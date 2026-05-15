@@ -72,7 +72,11 @@ It could fix parallelogram distortions.
 * Wi-Fi apps
 * Gopher browser
 * PIM apps (notes, todo, contacts, schedule, handwriting notes)
+* SD support
 * More games
 * More apps
 * More screensavers
 * More settings
+
+# Terms of use
+You can modify code if you want. Bug reports and pull requests appreciated.
