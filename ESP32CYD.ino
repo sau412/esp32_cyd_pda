@@ -597,6 +597,7 @@ void files(char mode, char *io_buff) {
       if(!strcmp("/", path)) {
         if(drawConfirm("Format FFat?") == 0) {
           FFat.format();
+          FFat.begin(FORMAT_FS_IF_FAILED);
           FFat.mkdir("/Settings");
         }
       }
@@ -3548,6 +3549,8 @@ void setup() {
     drawError("FFat mount failed");
     if(drawConfirm("Format FFat?") == 0) {
       FFat.format();
+      FFat.begin(FORMAT_FS_IF_FAILED);
+      FFat.mkdir("/Settings");
     }
   }
 
