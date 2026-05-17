@@ -99,3 +99,5 @@ You can modify code if you want. Bug reports and pull requests appreciated.
 # Links
 * Video presentation: https://www.youtube.com/watch?v=mXp3R2wKOIw
 * Reddit post: https://www.reddit.com/r/esp32projects/comments/1tdrvur/esp32_cyd_pocket_digital_assistant/
+* Reddit post: https://www.reddit.com/r/esp32/comments/1teoa28/esp32_cyd_pocket_digital_assistant/
+* Reddit post: https://www.reddit.com/r/CheapYellowDisplay/comments/1tdryb3/esp32_cyd_pocket_digital_assistant/
