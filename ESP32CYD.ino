@@ -51,6 +51,7 @@
 2026-05-14 Баг секундомера, баг таймера, дыхательный таймер, подключение к Wi-Fi
 2026-05-15 Выложил проект на гитхаб, ютуб, реддит; создание папки настроек после форматирования, константы, игра выключи свет, выигрыш в пятнашках
 2026-05-16 Прошивка через веб, исправлен порядок инициализации ФС
+2026-05-18 Заметки, клеточный автомат жизнь
 
 Направления работы:
 - Русский шрифт маленький и средний, русская клавиатура
@@ -196,6 +197,8 @@ void stopwatch_app(char mode, char *io_buff);
 void breathe(char mode, char *io_buff);
 void brightness_app(char mode, char *io_buff);
 void lights_off(char mode, char *io_buff);
+void notes(char mode, char *io_buff);
+void life(char mode, char *io_buff);
 
 typedef void (*app_pointer) (char mode, char *io_buff);
 
@@ -203,6 +206,7 @@ app_pointer apps[] = {
   launcher,
   calculator,
   files,
+  notes,
   system_info,
   torch,
   draw,
@@ -214,13 +218,14 @@ app_pointer apps[] = {
   timer,
   stopwatch_app,
   breathe,
-  screen_test,
-  screensaver,
+  //screen_test,
+  //screensaver,
   security,
   brightness_app,
   touch_calibration,
   fifteen,
   lights_off,
+  life,
   NULL
 };
 
@@ -538,6 +543,8 @@ void system_info(char mode, char *io_buff) {
   }
 }
 
+#define FILES_COUNT_MAX 1024
+
 void files(char mode, char *io_buff) {
   fs::File current_dir;
   fs::File file;
@@ -619,8 +626,8 @@ void files(char mode, char *io_buff) {
       }
       free(files);
     }
-    // Занимаем память, пока на 1024 элемента, с realloc глючит
-    files = (char**)malloc(1024 * sizeof(char*));
+    // Занимаем память, сразу на FILES_COUNT_MAX элементов, с realloc глючит
+    files = (char**)malloc(FILES_COUNT_MAX * sizeof(char*));
     files[0] = NULL;
     //delay(1000);
     if(strcmp(path, "/")) {
@@ -850,6 +857,181 @@ void files(char mode, char *io_buff) {
         }
         free(files);
       }
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+#define NOTES_COUNT_MAX 1024
+#define NOTES_PATH "/Notes"
+
+void notes(char mode, char *io_buff) {
+  fs::File current_dir;
+  fs::File file;
+  int button_pressed;
+  int file_offset;
+  int file_selected;
+  int i;
+  int offset;
+  char buff[80];
+  char buff2[80];
+  char buff3[80];
+  char byte;
+  char update_list_flag = 1;
+  char rename_note_flag = 0;
+  char *buttons[] = {
+    "New", "Edit", "Delete",
+    NULL
+  };
+  char **notes_list = NULL;
+  
+  if(mode == 0) {
+    strcpy(io_buff, "Notes");
+    return;
+  }
+
+  // Резервируем память, инициализируем
+  notes_list = (char **)malloc(NOTES_COUNT_MAX * sizeof(char *));
+  for(i = 0; i < NOTES_COUNT_MAX; i++) {
+    notes_list[i] = NULL;
+  }
+
+  update_list_flag = 1;
+  while(1) {
+    // Обновляем список файлов если нужно
+    if(update_list_flag) {
+      clearScreen();
+      drawAppTitle("Notes");
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      offset = 0;
+      // Освобождаем память
+      for(i = 0; i < NOTES_COUNT_MAX; i++) {
+        if(notes_list[i]) {
+          free(notes_list[i]);
+        }
+        notes_list[i] = NULL;
+      }
+      // Получаем список файлов
+      current_dir = FFat.open(NOTES_PATH);
+      if(!current_dir) {
+        FFat.mkdir(NOTES_PATH);
+        current_dir = FFat.open(NOTES_PATH);
+        if(!current_dir) {
+          drawError("Cannot open notes path");
+          return;
+        }
+      }
+      while(file = current_dir.openNextFile()) {
+        // Пропускаем папки
+        if(file.isDirectory()) continue;
+        notes_list[offset] = (char *)malloc((strlen(file.name()) + 1) * sizeof(char));
+        strcpy(notes_list[offset], file.name());
+        offset++;
+      }
+      update_list_flag = 0;
+    }
+
+    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.drawString("Select note:", 1, 16, FONT_DEFAULT);
+
+    touchCheckList(8, 32, tft.width() - 8 * 2, tft.height() - 64, notes_list, 16, &file_offset, &file_selected);
+    drawList(8, 32, tft.width() - 8 * 2, tft.height() - 64, notes_list, 16, &file_offset, &file_selected);
+    drawButtonMatrix(0, 280, tft.width(), 40, buttons, 3, 1);
+
+    touchWaitPress();
+
+    touchCheckList(8, 32, tft.width() - 8 * 2, tft.height() - 64, notes_list, 16, &file_offset, &file_selected);
+    button_pressed = touchCheckMatrix(0, 280, tft.width(), 40, buttons, 3, 1);
+    if(button_pressed != -1) {
+      rename_note_flag = 0;
+      if(button_pressed == 0) {
+        // Редактируем новый файл
+        sprintf(buff, "%s/%s", NOTES_PATH, "__NewNote");
+        file = FFat.open(buff, FILE_WRITE);
+        file.close();
+        edit_file("New note", buff);
+
+        // Меняем название в соответствии с содержимым
+        strcpy(buff, "__NewNote");
+        rename_note_flag = 1;
+      }
+      else if(button_pressed == 1) {
+        // Редактируем заметку с соответсвующим названием
+        sprintf(buff, "%s/%s", NOTES_PATH, notes_list[file_selected]);
+        //edit_file(notes_list[file_selected], buff);
+        edit_file(notes_list[file_selected], buff);
+
+        // Меняем название в соответствии с содержимым
+        strcpy(buff, notes_list[file_selected]);
+        rename_note_flag = 1;
+      }
+      else if(button_pressed == 2) {
+        if(drawConfirm("Are you sure to delete note?") == 0) {
+          // Удаляем заметку с соответствующим названием
+          sprintf(buff, "%s/%s", NOTES_PATH, notes_list[file_selected]);
+          FFat.remove(buff);
+        }
+      }
+      
+      // Меняем название в соответствии с содержимым
+      if(rename_note_flag) {
+        // В buff исходное название файла
+        sprintf(buff3, "%s/%s", NOTES_PATH, buff);
+        file = FFat.open(buff3);
+        buff2[0] = 0;
+        offset = 0;
+        while(file.available()) {
+          byte = file.read();
+          if(byte >= '0' && byte <= '9' || byte == ' ' || byte >= 'a' && byte <= 'z' || byte >= 'A' && byte <= 'Z') {
+            buff2[offset] = byte;
+            offset++;
+            buff2[offset] = 0;
+            if(offset > 20) break;
+          }
+          if(byte == '\n' || byte == '\r') break;
+        }
+        // Если названия нет, и это новый файл
+        if(strcmp("", buff2) == 0) {
+          if(strcmp("__NewNote", buff) == 0) {
+            for(i = 1;; i++) {
+              sprintf(buff2, "Note %d", i);
+              sprintf(buff3, "%s/%s", NOTES_PATH, buff2);
+              file = FFat.open(buff3);
+              if(!file) {
+                break;
+              }
+              file.close();
+            }
+          }
+        }
+        // Переименовываем файл если есть название, и оно отличается
+        if(strcmp("", buff2) != 0) {
+          sprintf(buff3, "%s/%s", NOTES_PATH, buff2);
+          sprintf(buff2, "%s/%s", NOTES_PATH, buff);
+          // Проверяем что мы не затрём какой-нибудь файл
+          file = FFat.open(buff3);
+          if(!file) {
+            FFat.rename(buff2, buff3);
+          }
+          else {
+            file.close();
+          }
+        }
+      }
+      update_list_flag = 1;
+    }
+
+    if(global_exit_flag) {
+      global_exit_flag = 0;
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      for(i = 0; i < NOTES_COUNT_MAX; i++) {
+        if(notes_list[i]) {
+          free(notes_list[i]);
+        }
+      }
+      free(notes_list);
       return;
     }
     touchWaitRelease();
@@ -1763,6 +1945,185 @@ void breathe(char mode, char *io_buff) {
   }
 }
 
+#define LIFE_CELL_PIXELS 4
+#define LIFE_FIELD_WIDTH_CELLS (tft.width() / LIFE_CELL_PIXELS)
+#define LIFE_FIELD_HEIGHT_CELLS ((tft.height() - 16 - 40) / LIFE_CELL_PIXELS)
+
+void life(char mode, char *io_buff) {
+  char life_run = 0;
+  char *field = NULL;
+  char *field_next = NULL;
+  int button_pressed;
+  int x, y;
+  int touch_x, touch_y;
+  int cell_color;
+  int near_count;
+  char current_cell;
+  long prev_millis;
+  TS_Point p;
+  char *buttons[] = {
+    "Start", "Step", "Stop", "Rnd", "Clr",
+    NULL
+  };
+
+  field = (char *)malloc(LIFE_FIELD_WIDTH_CELLS * LIFE_FIELD_HEIGHT_CELLS / 8 * sizeof(char));
+  field_next = (char *)malloc(LIFE_FIELD_WIDTH_CELLS * LIFE_FIELD_HEIGHT_CELLS / 8 * sizeof(char));
+
+  if(mode == 0) {
+    strcpy(io_buff, "Life");
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Life");
+  
+  while(1) {
+    if(life_run) {
+      if(millis() - prev_millis > 200) {
+        for(y = 0; y < LIFE_FIELD_HEIGHT_CELLS; y++) {
+          for(x = 0; x < LIFE_FIELD_WIDTH_CELLS; x++) {
+            near_count = 0;
+            current_cell = life_get_cell(x, y, field);
+            if(life_get_cell(x - 1, y - 1, field)) near_count++;
+            if(life_get_cell(x - 1, y, field)) near_count++;
+            if(life_get_cell(x - 1, y + 1, field)) near_count++;
+            if(life_get_cell(x, y - 1, field)) near_count++;
+            if(life_get_cell(x, y + 1, field)) near_count++;
+            if(life_get_cell(x + 1, y - 1, field)) near_count++;
+            if(life_get_cell(x + 1, y    , field)) near_count++;
+            if(life_get_cell(x + 1, y + 1, field)) near_count++;
+            if(current_cell) {
+              if(near_count < 2 || near_count > 3) life_set_cell(x, y, field_next, 0);
+              else life_set_cell(x, y, field_next, 1);
+            }
+            else {
+              if(near_count == 3) life_set_cell(x, y, field_next, 1);
+              else life_set_cell(x, y, field_next, 0);
+            }
+          }
+        }
+        // Копируем обратно
+        memcpy(field, field_next, LIFE_FIELD_WIDTH_CELLS * LIFE_FIELD_HEIGHT_CELLS / 8 * sizeof(char));
+        prev_millis = millis();
+      }
+      if(life_run == 1) {
+        life_run = 0;
+      }
+    }
+
+    // Нарисовать поле
+    for(y = 0; y < LIFE_FIELD_HEIGHT_CELLS; y++) {
+      for(x = 0; x < LIFE_FIELD_WIDTH_CELLS; x++) {
+        cell_color = TFT_WHITE;
+        if(life_get_cell(x, y, field)) {
+          cell_color = TFT_BLUE;
+        }
+        tft.fillRect(
+          x * LIFE_CELL_PIXELS,
+          16 + y * LIFE_CELL_PIXELS + 1,
+          LIFE_CELL_PIXELS - (LIFE_CELL_PIXELS > 2 ? 1 : 0),
+          LIFE_CELL_PIXELS - (LIFE_CELL_PIXELS > 2 ? 1 : 0),
+          cell_color
+        );
+      }
+    }
+
+    // Если запущено и касаний нет - обновляем
+    if(life_run && touchCheckNowait() == 0) {
+      continue;
+    }
+
+    drawButtonMatrix(0, 280, tft.width(), 40, buttons, 5, 1);
+
+    touchWaitPress();
+    // Смотрим, нет ли попадания в поле
+    p = touchscreen.getPoint();
+    touch_x = touchMapX(p.x, p.y);
+    touch_y = touchMapY(p.x, p.y);
+    if(touch_y >= 17 && touch_y < 280) {
+      x = touch_x / LIFE_CELL_PIXELS;
+      y = (touch_y - 17) / LIFE_CELL_PIXELS;
+      if(life_get_cell(x, y, field)) {
+        life_set_cell(x, y, field, 0);
+      }
+      else {
+        life_set_cell(x, y, field, 1);
+      }
+    }
+
+    button_pressed = touchCheckMatrix(0, 280, tft.width(), 40, buttons, 5, 1);
+    if(button_pressed != -1) {
+      // Start
+      if(button_pressed == 0) {
+        life_run = 2;
+      }
+      // Step
+      else if(button_pressed == 1) {
+        life_run = 1;
+        prev_millis = 0;
+      }
+      // Stop
+      else if(button_pressed == 2) {
+        life_run = 0;
+      }
+      // Rnd
+      else if(button_pressed == 3) {
+        for(y = 0; y < LIFE_FIELD_HEIGHT_CELLS; y++) {
+          for(x = 0; x < LIFE_FIELD_WIDTH_CELLS; x++) {
+            life_set_cell(x, y, field, random(0, 2));
+          }
+        }
+      }
+      // Clr
+      else if(button_pressed == 4) {
+        for(y = 0; y < LIFE_FIELD_HEIGHT_CELLS; y++) {
+          for(x = 0; x < LIFE_FIELD_WIDTH_CELLS; x++) {
+            life_set_cell(x, y, field, 0);
+          }
+        }
+      }
+    }
+
+    if(global_exit_flag) {
+      global_exit_flag = 0;
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      free(field);
+      free(field_next);
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+char life_get_cell(int x, int y, char *field) {
+  int byte;
+  int offset;
+  while(x < 0) x += LIFE_FIELD_WIDTH_CELLS;
+  while(y < 0) y += LIFE_FIELD_HEIGHT_CELLS;
+  while(x >= LIFE_FIELD_WIDTH_CELLS) x %= LIFE_FIELD_WIDTH_CELLS;
+  while(y >= LIFE_FIELD_HEIGHT_CELLS) y %= LIFE_FIELD_HEIGHT_CELLS;
+  //if(x < 0 || y < 0 || x >= LIFE_FIELD_WIDTH_CELLS || y >= LIFE_FIELD_HEIGHT_CELLS) return 0;
+
+  byte = (x + y * LIFE_FIELD_WIDTH_CELLS) / 8;
+  offset = (x + y * LIFE_FIELD_WIDTH_CELLS) % 8;
+  if(field[byte] & (1 << offset)) return 1;
+  return 0;
+}
+
+void life_set_cell(int x, int y, char *field, char value) {
+  int byte;
+  int offset;
+  while(x < 0) x += LIFE_FIELD_WIDTH_CELLS;
+  while(y < 0) y += LIFE_FIELD_HEIGHT_CELLS;
+  while(x >= LIFE_FIELD_WIDTH_CELLS) x %= LIFE_FIELD_WIDTH_CELLS;
+  while(y >= LIFE_FIELD_HEIGHT_CELLS) y %= LIFE_FIELD_HEIGHT_CELLS;
+  //if(x < 0 || y < 0 || x >= LIFE_FIELD_WIDTH_CELLS || y >= LIFE_FIELD_HEIGHT_CELLS) return;
+  byte = (x + y * LIFE_FIELD_WIDTH_CELLS) / 8;
+  offset = (x + y * LIFE_FIELD_WIDTH_CELLS) % 8;
+  if(value) field[byte] |= (1 << offset);
+  else field[byte] &= ~(1 << offset);
+}
 
 #define STAR_COUNT 40
 
@@ -2097,8 +2458,6 @@ void screen_test(char mode, char *io_buff) {
 
 // Просмотр файла
 void view_file(char *title, char *filename) {
-  // Смещение следующей страницы мы получаем и так
-  // Смещение предыдущей страницы - 
   fs::File file;
   int word_offset;
   int word_in_line_offset = 0;
@@ -2122,6 +2481,7 @@ void view_file(char *title, char *filename) {
   file = FFat.open(filename);
   if(!file) {
     drawError("Cannot open file");
+    return;
   }
   if(file.isDirectory()) {
     drawError("Cannot view directory");
@@ -2257,7 +2617,6 @@ void view_file(char *title, char *filename) {
 
 // Редактирование небольшого файла
 void edit_file(char *title, char *filename) {
-  fs::File file;
   int file_offset_bytes = 0;
   // Позиция курсора в байтах, перед каким символом стоит курсор
   int cursor_offset_bytes = 0;
@@ -2279,11 +2638,11 @@ void edit_file(char *title, char *filename) {
   char byte;
   char buff[80];
   char current_string[80];
-  char contents[EDIT_FILE_LENGTH_MAX];
+  char *contents;
   char caps_flag = 0;
   char symbol_flag = 0;
   int prev_width = 0;
-
+  
   char *keyboard_nocaps[] = {
     "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
     " ", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "\\",
@@ -2306,16 +2665,24 @@ void edit_file(char *title, char *filename) {
     NULL
   };
   char **keyboard_current = keyboard_nocaps;
+  fs::File file;
+
+  contents = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
 
   clearScreen();
   drawAppTitle(title);
   tft.setTextColor(TFT_BLACK, TFT_WHITE);
 
+  Serial.print("Edit file: ");
+  Serial.println(filename);
+
+  Serial.println("Open file");
   file = FFat.open(filename);
   if(!file) {
     drawError("Cannot open file");
     return;
   }
+  Serial.println("Check is dir");
   if(file.isDirectory()) {
     drawError("Cannot edit directory");
     return;
@@ -2561,6 +2928,7 @@ void edit_file(char *title, char *filename) {
         file.close();
       }
       global_exit_flag = 0;
+      free(contents);
       return;
     }
     touchWaitRelease();
