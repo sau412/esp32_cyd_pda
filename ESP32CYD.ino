@@ -2377,7 +2377,7 @@ void wifi_select_network() {
         }
         // Если сеть ещё не фигурировала - добавялем в список
         if(network_listed == 0) {
-          Serial.println(WiFi.SSID(i).c_str());
+          //Serial.println(WiFi.SSID(i).c_str());
           networks[networks_unique] = (char *)malloc(80 * sizeof(char));
           strcpy(networks[networks_unique], WiFi.SSID(i).c_str());
           networks_unique++;
@@ -2683,7 +2683,7 @@ void clock(char mode, char *io_buff) {
           year++;
           continue;
         }
-        Serial.println(days_remain);
+        //Serial.println(days_remain);
         if((month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) && days_remain >= 31) {
           days_remain -= 31;
           month++;
@@ -2725,8 +2725,8 @@ void clock(char mode, char *io_buff) {
       sprintf(buff, " %d:%02d:%02d ", hour, min, sec);
       tft.drawCentreString(buff, tft.width() / 2, 35, FONT_BIGGER);
 
-      tft.drawCentreString(day_of_week_name[day_of_week], tft.width() / 2, 70, FONT_BIG);
-      sprintf(buff, "%s, %04d, %d", month_name[month], year, day);
+      //tft.drawCentreString(day_of_week_name[day_of_week], tft.width() / 2, 70, FONT_BIG);
+      sprintf(buff, "%s, %04d", month_name[month], year);
       tft.drawCentreString(buff, tft.width() / 2, 90, FONT_BIG);
 
       // Календарь на текущий месяц
