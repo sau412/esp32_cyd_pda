@@ -26,6 +26,7 @@ PDA is Personal Digital Assistant. Small handheld computer. Like smartphone with
 * Set in Arduino IDE Tools - Partition scheme - Default 4 Mb with FFat (1.2 MP APP/1.5 MB FATFS)
 * Compile and upload
 * Done
+
 Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32-2432s028r/ if you have troubles.
 
 # First run
