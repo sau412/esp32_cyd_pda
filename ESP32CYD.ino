@@ -14,7 +14,7 @@
 - Виртуальная клавиатура
 - Фонарик
 - Калибровка тач-сенсора
-- Рисование
+- Рисование (с сохранением)
 - Пароль на вход
 - Счётчик
 - Тест экрана
@@ -37,6 +37,8 @@
 - Погода (с настройкой координат)
 - Чат
 - Контакты
+- Дела
+- Расходы
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -74,18 +76,35 @@ Sketch uses 1229450 bytes (93%) of program storage space. Maximum is 1310720 byt
 Sketch uses 1236154 bytes (94%) of program storage space. Maximum is 1310720 bytes.
 
 2026-05-27 Настройка времени, часового пояса, немного звуков, работа часов без интернета
-2026-05-28 Текст справа в списке, общая PIM-функция, контакты, дела, расходы, баг в чате
+2026-05-28 Текст справа в списке, общая PIM-функция, контакты, дела, расходы, баг в чате, размеры файлов в файловом менеджере
 Sketch uses 1244114 bytes (94%) of program storage space. Maximum is 1310720 bytes.
 Global variables use 51704 bytes (15%) of dynamic memory, leaving 275976 bytes for local variables. Maximum is 327680 bytes.
 
-Убрать мигание чата
+2026-05-29 Баг с выходом из просмотра, Обработка пар \n\r и \r\n в просмотре, убрать мигание чата, рисование с сохранением, баг выхода,
+  знак вопроса в клавиатурные символы
+
+Баг с выводом списка, иногда надпись выбивается
 
 Направления работы:
 - Русский шрифт маленький и средний
 - Русская клавиатура
 - Вывод русского из UTF-8
-- Рисование с сохранением
-- Расписание (календарь)
+- Расписание (календарь) - по нажатию на день открывать на редактирование расписание дня. В календаре непустые дни отмечать как-то
+
+Улучшения тут и там:
+- В файловом менеджере открывать папки / файлы по двойному нажатию
+- Не прокручивать при редактировании дальше конца файла
+- Калькулятор: индикация числа в памяти, второго аргумента, операции
+- Расходы: баги с переносами при ручном редактировании
+- Книги: сохранять место чтения
+- Информация о системе: больше информации (нужная ли это информация?)
+- Рисование: можно ли ускорить сохранение?
+- Чат: бип на получение новых сообщений
+- Погода: символ граудса или цельсия возле температуры
+- Счётчик: большие цифры, прижать кнопки к краям
+- Случайные числа: может быть другая анимация, больше цифры
+- Просмотр шрифта?
+- 
 
 Затем игры:
 - Змейка
@@ -210,13 +229,16 @@ float ay = 19840 / d;
 float by = -1109440 / d;
 float cy = 325691200 / d;
 
-long global_touch_begin;
-long global_touch_length;
+unsigned long global_touch_begin;
+unsigned long global_touch_length;
 TS_Point global_touch_p;
 int global_touch_x;
 int global_touch_y;
 char global_touch_present_flag;
 char global_exit_flag;
+unsigned long global_exit_flag_touch_begin;
+unsigned long global_exit_flag_touch_length;
+
 float global_lat = 0;
 float global_lon = 0;
 int global_brightness = 255;
@@ -381,7 +403,7 @@ void launcher(char mode, char *io_buff) {
       redraw_flag = 0;
     }
 
-    global_exit_flag = 0;
+    touchExitActionReset();
     touchWaitRelease();
     touchWaitPress();
 
@@ -616,9 +638,9 @@ void calculator(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -707,9 +729,9 @@ void system_info(char mode, char *io_buff) {
     while(millis() - update_millis < 1000) {
       touchCheckNowait();
       if(global_exit_flag) {
-        global_exit_flag = 0;
         drawAppTitle("Exit");
         touchWaitRelease();
+        touchExitActionReset();
         return;
       }
     }
@@ -1058,15 +1080,16 @@ void files(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+
       if(files) {
         for(i = 0; files[i] != NULL; i++) {
           free(files[i]);
         }
         free(files);
       }
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -1622,6 +1645,258 @@ void books(char mode, char *io_buff) {
 }
 
 // ====================================================
+// Рисование
+// ====================================================
+
+#define DRAW_PATH "/Images"
+
+void draw_action(int action_index, char *filename) {
+  fs::File file;
+  char buff[80];
+  char old_path_filename[80];
+  char new_path_filename[80];
+  int index;
+
+  if(action_index == 0) {
+    // Придумываем новое название
+    index = 0;
+    while(1) {
+      index++;
+      sprintf(buff, "%s/Draw %d.bmp", DRAW_PATH, index);
+      file = FFat.open(buff);
+      if(!file) {
+        break;
+      }
+      file.close();
+    }
+    draw_edit("New", buff);
+  }
+  else if(action_index == 1) {
+    // Редактируем существующий файл
+    sprintf(buff, "%s/%s", DRAW_PATH, filename);
+    draw_edit(filename, buff);
+  }
+  else if(action_index == 2) {
+    // Переименование
+    strcpy(buff, filename);
+    if(drawPrompt("New image name", buff) == 0) {
+      // Если название не пустое
+      if(strcmp(buff, "")) {
+        sprintf(old_path_filename, "%s/%s", DRAW_PATH, filename);
+        sprintf(new_path_filename, "%s/%s", DRAW_PATH, buff);
+        FFat.rename(old_path_filename, new_path_filename);
+      }
+    }
+  }
+  else if(action_index == 3) {
+    if(drawConfirm("Delete this image?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(buff, "%s/%s", DRAW_PATH, filename);
+      FFat.remove(buff);
+    }
+  }
+}
+
+void draw_file_to_list(fs::File file, char *buff) {
+  sprintf(buff, "%s", file.name());
+}
+
+void draw(char mode, char *io_buff) {
+  char *buttons[] = {
+    "New", "Edit", "Rename", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00001110,
+    B01000000, B00010010,
+    B01000000, B00010010,
+    B01000110, B00001010,
+    B01001001, B00001010,
+    B01001000, B10001010,
+    B01010000, B01001010,
+    B01010000, B00110010,
+    B01010000, B00000010,
+    B01100000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Draw");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  pim_app("Draw", DRAW_PATH, draw_file_to_list, buttons, draw_action);
+}
+
+void draw_edit(char *title, char *filename) {
+  fs::File file;
+  char buff[80];
+  char draw_header[118] = {
+    0x42, 0x4D, 0x76, 0x87, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x00,
+    0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0xF0, 0x00, 0x00, 0x00, 0x20, 0x01,
+    0x00, 0x00, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x87,
+    0x00, 0x00, 0xC2, 0x0E, 0x00, 0x00, 0xC2, 0x0E, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x80, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x80, 0x80, 0x00, 0x80, 0x00,
+    0x00, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x80, 0x00, 0x00, 0x80, 0x80,
+    0x80, 0x00, 0xC0, 0xC0, 0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF,
+    0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x00,
+    0xFF, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00
+  };
+
+  int i;
+  TS_Point p;
+  
+  int color = TFT_BLACK;
+  int color_index = 0;
+  
+  int colors[] = {
+    TFT_BLACK, TFT_MAROON, TFT_DARKGREEN, TFT_OLIVE,
+    TFT_NAVY, TFT_PURPLE, TFT_DARKCYAN, TFT_LIGHTGREY,
+    TFT_DARKGREY, TFT_RED, TFT_GREEN, TFT_YELLOW,
+    TFT_BLUE, TFT_MAGENTA, TFT_CYAN, TFT_WHITE};
+  int touch_x;
+  int touch_y;
+  int x, y;
+  int prev_touch_x;
+  int prev_touch_y;
+  char touch_started = 0;
+  char byte;
+  int pixel_color;
+  char modified = 0;
+
+  clearScreen();
+
+  drawAppTitle("Loading...");
+
+  // Загрузка из файла (если он есть)
+  file = FFat.open(filename);
+  if(file) {
+    // Пропускаем заголовок BMP (у меня вышло 118 байт, но лучше ориентироваться на размер файла)
+    i = file.size() - tft.width() * (tft.height() - 32) / 2;
+    for(; i > 0; i--) {
+      file.read();
+    }
+    // Читаем данные изображения и выводим на экран
+    x = 0;
+    y = 288;
+    while(file.available()) {
+      byte = file.read();
+      color_index = byte >> 4;
+      color = colors[color_index];
+      tft.drawPixel(x, y + 16, color);
+      x++;
+      color_index = byte & B00001111;
+      color = colors[color_index];
+      tft.drawPixel(x, y + 16, color);
+      x++;
+      if(x >= tft.width()) {
+        x = 0;
+        y --;
+      }
+      if(y < 0) break;
+    }
+    file.close();
+  }
+  else {
+    tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+  }
+
+  drawAppTitle(title);
+
+  for(color_index = 0; color_index < 16; color_index++) {
+    tft.fillRect(color_index * tft.width() / 16, 304, tft.width() / 16, 16, colors[color_index]);
+  }
+  color_index = 0;
+
+  color = TFT_BLACK;
+  while(1) {
+    touchWaitPress();
+    while(touchscreen.tirqTouched() && touchscreen.touched()) {
+      touchCheckNowait();
+      p = touchscreen.getPoint();
+      touch_x = touchMapX(p.x, p.y);
+      touch_y = touchMapY(p.x, p.y);
+
+      if(touch_x >= 0 && touch_x < tft.width() && touch_y >= 16 && touch_y < 304) {
+        if(touch_started) {
+          tft.drawLine(prev_touch_x, prev_touch_y, touch_x, touch_y, colors[color_index]);
+        }
+        else {
+          tft.drawPixel(touch_x, touch_y, colors[color_index]);
+          touch_started = 1;
+          modified = 1;
+        }
+      }
+      else {
+        touch_started = 0;
+      }
+      prev_touch_x = touch_x;
+      prev_touch_y = touch_y;
+      if(touch_x >= 0 && touch_x < tft.width() && touch_y >= 304 && touch_y < tft.height()) {
+        color_index = floor(touch_x * 16 / tft.width());
+      }
+      touchCheckNowait();
+
+      //touchWaitReleaseOrExit();
+      if(global_exit_flag) {
+        drawAppTitle("Exit");
+        touchWaitRelease();
+        if(modified) {
+          drawAppTitle("Saving...");
+          file = FFat.open(filename, FILE_WRITE);
+          for(i = 0; i < 118; i++) {
+            file.write(draw_header[i]);
+          }
+          // Записываем данные изображения с экрана
+          x = 0;
+          y = 288;
+          while(file.available()) {
+            byte = 0;
+            pixel_color = tft.readPixel(x, y + 16);
+            for(color_index = 0; color_index < 16; color_index++) {
+              if(pixel_color == colors[color_index]) break;
+            }
+            byte |= color_index << 4;
+            x++;
+            pixel_color = tft.readPixel(x, y + 16);
+            for(color_index = 0; color_index < 16; color_index++) {
+              if(pixel_color == colors[color_index]) break;
+            }
+            byte |= color_index;
+            file.write(byte);
+            x++;
+            if(x >= tft.width()) {
+              sprintf(buff, "Saving... (%d/288)", 288 - y - 1);
+              drawAppTitle(buff);
+              x = 0;
+              y --;
+            }
+            if(y < 0) break;
+          }
+
+          file.close();
+        }
+        touchExitActionReset();
+        return;
+      }
+    }
+    touchWaitRelease();
+    touch_started = 0;
+  }
+}
+
+// ====================================================
 // Общие PIM-функции
 // ====================================================
 
@@ -1726,7 +2001,6 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
       for(i = 0; i < PIM_FILES_COUNT_MAX; i++) {
@@ -1739,6 +2013,7 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
       }
       free(files_list);
       free(visible_list);
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -1859,9 +2134,9 @@ void torch(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -1976,9 +2251,9 @@ void security(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -2058,9 +2333,9 @@ void counter(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -2165,9 +2440,9 @@ void random_numbers(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -2256,10 +2531,10 @@ void brightness_app(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       save_brightness();
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -2501,9 +2776,9 @@ void timer(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
 
@@ -2694,7 +2969,6 @@ void stopwatch_app(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
       for(i = 0; i < STOPWATCH_MAX_LAPS; i++) {
@@ -2704,6 +2978,7 @@ void stopwatch_app(char mode, char *io_buff) {
         stopwatch_laps[i] = NULL;
       }
       free(stopwatch_laps);
+      touchExitActionReset();
       return;
     }
 
@@ -2904,9 +3179,9 @@ void breathe(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
 
@@ -3078,11 +3353,11 @@ void life(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
       free(field);
       free(field_next);
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -3217,91 +3492,6 @@ void screensaver(char mode, char *io_buff) {
   }
 }
 
-void draw(char mode, char *io_buff) {
-  char b[80];
-  TS_Point p1, p2, p3;
-  
-  int color = TFT_BLACK;
-  int color_index = 0;
-  int colors[] = {TFT_BLACK, TFT_RED, TFT_GREEN, TFT_BLUE, TFT_YELLOW, TFT_MAGENTA, TFT_CYAN, TFT_WHITE};
-  int touch_x;
-  int touch_y;
-  int prev_touch_x;
-  int prev_touch_y;
-  char touch_started = 0;
-  char app_icon[] = {
-    16, 16,
-    B00000000, B00000000,
-    B01111111, B11111110,
-    B01000000, B00000010,
-    B01000000, B00001110,
-    B01000000, B00010010,
-    B01000000, B00010010,
-    B01000110, B00001010,
-    B01001001, B00001010,
-    B01001000, B10001010,
-    B01010000, B01001010,
-    B01010000, B00110010,
-    B01010000, B00000010,
-    B01100000, B00000010,
-    B01000000, B00000010,
-    B01111111, B11111110,
-    B00000000, B00000000
-  };
-
-  if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Draw");
-    return;
-  }
-  if(mode == APP_MODE_RETURN_ICON) {
-    memcpy(io_buff, app_icon, 34);
-    return;
-  }
-
-  clearScreen();
-  drawAppTitle("Draw");
-
-  for(color_index = 0; color_index < 8; color_index++) {
-    tft.fillRect(color_index * tft.width() / 8, 304, tft.width() / 8, 16, colors[color_index]);
-  }
-  color_index = 0;
-
-  while(1) {
-    touchWaitPress();
-    while(touchscreen.tirqTouched() && touchscreen.touched()) {
-      touchCheckNowait();
-      TS_Point p = touchscreen.getPoint();
-      touch_x = touchMapX(p.x, p.y);
-      touch_y = touchMapY(p.x, p.y);
-
-      if(touch_x >= 0 && touch_x < tft.width() && touch_y >= 16 && touch_y < 304) {
-        if(touch_started) {
-          tft.drawLine(prev_touch_x, prev_touch_y, touch_x, touch_y, colors[color_index]);
-        }
-        else {
-          tft.drawPixel(touch_x, touch_y, colors[color_index]);
-          touch_started = 1;
-        }
-      }
-      prev_touch_x = touch_x;
-      prev_touch_y = touch_y;
-      if(touch_x >= 0 && touch_x < tft.width() && touch_y >= 304 && touch_y < tft.height()) {
-        color_index = floor(touch_x * 8 / tft.width());
-      }
-
-      touchWaitReleaseOrExit();
-      if(global_exit_flag) {
-        global_exit_flag = 0;
-        drawAppTitle("Exit");
-        touchWaitRelease();
-        return;
-      }
-    }
-    touchWaitRelease();
-    touch_started = 0;
-  }
-}
-
 #ifdef IS_WIFI_ENABLED
 
 #define WIFI_MAX_NETWORKS 128
@@ -3350,9 +3540,9 @@ void wifi(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -3719,10 +3909,10 @@ void gopher(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
       free(page);
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -4288,17 +4478,20 @@ void chat(char mode, char *io_buff) {
         strcpy(messages, http.getString().c_str());
         screen_line = 0;
         buff_offset = 0;
-        buff[buff_offset] = 0;
+        memset(buff, ' ', 40);
+        buff[40] = 0;
         tft.setTextColor(TFT_BLACK, TFT_WHITE);
-        tft.fillRect(0, 16, tft.width(), tft.height() - 16 - 32 - 8, TFT_WHITE);
+        //tft.fillRect(0, 16, tft.width(), tft.height() - 16 - 32 - 8, TFT_WHITE);
         for(messages_offset = 0; messages[messages_offset] != 0; messages_offset++) {
-          if(messages[messages_offset] == '\r') continue;
-          if(messages[messages_offset] == '\n' || strlen(buff) >= 40) {
+          if((messages[messages_offset] == '\n' || messages[messages_offset] == '\r') || buff_offset >= 40) {
+            if(messages[messages_offset] == '\n' && messages[messages_offset + 1] == '\r') messages_offset++;
+            else if(messages[messages_offset] == '\r' && messages[messages_offset + 1] == '\n') messages_offset++;
             tft.drawString(buff, 1, 20 + screen_line * 8, FONT_MONOSPACE);
             screen_line++;
             buff_offset = 0;
+            memset(buff, ' ', 40);
             // Не терять последний символ в строке
-            if(strlen(buff) >= 40) {
+            if(messages[messages_offset] != '\n' && messages[messages_offset] != '\r') {
               buff[buff_offset] = messages[messages_offset];
               buff_offset++;
             }
@@ -4308,7 +4501,7 @@ void chat(char mode, char *io_buff) {
           }
           buff[buff_offset] = messages[messages_offset];
           buff_offset++;
-          buff[buff_offset] = 0;
+          //buff[buff_offset] = 0;
         }
         update_flag = 0;
       }
@@ -4699,9 +4892,9 @@ void dashboard(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -4988,9 +5181,9 @@ void fuzzy_clock(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -5192,10 +5385,10 @@ void set_clock(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       store_current_timestamp();
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
 
@@ -5446,6 +5639,12 @@ void view_file(char *title, char *filename) {
         buff[word_offset] = byte;
         word_offset++;
         buff[word_offset] = 0;
+        if(byte == '\n') {
+          if(file.peek() == '\r') file.read();
+        }
+        if(byte == '\r') {
+          if(file.peek() == '\n') file.read();
+        }
         // Пробел, дефис, перевод строки завершают слово
         if(byte == '\n' || byte == '\r') {
           new_line_flag = 1;
@@ -5542,8 +5741,10 @@ void view_file(char *title, char *filename) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
+      drawAppTitle("Exit");
       touchWaitRelease();
+      drawAppTitle(title);
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -5582,14 +5783,14 @@ void edit_file(char *title, char *filename) {
   
   char *keyboard_nocaps[] = {
     "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
-    " ", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "\\",
+    " ", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "-",
     ":shift:", "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", ":enter:",
     ":change:", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", " ",
     NULL
   };
   char *keyboard_caps[] = {
     "~",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
-    " ", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "|",
+    " ", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "_",
     ":shift:", "A", "S", "D", "F", "G", "H", "J", "K", "L", ":", ":enter:",
     ":change:", "Z", "X", "C", "V", "B", "N", "M", "<", ">", "?", " ",
     NULL
@@ -5598,7 +5799,7 @@ void edit_file(char *title, char *filename) {
     "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
     " ",  "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "=",
     ":shift:", "[", "]", "<", ">", ".", ",", ":", ";", "\"", "'", ":enter:",
-    ":change:", "{", "}", "+", "-", "*", "/", "\\", "~", ";", ":", " ",
+    ":change:", "{", "}", "+", "-", "*", "/", "\\", "~", "|", "?", " ",
     NULL
   };
   char **keyboard_current = keyboard_nocaps;
@@ -5833,23 +6034,12 @@ void edit_file(char *title, char *filename) {
     if(touch_y >= 16 && touch_y < 192) {
       set_cursor_from_touch = 1;
     }
-    /*
-    // Касание нижней строки - прокрутка вниз (если не достигнут конец файла)
-    if(touch_y >= 176 && touch_y < 192) {
-      if(contents[file_offset_bytes] != 0) {
-        file_skip_lines++;
-      }
-    }
-    // Касание верхней строки - прокрутка вверх (если не достигнут конец файла)
-    if(touch_y >= 16 && touch_y < 32) {
-      if(file_skip_lines > 0) {
-        file_skip_lines--;
-      }
-    }
-    */
+
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
+      drawAppTitle("Exit");
       touchWaitRelease();
+      drawAppTitle(title);
       // Спрашиваем о сохранении, сохраняем если да
       if(drawConfirm("Save changes?") == 0) {
         file = FFat.open(filename, FILE_WRITE);
@@ -5860,8 +6050,8 @@ void edit_file(char *title, char *filename) {
         }
         file.close();
       }
-      global_exit_flag = 0;
       free(contents);
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -6097,9 +6287,9 @@ void fifteen(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -6232,9 +6422,9 @@ void lights_off(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -6313,14 +6503,14 @@ int drawPrompt(char *message, char *user_input) {
 
   char *keyboard_nocaps[] = {
     "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
-    " ", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "\\",
+    " ", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "-",
     ":shift:", "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", ":enter:",
     ":change:", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", " ",
     NULL
   };
   char *keyboard_caps[] = {
-    "~",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
-    " ", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "|",
+    "~",  "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", ":backspace:",
+    " ", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "_",
     ":shift:", "A", "S", "D", "F", "G", "H", "J", "K", "L", ":", ":enter:",
     ":change:", "Z", "X", "C", "V", "B", "N", "M", "<", ">", "?", " ",
     NULL
@@ -6329,7 +6519,21 @@ int drawPrompt(char *message, char *user_input) {
     "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
     " ",  "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "=",
     ":shift:", "[", "]", "<", ">", ".", ",", ":", ";", "\"", "'", ":enter:",
-    ":change:", "{", "}", "+", "-", "*", "/", "\\", "~", ";", ":", " ",
+    ":change:", "{", "}", "+", "-", "*", "/", "\\", "~", "|", "?", " ",
+    NULL
+  };
+  char *keyboard_alt_nocaps[] = {
+    "ё",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
+    "й", "ц", "у", "к", "е", "н", "г", "ш", "щ", "з", "х", "ъ",
+    ":shift:", "ф", "ы", "в", "а", "п", "р", "о", "л", "д", "ж", ":enter:",
+    ":change:", "я", "ч", "с", "м", "и", "т", "ь", "б", "ю", "э", " ",
+    NULL
+  };
+  char *keyboard_alt_caps[] = {
+    "Ё",  "!", "\"", "№", ";", "%", ":", "?", "*", "(", ")", ":backspace:",
+    "Й", "Ц", "У", "К", "Е", "Н", "Г", "Ш", "Щ", "З", "Х", "Ъ",
+    ":shift:", "Ф", "Ы", "В", "А", "П", "Р", "О", "Л", "Д", "Ж", ":enter:",
+    ":change:", "Я", "Ч", "С", "М", "И", "Т", "Ь", "Б", "Ю", "Э", " ",
     NULL
   };
   char **keyboard_current = keyboard_nocaps;
@@ -6798,28 +7002,55 @@ int touchMapY(int x, int y) {
 }
 
 char touchIsExitAction() {
-  // Касание не на заголовок
-  if(global_touch_y < 0 || global_touch_y >= 32) return 0;
-  
-  // Длительность меньше секунды
-  if(global_touch_length < 1000) return 0;
-  
+  // Уже стоит флаг
+  if(global_exit_flag) {
+    return 1;
+  }
+
   // Нет касания
-  if(!touchscreen.tirqTouched() || !touchscreen.touched()) return 0;
+  if(!touchscreen.tirqTouched() || !touchscreen.touched()) {
+    global_exit_flag_touch_begin = 0;
+    return 0;
+  }
   
+  if(global_exit_flag_touch_begin == 0) {
+    global_exit_flag_touch_begin = millis();
+  }
+
   // Касание сместилось
   global_touch_p = touchscreen.getPoint();
   global_touch_x = touchMapX(global_touch_p.x, global_touch_p.y);
   global_touch_y = touchMapY(global_touch_p.x, global_touch_p.y);
-  if(global_touch_y < 0 || global_touch_y >= 32) return 0;
+
+  // Мимо заголовка?
+  if(global_touch_y < 0 || global_touch_y >= 32) {
+    global_exit_flag_touch_begin = 0;
+    global_exit_flag_touch_length = 0;
+    return 0;
+  }
+
+  global_exit_flag_touch_length = millis() - global_exit_flag_touch_begin;
 
   // Если все условия выполнились - сообщаем о сигнале на выход
-  global_exit_flag = 1;
-  return 1;
+  Serial.println(global_exit_flag_touch_length);
+  if(global_exit_flag_touch_length >= 1000) {
+    global_exit_flag_touch_begin = 0;
+    global_exit_flag_touch_length = 0;
+    global_exit_flag = 1;
+    return 1;
+  }
+  return 0;
+}
+
+void touchExitActionReset() {
+  global_exit_flag = 0;
+  global_exit_flag_touch_begin = 0;
+  global_exit_flag_touch_length = 0;
 }
 
 void touchWaitPress() {
   while(!touchscreen.tirqTouched() || !touchscreen.touched()) {
+    global_exit_flag_touch_begin = 0;
     if(global_exit_flag) return;
   }
   global_touch_begin = millis();
