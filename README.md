@@ -36,7 +36,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 
 # Usage
 * Tap app name to launch this app
-* Touch and hold app title to exit app
+* Touch and hold app title more than 1 second to exit app
 * Tap buttons in app to perform actions
 * For screensavers touch and hold anywhere to exit
 * To force perform calibration on start hold touchscreen during reboot
@@ -50,7 +50,6 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Random number generator
 * System info
 * Password
-* Drawing (without saving)
 * LED control
 * Calculator
 * Fifteen puzzle game
@@ -74,6 +73,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Contacts
 * Todo
 * Expenses
+* Drawing (with saving)
 
 # Touch sensor calibration
 It uses three-dots linear calibration.
@@ -99,7 +99,7 @@ Ax, Bx, Cx, Ay, By, Cy - correction factors
 It could fix parallelogram distortions.
 
 # To Do
-* PIM apps (calendar, handwriting notes)
+* Schedule app
 * SD support
 * More games
 * More apps
