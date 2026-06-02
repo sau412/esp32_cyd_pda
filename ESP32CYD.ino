@@ -39,6 +39,7 @@
 - Контакты
 - Дела
 - Расходы
+- Расписание
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -82,29 +83,37 @@ Global variables use 51704 bytes (15%) of dynamic memory, leaving 275976 bytes f
 
 2026-05-29 Баг с выходом из просмотра, Обработка пар \n\r и \r\n в просмотре, убрать мигание чата, рисование с сохранением, баг выхода,
   знак вопроса в клавиатурные символы
+Sketch uses 1246406 bytes (95%) of program storage space. Maximum is 1310720 bytes.
+
+2026-05-31 Русский шрифт, частично
+2026-06-01 Русский шрифт доработки, расписание
+2026-06-02 Русский шрифт доработки, PIM список по ширине экрана, улучшение счётчика, улучшение информации о системе, ускорение сохранения картинок
 
 Баг с выводом списка, иногда надпись выбивается
 
 Направления работы:
-- Русский шрифт маленький и средний
-- Русская клавиатура
+- Русский шрифт маленький
 - Вывод русского из UTF-8
-- Расписание (календарь) - по нажатию на день открывать на редактирование расписание дня. В календаре непустые дни отмечать как-то
 
 Улучшения тут и там:
 - В файловом менеджере открывать папки / файлы по двойному нажатию
 - Не прокручивать при редактировании дальше конца файла
 - Калькулятор: индикация числа в памяти, второго аргумента, операции
+- Точки и нули в конце числа при вводе числа в калькулятор
 - Расходы: баги с переносами при ручном редактировании
 - Книги: сохранять место чтения
-- Информация о системе: больше информации (нужная ли это информация?)
-- Рисование: можно ли ускорить сохранение?
 - Чат: бип на получение новых сообщений
-- Погода: символ граудса или цельсия возле температуры
-- Счётчик: большие цифры, прижать кнопки к краям
+- Погода: символ граудса или цельсия возле температуры (выглядит ужасно если взять другой шрифт. Нужно другое решение)
 - Случайные числа: может быть другая анимация, больше цифры
-- Просмотр шрифта?
-- 
+- Prompt - прокрутка текста, возможность переставлять курсор
+- Код чата (на сервере) в гитхаб
+- Гофер браузер - менять домашнюю страницу
+- Гофер браузер - специальная домашняя страница для CYD с объяснениями
+- Гофер браузер - баг с повторяющимися строками?
+- Гофер браузер - кнопка назад
+- Рисование - лишние линии при поднятии стилуса
+- Использовать RTC-память для времени
+- Расписание: выводить планы на день по первому нажатию, редактирование по второму или двойному
 
 Затем игры:
 - Змейка
@@ -113,6 +122,8 @@ Global variables use 51704 bytes (15%) of dynamic memory, leaving 275976 bytes f
 - Повтор последовательности
 - Турецкий платок
 */
+
+//#define ALT_KEYBOARD_ENABLED
 
 #define IS_WIFI_ENABLED
 
@@ -289,6 +300,7 @@ void contacts(char mode, char *io_buff);
 void books(char mode, char *io_buff);
 void todo(char mode, char *io_buff);
 void expenses(char mode, char *io_buff);
+void schedule(char mode, char *io_buff);
 void life(char mode, char *io_buff);
 void i2c_scanner(char mode, char *io_buff);
 void dashboard(char mode, char *io_buff);
@@ -306,6 +318,7 @@ function_application_pointer apps[] = {
   notes,
   contacts,
   todo,
+  schedule,
   expenses,
   books,
   system_info,
@@ -370,11 +383,8 @@ void launcher(char mode, char *io_buff) {
     return;
   }
 
-  
   clearScreen();
   drawAppTitle("Launcher");
-
-  store_current_timestamp();
 
   int row, col;
   char app_name[80];
@@ -685,45 +695,80 @@ void system_info(char mode, char *io_buff) {
   drawAppTitle("System Info");
   
   while(1) {
-    // 123456789012345678901234567890
-    char *data[] = {
-      "Hardware: ESP32-2432S028",
-      "Cheap Yellow Display",
-      "",
-      "Software:",
-      "ESP32 CYD PDA by sau412",
-      "",
-      "Compilation time:",
-      __DATE__,
-      __TIME__,
-      NULL
-    };
 
     i = 0;
     tft.setTextColor(TFT_BLACK, TFT_WHITE);
-    while(data[i]) {
-      tft.drawString(data[i], 2, 16 + i * 16, FONT_DEFAULT);
-      i++;
-    }
+    sprintf(buff, "ESP32 CYD PDA by sau412");
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "Build time: %s %s", __DATE__, __TIME__);
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "SDK: %s", ESP.getSdkVersion());
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "Chip model: %s", ESP.getChipModel());
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "Chip cores, speed: %d @ %d MHz", ESP.getChipCores(), ESP.getCpuFreqMHz());
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "---");
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "Heap Total: %d bytes", ESP.getHeapSize());
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "Heap Free: %d bytes (%d%%)", ESP.getFreeHeap(), (int)floor(100 * ESP.getFreeHeap() / ESP.getHeapSize()));
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "Heap Min Free: %d bytes", ESP.getMinFreeHeap());
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "Heap Max Alloc: %d bytes", ESP.getMaxAllocHeap());
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "---");
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "Flash: %d bytes", ESP.getFlashChipSize());
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "Sketch: %d bytes", ESP.getSketchSize());
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+    i++;
 
     sprintf(buff, "FFat Total: %d bytes ", FFat.totalBytes());
-    tft.drawString(buff, 2, 32 + i * 16, FONT_DEFAULT);
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
     sprintf(buff, "FFat Used: %d bytes (%d%%) ", FFat.usedBytes(), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
-    tft.drawString(buff, 2, 32 + i * 16, FONT_DEFAULT);
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
-    sprintf(buff, "Free heap: %d bytes", esp_get_free_heap_size());
-    tft.drawString(buff, 2, 32 + i * 16, FONT_DEFAULT);
+    sprintf(buff, "---");
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
+
 
     sprintf(buff, "Uptime: %dh %dm %ds     ", millis() / 3600000, (millis() / 60000) % 60, (millis() / 1000) % 60);
-    tft.drawString(buff, 2, 32 + i * 16, FONT_DEFAULT);
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
     sprintf(buff, "Light sensor: %d    ", analogRead(LIGHT_SENSOR));
-    tft.drawString(buff, 2, 32 + i * 16, FONT_DEFAULT);
+    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
     while(millis() - update_millis < 1000) {
@@ -1791,15 +1836,19 @@ void draw_edit(char *title, char *filename) {
     x = 0;
     y = 288;
     while(file.available()) {
-      byte = file.read();
-      color_index = byte >> 4;
-      color = colors[color_index];
-      tft.drawPixel(x, y + 16, color);
-      x++;
-      color_index = byte & B00001111;
-      color = colors[color_index];
-      tft.drawPixel(x, y + 16, color);
-      x++;
+      //Половина размера экрана (120) должна быть кратна размеру буфера
+      file.read((unsigned char*)buff, 60);
+      for(i = 0; i < 60; i++) {
+        byte = buff[i];
+        color_index = byte >> 4;
+        color = colors[color_index];
+        tft.drawPixel(x, y + 16, color);
+        x++;
+        color_index = byte & B00001111;
+        color = colors[color_index];
+        tft.drawPixel(x, y + 16, color);
+        x++;
+      }
       if(x >= tft.width()) {
         x = 0;
         y --;
@@ -1862,25 +1911,29 @@ void draw_edit(char *title, char *filename) {
           x = 0;
           y = 288;
           while(file.available()) {
-            byte = 0;
-            pixel_color = tft.readPixel(x, y + 16);
-            for(color_index = 0; color_index < 16; color_index++) {
-              if(pixel_color == colors[color_index]) break;
+            // Половина ширины картинки (120) должна без остатка делиться на размер буфера
+            for(i = 0; i < 60; i++) {
+              byte = 0;
+              pixel_color = tft.readPixel(x, y + 16);
+              for(color_index = 0; color_index < 16; color_index++) {
+                if(pixel_color == colors[color_index]) break;
+              }
+              byte |= color_index << 4;
+              x++;
+              pixel_color = tft.readPixel(x, y + 16);
+              for(color_index = 0; color_index < 16; color_index++) {
+                if(pixel_color == colors[color_index]) break;
+              }
+              byte |= color_index;
+              x++;
+              buff[i] = byte;
             }
-            byte |= color_index << 4;
-            x++;
-            pixel_color = tft.readPixel(x, y + 16);
-            for(color_index = 0; color_index < 16; color_index++) {
-              if(pixel_color == colors[color_index]) break;
-            }
-            byte |= color_index;
-            file.write(byte);
-            x++;
+            file.write((const uint8_t *)buff, 60);
             if(x >= tft.width()) {
               sprintf(buff, "Saving... (%d/288)", 288 - y - 1);
               drawAppTitle(buff);
               x = 0;
-              y --;
+              y--;
             }
             if(y < 0) break;
           }
@@ -1986,13 +2039,13 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
 
     tft.setTextColor(TFT_BLACK, TFT_WHITE);
 
-    touchCheckList(8, 32 -8, tft.width() - 8 * 2, tft.height() - 72, visible_list, 15, &file_offset, &file_selected);
-    drawList(8, 32 - 8, tft.width() - 8 * 2, tft.height() - 72, visible_list, 15, &file_offset, &file_selected);
+    touchCheckList(0, 32 -8, tft.width(), tft.height() - 72, visible_list, 15, &file_offset, &file_selected);
+    drawList(0, 32 - 8, tft.width(), tft.height() - 72, visible_list, 15, &file_offset, &file_selected);
     drawButtonMatrix(0, 280, tft.width(), 40, buttons, buttons_count, 1);
 
     touchWaitPress();
 
-    touchCheckList(8, 32 - 8, tft.width() - 8 * 2, tft.height() - 72, visible_list, 15, &file_offset, &file_selected);
+    touchCheckList(0, 32 - 8, tft.width(), tft.height() - 72, visible_list, 15, &file_offset, &file_selected);
     button_pressed = touchCheckMatrix(0, 280, tft.width(), 40, buttons, buttons_count, 1);
     if(button_pressed != -1) {
       (*action_function)(button_pressed, files_list[file_selected]);
@@ -2076,6 +2129,239 @@ void pim_rename_file(char *path, char *old_filename, char *prefix) {
     else {
       file.close();
     }
+  }
+}
+
+#define SCHEDULE_PATH "/Schedule"
+
+void schedule(char mode, char *io_buff) {
+  fs::File file;
+  int wifi_status;
+  char filename[80];
+  char buff[80];
+  char schedule_file_template[] = "8:00 \n9:00 \n10:00 \n11:00 \n12:00 \n13:00 \n14:00 \n15:00 \n16:00 \n17:00 \n18:00 \n";
+  int day_of_week;
+  int year;
+  int month;
+  int day;
+  int prev_day;
+  int cal_dow;
+  int cal_day;
+  int cal_row;
+  int cal_col;
+  int selected_day;
+  int button_pressed;
+  char redraw_flag;
+  char prev_month_dow;
+  char next_month_dow;
+  char is_lap_year;
+  char touch_check_flag;
+
+  char *day_of_week_name[] = {
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
+  };
+  char *day_of_week_short[] = {
+    "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"
+  };
+  char *month_name[] = {
+    "", "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  };
+  char *buttons[] = {
+    "Prev", "Next",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000010, B10100010,
+    B01000101, B01000010,
+    B01000010, B10100010,
+    B01000101, B01000010,
+    B01000010, B10100010,
+    B01000101, B01000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Schedule");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Schedule");
+
+  redraw_flag = 1;
+  set_local_time_from_unix_timestamp();
+
+  day_of_week = (global_day_of_week + 7 - (global_day - 1) % 7) % 7;
+  year = global_year;
+  month = global_month;
+  day = 1;
+
+  while(1) {
+    drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 2, 1);
+    if(redraw_flag == 0) {
+      touchWaitPress();
+      redraw_flag = 1;
+      touch_check_flag = 1;
+    }
+    if(redraw_flag || touch_check_flag) {
+      drawAppTitle("Schedule");
+      if(touch_check_flag == 0) {
+        tft.fillRect(0, 16, tft.width(), tft.height() - 16 - 32 + 1, TFT_WHITE);
+      }
+      prev_day = day;
+
+      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      sprintf(buff, "%s, %04d", month_name[month], year);
+      tft.drawCentreString(buff, tft.width() / 2, 32, FONT_BIG);
+
+      // Календарь на текущий месяц
+      cal_day = 1;
+      cal_dow = day_of_week;
+      selected_day = -1;
+      is_lap_year = 0;
+      if(year % 4 == 0 && (year % 100 == 0 || year % 400 != 0)) {
+        is_lap_year = 1;
+      }
+
+      prev_month_dow = 0;
+      next_month_dow = 0;
+      for(cal_row = 0; cal_row < 7; cal_row++) {
+        for(cal_col = 0; cal_col < 7; cal_col++) {
+          if(cal_row == 0) {
+            strcpy(buff, day_of_week_short[cal_col]);
+          }
+          else {
+            if(cal_row == 1 && cal_col < cal_dow) {
+              prev_month_dow = cal_col;
+              continue;
+            }
+            sprintf(buff, "%d", cal_day);
+            next_month_dow = cal_col;
+            if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
+              if(cal_day > 31) break;
+            }
+            if(month == 4 || month == 6 || month == 9 || month == 11) {
+              if(cal_day > 30) break;
+            }
+            if(is_lap_year && month == 2 && cal_day > 29) break;
+            if(!is_lap_year && month == 2 && cal_day > 28) break;
+            cal_day++;
+          }
+          // Проверяем касание
+          if(global_touch_present_flag) {
+            if(global_touch_x >= cal_col * tft.width() / 7 && global_touch_x < (cal_col + 1) * tft.width() / 7
+              &&
+              global_touch_y >= 70 + cal_row * 32 - 8 && global_touch_y < 70 + (cal_row + 1) * 32 - 8
+            ) {
+              selected_day = (cal_day - 1);
+            }
+          }
+          if((global_day + 1) == cal_day && month == global_month && year == global_year) {
+            tft.fillRect(cal_col * tft.width() / 7, 70 + cal_row * 32 - 8, tft.width() / 7, 32, TFT_BLUE);
+            tft.setTextColor(TFT_WHITE, TFT_BLUE);
+          }
+          else {
+            tft.setTextColor(TFT_BLACK, TFT_WHITE);
+          }
+          tft.drawCentreString(buff, (cal_col + 0.5) * tft.width() / 7, 70 + cal_row * 32, FONT_DEFAULT);
+        }
+      }
+      redraw_flag = 0;
+      touch_check_flag = 0;
+    }
+    
+    if(selected_day != -1) {
+      sprintf(filename, "%s/%04d-%02d-%02d", SCHEDULE_PATH, year, month, selected_day);
+      sprintf(buff, "%04d-%02d-%02d", year, month, selected_day);
+      // Если файла нет, то его нужно создать
+      file = FFat.open(filename);
+      if(file) {
+        file.close();
+      }
+      else {
+        file = FFat.open(filename, FILE_WRITE);
+        file.print(schedule_file_template);
+        file.close();
+      }
+      edit_file(buff, filename);
+      redraw_flag = 1;
+    }
+
+    button_pressed = touchCheckMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 2, 1);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        month--;
+        if(month == 0) {
+          year--;
+          month = 12;
+        }
+        day = 1;
+        if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
+          day_of_week = (day_of_week + 35 - 31) % 7;
+        }
+        if(month == 4 || month == 6 || month == 9 || month == 11) {
+          day_of_week = (day_of_week + 35 - 30) % 7;
+        }
+        if(month == 2) {
+          if(is_lap_year) {
+            day_of_week = (day_of_week + 35 - 29) % 7;
+          }
+          else {
+            day_of_week = (day_of_week + 35 - 28) % 7;
+          }
+        }
+      }
+      else if(button_pressed == 1) {
+        Serial.print("day_of_week="); Serial.println(day_of_week);
+        Serial.print("is_lap_year="); Serial.println((int)is_lap_year);
+        Serial.print("month="); Serial.println(month);
+        if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
+          day_of_week = (day_of_week + 31) % 7;
+        }
+        if(month == 4 || month == 6 || month == 9 || month == 11) {
+          day_of_week = (day_of_week + 30) % 7;
+        }
+        if(month == 2) {
+          if(is_lap_year) {
+            day_of_week = (day_of_week + 29) % 7;
+          }
+          else {
+            day_of_week = (day_of_week + 28) % 7;
+          }
+        }
+        month++;
+        if(month > 12) {
+          month = 1;
+          year++;
+        }
+      }
+      redraw_flag = 1;
+      continue;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
   }
 }
 
@@ -2263,7 +2549,9 @@ void security(char mode, char *io_buff) {
 void counter(char mode, char *io_buff) {
   int button_pressed;
   long counter = 0;
+  int prev_touch_millis = 0;
   char buff[80] = "";
+  float bpm = 0;
   char password_correct_flag;
   char *buttons_inc[] = {
     "+",
@@ -2308,20 +2596,30 @@ void counter(char mode, char *io_buff) {
   
   while(1) {
     tft.fillRect(0, 16, tft.width(), 30, TFT_WHITE);
+
     tft.setTextColor(TFT_BLACK, TFT_WHITE);
-
     sprintf(buff, "%ld", counter);
-    tft.drawCentreString(buff, tft.width() / 2, 20, FONT_BIG);
+    tft.drawCentreString(buff, tft.width() / 2, 32, FONT_BIGGER);
 
-    drawButtonMatrix(8, 50, tft.width() - 8 * 2, 200, buttons_inc, 1, 1);
-    drawButtonMatrix(8, 250, tft.width() - 8 * 2, 50, buttons_other, 2, 1);
+    sprintf(buff, "   BPM: %f   ", bpm);
+    tft.drawCentreString(buff, tft.width() / 2, 210, FONT_DEFAULT);
+
+    drawButtonMatrix(0, 100, tft.width(), 100, buttons_inc, 1, 1);
+    drawButtonMatrix(0, tft.height() - 64, tft.width(), 64, buttons_other, 2, 1);
 
     touchWaitPress();
-    button_pressed = touchCheckMatrix(8, 50, tft.width() - 8 * 2, 200, buttons_inc, 1, 1);
+    button_pressed = (0, 100, tft.width(), 100, buttons_inc, 1, 1);
     if(button_pressed != -1) {
-      counter++;
+      // Защита от двойного срабатывания
+      if(millis() - prev_touch_millis > 100) {
+        counter++;
+        if(prev_touch_millis) {
+          bpm = (bpm + 60000 / ((float)(millis() - prev_touch_millis))) / 2;
+        }
+        prev_touch_millis = millis();
+      }
     }
-    button_pressed = touchCheckMatrix(8, 250, tft.width() - 8 * 2, 50, buttons_other, 2, 1);
+    button_pressed = touchCheckMatrix(0, tft.height() - 64, tft.width(), 64, buttons_other, 2, 1);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
         counter--;
@@ -4303,9 +4601,9 @@ void weather(char mode, char *io_buff) {
             if(temp_flag) {
               temp_flag = 0;
               wind_flag = 1;
-              // Начало строки с температурой
+              // Начало строки с температурой, без градусов цельсия
               memcpy(temp, buff, i - 2);
-              temp[i - 1] = 0;
+              temp[i - 2] = 0;
               from_offset = i + 1;
             }
             else if(wind_flag) {
@@ -4320,6 +4618,8 @@ void weather(char mode, char *io_buff) {
         tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
         tft.setTextColor(TFT_BLACK, TFT_WHITE);
         tft.drawCentreString(temp, tft.width() / 2, 35, FONT_BIGGER);
+        //tft.drawString("C", tft.width() / 2 + tft.textWidth(temp, FONT_BIGGER) / 2 + 8, 35, FONT_BIG);
+
         tft.drawCentreString(wind, tft.width() / 2, 100, FONT_BIG);
         tft.drawCentreString(weather, tft.width() / 2, 150, FONT_DEFAULT);
         update_flag = 0;
@@ -4346,7 +4646,8 @@ void weather(char mode, char *io_buff) {
         break;
       }
     }
-    if(update_flag) {
+    // Если нет касания и нужно обновить - обновляем
+    if(touchCheckNowait() == 0 && update_flag) {
       continue;
     }
     touchWaitPress();
@@ -4450,6 +4751,8 @@ void chat(char mode, char *io_buff) {
     return;
   }
 
+  strcpy(message, "");
+  strcpy(nickname, "");
   read_file_to_buff(CHAT_NICKNAME_FILE, 79, nickname);
   while(1) {
     drawPrompt("Your nickname (up to 10 chars)", nickname);
@@ -4522,7 +4825,7 @@ void chat(char mode, char *io_buff) {
         break;
       }
     }
-    if(update_flag) {
+    if(touchCheckNowait() == 0 && update_flag) {
       continue;
     }
     touchWaitPress();
@@ -5245,11 +5548,6 @@ void set_clock(char mode, char *io_buff) {
   clearScreen();
   drawAppTitle("Set Clock");
 
-#ifdef IS_WIFI_ENABLED
-  get_current_timestamp_wifi();
-  store_current_timestamp();
-#endif
-
   redraw_flag = 1;
   while(1) {
     // Обновляем время
@@ -5404,6 +5702,13 @@ void set_local_time_from_unix_timestamp() {
   int month;
   int day;
   char is_lap_year;
+  char retry_retrieve;
+  int prev_day;
+
+  // Если время уже было откуда-то загружено и день был установлен, то есть эта функция уже отработала раз
+  if(global_unixtime_retrieved != 0 && global_day != 0) {
+    retry_retrieve = 1;
+  }
 
   unix_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
 
@@ -5458,6 +5763,11 @@ void set_local_time_from_unix_timestamp() {
     break;
   }
 
+  // Если дата изменилась
+  if(retry_retrieve && global_day != day) {
+    store_current_timestamp();
+  }
+
   global_year = year;
   global_month = month;
   global_day = day;
@@ -5470,17 +5780,16 @@ void set_local_time_from_unix_timestamp() {
   global_moon_day = fmod(25 + days_since_epoch, 29.53059);
 }
 
-// Сохранить текущую дату, если она изменилась
-// Стараемся не делать лишних записей в ФС
+// Сохранить текущую дату в ФС
 void store_current_timestamp() {
   char buff[80];
   unsigned long current_timestamp;
   unsigned long saved_timestamp;
-  
+
+/*
   // Если время не было обновлено - ничего не делаем
   if(global_unixtime_retrieved == 0) return;
 
-  current_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
 
   read_file_to_buff("/Settings/Timestamp", 79, buff);
   sscanf(buff, "%lu", &saved_timestamp);
@@ -5494,6 +5803,11 @@ void store_current_timestamp() {
     sprintf(buff, "%lu", current_timestamp);
     write_file_from_buff("/Settings/Timestamp", buff);
   }
+  */
+  Serial.println("store_current_timestamp");
+  current_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
+  sprintf(buff, "%lu", current_timestamp);
+  write_file_from_buff("/Settings/Timestamp", buff);
 }
 
 void get_current_timestamp_fs() {
@@ -5779,6 +6093,7 @@ void edit_file(char *title, char *filename) {
   char *contents;
   char caps_flag = 0;
   char symbol_flag = 0;
+  char alt_flag = 0;
   int prev_width = 0;
   
   char *keyboard_nocaps[] = {
@@ -5802,6 +6117,21 @@ void edit_file(char *title, char *filename) {
     ":change:", "{", "}", "+", "-", "*", "/", "\\", "~", "|", "?", " ",
     NULL
   };
+  char *keyboard_alt_nocaps[] = {
+    "\xB8",  "!", "\"", "\xB9", ";", "%", ":", "?", "*", "(", ")", ":backspace:",
+    "\xE9", "\xF6", "\xF3", "\xEA", "\xE5", "\xED", "\xE3", "\xF8", "\xF9", "\xE7", "\xF5", "\xFA",
+    ":shift:", "\xF4", "\xFB", "\xE2", "\xE0", "\xEF", "\xF0", "\xEE", "\xEB", "\xE4", "\xE6", ":enter:",
+    ":change:", "\xFF", "\xF7", "\xF1", "\xEC", "\xE8", "\xF2", "\xFC", "\xE1", "\xFE", "\xFD", " ",
+    NULL
+  };
+  char *keyboard_alt_caps[] = {
+    "\xA8",  "!", "\"", "\xB9", ";", "%", ":", "?", "*", "(", ")", ":backspace:",
+    "\xC9", "\xD6", "\xD3", "\xCA", "\xC5", "\xCD", "\xC3", "\xD8", "\xD9", "\xC7", "\xD5", "\xDA",
+    ":shift:", "\xD4", "\xDB", "\xC2", "\xC0", "\xCF", "\xD0", "\xCE", "\xCB", "\xC4", "\xC6", ":enter:",
+    ":change:", "\xDF", "\xD7", "\xD1", "\xCC", "\xC8", "\xD2", "\xDC", "\xC1", "\xDE", "\xDD", " ",
+    NULL
+  };
+
   char **keyboard_current = keyboard_nocaps;
   fs::File file;
 
@@ -5981,12 +6311,31 @@ void edit_file(char *title, char *filename) {
     if(symbol_flag) {
       keyboard_current = keyboard_symbol;
     }
+#ifdef ALT_KEYBOARD_ENABLED
+    else if(caps_flag) {
+      if(alt_flag) {
+        keyboard_current = keyboard_alt_caps;
+      }
+      else {
+        keyboard_current = keyboard_caps;
+      }
+    }
+    else {
+      if(alt_flag) {
+        keyboard_current = keyboard_alt_nocaps;
+      }
+      else {
+        keyboard_current = keyboard_nocaps;
+      }
+    }
+#else
     else if(caps_flag) {
       keyboard_current = keyboard_caps;
     }
     else {
       keyboard_current = keyboard_nocaps;
     }
+#endif
 
     drawButtonMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
     
@@ -6001,13 +6350,22 @@ void edit_file(char *title, char *filename) {
           cursor_offset_bytes --;
         }
       }
-      else if(button == 12) {
-      }
+      // Tab
+      //else if(button == 12) {
+      //}
       else if(button == 24) {
         caps_flag = !caps_flag;
       }
       else if(button == 36) {
         symbol_flag = !symbol_flag;
+        if(!symbol_flag) {
+          if(alt_flag) {
+            alt_flag = 0;
+          }
+          else {
+            alt_flag = 1;
+          }
+        }
       }
       else {
         if(strlen(contents) < (EDIT_FILE_LENGTH_MAX - 1)) {
@@ -6498,6 +6856,7 @@ int drawPrompt(char *message, char *user_input) {
   int button = 0;
   char caps_flag = 0;
   char symbol_flag = 0;
+  char alt_flag = 0;
   char input[80] = "";
   int cursor_pos = 0;
 
@@ -6523,17 +6882,17 @@ int drawPrompt(char *message, char *user_input) {
     NULL
   };
   char *keyboard_alt_nocaps[] = {
-    "ё",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
-    "й", "ц", "у", "к", "е", "н", "г", "ш", "щ", "з", "х", "ъ",
-    ":shift:", "ф", "ы", "в", "а", "п", "р", "о", "л", "д", "ж", ":enter:",
-    ":change:", "я", "ч", "с", "м", "и", "т", "ь", "б", "ю", "э", " ",
+    "\xB8",  "!", "\"", "\xB9", ";", "%", ":", "?", "*", "(", ")", ":backspace:",
+    "\xE9", "\xF6", "\xF3", "\xEA", "\xE5", "\xED", "\xE3", "\xF8", "\xF9", "\xE7", "\xF5", "\xFA",
+    ":shift:", "\xF4", "\xFB", "\xE2", "\xE0", "\xEF", "\xF0", "\xEE", "\xEB", "\xE4", "\xE6", ":enter:",
+    ":change:", "\xFF", "\xF7", "\xF1", "\xEC", "\xE8", "\xF2", "\xFC", "\xE1", "\xFE", "\xFD", " ",
     NULL
   };
   char *keyboard_alt_caps[] = {
-    "Ё",  "!", "\"", "№", ";", "%", ":", "?", "*", "(", ")", ":backspace:",
-    "Й", "Ц", "У", "К", "Е", "Н", "Г", "Ш", "Щ", "З", "Х", "Ъ",
-    ":shift:", "Ф", "Ы", "В", "А", "П", "Р", "О", "Л", "Д", "Ж", ":enter:",
-    ":change:", "Я", "Ч", "С", "М", "И", "Т", "Ь", "Б", "Ю", "Э", " ",
+    "\xA8",  "!", "\"", "\xB9", ";", "%", ":", "?", "*", "(", ")", ":backspace:",
+    "\xC9", "\xD6", "\xD3", "\xCA", "\xC5", "\xCD", "\xC3", "\xD8", "\xD9", "\xC7", "\xD5", "\xDA",
+    ":shift:", "\xD4", "\xDB", "\xC2", "\xC0", "\xCF", "\xD0", "\xCE", "\xCB", "\xC4", "\xC6", ":enter:",
+    ":change:", "\xDF", "\xD7", "\xD1", "\xCC", "\xC8", "\xD2", "\xDC", "\xC1", "\xDE", "\xDD", " ",
     NULL
   };
   char **keyboard_current = keyboard_nocaps;
@@ -6564,12 +6923,31 @@ int drawPrompt(char *message, char *user_input) {
     if(symbol_flag) {
       keyboard_current = keyboard_symbol;
     }
+#ifdef ALT_KEYBOARD_ENABLED
+    else if(caps_flag) {
+      if(alt_flag) {
+        keyboard_current = keyboard_alt_caps;
+      }
+      else {
+        keyboard_current = keyboard_caps;
+      }
+    }
+    else {
+      if(alt_flag) {
+        keyboard_current = keyboard_alt_nocaps;
+      }
+      else {
+        keyboard_current = keyboard_nocaps;
+      }
+    }
+#else
     else if(caps_flag) {
       keyboard_current = keyboard_caps;
     }
     else {
       keyboard_current = keyboard_nocaps;
     }
+#endif
 
     drawButtonMatrix(0, PROMPT_OFFSET_Y + 40, tft.width(), 120, keyboard_current, 12, 4);
     
@@ -6581,8 +6959,9 @@ int drawPrompt(char *message, char *user_input) {
           input[strlen(input) - 1] = 0;
         }
       }
-      else if(button == 12) {
-      }
+      // Tab ?
+      //else if(button == 12) {
+      //}
       else if(button == 24) {
         caps_flag = !caps_flag;
       }
@@ -6592,6 +6971,14 @@ int drawPrompt(char *message, char *user_input) {
       }
       else if(button == 36) {
         symbol_flag = !symbol_flag;
+        if(!symbol_flag) {
+          if(alt_flag) {
+            alt_flag = 0;
+          }
+          else {
+            alt_flag = 1;
+          }
+        }
       }
       else {
         if(strlen(input) >= 79) continue;
@@ -7032,7 +7419,7 @@ char touchIsExitAction() {
   global_exit_flag_touch_length = millis() - global_exit_flag_touch_begin;
 
   // Если все условия выполнились - сообщаем о сигнале на выход
-  Serial.println(global_exit_flag_touch_length);
+  //Serial.println(global_exit_flag_touch_length);
   if(global_exit_flag_touch_length >= 1000) {
     global_exit_flag_touch_begin = 0;
     global_exit_flag_touch_length = 0;
