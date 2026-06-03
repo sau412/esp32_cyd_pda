@@ -53,17 +53,17 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Password
 * LED control
 * Calculator
-* Fifteen puzzle game
+* Fifteen puzzle game - see https://en.wikipedia.org/wiki/15_puzzle for details
 * Screensaver
 * Stopwatch
 * Timer
 * Breathing timer
 * Brightness
-* Lights Off puzzle game
+* Lights Off puzzle game - see https://en.wikipedia.org/wiki/Lights_Out_(game) for details
 * Life (Cellular automaton)
 * Wi-Fi connection
 * Clock stand
-* Gopher browser
+* Gopher browser - see https://ru.wikipedia.org/wiki/Gopher for details
 * Fuzzy clock
 * Weather
 * Chat
