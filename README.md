@@ -85,6 +85,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Gopher browser - see https://ru.wikipedia.org/wiki/Gopher for details
 * Weather
 * Chat
+* File Server (for backups and file upload)
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
