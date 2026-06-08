@@ -43,6 +43,8 @@
 - Просмотр шрифта
 - Игра змейка
 - Пасьянс турецкий платок
+- Файловый сервер (с загрузкой файлов)
+- Сохранение скриншотов по кнопке BOOT
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -89,27 +91,17 @@
   ключ-значение чтение и запись, сохранять текущее положение в книгах, процент в калькуляторе,
   прокрутка текста в drawPrompt, змейка
 2026-06-05 Просмотр шрифта, пасьянс турецкий платок
+2026-06-06 Исправлено несколько багов в турецком платке, зелёный фон
+2026-06-08 проблемы с большими файлами с SD, проблема с MP3, веб-сервер зато заработал, сохранение скриншотов по кнопке BOOT,
+  сохранять пароль вай-фая
 
 Направления работы:
 - Тетрис
 - Карточки на память (как Masterbrain)
 - Повтор последовательности
 
-F
-01111111
-00001001
-00001001
-00001001
-00000001
-
-0x38, 0x44, 0x44, 0x44, 0x28
-00111000
-01000100
-01000100
-01000100
-00101000
-
 Улучшения тут и там:
+- Проблема при работе с SD, запись больше 2 кб
 - В файловом менеджере открывать папки / файлы по двойному нажатию
 - Не прокручивать при редактировании дальше конца файла
 - Погода: символ градуса или цельсия возле температуры (выглядит ужасно если взять другой шрифт. Нужно другое решение)
@@ -119,12 +111,15 @@ F
 - Гофер браузер - баг с повторяющимися строками?
 - Гофер браузер - кнопка назад
 - Расписание: выводить планы на день по первому нажатию, редактирование по второму или двойному
-- Рисование: на SD не сохраняется картинка
 - Редактирование: меньше мигания
 - Просмотр: меньше мигания
 - Просмотр: прокручивать вперёд без перемотки файла
 - Выложить шрифты на гитхаб
 - Категории для PIM
+- Возможность отключать звук
+- Змейка баг двойная смена направления (проигрыш)
+- Пасьянс - более чёткий указатель
+- Если SD есть, то основная память SD, если нет то нет
 
 */
 
@@ -132,7 +127,7 @@ F
 
 #define IS_WIFI_ENABLED
 
-#define USE_SD_AS_STORAGE
+//#define USE_SD_AS_STORAGE
 
 #include <SPI.h>
 #include <TFT_eSPI.h>
@@ -142,12 +137,14 @@ F
 #include "FFat.h"
 #include "SD.h"
 #include <Wire.h>
+//#include "Audio.h" 
 
 #ifdef IS_WIFI_ENABLED
 
 #include "WiFi.h"
 #include <HTTPClient.h>
 #include <ESPping.h>
+#include <WebServer.h>
 
 #endif
 
@@ -173,6 +170,8 @@ TFT_eSPI tft = TFT_eSPI();
 #define I2C_SCL 22
 
 #define BUZZER_PIN 26
+
+#define BOOT_BUTTON_PIN 0
 
 // SD SPI pins
 #define SD_CS   5
@@ -302,6 +301,7 @@ void wifi(char mode, char *io_buff);
 void gopher(char mode, char *io_buff);
 void chat(char mode, char *io_buff);
 void weather(char mode, char *io_buff);
+void http_file_access(char mode, char *io_buff);
 #endif
 void screen_test(char mode, char *io_buff);
 void screensaver(char mode, char *io_buff);
@@ -352,6 +352,7 @@ function_application_pointer apps[] = {
   gopher,
   chat,
   weather,
+  http_file_access,
 #endif
   counter,
   random_numbers,
@@ -800,10 +801,10 @@ void system_info(char mode, char *io_buff) {
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
-    if(Storage.usedBytes() > 1024 * 1024) {
+    if(Storage.usedBytes() > 4096 * 1024) {
       sprintf(buff, "Storage Used: %d MiB (%d%%) ", Storage.usedBytes() / (1024 * 1024), (int)floor(100 * Storage.usedBytes() / Storage.totalBytes()));
     }
-    else if(Storage.usedBytes() > 1024) {
+    else if(Storage.usedBytes() > 4096) {
       sprintf(buff, "Storage Used: %d kiB (%d%%) ", Storage.usedBytes() / (1024), (int)floor(100 * Storage.usedBytes() / Storage.totalBytes()));
     }
     else {
@@ -2017,7 +2018,7 @@ void draw_edit(char *title, char *filename) {
           // Записываем данные изображения с экрана
           x = 0;
           y = 288;
-          while(file.available()) {
+          while(y >= 0) {
             // Половина ширины картинки (120) должна без остатка делиться на размер буфера
             for(i = 0; i < 60; i++) {
               byte = 0;
@@ -2037,13 +2038,13 @@ void draw_edit(char *title, char *filename) {
               buff[i] = byte;
             }
             file.write((const uint8_t *)buff, 60);
+            //file.flush();
             if(x >= tft.width()) {
               sprintf(buff, "Saving... (%d/288)", 288 - y);
               drawAppTitle(buff);
               x = 0;
               y--;
             }
-            if(y < 0) break;
           }
 
           file.close();
@@ -3926,7 +3927,7 @@ void snake(char mode, char *io_buff) {
       if(head_x == bait_x && head_y == bait_y) {
         length++;
         if(length > record) record = length;
-        tone(BUZZER_PIN, 3000, 100);
+        //tone(BUZZER_PIN, 3000, 100);
         bait_flag = 1;
       }
       else if(snake_get_cell(head_x, head_y, field)) {
@@ -4100,6 +4101,7 @@ void turkish_scarf(char mode, char *io_buff) {
   char cards_present_flag;
   char buff[80];
   int suit_color;
+  int tries;
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -4179,8 +4181,8 @@ void turkish_scarf(char mode, char *io_buff) {
   
   restart_flag = 1;
   while(1) {
-    if(restart_flag) {
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+    while(restart_flag) {
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_DARKGREEN);
       memset(field, 0xFF, 60);
       // Инициализируем колоду
       for(i = 0; i < 52; i++) {
@@ -4222,9 +4224,14 @@ void turkish_scarf(char mode, char *io_buff) {
             y++;
           } while(card1 != 0xFF);
         }
+        // 100 попыток положить вторую карту
+        // иначе возможна ситуция зависания, когда последние две карты оказываются в одной колонке
+        tries = 100;
         while(card2 != 0xFF) {
           y = 0;
           column2 = random(0, 10);
+          // В ту же нельзя
+          if(column1 == column2) continue;
           do {
             if(column2 + y  * 10 >= 52) break;
             if(field[column2 + y  * 10] == 0xFF) {
@@ -4233,11 +4240,18 @@ void turkish_scarf(char mode, char *io_buff) {
             }
             y++;
           } while(card2 != 0xFF);
+          tries--;
+          if(tries == 0) break;
         }
+        // Не удалось разложить поле, начинаем сначала
+        if(tries == 0) break;
       }
       column1 = -1;
       column2 = -1;
-      restart_flag = 0;
+      // Не удалось разложить поле, начинаем сначала
+      if(tries > 0) {
+        restart_flag = 0;
+      }
     }
 
     // Нарисовать поле
@@ -4246,7 +4260,7 @@ void turkish_scarf(char mode, char *io_buff) {
         if(x + y * 10 >= 52) break;
         card = field[x + y * 10];
         if(card == 0xFF) {
-          tft.fillRect(x * tft.width() / 10, 48 + y * 40, tft.width() / 10, 40, TFT_WHITE);
+          tft.fillRect(x * tft.width() / 10, 48 + y * 40, tft.width() / 10, 40, TFT_DARKGREEN);
         }
         else {
           suit = card / 13;
@@ -4258,11 +4272,10 @@ void turkish_scarf(char mode, char *io_buff) {
             suit_color = TFT_RED;
           }
           tft.setTextColor(suit_color, TFT_WHITE);
-
+          tft.fillRoundRect(x * tft.width() / 10 + 1, 48 + y * 40 + 1, tft.width() / 10 - 2, 40 - 2, 3, TFT_WHITE);
           tft.drawRoundRect(x * tft.width() / 10 + 1, 48 + y * 40 + 1, tft.width() / 10 - 2, 40 - 2, 3, TFT_BLACK);
           tft.drawCentreString(cards[card], x * tft.width() / 10 + tft.width() / 20, 48 + y * 40 + 4, FONT_DEFAULT);
           image_from_bits(x * tft.width() / 10 + tft.width() / 20 - 4, 48 + y * 40 + 20 + 2, suit_images[suit], suit_color, TFT_WHITE);
-          //tft.drawCentreString(suits[suit], x * tft.width() / 10 + tft.width() / 20, 48 + y * 40 + 20, FONT_DEFAULT);
         }
       }
     }
@@ -4292,13 +4305,14 @@ void turkish_scarf(char mode, char *io_buff) {
           if(y < 0) break;
         }
         if(y >= 0) card2 = field[j + y * 10] % 13;
+        if(card2 != 0xFF) cards_present_flag = 1;
         if(card1 == card2) {
           moves++;
           break;
         }
       }
     }
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
     sprintf(buff, "Moves: %d", moves);
     tft.drawString(buff, 1, 16, FONT_DEFAULT);
 
@@ -4322,8 +4336,8 @@ void turkish_scarf(char mode, char *io_buff) {
     column2 = column1;
     column1 = touch_x / (tft.width() / 10);
 
-    tft.fillRect(0, tft.height() - 16, tft.width(), 16, TFT_WHITE);
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.fillRect(0, tft.height() - 16, tft.width(), 16, TFT_DARKGREEN);
+    tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
     tft.drawCentreString("^", column1 * tft.width() / 10 + tft.width() / 20, tft.height() - 16, FONT_DEFAULT);
 
     Serial.print("column1="); Serial.println(column1);
@@ -4622,6 +4636,7 @@ void wifi_select_network() {
     if(button_pressed != -1) {
       if(button_pressed == 0) {
         strcpy(password, "");
+        read_key_value_from_file("/Settings/Wifi", networks[network_selected], password);
         drawPrompt("Enter password", password);
         WiFi.begin(networks[network_selected], password);
         millis_connecting_start = millis();
@@ -4632,6 +4647,7 @@ void wifi_select_network() {
         
         if(wifi_status == WL_CONNECTED) {
           WiFi.setAutoReconnect(true);
+          write_key_value_to_file("/Settings/Wifi", networks[network_selected], password);
           drawInfo("Connected");
           return;
         }
@@ -5578,6 +5594,217 @@ void chat(char mode, char *io_buff) {
     }
     touchWaitRelease();
   }
+}
+
+WebServer httpServer(80);
+
+void http_file_access(char mode, char *io_buff) {
+  HTTPClient http;
+  int httpResponseCode;
+  int button_pressed;
+  int wifi_status;
+  long prev_update_data_millis;
+  int i;
+  int screen_line;
+  int messages_offset;
+  int buff_offset;
+  char buff[80];
+  char nickname[80];
+  char *query = NULL;
+  char message[80];
+  char *messages = NULL;
+  char *prev_messages = NULL;
+  char update_flag;
+  char *buttons[] = {
+    "Send message",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000100, B00000010,
+    B01001110, B00100010,
+    B01011111, B00100010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01000100, B11111010,
+    B01000100, B01110010,
+    B01000000, B00100010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "File Server");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("File Server");
+
+  wifi_status = WiFi.status();
+  if(wifi_status != WL_CONNECTED && global_unixtime_retrieved == 0) {
+    drawError("Wi-Fi connection required");
+    return;
+  }
+
+  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.drawString("Use next URL to control files:", 1, 20, FONT_DEFAULT);
+  sprintf(buff, "http://%s/", WiFi.localIP().toString());
+  tft.drawString(buff, 1, 36, FONT_DEFAULT);
+
+  httpServer.begin();
+  httpServer.on("/", http_file_access_handle);
+  httpServer.on("/upload", HTTP_POST, http_file_upload_handle_done, http_file_upload_handle);
+
+  while(1) {
+    httpServer.handleClient();
+    if(touchCheckNowait() == 0) continue;
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      global_exit_flag = 0;
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void http_file_access_handle() {
+  char *contents = NULL;
+  char upload_form_begin[] = "<br>\n<form method='POST' action='/upload' enctype='multipart/form-data'>";
+  char upload_form_end[] = "<input type=file name=file>\n<input type=submit value='Upload'>\n</form>\n";
+  char filename[80];
+  char buff[80];
+  fs:File file;
+  // Если есть filename - выдать содержимое
+  if(httpServer.hasArg("filename")) {
+    strcpy(filename, httpServer.arg("filename").c_str());
+  }
+  else {
+    strcpy(filename, "/");
+  }
+  file = Storage.open(filename);
+  if(file) {
+    if(file.isDirectory()) {
+      contents = (char *)malloc(20000 * sizeof(char));
+      strcpy(contents, "");
+      sprintf(buff, "Used: %d bytes of %d bytes (%d %%)<br>\n", Storage.usedBytes(), Storage.totalBytes(), (int)floor(100 * Storage.usedBytes() / Storage.totalBytes()));
+      strcat(contents, buff);
+      strcat(contents, "<b>Files:</b><br>\n<br>\n");
+      http_file_access_show_dir(filename, contents);
+      strcat(contents, upload_form_begin);
+      sprintf(buff, "<input type=hidden name=path value='%s'>", filename);
+      strcat(contents, buff);
+      strcat(contents, upload_form_end);
+      httpServer.send(200, "text/html", contents);
+      free(contents);
+    }
+    else {
+      sprintf(buff, "attachment; filename=\"%s\"", file.name());
+      httpServer.sendHeader("Content-Disposition", buff);
+      httpServer.streamFile(file, "text/plain");
+    }
+    file.close();
+  }
+  else {
+    httpServer.send(404, "text/plain", "No such file");
+  }
+}
+
+void http_file_access_show_dir(char *path, char *contents) {
+  Serial.println(path);
+  fs::File file;
+  fs::File current_dir;
+  char buff[80];
+  char updir[80];
+  current_dir = Storage.open(path);
+  if(current_dir.isDirectory()) {
+    // Если это не корневая папка, то добавляем ссылки
+    if(strcmp(path, "/")) {
+      strcpy(updir, path);
+      while(strlen(updir) > 0 && updir[strlen(updir) - 1] != '/') {
+        updir[strlen(updir) - 1] = 0;
+      }
+      sprintf(buff, "<a href='?filename=%s'>..</a><br>\n", updir);
+      strcat(contents, buff);
+    }
+    while(file = current_dir.openNextFile()) {
+      if(strcmp(path, "/")) {
+        if(file.isDirectory()) {
+          sprintf(buff, "<a href='?filename=%s/%s'>%s/%s</a> (dir)<br>\n", path, file.name(), path, file.name());
+        }
+        else {
+          sprintf(buff, "<a href='?filename=%s/%s'>%s/%s</a> (%d bytes)<br>\n", path, file.name(), path, file.name(), file.size());
+        }
+      }
+      else {
+        if(file.isDirectory()) {
+          sprintf(buff, "<a href='?filename=/%s'>/%s</a> (dir)<br>\n", file.name(), file.name());
+        }
+        else {
+          sprintf(buff, "<a href='?filename=/%s'>/%s</a> (%d bytes)<br>\n", file.name(), file.name(), file.size());
+        }
+      }
+      strcat(contents, buff);
+    }
+  }
+}
+
+fs::File uploadFile;
+
+void http_file_upload_handle() {
+  char buff[80];
+  HTTPUpload& upload = httpServer.upload();
+
+  if (upload.status == UPLOAD_FILE_START) {
+    String filename = upload.filename;
+
+    if(httpServer.hasArg("path")) {
+      filename = httpServer.arg("path") + "/" + filename;
+    }
+    else if(!filename.startsWith("/")) {
+      filename = "/" + filename;
+    }
+
+    Serial.printf("Start upload: %s\n", filename.c_str());
+    // Open file for writing in LittleFS
+    uploadFile = Storage.open(filename, FILE_WRITE);
+  } 
+  else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (uploadFile) {
+      // Write the chunk of received data to flash memory
+      uploadFile.write(upload.buf, upload.currentSize);
+    }
+  } 
+  else if (upload.status == UPLOAD_FILE_END) {
+    if (uploadFile) {
+      uploadFile.close(); // Save and close file
+      Serial.printf("Upload success: %u bytes\n", upload.totalSize);
+    } else {
+      httpServer.send(500, "text/plain", "File creation failed");
+    }
+  }
+}
+
+void http_file_upload_handle_done() {
+  if(httpServer.hasArg("path")) {
+    httpServer.sendHeader("Location", "/?filename=" + httpServer.arg("path"));
+  }
+  else {
+    httpServer.sendHeader("Location", "/");
+  }
+  httpServer.send(301, "text/html", "");
 }
 
 #endif
@@ -7614,6 +7841,103 @@ double det3(double x11, double x12, double x13, double x21, double x22, double x
     - x11 * x23 * x32;
 }
 
+// Сохраняет скриншот в папку скриншотов
+void saveScreenshot() {
+  fs::File file;
+  int x;
+  int y;
+  int i;
+  char buff[80];
+  char filename[80];
+  char byte;
+  int pixel_color;
+  unsigned char bmp_header[118] = {
+    0x42, 0x4D, 0x76, 0x96, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x00,
+    0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0xF0, 0x00, 0x00, 0x00, 0x40, 0x01,
+    0x00, 0x00, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x96,
+    0x00, 0x00, 0xC2, 0x0E, 0x00, 0x00, 0xC2, 0x0E, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x80, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x80, 0x80, 0x00, 0x80, 0x00,
+    0x00, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x80, 0x00, 0x00, 0x80, 0x80,
+    0x80, 0x00, 0xC0, 0xC0, 0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF,
+    0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x00,
+    0xFF, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00
+  };
+  int colors[] = {
+    TFT_BLACK, TFT_MAROON, TFT_DARKGREEN, TFT_OLIVE,
+    TFT_NAVY, TFT_PURPLE, TFT_DARKCYAN, TFT_LIGHTGREY,
+    TFT_DARKGREY, TFT_RED, TFT_GREEN, TFT_YELLOW,
+    TFT_BLUE, TFT_MAGENTA, TFT_CYAN, TFT_WHITE};
+  int color_index;
+  
+  tone(BUZZER_PIN, 1000, 100);
+
+  // Создать папку если её ещё нет
+  file = Storage.open("/Screenshots");
+  if(!file) {
+    Storage.mkdir("/Screenshots");
+  }
+  else {
+    file.close();
+  }
+
+  // Ищем несущестующее имя файла
+  i = 0;
+  while(1) {
+    sprintf(filename, "/Screenshots/%d.bmp", i);
+    file = Storage.open(filename);
+    if(file) {
+      file.close();
+    }
+    else {
+      break;
+    }
+    i++;
+  }
+
+  // Сохраняем скриншот
+  file = Storage.open(filename, FILE_WRITE);
+  file.write((const uint8_t *)bmp_header, 118);
+
+  // Записываем данные изображения с экрана
+  x = 0;
+  y = tft.height() - 1;
+  while(y >= 0) {
+    // Половина ширины картинки (120) должна без остатка делиться на размер буфера
+    for(i = 0; i < 60; i++) {
+      byte = 0;
+      pixel_color = tft.readPixel(x, y);
+      for(color_index = 0; color_index < 16; color_index++) {
+        if(pixel_color == colors[color_index]) break;
+      }
+      byte |= color_index << 4;
+      x++;
+      pixel_color = tft.readPixel(x, y);
+      for(color_index = 0; color_index < 16; color_index++) {
+        if(pixel_color == colors[color_index]) break;
+      }
+      byte |= color_index;
+      x++;
+      //file.write(byte);
+      buff[i] = byte;
+    }
+    
+    file.write((const uint8_t *)buff, 60);
+
+    if(x >= tft.width()) {
+      // Мигаем светодиодом для индикации прогресса
+      digitalWrite(LED_RED, y % 2);
+      x = 0;
+      y--;
+    }
+  }
+
+  file.close();
+
+  tone(BUZZER_PIN, 1000, 100);
+  digitalWrite(LED_RED, HIGH);
+}
+
 void clearScreen() {
   tft.fillScreen(TFT_WHITE);
 }
@@ -8266,6 +8590,7 @@ void touchWaitPress() {
   while(!touchscreen.tirqTouched() || !touchscreen.touched()) {
     global_exit_flag_touch_begin = 0;
     if(global_exit_flag) return;
+    if(digitalRead(BOOT_BUTTON_PIN) == LOW) saveScreenshot();
   }
   global_touch_begin = millis();
   delay(20);
@@ -8299,7 +8624,7 @@ void touchWaitRelease() {
 }
 
 char touchCheckNowait() {
-  //Serial.println(global_touch_length);
+  if(digitalRead(BOOT_BUTTON_PIN) == LOW) saveScreenshot();
   // Проверить касание без блокировки
   if(touchscreen.tirqTouched() && touchscreen.touched()) {
     if(!global_touch_present_flag) {
@@ -8379,12 +8704,12 @@ int read_key_value_from_file(char *filename, char *key, char *value) {
       offset = 0;
       while(file.available()) {
         byte = file.read();
-        str[offset] = byte;
-        offset++;
-        str[offset] = 0;
         if(byte == '\n' && file.peek() == '\r') file.read();
         if(byte == '\r' && file.peek() == '\n') file.read();
         if(byte == '\n' || byte == '\r') break;
+        str[offset] = byte;
+        offset++;
+        str[offset] = 0;
       }
       // Если строка совпадает с ключом, то копируем значение в буфер
       if(!memcmp(key, str, strlen(key)) && str[strlen(key)] == '=') {
