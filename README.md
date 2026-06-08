@@ -63,6 +63,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * I2C Scanner
 * Set clock and timezone
 * View Fonts
+* Make screenshot with BOOT button
 
 ## PIM apps
 * Calculator
