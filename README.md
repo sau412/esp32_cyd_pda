@@ -24,7 +24,7 @@ PDA is Personal Digital Assistant. Small handheld computer. Like smartphone with
 * Replace User_Setup.h with a file from https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display/blob/main/DisplayConfig/User_Setup.h
 * Add ESP32 libraries 
 * Board Selection: In the Arduino IDE, go to Tools > Board and select ESP32-2432S028R
-* Set in Arduino IDE Tools - Partition scheme - Default 4 Mb with FFat (1.2 MP APP/1.5 MB FATFS)
+* Set in Arduino IDE Tools - Partition scheme - No OTA (2 MP APP/2 MB FATFS)
 * Compile and upload
 * Done
 
