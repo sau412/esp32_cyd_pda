@@ -94,32 +94,54 @@
 2026-06-06 Исправлено несколько багов в турецком платке, зелёный фон
 2026-06-08 проблемы с большими файлами с SD, проблема с MP3, веб-сервер зато заработал, сохранение скриншотов по кнопке BOOT,
   сохранять пароль вай-фая
+2026-06-09 Баг двойной смены направления в змейке, игра memory match, автозапуск, ханойские башни, пианино, группы приложений
 
 Направления работы:
-- Тетрис
-- Карточки на память (как Masterbrain)
+- Читать всю ФС как файл (для бэкапов на SD/http сервер)
+- Записывать всю ФС как файл (для восстановления из бэкапа)
+- Приложение настроек
+- Группы приложений в лаунчере? А то уже в экран не влезает
 - Повтор последовательности
+- N назад
+- Терминал
+- Устный счёт
+- Карточки для запоминания слов
+- Справка
+- Бэкапы (SD)
+- IRC
+- Консоль для пингов и прочего
+- Бэкапы (через сеть)
+- RSS
+- 2048
+- Камешки (Bejeweled)
+- Ханойские башни
+- Арканоид
+- Проигрыватель мелодий нокии
+- Метроном
+- Тетрис
+- MP3-плеер
+- Интернет-радио
 
 Улучшения тут и там:
-- Проблема при работе с SD, запись больше 2 кб
-- В файловом менеджере открывать папки / файлы по двойному нажатию
-- Не прокручивать при редактировании дальше конца файла
-- Погода: символ градуса или цельсия возле температуры (выглядит ужасно если взять другой шрифт. Нужно другое решение)
-- Prompt - возможность переставлять курсор
-- Гофер браузер - менять домашнюю страницу
-- Гофер браузер - специальная домашняя страница для CYD с объяснениями
-- Гофер браузер - баг с повторяющимися строками?
-- Гофер браузер - кнопка назад
-- Расписание: выводить планы на день по первому нажатию, редактирование по второму или двойному
-- Редактирование: меньше мигания
-- Просмотр: меньше мигания
-- Просмотр: прокручивать вперёд без перемотки файла
-- Выложить шрифты на гитхаб
-- Категории для PIM
-- Возможность отключать звук
-- Змейка баг двойная смена направления (проигрыш)
-- Пасьянс - более чёткий указатель
-- Если SD есть, то основная память SD, если нет то нет
+- (б) Проблема при работе с SD, запись больше 2 кб
+- (б) Гофер браузер - баг с повторяющимися строками?
+- (д) В файловом менеджере открывать папки / файлы по двойному нажатию
+- (д) Не прокручивать при редактировании дальше конца файла
+- (д) Погода: символ градуса или цельсия возле температуры (выглядит ужасно если взять другой шрифт. Нужно другое решение)
+- (д) Prompt - возможность переставлять курсор
+- (д) Гофер браузер - менять домашнюю страницу
+- (д) Гофер браузер - специальная домашняя страница для CYD с объяснениями
+- (д) Гофер браузер - кнопка назад
+- (д) Расписание: выводить планы на день по первому нажатию, редактирование по второму или двойному
+- (д) Редактирование: меньше мигания
+- (д) Просмотр: меньше мигания
+- (д) Просмотр: прокручивать вперёд без перемотки файла
+- (д) Выложить шрифты на гитхаб
+- (д) Категории для PIM
+- (д) Возможность отключать звук
+- (д) Пасьянс - более чёткий указатель
+- (д) Если SD есть, то основная память SD, если нет то нет
+- (д) Автозапуск - настройка для выбора
 
 */
 
@@ -329,12 +351,18 @@ void set_clock(char mode, char *io_buff);
 void snake(char mode, char *io_buff);
 void view_font(char mode, char *io_buff);
 void turkish_scarf(char mode, char *io_buff);
+void memory_match(char mode, char *io_buff);
+void hanoi_towers(char mode, char *io_buff);
+void piano(char mode, char *io_buff);
+void time_and_date_group(char mode, char *io_buff);
+void games_group(char mode, char *io_buff);
+void launcher_return_back(char mode, char *io_buff);
 
 typedef void (*function_application_pointer) (char mode, char *io_buff);
 typedef void (*function_action_pointer) (int action, char *filename);
 typedef void (*function_conversion_pointer) (fs::File file, char *buff);
 
-function_application_pointer apps[] = {
+function_application_pointer apps[40] = {
   launcher,
   calculator,
   files,
@@ -356,26 +384,54 @@ function_application_pointer apps[] = {
 #endif
   counter,
   random_numbers,
-  timer,
-  stopwatch_app,
-  breathe,
+  //timer,
+  //stopwatch_app,
+  //breathe,
+  piano,
   screen_test,
   screensaver,
   security,
   brightness_app,
   touch_calibration,
+  //fifteen,
+  //lights_off,
+  //snake,
+  //turkish_scarf,
+  //memory_match,
+  //hanoi_towers,
+  life,
+  i2c_scanner,
+  dashboard,
+  //fuzzy_clock,
+  //set_clock,
+  view_font,
+  time_and_date_group,
+  games_group,
+  NULL
+};
+function_application_pointer time_and_date_apps[40] = {
+  launcher,
+  launcher_return_back,
+  timer,
+  stopwatch_app,
+  breathe,
+  dashboard,
+  fuzzy_clock,
+  set_clock,
+  NULL
+};
+function_application_pointer games_apps[40] = {
+  launcher,
+  launcher_return_back,
   fifteen,
   lights_off,
   snake,
   turkish_scarf,
-  life,
-  i2c_scanner,
-  dashboard,
-  fuzzy_clock,
-  set_clock,
-  view_font,
+  memory_match,
+  hanoi_towers,
   NULL
 };
+function_application_pointer main_apps[40];
 
 void launcher(char mode, char *io_buff) {
   int touch_x;
@@ -471,6 +527,115 @@ void launcher(char mode, char *io_buff) {
     }
   }
 }
+
+void time_and_date_group(char mode, char *io_buff) {
+  int i;
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B00011111, B11111110,
+    B00010000, B00000010,
+    B01110000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01011111, B11111110,
+    B01000000, B00001000,
+    B01111111, B11111000,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Time & Date");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  for(i = 0; i < 40; i++) {
+    apps[i] = time_and_date_apps[i];
+  }
+}
+
+void games_group(char mode, char *io_buff) {
+  int i;
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B00011111, B11111110,
+    B00010000, B00000010,
+    B01110000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01010000, B00000010,
+    B01011111, B11111110,
+    B01000000, B00001000,
+    B01111111, B11111000,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Games");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  for(i = 0; i < 40; i++) {
+    apps[i] = games_apps[i];
+  }
+}
+
+void launcher_return_back(char mode, char *io_buff) {
+  int i;
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01001000, B00000010,
+    B00011000, B00000010,
+    B00111000, B00000010,
+    B01111111, B11110010,
+    B01111111, B11110010,
+    B00111000, B00000010,
+    B00011000, B00000010,
+    B01001000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Back");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  for(i = 0; i < 40; i++) {
+    apps[i] = main_apps[i];
+  }
+}
+
 
 void calculator(char mode, char *io_buff) {
   double a = 0;
@@ -3815,6 +3980,7 @@ void life_set_cell(int x, int y, char *field, char value) {
 #define SNAKE_CELL_PIXELS 8
 #define SNAKE_FIELD_WIDTH_CELLS (tft.width() / SNAKE_CELL_PIXELS)
 #define SNAKE_FIELD_HEIGHT_CELLS ((tft.height() - 32) / SNAKE_CELL_PIXELS)
+#define SNAKE_MOVE_INTERVAL_MILLIS 200
 
 void snake(char mode, char *io_buff) {
   char *field = NULL;
@@ -3825,6 +3991,7 @@ void snake(char mode, char *io_buff) {
   long prev_millis = 0;
   TS_Point p;
   char direction = 'u';
+  char next_direction = direction;
   int head_x = SNAKE_FIELD_WIDTH_CELLS / 2;
   int head_y = SNAKE_FIELD_HEIGHT_CELLS / 2;
   int bait_x;
@@ -3908,7 +4075,8 @@ void snake(char mode, char *io_buff) {
     }
 
     // Игоровой цикл
-    if(millis() - prev_millis > 200) {
+    if(millis() - prev_millis > SNAKE_MOVE_INTERVAL_MILLIS) {
+      direction = next_direction;
       // Перемещаем голову
       if(direction == 'u') {
         head_y--;
@@ -4017,21 +4185,20 @@ void snake(char mode, char *io_buff) {
     touch_y = touchMapY(p.x, p.y) * 100 / tft.height();
     if(touch_x > touch_y) {
       if(touch_x > 100 - touch_y) {
-        if(direction != 'l') direction = 'r';
+        if(direction != 'l') next_direction = 'r';
       }
       else {
-        if(direction != 'd') direction = 'u';
+        if(direction != 'd') next_direction = 'u';
       }
     }
     else {
       if(touch_y > 100 - touch_x) {
-        if(direction != 'u') direction = 'd';
+        if(direction != 'u') next_direction = 'd';
       }
       else {
-        if(direction != 'r') direction = 'l';
+        if(direction != 'r') next_direction = 'l';
       }
     }
-    Serial.println(direction);
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
@@ -7691,6 +7858,319 @@ void fifteen(char mode, char *io_buff) {
   }
 }
 
+void memory_match(char mode, char *io_buff) {
+  int button_pressed;
+  int i;
+  int j;
+  int level = 1;
+  int steps = 0;
+  int item_selected = -1;
+  char shuffle_flag = 1;
+  char won_flag = 0;
+  char buff[80];
+  char empty[] = "";
+  char *tmp = NULL;
+  char *buttons_show[] = {
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    NULL
+  };
+  char *buttons[] = {
+    "1", "1", "2", "2", "3",
+    "3", "4", "4", "5", "5",
+    "6", "6", "7", "7", "8",
+    "8", "9", "9", "10", "10",
+    "11", "11", "12", "12", "13",
+    "13", "14", "14", "15", "15",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111110, B01111110,
+    B01000010, B01000010,
+    B01000010, B01001010,
+    B01000010, B01001010,
+    B01000010, B01000010,
+    B01111110, B01111110,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B01111110, B01111110,
+    B01000010, B01000010,
+    B01001010, B01000010,
+    B01001010, B01000010,
+    B01000010, B01000010,
+    B01111110, B01111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Memory Match");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Memory Match");
+
+  shuffle_flag = 1;
+  while(1) {
+    if(shuffle_flag) {
+      // Перемешиваем
+      for(i = 0; i < 30; i++) {
+        buttons_show[i] = empty;
+        j = random(0, 30);
+        tmp = buttons[i];
+        buttons[i] = buttons[j];
+        buttons[j] = tmp;
+      }
+      steps = 0;
+      shuffle_flag = 0;
+      item_selected = -1;
+    }
+
+    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    sprintf(buff, "Level: %d", level);
+    tft.drawString(buff, 8, 20, FONT_DEFAULT);
+
+    sprintf(buff, "Steps: %d", steps);
+    tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
+
+    drawButtonMatrix(0, 44, tft.width(), tft.height() - 44, buttons_show, 5, 6);
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, 44, tft.width(), tft.height() - 44, buttons_show, 5, 6);
+    if(button_pressed != -1) {
+      if(buttons_show[button_pressed] == empty) {
+        if(item_selected == -1) {
+          item_selected = button_pressed;
+          buttons_show[button_pressed] = buttons[button_pressed];
+        }
+        else {
+          if(button_pressed != item_selected) {
+            buttons_show[button_pressed] = buttons[button_pressed];
+            drawButtonMatrix(0, 44, tft.width(), tft.height() - 44, buttons_show, 5, 6);
+            if(strcmp(buttons[button_pressed], buttons[item_selected])) {
+              // Если отличаются
+              delay(1000);
+              buttons_show[button_pressed] = empty;
+              buttons_show[item_selected] = empty;
+            }
+            item_selected = -1;
+            steps++;
+          }
+        }
+      }
+    }
+
+    won_flag = 1;
+    for(i = 0; i < 30; i++) {
+      if(buttons_show[i] == empty) won_flag = 0;
+    }
+    if(won_flag) {
+      drawInfo("You won!");
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      shuffle_flag = 1;
+      steps = 0;
+      level++;
+      won_flag = 0;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+#define HANOI_TOWERS_MAX_LEVEL 16
+
+void hanoi_towers(char mode, char *io_buff) {
+  TS_Point p;
+  int touch_x, touch_y;
+  int button_pressed;
+  int i;
+  int j;
+  int level = 3;
+  int steps = 0;
+  int item_selected = -1;
+  int column1, column2;
+  char restart_flag = 1;
+  char won_flag = 0;
+  char buff[80];
+  int towers[HANOI_TOWERS_MAX_LEVEL * 3];
+  int colors[] = {
+    TFT_BLACK, TFT_RED, TFT_GREEN, TFT_YELLOW,
+    TFT_BLUE, TFT_MAGENTA, TFT_CYAN, TFT_WHITE,
+    TFT_MAROON, TFT_DARKGREEN, TFT_OLIVE, TFT_NAVY,
+    TFT_PURPLE, TFT_DARKCYAN, TFT_LIGHTGREY, TFT_DARKGREY,
+    TFT_BLACK};
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01000011, B11000010,
+    B01000001, B10000010,
+    B01000111, B11100010,
+    B01000001, B10000010,
+    B01001111, B11110010,
+    B01000001, B10000010,
+    B01011111, B11111010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Hanoi Towers");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Hanoi Towers");
+
+  restart_flag = 1;
+  while(1) {
+    if(restart_flag) {
+      // Инициализируем
+      for(i = 0; i < HANOI_TOWERS_MAX_LEVEL * 3; i++) {
+        towers[i] = 0;
+      }
+      for(i = 0; i < level; i++) {
+        towers[i] = level - i;
+      }
+      steps = 0;
+      restart_flag = 0;
+      column1 = -1;
+      column2 = -1;
+    }
+
+    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    sprintf(buff, "Level: %d", level);
+    tft.drawString(buff, 8, 20, FONT_DEFAULT);
+
+    sprintf(buff, "Steps: %d", steps);
+    tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
+
+    // Рисуем поле
+    tft.drawLine(0, tft.height() - 16, tft.width(), tft.height() - 16, TFT_BLACK);
+    for(j = 0; j < 3; j++) {
+      for(i = 0; i < HANOI_TOWERS_MAX_LEVEL; i++) {
+        tft.fillRect(j * tft.width() / 3 + tft.width() / 6 - 8 - HANOI_TOWERS_MAX_LEVEL * 2, tft.height() - i * 16 - 32, 16 + HANOI_TOWERS_MAX_LEVEL * 4, 16, TFT_WHITE);
+        if(towers[i + j * HANOI_TOWERS_MAX_LEVEL] > 0) {
+          tft.drawRect(j * tft.width() / 3 + tft.width() / 6 - 8 - towers[i + j * HANOI_TOWERS_MAX_LEVEL] * 2, tft.height() - i * 16 - 32, 16 + towers[i + j * HANOI_TOWERS_MAX_LEVEL] * 4, 17, TFT_BLACK);
+          tft.fillRect(j * tft.width() / 3 + tft.width() / 6 - 8 - towers[i + j * HANOI_TOWERS_MAX_LEVEL] * 2 + 1, tft.height() - i * 16 - 32 + 1, 16 + towers[i + j * HANOI_TOWERS_MAX_LEVEL] * 4 - 2, 17 - 2, colors[towers[i + j * HANOI_TOWERS_MAX_LEVEL]]);
+          if(colors[towers[i + j * HANOI_TOWERS_MAX_LEVEL]] == TFT_BLACK) {
+            tft.setTextColor(TFT_WHITE, colors[towers[i + j * HANOI_TOWERS_MAX_LEVEL]]);
+          }
+          else {
+            tft.setTextColor(TFT_BLACK, colors[towers[i + j * HANOI_TOWERS_MAX_LEVEL]]);
+          }
+          sprintf(buff, "%d", towers[i + j * HANOI_TOWERS_MAX_LEVEL]);
+          tft.drawCentreString(buff, j * tft.width() / 3 + tft.width() / 6 + 1, tft.height() - i * 16 - 32 + 5, FONT_MONOSPACE);
+        }
+        else {
+          tft.fillRect(j * tft.width() / 3 + tft.width() / 6 - 2, tft.height() - i * 16 - 32, 4, 17, TFT_BLACK);
+        }
+      }
+    }
+
+    // Проверяем победу
+    won_flag = 1;
+    // Проверяем что левые два столбца пустые
+    for(i = 0; i < 2 * HANOI_TOWERS_MAX_LEVEL; i++) {
+      if(towers[i] != 0) won_flag = 0;
+    }
+    if(won_flag) {
+      drawInfo("You won!");
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      restart_flag = 1;
+      steps = 0;
+      level = min(level + 1, HANOI_TOWERS_MAX_LEVEL);
+      won_flag = 0;
+      continue;
+    }
+
+    touchWaitPress();
+    tft.fillRect(0, tft.height() - 15, tft.width(), 15, TFT_WHITE);
+    TS_Point p = touchscreen.getPoint();
+    touch_x = touchMapX(p.x, p.y);
+    touch_y = touchMapY(p.x, p.y);
+
+    if(column1 == -1) {
+      column1 = touch_x / (tft.width() / 3);
+      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.drawCentreString("^", column1 * tft.width() / 3 + tft.width() / 6, tft.height() - 15, FONT_DEFAULT);
+    }
+    else {
+      column2 = touch_x / (tft.width() / 3);
+      if(column1 == column2) {
+        column1 = column2;
+        column2 = -1;
+        tft.setTextColor(TFT_BLACK, TFT_WHITE);
+        tft.drawCentreString("^", column1 * tft.width() / 3 + tft.width() / 6, tft.height() - 15, FONT_DEFAULT);
+      }
+      else {
+        // Верхний элемент первого столбца
+        i = HANOI_TOWERS_MAX_LEVEL - 1;
+        while(i > 0) {
+          if(towers[i + column1 * HANOI_TOWERS_MAX_LEVEL] != 0) break;
+          i--;
+        }
+        // Верхний элемент второго столбца
+        j = HANOI_TOWERS_MAX_LEVEL - 1;
+        while(j > 0) {
+          if(towers[j + column2 * HANOI_TOWERS_MAX_LEVEL] != 0) break;
+          j--;
+        }
+
+        // Если можно переставлять, то переставляем
+        if(towers[j + column2 * HANOI_TOWERS_MAX_LEVEL] == 0) {
+          towers[j + column2 * HANOI_TOWERS_MAX_LEVEL] = towers[i + column1 * HANOI_TOWERS_MAX_LEVEL];
+          towers[i + column1 * HANOI_TOWERS_MAX_LEVEL] = 0;
+          steps++;
+        }
+        else if(towers[i + column1 * HANOI_TOWERS_MAX_LEVEL] < towers[j + column2 * HANOI_TOWERS_MAX_LEVEL]) {
+          towers[j + 1 + column2 * HANOI_TOWERS_MAX_LEVEL] = towers[i + column1 * HANOI_TOWERS_MAX_LEVEL];
+          towers[i + column1 * HANOI_TOWERS_MAX_LEVEL] = 0;
+          steps++;
+        }
+        column1 = -1;
+        column2 = -1;
+        tft.fillRect(0, tft.height() - 15, tft.width(), 15, TFT_WHITE); 
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
 void lights_off(char mode, char *io_buff) {
   int button_pressed;
   int moves_remain;
@@ -7813,6 +8293,115 @@ void lights_off(char mode, char *io_buff) {
       shuffle_flag = 1;
       steps = 0;
       won_flag = 0;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void piano(char mode, char *io_buff) {
+  TS_Point p;
+  int touch_x, touch_y;
+  int i;
+  char buff[80];
+  int note_index;
+  int active_note_index;
+  float note_to_freq_white[] = {
+    261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88,
+    523.25, 587.33, 659.25, 698.46, 783.99, 880.00, 987.77,
+    1046.50, 1174.66
+    };
+  float note_to_freq_black[] = {
+    0, 277.18, 311.13, 0, 369.99, 415.30, 466.16,
+    0, 554.36, 622.25, 0, 739.99, 830.61, 932.33,
+    0, 1108.73
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000011, B11101110,
+    B01000011, B11101110,
+    B01000011, B11101110,
+    B01000011, B11101110,
+    B01000011, B11101110,
+    B01000011, B11101110,
+    B01000000, B10000010,
+    B01000000, B10000010,
+    B01000000, B10000010,
+    B01000000, B10000010,
+    B01000000, B10000010,
+    B01000000, B10000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Piano");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Piano");
+
+  // Рисуем клавиатуру
+  // Белые
+  for(i = 0; i < 16; i++) {
+    tft.drawRect(i * tft.width() / 16, 240 - 32, tft.width() / 16, 64, TFT_BLACK);
+  }
+  // Чёрные
+  for(i = 0; i < 16; i++) {
+    if(i % 7 == 0) continue;
+    if(i % 7 == 3) continue;
+    tft.fillRect(i * tft.width() / 16 - tft.width() / 32 + 1, 240 - 32 + 1, tft.width() / 16 - 2, 32 - 2, TFT_BLACK);
+  }
+  while(1) {
+    if(touchCheckNowait() == 0) {
+      noTone(BUZZER_PIN);
+      active_note_index = -1;
+      continue;
+    }
+    else {
+      do {
+        p = touchscreen.getPoint();
+        touch_x = touchMapX(p.x, p.y);
+        touch_y = touchMapY(p.x, p.y);
+
+        // Белые
+        if(touch_y >= 240 && touch_y < 272) {
+          note_index = touch_x / (tft.width() / 16);
+          if(note_index != active_note_index) {
+            tone(BUZZER_PIN, note_to_freq_white[note_index]);
+            active_note_index = note_index;
+          }
+        }
+        // Чёрные
+        else if(touch_y >= 240 - 32 && touch_y < 240) {
+          note_index = (touch_x + 8)/ (tft.width() / 16);
+          if(note_index != active_note_index - 32) {
+            tone(BUZZER_PIN, note_to_freq_black[note_index]);
+            active_note_index = note_index + 32;
+          }
+        }
+        else {
+          noTone(BUZZER_PIN);
+          active_note_index = -1;
+        }
+        if(global_exit_flag) {
+          break;
+        }
+      } while(touchCheckNowait() == 1);
     }
 
     touchWaitReleaseOrExit();
@@ -8800,7 +9389,9 @@ void setup() {
   fs::File file;
   char byte;
   char buff[80];
+  char autorun_app_name[80];
   int offset;
+  int i;
   char calibration_required = 0;
   char password_present;
   char fs_present = 0;
@@ -8909,8 +9500,27 @@ void setup() {
   get_current_timezone();
 
   tone(BUZZER_PIN, 1000, 100);
-  // Отлаживаемая функция
-  //files(APP_MODE_LAUNCH, NULL);
+
+  // Читаем информацию об автозапуске
+  autorun_app_name[0] = 0;
+  if(read_file_to_buff("/Settings/Autorun", 79, autorun_app_name)) {
+    if(strcmp(autorun_app_name, "")) {
+      // Если он есть, ищем название приложения и запускаем
+      i = 0;
+      while(apps[i]) {
+        apps[i](APP_MODE_RETURN_NAME, buff);
+        if(strcmp(buff, autorun_app_name) == 0) {
+          apps[i](APP_MODE_LAUNCH, NULL);
+        }
+        i++;
+      }
+    }
+  }
+  
+  // Ставим приложения
+  for(i = 0; i < 40; i++) {
+    main_apps[i] = apps[i];
+  }
 }
 
 void loop() {
