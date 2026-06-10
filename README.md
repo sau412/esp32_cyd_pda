@@ -65,6 +65,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * View Fonts
 * Make screenshot with BOOT button
 * Application groups
+* Manual application
 
 ## PIM apps
 * Calculator
@@ -90,9 +91,11 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Weather
 * Chat
 * File Server (for backups and file upload)
+* RSS Reader
 
 ## Sound
 * Piano
+* Metronome
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
