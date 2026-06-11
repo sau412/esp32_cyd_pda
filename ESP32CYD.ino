@@ -52,6 +52,9 @@
 - Просмотр текста из памяти
 - Справка
 - RSS
+- Шифрование AES
+- Хранилище паролей
+- Воспроизведение монофонических мелодий
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -102,34 +105,32 @@
 2026-06-08 проблемы с большими файлами с SD, проблема с MP3, веб-сервер зато заработал, сохранение скриншотов по кнопке BOOT,
   сохранять пароль вай-фая
 2026-06-09 Баг двойной смены направления в змейке, игра memory match, автозапуск, ханойские башни, пианино, группы приложений
-2026-06-10 Соединение по https, раздел настроек, метроном, просмотр текста из памяти, справка, RSS
+2026-06-10 Соединение по https, раздел настроек, метроном, просмотр текста из памяти, справка, читалка RSS, возможность отключить звук
+2026-06-11 Шифрование AES-256, хранилище паролей, монофонические мелодии
 
 Направления работы:
 - (и) Читать всю ФС как файл (для бэкапов на SD/http сервер)
 - (и) Записывать всю ФС как файл (для восстановления из бэкапа)
-- (и) Шифрование файлов
-- Преобразование из CP1251 в UTF8
+- (и) Воспроизведение MP3
+- Терминал
 - Цветовые схемы
 - Повтор последовательности (игра)
 - N назад (почти игра)
 - Устный счёт (почти игра)
-- Терминал
-- Карточки для запоминания слов (PIM)
-- Менеджер паролей (PIM)
-- Проигрыватель мелодий нокии (PIM)
+- Карточки для запоминания слов (PIM) - первая строка название, остальные - пояснение
+- MP3-плеер (PIM)
+- Интернет-радио (PIM)
 - Бэкапы (SD)
 - IRC
 - Бэкапы (через сеть)
-- 2048
+- 2048 (игра)
 - Камешки (Bejeweled)
-- Арканоид
-- Тетрис
-- MP3-плеер
-- Интернет-радио
+- Арканоид (игра)
+- Тетрис (игра)
 
 Улучшения тут и там:
 - (б) Проблема при работе с SD, запись больше 2 кб
-- (б) Гофер браузер - баг с повторяющимися строками?
+- (б) Гофер браузер - не прокручивать дальше конца файла
 - (д) В файловом менеджере открывать папки / файлы по двойному нажатию
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Погода: символ градуса или цельсия возле температуры (выглядит ужасно если взять другой шрифт. Нужно другое решение)
@@ -147,6 +148,9 @@
 - (д) Пасьянс - более чёткий указатель
 - (д) Если SD есть, то основная память SD, если нет то нет
 - (д) Автозапуск - настройка для выбора
+- (д) Преобразование из CP1251 в UTF8
+- (д) Парсинг JSON
+- (д) Получение погоды напрямую с weather.com
 
 */
 
@@ -233,6 +237,8 @@ XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
 #define APP_MODE_RETURN_NAME 0
 #define APP_MODE_RETURN_ICON 2
 
+#define EDIT_FILE_LENGTH_MAX 8192
+
 #ifdef USE_SD_AS_STORAGE
 #define Storage SD
 //FS Storage = SD; 
@@ -312,6 +318,9 @@ float global_lat = 0;
 float global_lon = 0;
 int global_brightness = 255;
 
+// Звук
+char is_beep_enabled = 1;
+
 // После подключения к вай-фаю можно узнать текущее время
 long global_unixtime_retrieved = 0;
 long global_unixtime_retrieved_millis = 0;
@@ -361,6 +370,8 @@ void books(char mode, char *io_buff);
 void todo(char mode, char *io_buff);
 void expenses(char mode, char *io_buff);
 void schedule(char mode, char *io_buff);
+void passwords(char mode, char *io_buff);
+void tunes(char mode, char *io_buff);
 void life(char mode, char *io_buff);
 void i2c_scanner(char mode, char *io_buff);
 void dashboard(char mode, char *io_buff);
@@ -373,7 +384,7 @@ void memory_match(char mode, char *io_buff);
 void hanoi_towers(char mode, char *io_buff);
 void piano(char mode, char *io_buff);
 void metronome(char mode, char *io_buff);
-void help(char mode, char *io_buff);
+void user_manual(char mode, char *io_buff);
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
 void settings_group(char mode, char *io_buff);
@@ -393,6 +404,8 @@ function_application_pointer apps[40] = {
   schedule,
   expenses,
   books,
+  passwords,
+  tunes,
   //system_info,
   torch,
   draw,
@@ -413,7 +426,7 @@ function_application_pointer apps[40] = {
   metronome,
   //screen_test,
   screensaver,
-  help,
+  user_manual,
   //security,
   //brightness_app,
   //touch_calibration,
@@ -470,6 +483,7 @@ function_application_pointer settings_apps[40] = {
   security,
   brightness_app,
   touch_calibration,
+  set_clock,
   i2c_scanner,
   view_font,
   NULL
@@ -1083,7 +1097,7 @@ void system_info(char mode, char *io_buff) {
   }
 }
 
-void help(char mode, char *io_buff) {
+void user_manual(char mode, char *io_buff) {
   char help[] =
   "This is some help for ESP32 CYD PDA Firmware\n"
   "\n"
@@ -1095,6 +1109,15 @@ void help(char mode, char *io_buff) {
   "* Press BOOT button to make screenshot. There is no way to view screenshot though.\n"
   "* To force perform calibration on start hold touchscreen during reboot\n"
   "* For screensavers touch and hold anywhere to exit\n"
+  "\n"
+  "== Reader ==\n"
+  "Touch left side of the screen to scroll back, right side to scroll forward."
+  "\n"
+  "== Contacts ==\n"
+  "First line of the file is name, second is contact."
+  "\n"
+  "== RSS ==\n"
+  "First line of the file is name, second is RSS URL. HTTP and HTTPS are supported."
   "\n"
   "== Schedule ==\n"
   "Touch day to view and edit plans for that day.\n"
@@ -1147,7 +1170,7 @@ void help(char mode, char *io_buff) {
 
 
   if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Help");
+    strcpy(io_buff, "User Manual");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -1155,7 +1178,7 @@ void help(char mode, char *io_buff) {
     return;
   }
 
-  view_text("Help", help);
+  view_text("User Manual", help);
 }
 
 #define FILES_COUNT_MAX 1024
@@ -1620,6 +1643,535 @@ void notes(char mode, char *io_buff) {
   }
 
   pim_app("Notes", NOTES_PATH, notes_file_to_list, buttons, notes_action);
+}
+
+// ====================================================
+// Проигрыватель монофонических мелодий
+// ====================================================
+
+#define TUNES_PATH "/Tunes"
+
+void tunes_action(int action_index, char *filename) {
+  fs::File file;
+  char buff[80];
+  if(action_index == 0) {
+    // Редактируем новый файл
+    sprintf(buff, "%s/%s", TUNES_PATH, "__New");
+    //file = Storage.open(buff, FILE_WRITE);
+    //file.close();
+    edit_file("New tune", buff);
+
+    file = Storage.open(buff);
+    if(!file) {
+      return;
+    }
+    else if(file.size() == 0) {
+      file.close();
+      Storage.remove(buff);
+    }
+    else {
+      file.close();
+      // Меняем название в соответствии с содержимым
+      pim_rename_file(TUNES_PATH, "__New", NULL);
+    }
+  }
+  else if(action_index == 1) {
+    // Воспроизведение
+    sprintf(buff, "%s/%s", TUNES_PATH, filename);
+    tunes_play(buff);
+  }
+  else if(action_index == 2) {
+    // Редактируем существующий файл
+    sprintf(buff, "%s/%s", TUNES_PATH, filename);
+    edit_file("Edit tune", buff);
+
+    // Меняем название в соответствии с содержимым
+    pim_rename_file(TUNES_PATH, filename, NULL);
+  }
+  else if(action_index == 3) {
+    if(drawConfirm("Delete this tune?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(buff, "%s/%s", TUNES_PATH, filename);
+      Storage.remove(buff);
+    }
+  }
+}
+
+void tunes_file_to_list(fs::File file, char *buff) {
+  char left[80];
+  char right[80];
+  char byte;
+  int offset;
+  // Левая колонка - первая непустая строчка файла
+  offset = 0;
+  left[offset] = 0;
+  while(file.available()) {
+    byte = file.read();
+    if(byte == '\n') break;
+    left[offset] = byte;
+    offset++;
+    left[offset] = 0;
+    if(offset > 39) {
+      break;
+    }
+  }
+  sprintf(buff, "%s", left);
+}
+
+void tunes_play(char *filename) {
+  fs::File file;
+  char buff[80];
+  char byte;
+  int offset = 0;
+  char sharp_flag = 0;
+  char dot_flag = 0;
+  char tempo_flag = 0;
+  char octave_flag = 0;
+  char note;
+  int note_octave;
+  int note_length;
+  int base_octave = 0;
+  float freq;
+  int length;
+  int tempo = 60;
+  float note_to_freq[] = {
+    //   C      C#       D      D#       E       F      F#       G      G#       A      A#       B       C
+    261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88, 523.25
+    };
+
+  file = Storage.open(filename);
+  // Пропустить первую строчку
+  while(file.available()) {
+      byte = file.read();
+      if(byte == '\n' && file.peek() == '\r') file.read();
+      if(byte == '\r' && file.peek() == '\n') file.read();
+
+      if(byte == '\n' || byte == '\r') {
+        break;
+      }
+  }
+  while(file.available()) {
+    // Считать до пробела, перевода строки или до конца файла
+    offset = 0;
+    buff[offset] = 0;
+    sharp_flag = 0;
+    dot_flag = 0;
+    tempo_flag = 0;
+    note_octave = 0;
+    note_length = 0;
+    note = 0;
+    while(file.available()) {
+      byte = file.read();
+      if(byte == '\n' && file.peek() == '\r') file.read();
+      if(byte == '\r' && file.peek() == '\n') file.read();
+
+      if(byte == ' ' || byte == '\n' || byte == '\r') {
+        break;
+      }
+
+      if(byte == '#') {
+        sharp_flag = 1;
+        continue;
+      }
+      if(byte == '.') {
+        dot_flag = 1;
+        continue;
+      }
+
+      if(byte >= 'a' && byte <= 'g') note = byte;
+      if(byte >= 'A' && byte <= 'G') note = byte;
+      if(byte == '-') note = byte;
+      if(byte == 't' || byte == 'T') tempo_flag = 1;
+      if(byte == 'o' || byte == 'O') octave_flag = 1;
+
+
+      buff[offset] = byte;
+      offset++;
+      buff[offset] = 0;
+    }
+
+//Serial.println(buff);
+//delay(100);
+
+    // Воспроизвести
+    if(tempo_flag) {
+      sscanf(buff, "%c%d", &note, &tempo);
+      continue;
+    }
+    else if(octave_flag) {
+      sscanf(buff, "%c%d", &note, &base_octave);
+      continue;
+    }
+    else {
+      sscanf(buff, "%d%c%d", &note_length, &byte, &note_octave);
+    }
+
+//Serial.print("note_length = "); Serial.println(note_length);
+//Serial.print("note = "); Serial.println(note);
+//Serial.print("note_octave = "); Serial.println(note_octave);
+//Serial.print("dot_flag = "); Serial.println(dot_flag ? 1 : 0);
+//Serial.print("sharp_flag = "); Serial.println(sharp_flag ? 1 : 0);
+//delay(100);
+    freq = 0;
+    if(note == 'c' || note == 'C') {
+      if(sharp_flag) freq = note_to_freq[1];
+      else freq = note_to_freq[0];
+    }
+    else if(note == 'd' || note == 'D') {
+      if(sharp_flag) freq = note_to_freq[3];
+      else freq = note_to_freq[2];
+    }
+    else if(note == 'e' || note == 'E') {
+      if(sharp_flag) freq = note_to_freq[5];
+      else freq = note_to_freq[4];
+    }
+    else if(note == 'f' || note == 'F') {
+      if(sharp_flag) freq = note_to_freq[6];
+      else freq = note_to_freq[5];
+    }
+    else if(note == 'g' || note == 'G') {
+      if(sharp_flag) freq = note_to_freq[8];
+      else freq = note_to_freq[7];
+    }
+    else if(note == 'a' || note == 'A') {
+      if(sharp_flag) freq = note_to_freq[10];
+      else freq = note_to_freq[9];
+    }
+    else if(note == 'b' || note == 'B') {
+      if(sharp_flag) freq = note_to_freq[12];
+      else freq = note_to_freq[11];
+    }
+    else if(note == '-') {
+      freq = 0;
+    }
+    else {
+      continue;
+    }
+
+    freq *= pow(2, note_octave + base_octave);
+    length = 60000 / (tempo * note_length);
+    if(dot_flag) length *= 1.5;
+
+//Serial.print("freq = "); Serial.println(freq);
+//Serial.print("length = "); Serial.println(length);
+//delay(100);
+
+    if(freq > 0) {
+      tone(BUZZER_PIN, freq, length);
+    }
+    delay(length);
+  }
+  file.close();
+}
+
+void tunes(char mode, char *io_buff) {
+  char *buttons[] = {
+    "New", "Play", "Edit", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B00110110, B01101100,
+    B01001001, B10010010,
+    B01000000, B00000010,
+    B01000000, B10000010,
+    B01000000, B11000010,
+    B01000000, B10100010,
+    B01000000, B10010010,
+    B01000011, B10000010,
+    B01000111, B10000010,
+    B01000111, B10000010,
+    B01000011, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Tunes");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  pim_app("Tunes", TUNES_PATH, tunes_file_to_list, buttons, tunes_action);
+}
+
+// ====================================================
+// Пароли
+// ====================================================
+
+#define PASSWORDS_PATH "/Passwords"
+#define PASSWORDS_AES_BITS 256
+
+char aes_encryption_key[32] __attribute__((aligned(4)));
+
+void passwords_action(int action_index, char *filename) {
+  fs::File file;
+  char filename_with_path[80];
+  char filename_with_path_new[80];
+  char *data_in;
+  char *data_out;
+  int data_length;
+  int index;
+  if(action_index == 0) {
+    // Редактируем новый файл
+    sprintf(filename_with_path_new, "%s/%s", PASSWORDS_PATH, "__New");
+    edit_file("New password", filename_with_path_new);
+
+    file = Storage.open(filename_with_path_new);
+    if(!file) {
+      return;
+    }
+    else if(file.size() == 0) {
+      file.close();
+      Storage.remove(filename_with_path_new);
+    }
+    else {
+      file.close();
+      // Меняем название на первое свободное число
+      index = 1;
+      while(1) {
+        sprintf(filename_with_path, "%s/%d", PASSWORDS_PATH, index);
+        file = Storage.open(filename_with_path);
+        if(file) {
+          file.close();
+        }
+        else {
+          break;
+        }
+        index++;
+      }
+
+      passwords_file_encrypt(filename_with_path);
+    }
+  }
+  else if(action_index == 1) {
+    // Редактируем существующий файл
+    sprintf(filename_with_path_new, "%s/%s", PASSWORDS_PATH, "__New");
+    sprintf(filename_with_path, "%s/%s", PASSWORDS_PATH, filename);
+
+    // Расшифровываем если не __New
+    if(strcmp(filename_with_path, filename_with_path_new)) {
+      passwords_file_decrypt(filename_with_path);
+    }
+    // Придумываем новое название если __New
+    else {
+      // Меняем название на первое свободное число
+      index = 1;
+      while(1) {
+        sprintf(filename_with_path, "%s/%d", PASSWORDS_PATH, index);
+        file = Storage.open(filename_with_path);
+        if(file) {
+          file.close();
+        }
+        else {
+          break;
+        }
+        index++;
+      }
+    }
+
+    // Редактируем
+    edit_file("Edit password", filename_with_path_new);
+
+    // Шифруем обратно
+    passwords_file_encrypt(filename_with_path);
+
+    free(data_out);
+    free(data_in);
+  }
+  else if(action_index == 2) {
+    if(drawConfirm("Delete this password?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(filename_with_path, "%s/%s", PASSWORDS_PATH, filename);
+      Storage.remove(filename_with_path);
+    }
+  }
+}
+
+void passwords_file_encrypt(char *filename_with_path) {
+  fs::File file;
+  char filename_with_path_new[80];
+  char *data_in = NULL;
+  char *data_out = NULL;
+
+  data_in = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
+  if(!data_in) {
+    drawError("Cannot allocate memory");
+    return;
+  }
+  data_out = (char *)malloc((EDIT_FILE_LENGTH_MAX + 16) * sizeof(char));
+  if(!data_out) {
+    free(data_in);
+    drawError("Cannot allocate memory");
+    return;
+  }
+
+  sprintf(filename_with_path_new, "%s/%s", PASSWORDS_PATH, "__New");
+  // Читаем
+  read_file_to_buff(filename_with_path_new, EDIT_FILE_LENGTH_MAX, data_in);
+
+  // Шифруем
+  encryptAES((uint8_t*) data_in, strlen(data_in) + 1, (uint8_t*) data_out, (((strlen(data_in) + 1) / 16) + 1) * 16);
+  //strcpy(data_out, data_in);
+
+  // Записываем двочиный файл
+  // write_file_from_buff только для текстовых файлов
+  file = Storage.open(filename_with_path, FILE_WRITE);
+  file.write((const uint8_t *)data_out, 16 + (((strlen(data_in) + 1) / 16) + 1) * 16);
+  file.close();
+
+  // Удалить расшифрованный файл
+  Storage.remove(filename_with_path_new);
+
+  free(data_in);
+  free(data_out);
+}
+
+void passwords_file_decrypt(char *filename_with_path) {
+  fs::File file;
+  char filename_with_path_new[80];
+  char *data_in = NULL;
+  char *data_out = NULL;
+  long file_size = 0;
+
+  // Нужен размер файла
+  file = Storage.open(filename_with_path);
+  file_size = file.size();
+  file.close();
+  
+  data_in = (char *)malloc((EDIT_FILE_LENGTH_MAX + 16) * sizeof(char));
+  if(!data_in) {
+    drawError("Cannot allocate memory");
+    return;
+  }
+  data_out = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
+  if(!data_out) {
+    free(data_in);
+    drawError("Cannot allocate memory");
+    return;
+  }
+
+  // Читаем двоичный файл (!)
+  // read_file_to_buff только для текстовых файлов
+  file = Storage.open(filename_with_path);
+  file.read((unsigned char*)data_in, file.size());
+  file.close();
+  //read_file_to_buff(filename_with_path, EDIT_FILE_LENGTH_MAX + 16, data_in);
+  
+  // Расшифровываем
+  decryptAES((uint8_t*) data_in, file_size, (uint8_t*) data_out);
+  //strcpy(data_out, data_in);
+
+  // Записываем в __New
+  sprintf(filename_with_path_new, "%s/%s", PASSWORDS_PATH, "__New");
+  write_file_from_buff(filename_with_path_new, data_out);
+
+  // Исходный файл не трогаем
+
+  free(data_in);
+  free(data_out);
+}
+
+void passwords_file_to_list(fs::File file, char *buff) {
+  char left[82];
+  char right[80];
+  char byte;
+  int offset;
+  // Левая колонка - первая строчка файла
+  offset = 0;
+  memset(left, 0, 80);
+  
+  // Читаем первые 80 байт, из них первые 16 байт вектор инициализации, 64 байта шифрованных данных
+  while(file.available()) {
+    byte = file.read();
+    left[offset] = byte;
+    offset++;
+    left[offset] = 0;
+    if(offset > 80) {
+      break;
+    }
+  }
+
+  if(strcmp(file.name(), "__New") == 0) {
+    // Файл __New не расшифровывать, дописать в название что он незашифрован
+    strcpy(right, "!Unencrypted!");
+    for(offset = 0; offset < 20; offset++) {
+      right[strlen(right) + 1] = 0;
+      right[strlen(right)] = left[offset];
+    }
+  }
+  else {
+    // Остальные расшифровывать, первые 64 байта
+    decryptAES((uint8_t*) left, min(64, (int)file.size()), (uint8_t*) right);
+//Serial.println(__LINE__);
+  }
+
+  // Обрезать название до первого перевода строки
+//Serial.println(__LINE__);
+  for(offset = 0; offset < 64; offset++) {
+    if(right[offset] == '\n') {
+      right[offset] = 0;
+      break;
+    }
+  }
+//Serial.println(__LINE__);
+  right[offset] = 0;
+//Serial.println(right);
+  sprintf(buff, "%s", right);
+}
+
+void passwords(char mode, char *io_buff) {
+  int i;
+  char buff[80];
+  char *buttons[] = {
+    "New", "Edit", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B00110110, B01101100,
+    B01001001, B10010010,
+    B01000000, B00000010,
+    B01000111, B11100010,
+    B01001000, B00010010,
+    B01001000, B00010010,
+    B01000111, B11100010,
+    B01000001, B00000010,
+    B01000001, B00000010,
+    B01000001, B11000010,
+    B01000001, B10000010,
+    B01000001, B11000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Passwords");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  buff[0] = 0;
+  if(drawPrompt("Enter password:", buff) == 0) {
+    // Пароль - первые 16 символов, дополненные нулями 
+    memset(aes_encryption_key, 0, 32);
+    for(i = 0; i < 32; i++) {
+      aes_encryption_key[i] = buff[i];
+      if(buff[i] == 0) break;
+    }
+    pim_app("Passwords", PASSWORDS_PATH, passwords_file_to_list, buttons, passwords_action);
+  }
 }
 
 // ====================================================
@@ -3361,7 +3913,7 @@ void timer(char mode, char *io_buff) {
         }
         else {
           start_millis = millis();
-          tone(BUZZER_PIN, 1000, 100);
+          beep_if_enabled();
           time_remains = preset_minutes * 60 + preset_seconds - (millis() - start_millis) / 1000;
         }
       }
@@ -3793,7 +4345,7 @@ void breathe(char mode, char *io_buff) {
           else strcat(buff, "_ ");
         }
         if(this_step_seconds > inhale) {
-          tone(BUZZER_PIN, 1000, 100);
+          beep_if_enabled();
           tft.fillRect(0, 16, tft.width(), 132, TFT_WHITE);
           step_start_millis = millis();
           step++;
@@ -3807,7 +4359,7 @@ void breathe(char mode, char *io_buff) {
           else strcat(buff, "_ ");
         }
         if(this_step_seconds > inhale_hold) {
-          tone(BUZZER_PIN, 1000, 100);
+          beep_if_enabled();
           tft.fillRect(0, 16, tft.width(), 132, TFT_WHITE);
           step_start_millis = millis();
           step++;
@@ -3822,7 +4374,7 @@ void breathe(char mode, char *io_buff) {
         }
 
         if(this_step_seconds > exhale) {
-          tone(BUZZER_PIN, 1000, 100);
+          beep_if_enabled();
           tft.fillRect(0, 16, tft.width(), 132, TFT_WHITE);
           step_start_millis = millis();
           step++;
@@ -3837,7 +4389,7 @@ void breathe(char mode, char *io_buff) {
         }
 
         if(this_step_seconds > exhale_hold) {
-          tone(BUZZER_PIN, 1000, 100);
+          beep_if_enabled();
           tft.fillRect(0, 16, tft.width(), 132, TFT_WHITE);
           step_start_millis = millis();
           step = 0;
@@ -4246,7 +4798,7 @@ void snake(char mode, char *io_buff) {
       if(head_x == bait_x && head_y == bait_y) {
         length++;
         if(length > record) record = length;
-        //tone(BUZZER_PIN, 3000, 100);
+        beep_if_enabled();
         bait_flag = 1;
       }
       else if(snake_get_cell(head_x, head_y, field)) {
@@ -5797,7 +6349,7 @@ void chat(char mode, char *io_buff) {
       if(get_file_https("https://arikado.ru/cyd/chat_data.txt", messages) == 200) {
         // Если сообщения изменились - бибикнуть
         if(strlen(prev_messages) > 0 && strcmp(messages, prev_messages)) {
-          tone(BUZZER_PIN, 1000, 100);
+          beep_if_enabled();
         }
         strcpy(prev_messages, messages);
         screen_line = 0;
@@ -7947,8 +8499,6 @@ void view_text(char *title, char *data) {
   }
 }
 
-#define EDIT_FILE_LENGTH_MAX 8192
-
 // Редактирование небольшого файла
 void edit_file(char *title, char *filename) {
   int file_offset_bytes = 0;
@@ -9313,7 +9863,7 @@ void saveScreenshot() {
     TFT_BLUE, TFT_MAGENTA, TFT_CYAN, TFT_WHITE};
   int color_index;
   
-  tone(BUZZER_PIN, 1000, 100);
+  beep_if_enabled();
 
   // Создать папку если её ещё нет
   file = Storage.open("/Screenshots");
@@ -9377,7 +9927,7 @@ void saveScreenshot() {
 
   file.close();
 
-  tone(BUZZER_PIN, 1000, 100);
+  beep_if_enabled();
   digitalWrite(LED_RED, HIGH);
 }
 
@@ -9401,27 +9951,25 @@ void drawAppTitle(char *name) {
 
 void drawError(char *message) {
   char *buttons[] = { "OK", NULL };
-  tone(BUZZER_PIN, 1000, 100);
+  beep_if_enabled();
   drawPopoupWindowWaitReply("Error", message, buttons);
 }
 
 void drawAlert(char *message) {
   char *buttons[] = { "OK", NULL };
-  tone(BUZZER_PIN, 1000, 100);
+  beep_if_enabled();
   drawPopoupWindowWaitReply("Alert", message, buttons);
 }
 
 void drawInfo(char *message) {
   char *buttons[] = { "OK", NULL };
-  tone(BUZZER_PIN, 1000, 100);
+  beep_if_enabled();
   drawPopoupWindowWaitReply("Info", message, buttons);
 }
 
 int drawConfirm(char *message) {
   char *buttons[] = { "OK", "Cancel", NULL };
-
-  tone(BUZZER_PIN, 1000, 100);
-
+  beep_if_enabled();
   return drawPopoupWindowWaitReply("Confirm", message, buttons);
 }
 
@@ -9476,7 +10024,7 @@ int drawPrompt(char *message, char *user_input) {
   };
   char **keyboard_current = keyboard_nocaps;
 
-  tone(BUZZER_PIN, 1000, 100);
+  beep_if_enabled();
 
   strcpy(input, user_input);
   
@@ -10239,6 +10787,126 @@ void image_from_bits(int start_x, int start_y, char *image, int color, int bg_co
   }
 }
 
+void beep_if_enabled() {
+  if(is_beep_enabled) {
+    tone(BUZZER_PIN, 1000, 100);
+  }
+}
+
+// Функции ширования и расшифровки - минное поле
+// Скопировал их из примера, потому что переработанный вариант не работал, вылетал в Exception
+// Единственное изменение - про вектор инициализации
+
+// Encryption Function with PKCS#7 Padding
+void encryptAES(uint8_t* input, int inputLen, uint8_t* output, int paddedLen) {
+  char aes_iv[16];
+  mbedtls_aes_context aes;
+  uint8_t iv_copy[16];
+  uint8_t paddingValue;
+  uint8_t* paddedInput;
+  int i;
+
+  // Генерировать случайный новый вектор инициализации
+  for(i = 0; i < 16; i++) {
+    aes_iv[i] = random(0, 256);
+  }
+  // Create a temporary copy of IV because mbedtls modifies it during processing
+  memcpy(iv_copy, aes_iv, 16);
+
+  // Allocate a temporary buffer to apply PKCS#7 padding
+  paddedInput = (uint8_t*)malloc(paddedLen);
+  memcpy(paddedInput, input, inputLen);
+  
+  // Apply PKCS#7 padding bytes
+  paddingValue = paddedLen - inputLen;
+  for (i = inputLen; i < paddedLen; i++) {
+    paddedInput[i] = paddingValue;
+  }
+
+  mbedtls_aes_init(&aes);
+  mbedtls_aes_setkey_enc(&aes, (const unsigned char*)aes_encryption_key, PASSWORDS_AES_BITS);
+  /*
+  Serial.println("Encryption");
+  Serial.print("paddedLen="); Serial.println(paddedLen);
+  Serial.print("paddingValue="); Serial.println(paddingValue);
+  Serial.print("inputLen="); Serial.println(inputLen);
+  Serial.print("input="); Serial.println((char*)input);
+  Serial.print("paddedInput=");
+  for(i = 0; i < 16; i++) {
+    Serial.print(paddedInput[i], HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
+  delay(100);
+  */
+  mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, paddedLen, iv_copy, paddedInput, output + 16);
+  mbedtls_aes_free(&aes);
+  /*
+  Serial.print("output=");
+  for(i = 0; i < 16; i++) {
+    Serial.print(*(output + 16 + i), HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
+  delay(100);
+  */
+  // Первые 16 байт - вектор инициализации
+  memcpy(output, aes_iv, 16);
+  free(paddedInput);
+}
+
+// Decryption Function with PKCS#7 Unpadding
+void decryptAES(uint8_t* input, int dataLen, uint8_t* output) {
+  mbedtls_aes_context aes;
+  uint8_t iv_copy[16];
+  uint8_t paddingValue;
+  int originalLen;
+  int paddedLen;
+  int i;
+
+  paddedLen = ((dataLen - 16) / 16) * 16;
+
+  // Первые 16 байт - вектор инициализации
+  memcpy(iv_copy, input, 16);
+
+  mbedtls_aes_init(&aes);
+  mbedtls_aes_setkey_dec(&aes, (const unsigned char*)aes_encryption_key, PASSWORDS_AES_BITS);
+  /*
+  Serial.println("Decryption");
+  Serial.print("dataLen="); Serial.println(dataLen);
+  Serial.print("paddedLen="); Serial.println(paddedLen);
+  Serial.print("input=");
+  for(i = 0; i < 16; i++) {
+    Serial.print(*(input + 16 + i), HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
+
+  delay(100);
+  */
+  mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, paddedLen, iv_copy, input + 16, output);
+  /*
+  Serial.print("output=");
+  for(i = 0; i < 16; i++) {
+    Serial.print(*(output + i), HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
+  delay(100);
+*/
+  mbedtls_aes_free(&aes);
+
+  // Read PKCS#7 padding value from the very last byte to remove it
+  paddingValue = output[paddedLen - 1];
+  originalLen = paddedLen - paddingValue;
+  /*
+  Serial.print("paddingValue="); Serial.println(paddingValue);
+  Serial.print("originalLen="); Serial.println(originalLen);
+  */
+  // Truncate the string to restore original length
+  //output[originalLen] = 0;
+}
+
 void setup() {
   fs::File file;
   char byte;
@@ -10345,6 +11013,13 @@ void setup() {
     sscanf(buff, "%f %f", &global_lat, &global_lon);
   }
 
+  is_beep_enabled = 1;
+  if(read_file_to_buff("/Settings/Sound", 79, buff)) {
+    if(buff[0] == '0') {
+      is_beep_enabled = 0;
+    }
+  }
+
 #ifdef IS_WIFI_ENABLED
   WiFi.begin();
 #endif
@@ -10353,7 +11028,7 @@ void setup() {
   get_current_timestamp_fs();
   get_current_timezone();
 
-  tone(BUZZER_PIN, 1000, 100);
+  beep_if_enabled();
 
   // Читаем информацию об автозапуске
   autorun_app_name[0] = 0;
