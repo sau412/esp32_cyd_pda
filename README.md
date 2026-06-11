@@ -66,6 +66,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Make screenshot with BOOT button
 * Application groups
 * Manual application
+* Passwords - AES-256 encrypted notes
 
 ## PIM apps
 * Calculator
@@ -96,6 +97,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 ## Sound
 * Piano
 * Metronome
+* Tunes - nokia melody player, try 4g1 8e1 8e1 4g1 8e1 8e1 8c1 8d1 8e1 8f1 2g1 8g1 8g1 8e1 8e1 8f1 8f1 8d1 8d1 4c1 4d1 2c1
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
