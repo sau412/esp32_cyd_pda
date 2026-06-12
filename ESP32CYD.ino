@@ -55,6 +55,7 @@
 - Шифрование AES
 - Хранилище паролей
 - Воспроизведение монофонических мелодий
+- Выбор цветовой схемы
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -107,13 +108,13 @@
 2026-06-09 Баг двойной смены направления в змейке, игра memory match, автозапуск, ханойские башни, пианино, группы приложений
 2026-06-10 Соединение по https, раздел настроек, метроном, просмотр текста из памяти, справка, читалка RSS, возможность отключить звук
 2026-06-11 Шифрование AES-256, хранилище паролей, монофонические мелодии
+2026-06-12 Инверсия экрана, цветовые схемы
 
 Направления работы:
 - (и) Читать всю ФС как файл (для бэкапов на SD/http сервер)
 - (и) Записывать всю ФС как файл (для восстановления из бэкапа)
 - (и) Воспроизведение MP3
 - Терминал
-- Цветовые схемы
 - Повтор последовательности (игра)
 - N назад (почти игра)
 - Устный счёт (почти игра)
@@ -127,6 +128,9 @@
 - Камешки (Bejeweled)
 - Арканоид (игра)
 - Тетрис (игра)
+- Приложение выбор автозапуска
+- Приложение перезагрузки
+- Настройки клавиатуры (вкл/выкл альтернативную)
 
 Улучшения тут и там:
 - (б) Проблема при работе с SD, запись больше 2 кб
@@ -151,6 +155,16 @@
 - (д) Преобразование из CP1251 в UTF8
 - (д) Парсинг JSON
 - (д) Получение погоды напрямую с weather.com
+- (д) Прерывать мелодии при касании
+- (д) Меньше мигания в мелодиях
+- (д) Флаг автосохранения файла при редактировании и неактивности
+- (д) RSS лишние теги у фонтанки
+- (д) RSS текст ошибки пользователю
+- (д) Автояркость
+- (д) drawProgress - рисовать прогресс операции
+- (д) Serial как ввод клавиатуры
+- (д) Определять инверсию экрана
+- (д) Пианино, белые клавиши вне зависимости от цветовой схемы
 
 */
 
@@ -247,6 +261,53 @@ XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
 //FS Storage = FFat;
 #endif
 
+// Цвета
+#define COLOR_INDEX_BLACK 0
+#define COLOR_INDEX_MAROON 1
+#define COLOR_INDEX_DARKGREEN 2
+#define COLOR_INDEX_OLIVE 3
+#define COLOR_INDEX_NAVY 4
+#define COLOR_INDEX_PURPLE 5
+#define COLOR_INDEX_DARKCYAN 6
+#define COLOR_INDEX_LIGHTGREY 7
+#define COLOR_INDEX_DARKGREY 8
+#define COLOR_INDEX_RED 9
+#define COLOR_INDEX_GREEN 10
+#define COLOR_INDEX_YELLOW 11
+#define COLOR_INDEX_BLUE 12
+#define COLOR_INDEX_MAGENTA 13
+#define COLOR_INDEX_CYAN 14
+#define COLOR_INDEX_WHITE 15
+
+int colors[] = {
+  TFT_BLACK, TFT_MAROON, TFT_DARKGREEN, TFT_OLIVE,
+  TFT_NAVY, TFT_PURPLE, TFT_DARKCYAN, TFT_LIGHTGREY,
+  TFT_DARKGREY, TFT_RED, TFT_GREEN, TFT_YELLOW,
+  TFT_BLUE, TFT_MAGENTA, TFT_CYAN, TFT_WHITE
+};
+
+// Цветовая схема
+// Цвет фона и текста
+int color_scheme_bg = colors[COLOR_INDEX_WHITE];
+int color_scheme_fg = colors[COLOR_INDEX_BLACK];
+// Цвет заголовка и текста
+int color_scheme_title_bg = colors[COLOR_INDEX_BLUE];
+int color_scheme_title_fg = colors[COLOR_INDEX_WHITE];
+// Цвет выделения и текста
+int color_scheme_selection_bg = colors[COLOR_INDEX_BLUE];
+int color_scheme_selection_fg = colors[COLOR_INDEX_WHITE];
+// Цвет кнопки и текста
+int color_scheme_button_bg = colors[COLOR_INDEX_LIGHTGREY];
+int color_scheme_button_fg = colors[COLOR_INDEX_BLACK];
+// Цвет нажатой кнопки и текста
+int color_scheme_button_active_bg = colors[COLOR_INDEX_DARKGREY];
+int color_scheme_button_active_fg = colors[COLOR_INDEX_BLACK];
+// Цвет неактивного текста
+int color_scheme_inactive_fg = colors[COLOR_INDEX_LIGHTGREY];
+// Цвет ссылки
+int color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
+
+// Значки
 char enter[] = {
   8, 8,
   B00000011,
@@ -385,6 +446,7 @@ void hanoi_towers(char mode, char *io_buff);
 void piano(char mode, char *io_buff);
 void metronome(char mode, char *io_buff);
 void user_manual(char mode, char *io_buff);
+void color_settings(char mode, char *io_buff);
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
 void settings_group(char mode, char *io_buff);
@@ -482,6 +544,7 @@ function_application_pointer settings_apps[40] = {
   screen_test,
   security,
   brightness_app,
+  color_settings,
   touch_calibration,
   set_clock,
   i2c_scanner,
@@ -540,9 +603,9 @@ void launcher(char mode, char *io_buff) {
             if(apps[row + col * 19 + 1]) {
               apps[row + col * 19 + 1](APP_MODE_RETURN_NAME, app_name);
               apps[row + col * 19 + 1](APP_MODE_RETURN_ICON, app_icon);
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
               tft.drawString(app_name, 19 + col * tft.width() / 2, (row + 1) * 16, FONT_DEFAULT);
-              image_from_bits(col * tft.width() / 2, (row + 1) * 16, app_icon, TFT_BLACK, TFT_WHITE);
+              image_from_bits(col * tft.width() / 2, (row + 1) * 16, app_icon, color_scheme_fg, color_scheme_bg);
             }
             else {
               apps_eol = row + col * 19 + 1;
@@ -567,17 +630,18 @@ void launcher(char mode, char *io_buff) {
     if(row + col * 19 + 1 < apps_eol) {
       apps[row + col * 19 + 1](APP_MODE_RETURN_NAME, app_name);
       apps[row + col * 19 + 1](APP_MODE_RETURN_ICON, app_icon);
-      tft.fillRect(col * tft.width() / 2, (row + 1) * 16, tft.width() / 2, 16, TFT_BLUE);
-      tft.setTextColor(TFT_WHITE, TFT_BLUE);
+      tft.fillRect(col * tft.width() / 2, (row + 1) * 16, tft.width() / 2, 16, color_scheme_selection_bg);
+      tft.setTextColor(color_scheme_selection_fg, color_scheme_selection_bg);
+      
       tft.drawString(app_name, 19 + col * tft.width() / 2, (row + 1) * 16, FONT_DEFAULT);
-      image_from_bits(col * tft.width() / 2, (row + 1) * 16, app_icon, TFT_WHITE, TFT_BLUE);
+      image_from_bits(col * tft.width() / 2, (row + 1) * 16, app_icon, color_scheme_selection_fg, color_scheme_selection_bg);
       delay(100);
       touchWaitRelease();
 
-      tft.fillRect(col * tft.width() / 2, (row + 1) * 16, tft.width() / 2, 16, TFT_WHITE);
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.fillRect(col * tft.width() / 2, (row + 1) * 16, tft.width() / 2, 16, color_scheme_bg);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       tft.drawString(app_name, 19 + col * tft.width() / 2, (row + 1) * 16, FONT_DEFAULT);
-      image_from_bits(col * tft.width() / 2, (row + 1) * 16, app_icon, TFT_BLACK, TFT_WHITE);
+      image_from_bits(col * tft.width() / 2, (row + 1) * 16, app_icon, color_scheme_fg, color_scheme_bg);
 
       apps[row + col * 19 + 1](APP_MODE_LAUNCH, NULL);
       break;
@@ -784,14 +848,14 @@ void calculator(char mode, char *io_buff) {
   strcpy(screen, "0");
 
   while(1) {
-    tft.fillRect(0, 16, tft.width(), 80 - 16, TFT_WHITE);
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.fillRect(0, 16, tft.width(), 80 - 16, color_scheme_bg);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     if(error_flag) {
       strcpy(screen, "Error");
     }
     tft.drawRightString(screen, tft.width() - 16, 40, FONT_BIG);
 
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     if(m != 0) {
       sprintf(buff, "M = %lg", m);
       tft.drawString(buff, 1, 16, FONT_DEFAULT);
@@ -994,7 +1058,7 @@ void system_info(char mode, char *io_buff) {
   while(1) {
 
     i = 0;
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "ESP32 CYD PDA by sau412");
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
@@ -1279,8 +1343,8 @@ void files(char mode, char *io_buff) {
     // Текущий путь
     file_index = 0;
     sprintf(buff2, "Path: %s", path);
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
-    tft.fillRect(0, 16, tft.width(), 16, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.fillRect(0, 16, tft.width(), 16, color_scheme_bg);
     tft.drawString(buff2, 8, 16, FONT_DEFAULT);
 
     // Освобождаем память
@@ -2780,11 +2844,6 @@ void draw_edit(char *title, char *filename) {
   int color = TFT_BLACK;
   int color_index = 0;
   
-  int colors[] = {
-    TFT_BLACK, TFT_MAROON, TFT_DARKGREEN, TFT_OLIVE,
-    TFT_NAVY, TFT_PURPLE, TFT_DARKCYAN, TFT_LIGHTGREY,
-    TFT_DARKGREY, TFT_RED, TFT_GREEN, TFT_YELLOW,
-    TFT_BLUE, TFT_MAGENTA, TFT_CYAN, TFT_WHITE};
   int touch_x;
   int touch_y;
   int x, y;
@@ -2980,7 +3039,7 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
     if(update_list_flag) {
       clearScreen();
       drawAppTitle(title);
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       offset = 0;
       // Освобождаем память
       for(i = 0; i < PIM_FILES_COUNT_MAX; i++) {
@@ -3017,7 +3076,7 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
       update_list_flag = 0;
     }
 
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
     touchCheckList(0, 32 -8, tft.width(), tft.height() - 72, visible_list, 15, &file_offset, &file_selected);
     drawList(0, 32 - 8, tft.width(), tft.height() - 72, visible_list, 15, &file_offset, &file_selected);
@@ -3212,11 +3271,11 @@ void schedule(char mode, char *io_buff) {
     if(redraw_flag || touch_check_flag) {
       drawAppTitle("Schedule");
       if(touch_check_flag == 0) {
-        tft.fillRect(0, 16, tft.width(), tft.height() - 16 - 32 + 1, TFT_WHITE);
+        tft.fillRect(0, 16, tft.width(), tft.height() - 16 - 32 + 1, color_scheme_bg);
       }
       prev_day = day;
 
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       sprintf(buff, "%s, %04d", month_name[month], year);
       tft.drawCentreString(buff, tft.width() / 2, 32, FONT_BIG);
 
@@ -3263,11 +3322,11 @@ void schedule(char mode, char *io_buff) {
             }
           }
           if((global_day + 1) == cal_day && month == global_month && year == global_year) {
-            tft.fillRect(cal_col * tft.width() / 7, 70 + cal_row * 32 - 8, tft.width() / 7, 32, TFT_BLUE);
-            tft.setTextColor(TFT_WHITE, TFT_BLUE);
+            tft.fillRect(cal_col * tft.width() / 7, 70 + cal_row * 32 - 8, tft.width() / 7, 32, color_scheme_selection_bg);
+            tft.setTextColor(color_scheme_selection_fg, color_scheme_selection_bg);
           }
           else {
-            tft.setTextColor(TFT_BLACK, TFT_WHITE);
+            tft.setTextColor(color_scheme_fg, color_scheme_bg);
           }
           tft.drawCentreString(buff, (cal_col + 0.5) * tft.width() / 7, 70 + cal_row * 32, FONT_DEFAULT);
         }
@@ -3465,8 +3524,8 @@ void security(char mode, char *io_buff) {
     read_file_to_buff("/Settings/Owner", 79, owner_info);
     read_file_to_buff("/Settings/Password", 79, correct_password);
 
-    tft.fillRect(0, 16, tft.width(), 100, TFT_WHITE);
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.fillRect(0, 16, tft.width(), 100, color_scheme_bg);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.drawString("Owner info:", 8, 20, FONT_DEFAULT);
     tft.drawString(owner_info, 8, 20 + 16, FONT_DEFAULT);
     
@@ -3497,7 +3556,7 @@ void security(char mode, char *io_buff) {
 
       if(!password_correct_flag) {
         drawError("Password incorrect");
-        tft.fillRect(0, 16, tft.width(), tft.height(), TFT_WHITE);
+        tft.fillRect(0, 16, tft.width(), tft.height(), color_scheme_bg);
         continue;
       }
 
@@ -3506,20 +3565,20 @@ void security(char mode, char *io_buff) {
         if(drawPrompt("Enter owner info", owner_info) == 0) {
           write_file_from_buff("/Settings/Owner", owner_info);
         }
-        tft.fillRect(0, 16, tft.width(), tft.height(), TFT_WHITE);
+        tft.fillRect(0, 16, tft.width(), tft.height(), color_scheme_bg);
       }
       // Смена пароля
       else if(button_pressed == 1) {
         if(drawPrompt("Enter new password (digits only)", user_input) == 0) {
           write_file_from_buff("/Settings/Password", user_input);
         }
-        tft.fillRect(0, 16, tft.width(), tft.height(), TFT_WHITE);
+        tft.fillRect(0, 16, tft.width(), tft.height(), color_scheme_bg);
       }
       // Удаление пароля
       else if(button_pressed == 2) {
         Storage.remove("/Settings/Password");
         drawInfo("Password deleted");
-        tft.fillRect(0, 16, tft.width(), tft.height(), TFT_WHITE);
+        tft.fillRect(0, 16, tft.width(), tft.height(), color_scheme_bg);
       }
     }
 
@@ -3583,9 +3642,9 @@ void counter(char mode, char *io_buff) {
   drawAppTitle("Counter");
   
   while(1) {
-    tft.fillRect(0, 16, tft.width(), 30, TFT_WHITE);
+    tft.fillRect(0, 16, tft.width(), 30, color_scheme_bg);
 
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, " %ld ", counter);
     tft.drawCentreString(buff, tft.width() / 2, 32, FONT_BIGGER);
 
@@ -3679,8 +3738,8 @@ void random_numbers(char mode, char *io_buff) {
     touchWaitPress();
     button_pressed = touchCheckMatrix(0, 52, tft.width(), tft.height() - 52, buttons, 2, 4);
     if(button_pressed != -1) {
-      tft.fillRect(0, 16, tft.width(), 34, TFT_WHITE);
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), 34, color_scheme_bg);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       tft.drawCentreString("Spin...", tft.width() / 2, 24, FONT_BIG);
       delay(500);
       if(button_pressed == 0) {
@@ -3720,8 +3779,8 @@ void random_numbers(char mode, char *io_buff) {
         }
       }
 
-      tft.fillRect(0, 16, tft.width(), 34, TFT_WHITE);
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), 34, color_scheme_bg);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       tft.drawCentreString(buff, tft.width() / 2, 24, FONT_BIG);
     }
 
@@ -3782,7 +3841,7 @@ void brightness_app(char mode, char *io_buff) {
 
   while(1) {
     sprintf(buff, "   %d   ", get_brightness());
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.drawCentreString(buff, tft.width() / 2, 20, FONT_BIG);
 
     drawButtonMatrix(0, 50, tft.width(), tft.height() - 50, buttons, 2, 4);
@@ -3904,7 +3963,7 @@ void timer(char mode, char *io_buff) {
           tft.drawCentreString(buff, 3 * tft.width() / 4, 56, FONT_BIG);
 
           drawInfo("Time's up!");
-          tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+          tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
           minutes = preset_minutes;
           seconds = preset_seconds;
           timer_run = 0;
@@ -3926,7 +3985,7 @@ void timer(char mode, char *io_buff) {
     }
 
     // Рисуем время
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "%02d", minutes);
     tft.drawCentreString(buff, 1 * tft.width() / 4, 56, FONT_BIG);
     sprintf(buff, "%02d", seconds);
@@ -3942,7 +4001,7 @@ void timer(char mode, char *io_buff) {
     drawButtonMatrix(0, 140, tft.width(), 32, buttons_start_stop, 2, 1);
 
     drawButtonMatrix(0, 190, tft.width() / 2, 32, buttons_auto_restart, 1, 1);
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     if(auto_restart) {
       tft.drawCentreString(" on ", 3 * tft.width() / 4, 196, FONT_DEFAULT);
     }
@@ -4149,7 +4208,7 @@ void stopwatch_app(char mode, char *io_buff) {
         (millis_from_start / 10) % 100);
 
     // Рисуем время
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.drawCentreString(buff, tft.width() / 2, 20, FONT_BIG);
 
     // Если таймер запущен и касаний нет - остальное не рисуем
@@ -4160,7 +4219,7 @@ void stopwatch_app(char mode, char *io_buff) {
     drawButtonMatrix(0, 52, tft.width(), 64, buttons_control, 4, 1);
     drawButtonMatrix(0, 288, tft.width(), 32, buttons_lap_control, 2, 1);
 
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
     if(redraw_flag) {
       drawList(8, 120, tft.width() - 8 * 2, 160, stopwatch_laps, 10, &lap_list_offset,  &lap_list_selected);
@@ -4346,7 +4405,7 @@ void breathe(char mode, char *io_buff) {
         }
         if(this_step_seconds > inhale) {
           beep_if_enabled();
-          tft.fillRect(0, 16, tft.width(), 132, TFT_WHITE);
+          tft.fillRect(0, 16, tft.width(), 132, color_scheme_bg);
           step_start_millis = millis();
           step++;
         }
@@ -4360,7 +4419,7 @@ void breathe(char mode, char *io_buff) {
         }
         if(this_step_seconds > inhale_hold) {
           beep_if_enabled();
-          tft.fillRect(0, 16, tft.width(), 132, TFT_WHITE);
+          tft.fillRect(0, 16, tft.width(), 132, color_scheme_bg);
           step_start_millis = millis();
           step++;
         }
@@ -4375,7 +4434,7 @@ void breathe(char mode, char *io_buff) {
 
         if(this_step_seconds > exhale) {
           beep_if_enabled();
-          tft.fillRect(0, 16, tft.width(), 132, TFT_WHITE);
+          tft.fillRect(0, 16, tft.width(), 132, color_scheme_bg);
           step_start_millis = millis();
           step++;
         }
@@ -4390,13 +4449,13 @@ void breathe(char mode, char *io_buff) {
 
         if(this_step_seconds > exhale_hold) {
           beep_if_enabled();
-          tft.fillRect(0, 16, tft.width(), 132, TFT_WHITE);
+          tft.fillRect(0, 16, tft.width(), 132, color_scheme_bg);
           step_start_millis = millis();
           step = 0;
         }
       }
 
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       tft.drawCentreString(stage, tft.width() / 2, 46, FONT_BIG);
       tft.drawCentreString(buff, tft.width() / 2, 80, FONT_BIG);
 
@@ -4435,7 +4494,7 @@ void breathe(char mode, char *io_buff) {
         breathe_run = 0;
         step = 0;
         total_millis = 0;
-        tft.fillRect(0, 16, tft.width(), 132, TFT_WHITE);
+        tft.fillRect(0, 16, tft.width(), 132, color_scheme_bg);
       }
       redraw_flag = 1;
     }
@@ -4568,9 +4627,9 @@ void life(char mode, char *io_buff) {
     // Нарисовать поле
     for(y = 0; y < LIFE_FIELD_HEIGHT_CELLS; y++) {
       for(x = 0; x < LIFE_FIELD_WIDTH_CELLS; x++) {
-        cell_color = TFT_WHITE;
+        cell_color = color_scheme_bg;
         if(life_get_cell(x, y, field)) {
-          cell_color = TFT_BLUE;
+          cell_color = color_scheme_selection_fg;
         }
         tft.fillRect(
           x * LIFE_CELL_PIXELS,
@@ -4743,9 +4802,9 @@ void snake(char mode, char *io_buff) {
   clearScreen();
   drawAppTitle("Snake");
   
-  tft.drawLine(0, 16, tft.width(), tft.height(), TFT_BLACK);
-  tft.drawLine(tft.width(), 16, 0, tft.height(), TFT_BLACK);
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.drawLine(0, 16, tft.width(), tft.height(), color_scheme_fg);
+  tft.drawLine(tft.width(), 16, 0, tft.height(), color_scheme_fg);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
   tft.drawCentreString("UP", tft.width() / 2, tft.height() / 4, FONT_DEFAULT);
   tft.drawCentreString("DOWN", tft.width() / 2, 3 * tft.height() / 4, FONT_DEFAULT);
   tft.drawCentreString("LEFT", tft.width() / 4, tft.height() / 2, FONT_DEFAULT);
@@ -4756,7 +4815,7 @@ void snake(char mode, char *io_buff) {
   restart_flag = 1;
   while(1) {
     if(restart_flag) {
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       lose_flag = 0;
       bait_flag = 1;
       direction = 'u';
@@ -4861,7 +4920,7 @@ void snake(char mode, char *io_buff) {
       }
     }
     // Счёт и рекорд
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "Length: %d", length);
     tft.drawString(buff, 1, 16, FONT_DEFAULT);
     sprintf(buff, "Record: %d", record);
@@ -5363,6 +5422,299 @@ void screensaver(char mode, char *io_buff) {
   }
 }
 
+void color_settings(char mode, char *io_buff) {
+  int scheme_offset = 0;
+  int scheme_selected = 0;
+  int i;
+  int inversion;
+  int button_pressed;
+  char redraw_flag;
+  char buff[80];
+  char *scheme_text;
+  char *color_schemes[] = {
+    "Classic",
+    "Yellow",
+    "Black & White",
+    "Red",
+    "Green",
+    "Random",
+    NULL
+  };
+  char *buttons_apply[] = {
+    "Apply",
+    NULL
+  };
+  char *buttons_inversion[] = {
+    "Inversion", NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000110,
+    B01000000, B00001110,
+    B01000000, B00011110,
+    B01000000, B00111110,
+    B01000000, B01111110,
+    B01000000, B11111110,
+    B01000001, B11111110,
+    B01000011, B11111110,
+    B01000111, B11111110,
+    B01001111, B11111110,
+    B01011111, B11111110,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Color Settings");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  if(read_file_to_buff("/Settings/Inversion", 79, buff)) {
+    sscanf(buff, "%d", &inversion);
+    tft.invertDisplay(inversion ? true : false);
+  }
+
+  redraw_flag = 1;
+  while(1) {
+    if(redraw_flag) {
+      clearScreen();
+      drawAppTitle("Color Settings");
+      redraw_flag = 0;
+    }
+
+    drawButtonMatrix(0, 32, tft.width() / 2, 32, buttons_inversion, 1, 1);
+    drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons_apply, 1, 1);
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    if(inversion) {
+      tft.drawCentreString(" on ", 3 * tft.width() / 4, 40, FONT_DEFAULT);
+    }
+    else {
+      tft.drawCentreString(" off ", 3 * tft.width() / 4, 40, FONT_DEFAULT);
+    }
+
+    tft.drawString("Color scheme:", 1, 70, FONT_DEFAULT);
+
+    touchCheckList(0, 86, tft.width(), tft.height() - 70 - 32 - 26, color_schemes, 12, &scheme_offset, &scheme_selected);
+    drawList(0, 86, tft.width(), tft.height() - 70 - 32 - 26, color_schemes, 12, &scheme_offset, &scheme_selected);
+    
+    touchWaitPress();
+    touchCheckList(0, 86, tft.width(), tft.height() - 70 - 32 - 26, color_schemes, 12, &scheme_offset, &scheme_selected);
+
+    button_pressed = touchCheckMatrix(0, 32, tft.width() / 2, 32, buttons_inversion, 1, 1);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        if(inversion) {
+          inversion = 0;
+        }
+        else {
+          inversion = 1;
+        }
+        tft.invertDisplay(inversion ? true : false);
+      }
+      redraw_flag = 1;
+    }
+
+    button_pressed = touchCheckMatrix(0, tft.height() - 32, tft.width(), 32, buttons_apply, 1, 1);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        // Classic
+        if(scheme_selected == 0) {
+          // Цвет фона и текста
+          color_scheme_bg = colors[COLOR_INDEX_WHITE];
+          color_scheme_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет заголовка и текста
+          color_scheme_title_bg = colors[COLOR_INDEX_BLUE];
+          color_scheme_title_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет выделения и текста
+          color_scheme_selection_bg = colors[COLOR_INDEX_BLUE];
+          color_scheme_selection_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет кнопки и текста
+          color_scheme_button_bg = colors[COLOR_INDEX_LIGHTGREY];
+          color_scheme_button_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет нажатой кнопки и текста
+          color_scheme_button_active_bg = colors[COLOR_INDEX_DARKGREY];
+          color_scheme_button_active_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет неактивного текста
+          color_scheme_inactive_fg = colors[COLOR_INDEX_LIGHTGREY];
+          // Цвет ссылки
+          color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
+        }
+        // Yellow
+        else if(scheme_selected == 1) {
+          // Цвет фона и текста
+          color_scheme_bg = colors[COLOR_INDEX_WHITE];
+          color_scheme_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет заголовка и текста
+          color_scheme_title_bg = colors[COLOR_INDEX_YELLOW];
+          color_scheme_title_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет выделения и текста
+          color_scheme_selection_bg = colors[COLOR_INDEX_YELLOW];
+          color_scheme_selection_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет кнопки и текста
+          color_scheme_button_bg = colors[COLOR_INDEX_LIGHTGREY];
+          color_scheme_button_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет нажатой кнопки и текста
+          color_scheme_button_active_bg = colors[COLOR_INDEX_DARKGREY];
+          color_scheme_button_active_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет неактивного текста
+          color_scheme_inactive_fg = colors[COLOR_INDEX_LIGHTGREY];
+          // Цвет ссылки
+          color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
+        }
+        // Black & White
+        else if(scheme_selected == 2) {
+          // Цвет фона и текста
+          color_scheme_bg = colors[COLOR_INDEX_WHITE];
+          color_scheme_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет заголовка и текста
+          color_scheme_title_bg = colors[COLOR_INDEX_BLACK];
+          color_scheme_title_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет выделения и текста
+          color_scheme_selection_bg = colors[COLOR_INDEX_BLACK];
+          color_scheme_selection_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет кнопки и текста
+          color_scheme_button_bg = colors[COLOR_INDEX_WHITE];
+          color_scheme_button_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет нажатой кнопки и текста
+          color_scheme_button_active_bg = colors[COLOR_INDEX_BLACK];
+          color_scheme_button_active_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет неактивного текста
+          color_scheme_inactive_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет ссылки
+          color_scheme_link_fg = colors[COLOR_INDEX_WHITE];
+        }
+        // Red
+        else if(scheme_selected == 3) {
+          // Цвет фона и текста
+          color_scheme_bg = colors[COLOR_INDEX_WHITE];
+          color_scheme_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет заголовка и текста
+          color_scheme_title_bg = colors[COLOR_INDEX_RED];
+          color_scheme_title_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет выделения и текста
+          color_scheme_selection_bg = colors[COLOR_INDEX_RED];
+          color_scheme_selection_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет кнопки и текста
+          color_scheme_button_bg = colors[COLOR_INDEX_LIGHTGREY];
+          color_scheme_button_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет нажатой кнопки и текста
+          color_scheme_button_active_bg = colors[COLOR_INDEX_DARKGREY];
+          color_scheme_button_active_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет неактивного текста
+          color_scheme_inactive_fg = colors[COLOR_INDEX_LIGHTGREY];
+          // Цвет ссылки
+          color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
+        }
+        // Green
+        else if(scheme_selected == 4) {
+          // Цвет фона и текста
+          color_scheme_bg = colors[COLOR_INDEX_WHITE];
+          color_scheme_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет заголовка и текста
+          color_scheme_title_bg = colors[COLOR_INDEX_GREEN];
+          color_scheme_title_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет выделения и текста
+          color_scheme_selection_bg = colors[COLOR_INDEX_GREEN];
+          color_scheme_selection_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет кнопки и текста
+          color_scheme_button_bg = colors[COLOR_INDEX_LIGHTGREY];
+          color_scheme_button_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет нажатой кнопки и текста
+          color_scheme_button_active_bg = colors[COLOR_INDEX_DARKGREY];
+          color_scheme_button_active_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет неактивного текста
+          color_scheme_inactive_fg = colors[COLOR_INDEX_LIGHTGREY];
+          // Цвет ссылки
+          color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
+        }
+        // Random
+        else if(scheme_selected == 5) {
+          // Цвет фона и текста
+          color_scheme_bg = colors[random(0, 16)];
+          color_scheme_fg = colors[random(0, 16)];
+          // Цвет заголовка и текста
+          color_scheme_title_bg = colors[random(0, 16)];
+          color_scheme_title_fg = colors[random(0, 16)];
+          // Цвет выделения и текста
+          color_scheme_selection_bg = colors[random(0, 16)];
+          color_scheme_selection_fg = colors[random(0, 16)];
+          // Цвет кнопки и текста
+          color_scheme_button_bg = colors[random(0, 16)];
+          color_scheme_button_fg = colors[random(0, 16)];
+          // Цвет нажатой кнопки и текста
+          color_scheme_button_active_bg = colors[random(0, 16)];
+          color_scheme_button_active_fg = colors[random(0, 16)];
+          // Цвет неактивного текста
+          color_scheme_inactive_fg = colors[random(0, 16)];
+          // Цвет ссылки
+          color_scheme_link_fg = colors[random(0, 16)];
+        }
+      }
+      redraw_flag = 1;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+
+      if(drawConfirm("Save settings?") == 0) {
+        sprintf(buff, "%d", inversion);
+        write_file_from_buff("/Settings/Inversion", buff);
+
+        scheme_text = (char*)malloc(2000);
+        scheme_text[0] = 0;
+        sprintf(buff, "background=%d\n", color_to_index(color_scheme_bg));
+        strcat(scheme_text, buff);
+        sprintf(buff, "foreground=%d\n", color_to_index(color_scheme_fg));
+        strcat(scheme_text, buff);
+        sprintf(buff, "title_background=%d\n", color_to_index(color_scheme_title_bg));
+        strcat(scheme_text, buff);
+        sprintf(buff, "title_foreground=%d\n", color_to_index(color_scheme_title_fg));
+        strcat(scheme_text, buff);
+        sprintf(buff, "selection_background=%d\n", color_to_index(color_scheme_selection_bg));
+        strcat(scheme_text, buff);
+        sprintf(buff, "selection_foreground=%d\n", color_to_index(color_scheme_selection_fg));
+        strcat(scheme_text, buff);
+        sprintf(buff, "button_background=%d\n", color_to_index(color_scheme_button_bg));
+        strcat(scheme_text, buff);
+        sprintf(buff, "button_foreground=%d\n", color_to_index(color_scheme_button_fg));
+        strcat(scheme_text, buff);
+        sprintf(buff, "button_active_background=%d\n", color_to_index(color_scheme_button_active_bg));
+        strcat(scheme_text, buff);
+        sprintf(buff, "button_active_foreground=%d\n", color_to_index(color_scheme_button_active_fg));
+        strcat(scheme_text, buff);
+        sprintf(buff, "inactive_foreground=%d\n", color_to_index(color_scheme_inactive_fg));
+        strcat(scheme_text, buff);
+        sprintf(buff, "link_foreground=%d\n", color_to_index(color_scheme_link_fg));
+        strcat(scheme_text, buff);
+        write_file_from_buff("/Settings/Colors", scheme_text);
+        free(scheme_text);
+      }
+      touchExitActionReset();
+      return;
+    }
+
+    touchWaitRelease();
+  }
+}
+
+int color_to_index(int color) {
+  int i;
+  for(i = 0; i < 16; i++) {
+    if(colors[i] == color) return i;
+  }
+  return 0;
+}
+
 #ifdef IS_WIFI_ENABLED
 
 #define WIFI_MAX_NETWORKS 128
@@ -5453,9 +5805,9 @@ void wifi_select_network() {
 
   rescan_flag = 1;
   while(1) {
-    tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+    tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
     if(rescan_flag) {
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       tft.drawString("Scanning...      ", 0, 16, FONT_DEFAULT);
       for(network_index = 0; network_index < WIFI_MAX_NETWORKS; network_index++) {
         if(networks[network_index]) {
@@ -5485,7 +5837,7 @@ void wifi_select_network() {
       rescan_flag = 0;
     }
 
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.drawString("Select network:", 0, 16, FONT_DEFAULT);
 
     touchCheckList(8, 32, tft.width() - 8 * 2, tft.height() - 72, networks, 15, &network_offset, &network_selected);
@@ -5568,7 +5920,7 @@ void wifi_network_info() {
 
   while(1) {
     if(millis() - prev_update_millis > 1000) {
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       screen_offset = 20;
       sprintf(buff, "SSID: %s  ", WiFi.SSID());
       tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
@@ -5637,7 +5989,7 @@ void wifi_network_info() {
         WiFi.disconnect();
         return;
       }
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
     }
 
     touchWaitReleaseOrExit();
@@ -5741,12 +6093,12 @@ void gopher(char mode, char *io_buff) {
       reload_page = 0;
     }
 
-    tft.fillRect(0, 16, tft.width(), 16 - 1, TFT_LIGHTGREY);
-    tft.setTextColor(TFT_BLACK, TFT_LIGHTGREY);
+    tft.fillRect(0, 16, tft.width(), 16 - 1, color_scheme_inactive_fg);
+    tft.setTextColor(color_scheme_fg, color_scheme_inactive_fg);
     tft.drawString(address, 1, 20, FONT_MONOSPACE);
 
     // Выводим всё
-    tft.fillRect(0, 32, tft.width(), tft.height() - 32, TFT_WHITE);
+    tft.fillRect(0, 32, tft.width(), tft.height() - 32, color_scheme_bg);
     gopher_show_page(page, &page_offset, type, 0, address_to_go);
 
     drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 4, 1);
@@ -5979,33 +6331,33 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
       }
 
       if(line_type == 'i') {
-        tft.setTextColor(TFT_BLACK, TFT_WHITE);
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
       }
       else if(line_type == '0' || line_type == '1') {
         if(get_touch_address && touch_line == screen_offset) {
-          tft.setTextColor(TFT_WHITE, TFT_BLUE);
+          tft.setTextColor(color_scheme_bg, color_scheme_link_fg);
           sprintf(address_to_go, "%s:%s/%c%s", server, port, line_type, path);
         }
         else {
-          tft.setTextColor(TFT_BLUE, TFT_WHITE);
+          tft.setTextColor(color_scheme_link_fg, color_scheme_bg);
         }
       }
       else if(line_type == '7') {
         if(get_touch_address && touch_line == screen_offset) {
-          tft.setTextColor(TFT_WHITE, TFT_BLUE);
+          tft.setTextColor(color_scheme_bg, color_scheme_link_fg);
           strcpy(query, "");
           drawPrompt("Query", query);
           sprintf(address_to_go, "%s:%s/%c%s\t%s", server, port, line_type, path, query);
         }
         else {
-          tft.setTextColor(TFT_BLUE, TFT_WHITE);
+          tft.setTextColor(color_scheme_link_fg, color_scheme_bg);
         }
       }
       else if(line_type == '3') {
-        tft.setTextColor(TFT_RED, TFT_WHITE);
+        tft.setTextColor(TFT_RED, color_scheme_bg);
       }
       else {
-        tft.setTextColor(TFT_DARKGREY, TFT_WHITE);
+        tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
       }
       tft.drawString(buff, 1, 32 + screen_offset * 8, FONT_MONOSPACE);
       screen_offset++;
@@ -6183,10 +6535,9 @@ void weather(char mode, char *io_buff) {
             }
           }
         }
-        tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
-        tft.setTextColor(TFT_BLACK, TFT_WHITE);
+        tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
         tft.drawCentreString(temp, tft.width() / 2, 35, FONT_BIGGER);
-        //tft.drawString("C", tft.width() / 2 + tft.textWidth(temp, FONT_BIGGER) / 2 + 8, 35, FONT_BIG);
 
         tft.drawCentreString(wind, tft.width() / 2, 100, FONT_BIG);
         tft.drawCentreString(weather, tft.width() / 2, 150, FONT_DEFAULT);
@@ -6195,14 +6546,14 @@ void weather(char mode, char *io_buff) {
     }
 
     drawButtonMatrix(0, tft.height() - 96, tft.width() / 2, 96, buttons, 1, 3);
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "%f", global_lat);
     tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 64 + 8, FONT_DEFAULT);
     sprintf(buff, "%f", global_lon);
     tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 32 + 8, FONT_DEFAULT);
 
     while(!touchCheckNowait()) {
-      tft.setTextColor(TFT_LIGHTGREY, TFT_WHITE);
+      tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
       sprintf(buff, "  Next update in %d min %d sec  ",
         (prev_update_data_millis + WEATHER_AUTO_UPDATE_INTERVAL - millis()) / 60000,
         ((prev_update_data_millis + WEATHER_AUTO_UPDATE_INTERVAL - millis()) / 1000) % 60
@@ -6233,7 +6584,7 @@ void weather(char mode, char *io_buff) {
           sprintf(buff, "%f %f", global_lat, global_lon);
           write_file_from_buff("/Settings/Coordinates", buff);
         }
-        tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+        tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       }
       else if(button_pressed == 2) {
         sprintf(buff, "%f", global_lon);
@@ -6243,7 +6594,7 @@ void weather(char mode, char *io_buff) {
           sprintf(buff, "%f %f", global_lat, global_lon);
           write_file_from_buff("/Settings/Coordinates", buff);
         }
-        tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+        tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       }
     }
 
@@ -6334,7 +6685,7 @@ void chat(char mode, char *io_buff) {
     break;
   }
   write_file_from_buff(CHAT_NICKNAME_FILE, nickname);
-  tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+  tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
   
   messages = (char*)malloc(2048 * sizeof(char));
   prev_messages = (char*)malloc(2048 * sizeof(char));
@@ -6356,8 +6707,8 @@ void chat(char mode, char *io_buff) {
         buff_offset = 0;
         memset(buff, ' ', 40);
         buff[40] = 0;
-        tft.setTextColor(TFT_BLACK, TFT_WHITE);
-        //tft.fillRect(0, 16, tft.width(), tft.height() - 16 - 32 - 8, TFT_WHITE);
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
+        
         for(messages_offset = 0; messages[messages_offset] != 0; messages_offset++) {
           if((messages[messages_offset] == '\n' || messages[messages_offset] == '\r') || buff_offset >= 40) {
             if(messages[messages_offset] == '\n' && messages[messages_offset + 1] == '\r') messages_offset++;
@@ -6387,7 +6738,7 @@ void chat(char mode, char *io_buff) {
     drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 1, 1);
 
     while(!touchCheckNowait()) {
-      tft.setTextColor(TFT_LIGHTGREY, TFT_WHITE);
+      tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
       sprintf(buff, "Next update in %d sec  ",
         ((prev_update_data_millis + CHAT_AUTO_UPDATE_INTERVAL - millis()) / 1000) % 60
       );
@@ -6428,7 +6779,7 @@ void chat(char mode, char *io_buff) {
         }
         update_flag = 1;
       }
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
     }
 
     touchWaitReleaseOrExit();
@@ -6506,7 +6857,7 @@ void http_file_access(char mode, char *io_buff) {
     return;
   }
 
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
   tft.drawString("Use next URL to control files:", 1, 20, FONT_DEFAULT);
   sprintf(buff, "http://%s/", WiFi.localIP().toString());
   tft.drawString(buff, 1, 36, FONT_DEFAULT);
@@ -6679,14 +7030,14 @@ int get_file_https(char *url, char *buff) {
   HTTPClient https;
   WiFiClient* stream;
 
-  Serial.println(url);
+  //Serial.println(url);
 
   if(client) {
     client->setInsecure();
     if (https.begin(*client, url)) {
       httpResponseCode = https.GET();
-      Serial.println(httpResponseCode);
-      Serial.println(https.errorToString(httpResponseCode));
+      //Serial.println(httpResponseCode);
+      //Serial.println(https.errorToString(httpResponseCode));
       if (httpResponseCode > 0) {
         strcpy(buff, https.getString().c_str());
         // Чтение через stream добавляет лишние байты (?!)
@@ -6699,9 +7050,9 @@ int get_file_https(char *url, char *buff) {
           buff[offset] = 0;
         }*/
         //Serial.println(offset);
-        Serial.println("---");
-        Serial.println(buff);
-        Serial.println("---");
+        //Serial.println("---");
+        //Serial.println(buff);
+        //Serial.println("---");
         https.end();
       }
       https.end();
@@ -6832,8 +7183,8 @@ void rss_action(int action_index, char *filename) {
       }
     }
 
-    Serial.println(name);
-    Serial.println(buff);
+    //Serial.println(name);
+    //Serial.println(buff);
 
     // Резервируем память
     data = (char*)malloc(20000 * sizeof(char));
@@ -6845,7 +7196,7 @@ void rss_action(int action_index, char *filename) {
     // Получить данные в XML
     data[0] = 0;
     if(buff[4] == 's') {
-      Serial.println("Before https");
+      //Serial.println("Before https");
       
       http_code = get_file_https(buff, data);
       if(http_code != 200) {
@@ -6854,10 +7205,10 @@ void rss_action(int action_index, char *filename) {
         free(data);
         return;
       }
-      Serial.println("After https");
+      //Serial.println("After https");
     }
     else {
-      Serial.println("Before http");
+      //Serial.println("Before http");
       http_code = get_file_http(buff, data);
       if(http_code != 200) {
         sprintf(buff, "Error %d", http_code);
@@ -6865,7 +7216,7 @@ void rss_action(int action_index, char *filename) {
         free(data);
         return;
       }
-      Serial.println("After http");
+      //Serial.println("After http");
     }
 
     // Нет данных
@@ -7102,8 +7453,8 @@ void i2c_scanner(char mode, char *io_buff) {
   rescan_flag = 1;
   while(1) {
     if(rescan_flag) {
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       tft.drawString("Scanning...      ", 1, 16, FONT_DEFAULT);
 
       for(device_index = 0; device_index < I2C_MAX_DEVICES; device_index++) {
@@ -7126,7 +7477,7 @@ void i2c_scanner(char mode, char *io_buff) {
       rescan_flag = 0;
     }
 
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.drawString("Found devices:", 1, 16, FONT_DEFAULT);
 
     touchCheckList(8, 32, tft.width() - 8 * 2, tft.height() - 72, devices, 15, &device_offset, &device_selected);
@@ -7269,7 +7620,7 @@ void dashboard(char mode, char *io_buff) {
       }
 #endif
 
-      tft.fillRect(0, 242, tft.width(), tft.height() - 242, TFT_WHITE);
+      tft.fillRect(0, 242, tft.width(), tft.height() - 242, color_scheme_bg);
     }
     if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
       prev_update_millis = millis();
@@ -7289,12 +7640,12 @@ void dashboard(char mode, char *io_buff) {
 
       // Если день изменился - очистить экран
       if(prev_day != day) {
-        tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+        tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       }
       prev_day = day;
 
       // Выводим всё
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       sprintf(buff, " %d:%02d:%02d ", hour, min, sec);
       tft.drawCentreString(buff, tft.width() / 2, 35, FONT_BIGGER);
 
@@ -7324,25 +7675,25 @@ void dashboard(char mode, char *io_buff) {
             cal_day++;
           }
           if((day + 1) == cal_day) {
-            tft.fillRect(cal_col * tft.width() / 7, 130 + cal_row * 16, tft.width() / 7, 16, TFT_BLUE);
-            tft.setTextColor(TFT_WHITE, TFT_BLUE);
+            tft.fillRect(cal_col * tft.width() / 7, 130 + cal_row * 16, tft.width() / 7, 16, color_scheme_selection_bg);
+            tft.setTextColor(color_scheme_selection_fg, color_scheme_selection_bg);
           }
           else {
-            tft.setTextColor(TFT_BLACK, TFT_WHITE);
+            tft.setTextColor(color_scheme_fg, color_scheme_bg);
           }
           tft.drawCentreString(buff, (cal_col + 0.5) * tft.width() / 7, 130 + cal_row * 16, FONT_DEFAULT);
         }
       }
 
       // Лунный день
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       sprintf(buff, "Moon day: %d", moon_day);
       tft.drawCentreString(buff, tft.width() / 2, 242, FONT_DEFAULT);
       tft.drawCentreString(weather, tft.width() / 2, 258, FONT_DEFAULT);
       tft.drawCentreString(rates, tft.width() / 2, 274, FONT_DEFAULT);
 
       // До следующего обновления данных
-      tft.setTextColor(TFT_LIGHTGREY, TFT_WHITE);
+      tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
       sprintf(buff, "  Next update in %d min %d sec  ",
         (prev_update_data_millis + CLOCK_UPDATE_DATA_INTERVAL - millis()) / 60000,
         ((prev_update_data_millis + CLOCK_UPDATE_DATA_INTERVAL - millis()) / 1000) % 60
@@ -7527,114 +7878,114 @@ void fuzzy_clock(char mode, char *io_buff) {
       // Выводим всё
       for(row = 0; row < 10; row++) {
         for(col = 0; col < 11; col++) {
-          tft.setTextColor(TFT_LIGHTGREY, TFT_WHITE);
+          tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
           // it is
           if(row == 0 && (col == 0 || col == 1 || col == 3 || col == 4)) {
-            tft.setTextColor(TFT_BLACK, TFT_WHITE);
+            tft.setTextColor(color_scheme_fg, color_scheme_bg);
           }
           if(oclock_flag) {
             if(row == 9 && col >= 5) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(past_flag) {
             if(row == 4 && col < 4) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(to_flag) {
             if(row == 3 && col >= 8 && col < 10) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(five_flag) {
             if(row == 1 && col >= 7) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(ten_flag) {
             if(row == 2 && col >= 8) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(quarter_flag) {
             if(row == 2 && col < 7) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(twenty_flag) {
             if(row == 1 && col < 6) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(half_flag) {
             if(row == 0 && col >= 6 && col < 10) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(minutes_flag) {
             if(row == 3 && col < 7) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[0]) {
             if(row == 4 && col >= 5) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[1]) {
             if(row == 5 && col < 3) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[2]) {
             if(row == 6 && col >= 8) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[3]) {
             if(row == 5 && col >= 6) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[4]) {
             if(row == 6 && col < 4) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[5]) {
             if(row == 9 && col < 4) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[6]) {
             if(row == 5 && col >= 3 && col < 6) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[7]) {
             if(row == 8 && col < 5) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[8]) {
             if(row == 7 && col < 5) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[9]) {
             if(row == 8 && col >= 6 && col < 10) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[10]) {
             if(row == 6 && col >= 5 && col < 8) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           if(hour_flag[11]) {
             if(row == 7 && col >= 5) {
-              tft.setTextColor(TFT_BLACK, TFT_WHITE);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
             }
           }
           sprintf(buff, "%c", symbols[row][col]);
@@ -7720,7 +8071,7 @@ void set_clock(char mode, char *io_buff) {
     // Обновляем время
     set_local_time_from_unix_timestamp();
     // Рисуем время
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
     sprintf(buff, " %04d ", global_year);
     tft.drawCentreString(buff, 1 * tft.width() / 6, 56, FONT_BIG);
@@ -7804,7 +8155,7 @@ void set_clock(char mode, char *io_buff) {
           sscanf(buff, "%ld", &global_timezone);
           save_current_timezone();
         }
-        tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+        tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       }
       redraw_flag = 1;
     }
@@ -7903,7 +8254,7 @@ void view_font(char mode, char *io_buff) {
 
   byte = 0;
   while(1) {
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
     for(i = 0; i < 16; i++) {
       sprintf(buff, " %d 0x%02X %c     ", (int)byte, (int)byte, byte);
@@ -8156,7 +8507,7 @@ void view_file(char *title, char *filename) {
 
   clearScreen();
   drawAppTitle(title);
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
   file = Storage.open(filename);
   if(!file) {
@@ -8181,7 +8532,7 @@ void view_file(char *title, char *filename) {
     current_line_on_screen = 0;
     word_in_line_offset = 0;
     current_string[0] = 0;
-    tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+    tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
 
     word_offset = 0;
     current_word[word_offset] = 0;
@@ -8347,7 +8698,7 @@ void view_text(char *title, char *data) {
 
   clearScreen();
   drawAppTitle(title);
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
   while(1) {
     // Вывести текст по текущему смещению
@@ -8357,7 +8708,7 @@ void view_text(char *title, char *data) {
     current_line_on_screen = 0;
     word_in_line_offset = 0;
     current_string[0] = 0;
-    tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+    tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
 
     word_offset = 0;
     current_word[word_offset] = 0;
@@ -8572,7 +8923,7 @@ void edit_file(char *title, char *filename) {
 
   clearScreen();
   drawAppTitle(title);
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
   contents[0] = 0;
   file = Storage.open(filename);
@@ -8604,7 +8955,7 @@ void edit_file(char *title, char *filename) {
     // Вывести текст по текущему смещению
     // Начинаем с начала файла и читаем пока не попадём на отображаемую часть
     current_string[0] = 0;
-    tft.fillRect(0, 16, tft.width(), 200 - 16, TFT_WHITE);
+    tft.fillRect(0, 16, tft.width(), 200 - 16, color_scheme_bg);
 
     cursor_too_low = 0;
     cursor_too_high = 0;
@@ -8704,7 +9055,7 @@ void edit_file(char *title, char *filename) {
       file_line_number++;
 
       // Пора показать строку
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       tft.drawString(buff, 1, 16 + screen_line_number * 16, FONT_DEFAULT);
       screen_line_number++;
 
@@ -8737,7 +9088,7 @@ void edit_file(char *title, char *filename) {
     }
 
     // Рисуем курсор где нужно
-    tft.fillRect(cursor_screen_pos_x, cursor_screen_pos_y, 2, 16, TFT_BLUE);
+    tft.fillRect(cursor_screen_pos_x, cursor_screen_pos_y, 2, 16, color_scheme_selection_bg);
 
     if(symbol_flag) {
       keyboard_current = keyboard_symbol;
@@ -8885,12 +9236,12 @@ void touch_calibration(char mode, char *io_buff) {
     return;
   }
 
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
   clearScreen();
   tft.drawCentreString("Touch left top cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
-  tft.drawLine(offset - 5, offset - 5, offset + 5, offset + 5, TFT_BLACK);
-  tft.drawLine(offset - 5, offset + 5, offset + 5, offset - 5, TFT_BLACK);
+  tft.drawLine(offset - 5, offset - 5, offset + 5, offset + 5, color_scheme_fg);
+  tft.drawLine(offset - 5, offset + 5, offset + 5, offset - 5, color_scheme_fg);
   delay(1000);
   touchWaitPress();
   p1 = touchscreen.getPoint();
@@ -8901,8 +9252,8 @@ void touch_calibration(char mode, char *io_buff) {
 
   clearScreen();
   tft.drawCentreString("Touch left bottom cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
-  tft.drawLine(offset - 5, tft.height() - 2 - offset - 5, offset + 5, tft.height() - 2 - offset + 5, TFT_BLACK);
-  tft.drawLine(offset - 5, tft.height() - 2 - offset + 5, offset + 5, tft.height() - 2 - offset - 5, TFT_BLACK);
+  tft.drawLine(offset - 5, tft.height() - 2 - offset - 5, offset + 5, tft.height() - 2 - offset + 5, color_scheme_fg);
+  tft.drawLine(offset - 5, tft.height() - 2 - offset + 5, offset + 5, tft.height() - 2 - offset - 5, color_scheme_fg);
   delay(1000);
   touchWaitPress();
   p2 = touchscreen.getPoint();
@@ -8913,8 +9264,8 @@ void touch_calibration(char mode, char *io_buff) {
 
   clearScreen();
   tft.drawCentreString("Touch right top cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
-  tft.drawLine(tft.width() - 2 - offset - 5, offset - 5, tft.width() - 2 - offset + 5, offset + 5, TFT_BLACK);
-  tft.drawLine(tft.width() - 2 - offset - 5, offset + 5, tft.width() - 2 - offset + 5, offset - 5, TFT_BLACK);
+  tft.drawLine(tft.width() - 2 - offset - 5, offset - 5, tft.width() - 2 - offset + 5, offset + 5, color_scheme_fg);
+  tft.drawLine(tft.width() - 2 - offset - 5, offset + 5, tft.width() - 2 - offset + 5, offset - 5, color_scheme_fg);
   delay(1000);
   touchWaitPress();
   p3 = touchscreen.getPoint();
@@ -9038,7 +9389,7 @@ void fifteen(char mode, char *io_buff) {
       shuffle_flag = 0;
     }
 
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "Level: %d", level);
     tft.drawString(buff, 8, 20, FONT_DEFAULT);
 
@@ -9069,7 +9420,7 @@ void fifteen(char mode, char *io_buff) {
     }
     if(won_flag) {
       drawInfo("You won!");
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       shuffle_flag = 1;
       steps = 0;
       level++;
@@ -9165,7 +9516,7 @@ void memory_match(char mode, char *io_buff) {
       item_selected = -1;
     }
 
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "Level: %d", level);
     tft.drawString(buff, 8, 20, FONT_DEFAULT);
 
@@ -9205,7 +9556,7 @@ void memory_match(char mode, char *io_buff) {
     }
     if(won_flag) {
       drawInfo("You won!");
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       shuffle_flag = 1;
       steps = 0;
       level++;
@@ -9293,7 +9644,7 @@ void hanoi_towers(char mode, char *io_buff) {
       column2 = -1;
     }
 
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "Level: %d", level);
     tft.drawString(buff, 8, 20, FONT_DEFAULT);
 
@@ -9331,7 +9682,7 @@ void hanoi_towers(char mode, char *io_buff) {
     }
     if(won_flag) {
       drawInfo("You won!");
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       restart_flag = 1;
       steps = 0;
       level = min(level + 1, HANOI_TOWERS_MAX_LEVEL);
@@ -9340,14 +9691,14 @@ void hanoi_towers(char mode, char *io_buff) {
     }
 
     touchWaitPress();
-    tft.fillRect(0, tft.height() - 15, tft.width(), 15, TFT_WHITE);
+    tft.fillRect(0, tft.height() - 15, tft.width(), 15, color_scheme_bg);
     TS_Point p = touchscreen.getPoint();
     touch_x = touchMapX(p.x, p.y);
     touch_y = touchMapY(p.x, p.y);
 
     if(column1 == -1) {
       column1 = touch_x / (tft.width() / 3);
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       tft.drawCentreString("^", column1 * tft.width() / 3 + tft.width() / 6, tft.height() - 15, FONT_DEFAULT);
     }
     else {
@@ -9355,7 +9706,7 @@ void hanoi_towers(char mode, char *io_buff) {
       if(column1 == column2) {
         column1 = column2;
         column2 = -1;
-        tft.setTextColor(TFT_BLACK, TFT_WHITE);
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
         tft.drawCentreString("^", column1 * tft.width() / 3 + tft.width() / 6, tft.height() - 15, FONT_DEFAULT);
       }
       else {
@@ -9385,7 +9736,7 @@ void hanoi_towers(char mode, char *io_buff) {
         }
         column1 = -1;
         column2 = -1;
-        tft.fillRect(0, tft.height() - 15, tft.width(), 15, TFT_WHITE); 
+        tft.fillRect(0, tft.height() - 15, tft.width(), 15, color_scheme_bg); 
       }
     }
 
@@ -9480,7 +9831,7 @@ void lights_off(char mode, char *io_buff) {
       shuffle_flag = 0;
     }
 
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "Level: %d", level);
     tft.drawString(buff, 8, 20, FONT_DEFAULT);
 
@@ -9517,7 +9868,7 @@ void lights_off(char mode, char *io_buff) {
     if(won_flag) {
       sprintf(buff, "You won level %d in %d steps", level, steps);
       drawInfo(buff);
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       level++;
       shuffle_flag = 1;
       steps = 0;
@@ -9734,11 +10085,11 @@ void metronome(char mode, char *io_buff) {
     }
 
     if(redraw_flag) {
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       redraw_flag = 0;
     }
 
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "  %d  ", tempo);
     tft.drawCentreString(buff, 3 * tft.width() / 4, 28, FONT_DEFAULT);
 
@@ -9856,11 +10207,7 @@ void saveScreenshot() {
     0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x00,
     0xFF, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00
   };
-  int colors[] = {
-    TFT_BLACK, TFT_MAROON, TFT_DARKGREEN, TFT_OLIVE,
-    TFT_NAVY, TFT_PURPLE, TFT_DARKCYAN, TFT_LIGHTGREY,
-    TFT_DARKGREY, TFT_RED, TFT_GREEN, TFT_YELLOW,
-    TFT_BLUE, TFT_MAGENTA, TFT_CYAN, TFT_WHITE};
+
   int color_index;
   
   beep_if_enabled();
@@ -9932,13 +10279,13 @@ void saveScreenshot() {
 }
 
 void clearScreen() {
-  tft.fillScreen(TFT_WHITE);
+  tft.fillScreen(color_scheme_bg);
 }
 
 void drawAppTitle(char *name) {
   char buff[80];
-  tft.setTextColor(TFT_WHITE, TFT_BLUE);
-  tft.fillRect(0, 0, tft.width(), 16, TFT_BLUE);
+  tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
+  tft.fillRect(0, 0, tft.width(), 16, color_scheme_title_bg);
   tft.drawString(name, 16, 0, FONT_DEFAULT);
   // Рисовать время в заголовке неплохая идея, но тогда надо ещё заголовок постоянно обновлять
   /*
@@ -10029,18 +10376,18 @@ int drawPrompt(char *message, char *user_input) {
   strcpy(input, user_input);
   
   // Рамка
-  tft.drawRect(0, PROMPT_OFFSET_Y, tft.width(), 220, TFT_BLACK);
+  tft.drawRect(0, PROMPT_OFFSET_Y, tft.width(), 220, color_scheme_fg);
   // Белый фон
-  tft.fillRect(1, PROMPT_OFFSET_Y + 1, tft.width() - 2, 218, TFT_WHITE);
+  tft.fillRect(1, PROMPT_OFFSET_Y + 1, tft.width() - 2, 218, color_scheme_bg);
   // Фон заголовка
-  tft.fillRect(1, PROMPT_OFFSET_Y + 1, tft.width() - 2, 16, TFT_BLUE);
+  tft.fillRect(1, PROMPT_OFFSET_Y + 1, tft.width() - 2, 16, color_scheme_title_bg);
   // Заголовок
-  tft.setTextColor(TFT_WHITE, TFT_BLUE);
+  tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
   tft.drawString(message, 16, PROMPT_OFFSET_Y + 1, FONT_DEFAULT);
   
   while(1) {
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
-    tft.fillRect(1, PROMPT_OFFSET_Y + 20, tft.width() - 2, 16, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.fillRect(1, PROMPT_OFFSET_Y + 20, tft.width() - 2, 16, color_scheme_bg);
     strcpy(visible_input, input);
     while(tft.textWidth(visible_input, FONT_DEFAULT) > tft.width() - 8 * 2) {
       for(i = 0; i < strlen(visible_input); i++) {
@@ -10048,8 +10395,8 @@ int drawPrompt(char *message, char *user_input) {
       }
     }
     cursor_pos = tft.drawString(visible_input, 8, PROMPT_OFFSET_Y + 20, FONT_DEFAULT);
-    //tft.setTextColor(TFT_BLUE, TFT_WHITE);
-    tft.fillRect(8 + cursor_pos + 1, PROMPT_OFFSET_Y + 20, 2, 16, TFT_BLUE);
+    
+    tft.fillRect(8 + cursor_pos + 1, PROMPT_OFFSET_Y + 20, 2, 16, color_scheme_selection_bg);
 
     drawButtonMatrix(8, PROMPT_OFFSET_Y + 180, tft.width() - 8 * 2, 32, buttons, 3, 1);
 
@@ -10147,17 +10494,17 @@ int drawPopoupWindowWaitReply(char *title, char *message, char **buttons) {
 
 void drawPopupWindow(char *title, char *message, char **buttons) {
   // Рамка
-  tft.drawRect(0, 120, tft.width(), 120, TFT_BLACK);
+  tft.drawRect(0, 120, tft.width(), 120, color_scheme_fg);
   // Белый фон
-  tft.fillRect(1, 121, 238, 118, TFT_WHITE);
+  tft.fillRect(1, 121, 238, 118, color_scheme_bg);
   // Фон заголовка
-  tft.fillRect(1, 121, 238, 16, TFT_BLUE);
+  tft.fillRect(1, 121, 238, 16, color_scheme_title_bg);
   // Заголовок
-  tft.setTextColor(TFT_WHITE, TFT_BLUE);
+  tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
   tft.drawString(title, 16, 121, FONT_DEFAULT);
   
   // Надпись
-  tft.setTextColor(TFT_BLACK, TFT_WHITE);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
   tft.drawString(message, 8, 121 + 16, FONT_DEFAULT);
 
   // Кнопки в один ряд
@@ -10211,11 +10558,11 @@ void checkPasswordUntilCorrect(char *correct_password) {
 
   while(1) {
     // Нарисовать звёздочки по числу символов
-    tft.fillRect(0, 16, tft.width(), 60, TFT_WHITE);
-    tft.setTextColor(TFT_BLACK, TFT_WHITE);
+    tft.fillRect(0, 16, tft.width(), 60, color_scheme_bg);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
     for(i = 0; i < strlen(user_input); i++) {
       if(8 + i * tft.textWidth("*", FONT_BIG) < tft.width()) {
-        tft.setTextColor(TFT_BLACK, TFT_WHITE);
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
         tft.drawString("*", 8 + i * tft.textWidth("*", FONT_BIG), 58, FONT_BIG);
       }
     }
@@ -10236,7 +10583,7 @@ void checkPasswordUntilCorrect(char *correct_password) {
           drawAlert("Wrong password!");
           //drawInfo(correct_password);
           strcpy(user_input, "");
-          tft.fillRect(0, 16, tft.width(), tft.height() - 20, TFT_WHITE);
+          tft.fillRect(0, 16, tft.width(), tft.height() - 20, color_scheme_bg);
         }
       }
       else if(!strcmp(buttons[button], "<-")) {
@@ -10260,22 +10607,22 @@ void drawButtonMatrix(int left_x, int top_y, int width, int height, char **str, 
     for(x = 0; x < cols; x++) {
       if(!is_eol) {
         if(str[x + y * cols]) {
-          tft.drawRect(left_x + x * width / cols + 1, top_y + y * height / rows + 1, width / cols - 2, height / rows - 2, TFT_BLACK);
-          tft.fillRect(left_x + x * width / cols + 2, top_y + y * height / rows + 2, width / cols - 4, height / rows - 4, TFT_LIGHTGREY);
+          tft.drawRect(left_x + x * width / cols + 1, top_y + y * height / rows + 1, width / cols - 2, height / rows - 2, color_scheme_button_fg);
+          tft.fillRect(left_x + x * width / cols + 2, top_y + y * height / rows + 2, width / cols - 4, height / rows - 4, color_scheme_button_bg);
           if(!strcmp(str[x + y * cols], ":enter:")) {
-            image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, enter, TFT_BLACK, TFT_LIGHTGREY);
+            image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, enter, color_scheme_button_fg, color_scheme_button_bg);
           }
           else if(!strcmp(str[x + y * cols], ":backspace:")) {
-            image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, backspace, TFT_BLACK, TFT_LIGHTGREY);
+            image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, backspace, color_scheme_button_fg, color_scheme_button_bg);
           }
           else if(!strcmp(str[x + y * cols], ":shift:")) {
-            image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, shift, TFT_BLACK, TFT_LIGHTGREY);
+            image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, shift, color_scheme_button_fg, color_scheme_button_bg);
           }
           else if(!strcmp(str[x + y * cols], ":change:")) {
-            image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, change_keyboard, TFT_BLACK, TFT_LIGHTGREY);
+            image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, change_keyboard, color_scheme_button_fg, color_scheme_button_bg);
           }
           else {
-            tft.setTextColor(TFT_BLACK, TFT_LIGHTGREY);
+            tft.setTextColor(color_scheme_button_fg, color_scheme_button_bg);
             tft.drawCentreString(str[x + y * cols], left_x + (x + 0.5) * width / cols + 1, top_y + (y + 0.5) * height / rows - 8, FONT_DEFAULT);
           }
         }
@@ -10293,6 +10640,7 @@ int touchCheckMatrix(int left_x, int top_y, int width, int height, char **str, i
   int touch_x;
   int touch_y;
   int bg_color;
+  int fg_color;
   int prev_color;
   char is_eol = 0;
   char is_touch;
@@ -10321,33 +10669,35 @@ int touchCheckMatrix(int left_x, int top_y, int width, int height, char **str, i
               else {
                 is_inside = 0;
               }
-              bg_color = TFT_LIGHTGREY;
+              bg_color = color_scheme_button_bg;
+              fg_color = color_scheme_button_fg;
               if(is_touch) {
                 p = touchscreen.getPoint();
                 touch_x = touchMapX(p.x, p.y);
                 touch_y = touchMapY(p.x, p.y);
                 if(is_inside) {
-                  bg_color = TFT_DARKGREY;
+                  bg_color = color_scheme_button_active_bg;
+                  fg_color = color_scheme_button_active_fg;
                 }
               }
               
               if(prev_color != bg_color) {
-                tft.drawRect(left_x + x * width / cols + 1, top_y + y * height / rows + 1, width / cols - 2, height / rows - 2, TFT_BLACK);
+                tft.drawRect(left_x + x * width / cols + 1, top_y + y * height / rows + 1, width / cols - 2, height / rows - 2, fg_color);
                 tft.fillRect(left_x + x * width / cols + 2, top_y + y * height / rows + 2, width / cols - 4, height / rows - 4, bg_color);
                 if(!strcmp(str[x + y * cols], ":enter:")) {
-                  image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, enter, TFT_BLACK, bg_color);
+                  image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, enter, fg_color, bg_color);
                 }
                 else if(!strcmp(str[x + y * cols], ":backspace:")) {
-                  image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, backspace, TFT_BLACK, bg_color);
+                  image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, backspace, fg_color, bg_color);
                 }
                 else if(!strcmp(str[x + y * cols], ":shift:")) {
-                  image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, shift, TFT_BLACK, bg_color);
+                  image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, shift, fg_color, bg_color);
                 }
                 else if(!strcmp(str[x + y * cols], ":change:")) {
-                  image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, change_keyboard, TFT_BLACK, bg_color);
+                  image_from_bits(left_x + x * width / cols + 6, top_y + (y + 0.5) * height / rows - 4, change_keyboard, fg_color, bg_color);
                 }
                 else {
-                  tft.setTextColor(TFT_BLACK, bg_color);
+                  tft.setTextColor(fg_color, bg_color);
                   tft.drawCentreString(str[x + y * cols], left_x + (x + 0.5) * width / cols + 1, top_y + (y + 0.5) * height / rows - 8, FONT_DEFAULT);
                 }
               prev_color = bg_color;
@@ -10394,31 +10744,31 @@ void drawList(int left_x, int top_y, int width, int height, char **str, int rows
 
   // Пустой список - показываем что тут мог быть список
   if(str[0] == NULL) {
-    tft.setTextColor(TFT_LIGHTGREY, TFT_WHITE);
+    tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
     tft.drawString("<empty list>", left_x + 1, top_y, FONT_DEFAULT);
     return;
   }
 
   for(y = 0; y < rows_to_show; y++) {
     if(!is_eol) {
-      tft.setTextColor(TFT_BLACK, TFT_WHITE);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
       // Если нужно показать [up]
       if(y == 0 && *offset > 0) {
-        tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, TFT_WHITE);
+        tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, color_scheme_bg);
         tft.drawString(up, left_x + 1, top_y + y * height / rows_to_show, FONT_DEFAULT);
       }
       // Если нужно показать [down]
       else if(y == (rows_to_show - 1) && (*offset + rows_to_show) <= last_row) {
-        tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, TFT_WHITE);
+        tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, color_scheme_bg);
         tft.drawString(down, left_x + 1, top_y + y * height / rows_to_show, FONT_DEFAULT);
       }
       else if(str[y + *offset]) {
         if(y + *offset == *selected) {
-          tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, TFT_BLUE);
-          tft.setTextColor(TFT_WHITE, TFT_BLUE);
+          tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, color_scheme_selection_bg);
+          tft.setTextColor(color_scheme_selection_fg, color_scheme_selection_bg);
         }
         else {
-          tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, TFT_WHITE);
+          tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, color_scheme_bg);
         }
         getListItemParts(str[y + *offset], left, right);
         if(!strcmp(left, "") && !strcmp(right, "")) {
@@ -10438,12 +10788,12 @@ void drawList(int left_x, int top_y, int width, int height, char **str, int rows
         }
       }
       else {
-        tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, TFT_WHITE);
+        tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, color_scheme_bg);
         is_eol = 1;
       }
     }
     else {
-        tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, TFT_WHITE);
+        tft.fillRect(left_x, top_y + y * height / rows_to_show, width, height / rows_to_show, color_scheme_bg);
     }
   }
 }
@@ -10914,6 +11264,8 @@ void setup() {
   char autorun_app_name[80];
   int offset;
   int i;
+  int inversion;
+  int index;
   char calibration_required = 0;
   char password_present;
   char fs_present = 0;
@@ -10937,7 +11289,9 @@ void setup() {
 
   // Инициализация экрана, 
   tft.init();
+  // Поворот
   tft.setRotation(2);
+  // Очистка
   clearScreen();
 
   // Инициализация FFat/SD
@@ -10966,6 +11320,93 @@ void setup() {
   if(fs_present && read_file_to_buff("/Settings/Brightness", 79, buff)) {
     sscanf(buff, "%d", &global_brightness);
     set_brightness(global_brightness);
+  }
+
+  // Инверсия
+  if(fs_present && read_file_to_buff("/Settings/Inversion", 79, buff)) {
+    sscanf(buff, "%d", &inversion);
+    tft.invertDisplay(inversion ? true : false);
+  }
+  else {
+    tft.invertDisplay(false);
+  }
+
+  // Цветовая схема
+  // Цвет фона и текста
+  color_scheme_bg = colors[COLOR_INDEX_WHITE];
+  color_scheme_fg = colors[COLOR_INDEX_BLACK];
+  // Цвет заголовка и текста
+  color_scheme_title_bg = colors[COLOR_INDEX_BLUE];
+  color_scheme_title_fg = colors[COLOR_INDEX_WHITE];
+  // Цвет выделения и текста
+  color_scheme_selection_bg = colors[COLOR_INDEX_BLUE];
+  color_scheme_selection_fg = colors[COLOR_INDEX_WHITE];
+  // Цвет кнопки и текста
+  color_scheme_button_bg = colors[COLOR_INDEX_LIGHTGREY];
+  color_scheme_button_fg = colors[COLOR_INDEX_BLACK];
+  // Цвет нажатой кнопки и текста
+  color_scheme_button_active_bg = colors[COLOR_INDEX_DARKGREY];
+  color_scheme_button_active_fg = colors[COLOR_INDEX_BLACK];
+  // Цвет неактивного текста
+  color_scheme_inactive_fg = colors[COLOR_INDEX_LIGHTGREY];
+  // Цвет ссылки
+  color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
+
+  if(fs_present) {
+    // Цвет фона и текста
+    if(read_key_value_from_file("/Settings/Colors", "background", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_bg = colors[index];
+    }
+    if(read_key_value_from_file("/Settings/Colors", "foreground", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_fg = colors[index];
+    }
+    // Цвет заголовка и текста
+    if(read_key_value_from_file("/Settings/Colors", "title_background", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_title_bg = colors[index];
+    }
+    if(read_key_value_from_file("/Settings/Colors", "title_foreground", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_title_fg = colors[index];
+    }
+    if(read_key_value_from_file("/Settings/Colors", "selection_background", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_selection_bg = colors[index];
+    }
+    if(read_key_value_from_file("/Settings/Colors", "selection_foreground", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_selection_fg = colors[index];
+    }
+    // Цвет кнопки и текста
+    if(read_key_value_from_file("/Settings/Colors", "button_background", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_button_bg = colors[index];
+    }
+    if(read_key_value_from_file("/Settings/Colors", "button_foreground", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_button_fg = colors[index];
+    }
+    // Цвет нажатой кнопки и текста
+    if(read_key_value_from_file("/Settings/Colors", "button_active_background", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_button_active_bg = colors[index];
+    }
+    if(read_key_value_from_file("/Settings/Colors", "button_active_foreground", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_button_active_fg = colors[index];
+    }
+    // Цвет неактивного текста
+    if(read_key_value_from_file("/Settings/Colors", "inactive_foreground", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_inactive_fg = colors[index];
+    }
+    // Цвет ссылки
+    if(read_key_value_from_file("/Settings/Colors", "link_foreground", buff)) {
+      sscanf(buff, "%d", &index);
+      color_scheme_link_fg = colors[index];
+    }
   }
 
   // Калибровка сенсора, если нужно
