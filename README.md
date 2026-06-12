@@ -66,7 +66,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Make screenshot with BOOT button
 * Application groups
 * Manual application
-* Select color scheme
+* Select color scheme and inversion
 
 ## PIM apps
 * Calculator
