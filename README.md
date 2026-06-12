@@ -66,7 +66,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Make screenshot with BOOT button
 * Application groups
 * Manual application
-* Passwords - AES-256 encrypted notes
+* Select color scheme
 
 ## PIM apps
 * Calculator
@@ -77,6 +77,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Expenses
 * Drawing (with saving BMP)
 * Schedule
+* Passwords - AES-256 encrypted notes
 
 ## Games
 * Fifteen puzzle game - see https://en.wikipedia.org/wiki/15_puzzle for details
