@@ -109,12 +109,16 @@
 2026-06-10 Соединение по https, раздел настроек, метроном, просмотр текста из памяти, справка, читалка RSS, возможность отключить звук
 2026-06-11 Шифрование AES-256, хранилище паролей, монофонические мелодии
 2026-06-12 Инверсия экрана, цветовые схемы
+2026-06-13 Клавиши пианино белые при любой цветовой схеме, программная перезагрузка, включение альтернативной клавиатуры в настройках,
+  баг цветов в игре жизнь (ничего не было видно), баг в информации о системе, доработка там же
 
 Направления работы:
+- Терминал
+- IRC
+- Камешки (Bejeweled)
+- (и) Воспроизведение MP3
 - (и) Читать всю ФС как файл (для бэкапов на SD/http сервер)
 - (и) Записывать всю ФС как файл (для восстановления из бэкапа)
-- (и) Воспроизведение MP3
-- Терминал
 - Повтор последовательности (игра)
 - N назад (почти игра)
 - Устный счёт (почти игра)
@@ -122,15 +126,11 @@
 - MP3-плеер (PIM)
 - Интернет-радио (PIM)
 - Бэкапы (SD)
-- IRC
 - Бэкапы (через сеть)
 - 2048 (игра)
-- Камешки (Bejeweled)
 - Арканоид (игра)
 - Тетрис (игра)
 - Приложение выбор автозапуска
-- Приложение перезагрузки
-- Настройки клавиатуры (вкл/выкл альтернативную)
 
 Улучшения тут и там:
 - (б) Проблема при работе с SD, запись больше 2 кб
@@ -164,11 +164,9 @@
 - (д) drawProgress - рисовать прогресс операции
 - (д) Serial как ввод клавиатуры
 - (д) Определять инверсию экрана
-- (д) Пианино, белые клавиши вне зависимости от цветовой схемы
+- (д) Ночная тема
 
 */
-
-#define ALT_KEYBOARD_ENABLED
 
 #define IS_WIFI_ENABLED
 
@@ -306,6 +304,9 @@ int color_scheme_button_active_fg = colors[COLOR_INDEX_BLACK];
 int color_scheme_inactive_fg = colors[COLOR_INDEX_LIGHTGREY];
 // Цвет ссылки
 int color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
+
+// Альтернативная клавиатура
+char alt_keyboard_enabled_flag = 1;
 
 // Значки
 char enter[] = {
@@ -447,6 +448,8 @@ void piano(char mode, char *io_buff);
 void metronome(char mode, char *io_buff);
 void user_manual(char mode, char *io_buff);
 void color_settings(char mode, char *io_buff);
+void reboot(char mode, char *io_buff);
+void alt_keyboard_control(char mode, char *io_buff);
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
 void settings_group(char mode, char *io_buff);
@@ -549,6 +552,8 @@ function_application_pointer settings_apps[40] = {
   set_clock,
   i2c_scanner,
   view_font,
+  alt_keyboard_control,
+  reboot,
   NULL
 };
 function_application_pointer main_apps[40];
@@ -1083,19 +1088,19 @@ void system_info(char mode, char *io_buff) {
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
-    sprintf(buff, "Heap Total: %d bytes", ESP.getHeapSize());
+    sprintf(buff, "Heap Total: %d bytes ", ESP.getHeapSize());
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
-    sprintf(buff, "Heap Free: %d bytes (%d%%)", ESP.getFreeHeap(), (int)floor(100 * ESP.getFreeHeap() / ESP.getHeapSize()));
+    sprintf(buff, "Heap Free: %d bytes (%d%%) ", ESP.getFreeHeap(), (int)floor(100 * ESP.getFreeHeap() / ESP.getHeapSize()));
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
-    sprintf(buff, "Heap Min Free: %d bytes", ESP.getMinFreeHeap());
+    sprintf(buff, "Heap Min Free: %d bytes ", ESP.getMinFreeHeap());
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
-    sprintf(buff, "Heap Max Alloc: %d bytes", ESP.getMaxAllocHeap());
+    sprintf(buff, "Heap Max Alloc: %d bytes ", ESP.getMaxAllocHeap());
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
@@ -1103,15 +1108,15 @@ void system_info(char mode, char *io_buff) {
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
-    sprintf(buff, "Flash: %d bytes", ESP.getFlashChipSize());
+    sprintf(buff, "Flash: %d bytes ", ESP.getFlashChipSize());
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
-    sprintf(buff, "Sketch: %d bytes", ESP.getSketchSize());
+    sprintf(buff, "Sketch: %d bytes ", ESP.getSketchSize());
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
-    if(Storage.totalBytes() > 1024 * 1024) {
+    if(Storage.totalBytes() > 4096 * 1024) {
       sprintf(buff, "Storage Total: %d MiB ", Storage.totalBytes() / (1024 * 1024));
     }
     else if(Storage.totalBytes() > 1024) {
@@ -4629,7 +4634,7 @@ void life(char mode, char *io_buff) {
       for(x = 0; x < LIFE_FIELD_WIDTH_CELLS; x++) {
         cell_color = color_scheme_bg;
         if(life_get_cell(x, y, field)) {
-          cell_color = color_scheme_selection_fg;
+          cell_color = color_scheme_fg;
         }
         tft.fillRect(
           x * LIFE_CELL_PIXELS,
@@ -8277,6 +8282,160 @@ void view_font(char mode, char *io_buff) {
 }
 
 // ====================================================
+// Перезагрузка
+// ====================================================
+
+void reboot(char mode, char *io_buff) {
+  int i;
+  unsigned char byte;
+  int button_pressed;
+  char buff[80];
+  char *buttons[] = {
+    "Reboot",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000001, B10000010,
+    B01001001, B10010010,
+    B01010001, B10001010,
+    B01010001, B10001010,
+    B01010000, B00001010,
+    B01010000, B00001010,
+    B01010000, B00001010,
+    B01010000, B00001010,
+    B01001000, B00010010,
+    B01000111, B11100010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Reboot");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Reboot");
+
+  while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+    drawButtonMatrix(0, 20, tft.width(), 32, buttons, 1, 1);
+
+    touchWaitPress();
+
+    button_pressed = touchCheckMatrix(0, 20, tft.width(), 32, buttons, 1, 1);
+    if(button_pressed != -1) {
+      ESP.restart();
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      store_current_timestamp();
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// ====================================================
+// Доп клавиатура вкл/выкл
+// ====================================================
+
+void alt_keyboard_control(char mode, char *io_buff) {
+  int i;
+  unsigned char byte;
+  int button_pressed;
+  char buff[80];
+  char *buttons[] = {
+    "Change state",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000111, B11111010,
+    B01001000, B00001010,
+    B01010000, B00001010,
+    B01010000, B00001010,
+    B01001000, B00001010,
+    B01000111, B11111010,
+    B01000010, B00001010,
+    B01000100, B00001010,
+    B01001000, B00001010,
+    B01010000, B00001010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Alt Keyboard");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Alt Keyboard");
+
+  while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+    drawButtonMatrix(0, 20, tft.width() / 2, 32, buttons, 1, 1);
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "  %s  ", alt_keyboard_enabled_flag ? "ON" : "OFF");
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28, FONT_DEFAULT);
+
+    touchWaitPress();
+
+    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32, buttons, 1, 1);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        if(alt_keyboard_enabled_flag) {
+          alt_keyboard_enabled_flag = 0;
+        }
+        else {
+          alt_keyboard_enabled_flag = 1;
+        }
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      store_current_timestamp();
+      touchWaitRelease();
+
+      if(drawConfirm("Save changes?") == 0) {
+        write_key_value_to_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", (char*)(alt_keyboard_enabled_flag ? "1" : "0"));
+      }
+
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// ====================================================
 // Общие функции для устройства
 // ====================================================
 
@@ -9093,10 +9252,9 @@ void edit_file(char *title, char *filename) {
     if(symbol_flag) {
       keyboard_current = keyboard_symbol;
     }
-#ifdef ALT_KEYBOARD_ENABLED
     else if(caps_flag) {
       if(alt_flag) {
-        keyboard_current = keyboard_alt_caps;
+        keyboard_current = alt_keyboard_enabled_flag ? keyboard_alt_caps : keyboard_caps;
       }
       else {
         keyboard_current = keyboard_caps;
@@ -9104,20 +9262,12 @@ void edit_file(char *title, char *filename) {
     }
     else {
       if(alt_flag) {
-        keyboard_current = keyboard_alt_nocaps;
+        keyboard_current = alt_keyboard_enabled_flag ? keyboard_alt_nocaps : keyboard_nocaps;
       }
       else {
         keyboard_current = keyboard_nocaps;
       }
     }
-#else
-    else if(caps_flag) {
-      keyboard_current = keyboard_caps;
-    }
-    else {
-      keyboard_current = keyboard_nocaps;
-    }
-#endif
 
     drawButtonMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
     
@@ -9939,6 +10089,8 @@ void piano(char mode, char *io_buff) {
   // Белые
   for(i = 0; i < 16; i++) {
     tft.drawRect(i * tft.width() / 16, 240 - 32, tft.width() / 16, 64, TFT_BLACK);
+    tft.fillRect(i * tft.width() / 16 + 1, 240 - 32 + 1, tft.width() / 16 - 2, 64 - 2, TFT_WHITE);
+
   }
   // Чёрные
   for(i = 0; i < 16; i++) {
@@ -10403,10 +10555,9 @@ int drawPrompt(char *message, char *user_input) {
     if(symbol_flag) {
       keyboard_current = keyboard_symbol;
     }
-#ifdef ALT_KEYBOARD_ENABLED
     else if(caps_flag) {
       if(alt_flag) {
-        keyboard_current = keyboard_alt_caps;
+        keyboard_current = alt_keyboard_enabled_flag ? keyboard_alt_caps : keyboard_caps;
       }
       else {
         keyboard_current = keyboard_caps;
@@ -10414,20 +10565,12 @@ int drawPrompt(char *message, char *user_input) {
     }
     else {
       if(alt_flag) {
-        keyboard_current = keyboard_alt_nocaps;
+        keyboard_current = alt_keyboard_enabled_flag ? keyboard_alt_nocaps : keyboard_nocaps;
       }
       else {
         keyboard_current = keyboard_nocaps;
       }
     }
-#else
-    else if(caps_flag) {
-      keyboard_current = keyboard_caps;
-    }
-    else {
-      keyboard_current = keyboard_nocaps;
-    }
-#endif
 
     drawButtonMatrix(0, PROMPT_OFFSET_Y + 40, tft.width(), 120, keyboard_current, 12, 4);
     
@@ -11459,6 +11602,12 @@ void setup() {
     if(buff[0] == '0') {
       is_beep_enabled = 0;
     }
+  }
+
+  // Настройки клавиатуры
+  alt_keyboard_enabled_flag = 1;
+  if(read_key_value_from_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", buff)) {
+    sscanf(buff, "%d", &alt_keyboard_enabled_flag);
   }
 
 #ifdef IS_WIFI_ENABLED
