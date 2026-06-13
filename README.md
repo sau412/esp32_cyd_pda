@@ -67,6 +67,8 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Application groups
 * Manual application
 * Select color scheme and inversion
+* Software reboot app
+* Enable/disable russian keyboard app
 
 ## PIM apps
 * Calculator
