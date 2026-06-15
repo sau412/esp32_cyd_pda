@@ -111,11 +111,12 @@
 2026-06-12 Инверсия экрана, цветовые схемы
 2026-06-13 Клавиши пианино белые при любой цветовой схеме, программная перезагрузка, включение альтернативной клавиатуры в настройках,
   баг цветов в игре жизнь (ничего не было видно), баг в информации о системе, доработка там же
+2026-06-14 Ночная цветовая схема
+2026-06-15 Три в ряд
 
 Направления работы:
 - Терминал
 - IRC
-- Камешки (Bejeweled)
 - (и) Воспроизведение MP3
 - (и) Читать всю ФС как файл (для бэкапов на SD/http сервер)
 - (и) Записывать всю ФС как файл (для восстановления из бэкапа)
@@ -259,6 +260,17 @@ XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
 //FS Storage = FFat;
 #endif
 
+// Терминал
+#define TERMINAL_WIDTH_CHARS 40
+#define TERMINAL_HEIGHT_CHARS 20
+
+char terminal_screen[TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS];
+char terminal_colors[TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS];
+int cursor_row;
+int cursor_col;
+int current_color;
+char cursor_visible_flag = 1;
+
 // Цвета
 #define COLOR_INDEX_BLACK 0
 #define COLOR_INDEX_MAROON 1
@@ -357,6 +369,44 @@ char change_keyboard[] = {
   B01111110
 };
 
+// Клавиатуры
+char *keyboard_nocaps[] = {
+  "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
+  " ", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "-",
+  ":shift:", "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", ":enter:",
+  ":change:", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", " ",
+  NULL
+};
+char *keyboard_caps[] = {
+  "~",  "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", ":backspace:",
+  " ", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "_",
+  ":shift:", "A", "S", "D", "F", "G", "H", "J", "K", "L", ":", ":enter:",
+  ":change:", "Z", "X", "C", "V", "B", "N", "M", "<", ">", "?", " ",
+  NULL
+};
+char *keyboard_symbol[] = {
+  "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
+  " ",  "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "=",
+  ":shift:", "[", "]", "<", ">", ".", ",", ":", ";", "\"", "'", ":enter:",
+  ":change:", "{", "}", "+", "-", "*", "/", "\\", "~", "|", "?", " ",
+  NULL
+};
+char *keyboard_alt_nocaps[] = {
+  "\xB8",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
+  "\xE9", "\xF6", "\xF3", "\xEA", "\xE5", "\xED", "\xE3", "\xF8", "\xF9", "\xE7", "\xF5", "\xFA",
+  ":shift:", "\xF4", "\xFB", "\xE2", "\xE0", "\xEF", "\xF0", "\xEE", "\xEB", "\xE4", "\xE6", ":enter:",
+  ":change:", "\xFF", "\xF7", "\xF1", "\xEC", "\xE8", "\xF2", "\xFC", "\xE1", "\xFE", "\xFD", " ",
+  NULL
+};
+char *keyboard_alt_caps[] = {
+  "\xA8",  "!", "\"", "\xB9", ";", "%", ":", "?", "*", "(", ")", ":backspace:",
+  "\xC9", "\xD6", "\xD3", "\xCA", "\xC5", "\xCD", "\xC3", "\xD8", "\xD9", "\xC7", "\xD5", "\xDA",
+  ":shift:", "\xD4", "\xDB", "\xC2", "\xC0", "\xCF", "\xD0", "\xCE", "\xCB", "\xC4", "\xC6", ":enter:",
+  ":change:", "\xDF", "\xD7", "\xD1", "\xCC", "\xC8", "\xD2", "\xDC", "\xC1", "\xDE", "\xDD", " ",
+  NULL
+};
+
+
 // Калибровка тач-скрина
 float d = -12314407;
 float ax = -852720 / d;
@@ -450,6 +500,8 @@ void user_manual(char mode, char *io_buff);
 void color_settings(char mode, char *io_buff);
 void reboot(char mode, char *io_buff);
 void alt_keyboard_control(char mode, char *io_buff);
+void match_three(char mode, char *io_buff);
+void terminal(char mode, char *io_buff);
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
 void settings_group(char mode, char *io_buff);
@@ -463,6 +515,7 @@ function_application_pointer apps[40] = {
   launcher,
   calculator,
   files,
+  terminal,
   notes,
   contacts,
   todo,
@@ -532,6 +585,7 @@ function_application_pointer games_apps[40] = {
   turkish_kerchief,
   memory_match,
   hanoi_towers,
+  match_three,
   NULL
 };
 function_application_pointer settings_apps[40] = {
@@ -1606,6 +1660,280 @@ void files(char mode, char *io_buff) {
       return;
     }
     touchWaitRelease();
+  }
+}
+
+// ====================================================
+// Терминал
+// ====================================================
+void terminal(char mode, char *io_buff) {
+  char buff[80];
+  IPAddress ip;
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01010000, B00000010,
+    B01001000, B00000010,
+    B01000100, B00000010,
+    B01000010, B00000010,
+    B01000001, B00000010,
+    B01000001, B00000010,
+    B01000010, B00000010,
+    B01000100, B00000010,
+    B01001000, B00000010,
+    B01010000, B11111010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Terminal");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Terminal");
+
+  terminal_clear_screen();
+
+  while(1) {
+    terminal_print(">");
+    terminal_show_screen();
+
+    terminal_input_string(buff);
+    Serial.println(buff);
+    //terminal_print(buff);
+    //terminal_print("\n\r");
+    if(strcmp(buff, "millis") == 0) {
+      sprintf(buff, "%d\n\r", millis());
+      terminal_print(buff);
+    }
+    else if(strcmp(buff, "micros") == 0) {
+      sprintf(buff, "%d\n\r", micros());
+      terminal_print(buff);
+    }
+    else if(strcmp(buff, "reset") == 0) {
+      terminal_clear_screen();
+    }
+    else if(strcmp(buff, "reboot") == 0) {
+      ESP.restart();
+    }
+    else if(strcmp(buff, "date") == 0) {
+      set_local_time_from_unix_timestamp();
+      sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d\n\r", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
+      terminal_print(buff);
+    }
+#ifdef IS_WIFI_ENABLED
+    else if(strcmp(buff, "ip") == 0) {
+      sprintf(buff, "%s\n\r", WiFi.localIP().toString());
+      terminal_print(buff);
+    }
+    else if(strcmp(buff, "netmask") == 0) {
+      sprintf(buff, "%s\n\r", WiFi.subnetMask().toString());
+      terminal_print(buff);
+    }
+    else if(strcmp(buff, "gateway") == 0) {
+      sprintf(buff, "%s\n\r", WiFi.gatewayIP().toString());
+      terminal_print(buff);
+    }
+    else if(strcmp(buff, "dns") == 0) {
+      sprintf(buff, "%s\n\r", WiFi.dnsIP().toString());
+      terminal_print(buff);
+    }
+    else if(strcmp(buff, "rssi") == 0) {
+      sprintf(buff, "%d\n\r", WiFi.RSSI());
+      terminal_print(buff);
+    }
+    else if(memcmp(buff, "host ", 5) == 0) {
+      WiFi.hostByName(buff + 5, ip);
+      sprintf(buff, "%s\n\r", ip.toString().c_str());
+      terminal_print(buff);
+    }
+#endif
+    else {
+      if(strcmp(buff, "")) {
+        terminal_print("Unknown command\n\r");
+      }
+    }
+    terminal_show_screen();
+  }
+}
+
+void terminal_print(char *string) {
+  int i;
+  for(i = 0; i < strlen(string); i++) {
+    terminal_print_char(string[i]);
+  }
+}
+
+void terminal_print_char(char c) {
+  if(c == '\n') {
+    cursor_row++;
+  }
+  else if(c == '\r') {
+    cursor_col = 0;
+  }
+  else if(c == 0x08) {
+    cursor_col = (cursor_col / 8 + 1) * 8;
+  }
+  else if(c == 0x09) {
+    if(cursor_col > 0) cursor_col--;
+  }
+  else {
+    terminal_screen[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = c;
+    terminal_colors[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
+    cursor_col++;
+  }
+
+  if(cursor_col >= TERMINAL_WIDTH_CHARS) {
+    cursor_col = 0;
+    cursor_row++;
+  }
+  if(cursor_row >= TERMINAL_HEIGHT_CHARS) {
+    terminal_scroll_down();
+    cursor_row = TERMINAL_HEIGHT_CHARS - 1;
+  }
+}
+
+void terminal_show_screen() {
+  int row, col;
+  int color_fg;
+  int color_bg;
+  char buff[10];
+  for(row = 0; row < TERMINAL_HEIGHT_CHARS; row++) {
+    for(col = 0; col < TERMINAL_WIDTH_CHARS; col++) {
+      if(terminal_screen[col + row * TERMINAL_WIDTH_CHARS]) {
+        sprintf(buff, "%c", terminal_screen[col + row * TERMINAL_WIDTH_CHARS]);
+      }
+      else {
+        strcpy(buff, " ");
+      }
+      color_fg = terminal_colors[col + row * TERMINAL_WIDTH_CHARS] & 0x0F;
+      color_bg = terminal_colors[col + row * TERMINAL_WIDTH_CHARS] >> 4;
+      tft.setTextColor(colors[color_fg], colors[color_bg]);
+      tft.drawString(buff, col * 6, 16 + row * 8, FONT_MONOSPACE);
+    }
+  }
+}
+
+void terminal_scroll_down() {
+  int row, col;
+  for(row = 1; row < TERMINAL_HEIGHT_CHARS; row++) {
+    for(col = 0; col < TERMINAL_WIDTH_CHARS; col++) {
+      terminal_screen[col + (row - 1) * TERMINAL_WIDTH_CHARS] = terminal_screen[col + row * TERMINAL_WIDTH_CHARS];
+      terminal_colors[col + (row - 1) * TERMINAL_WIDTH_CHARS] = terminal_colors[col + row * TERMINAL_WIDTH_CHARS];
+    }
+  }
+  row = TERMINAL_HEIGHT_CHARS - 1;
+  for(col = 0; col < TERMINAL_WIDTH_CHARS; col++) {
+    terminal_screen[col + row * TERMINAL_WIDTH_CHARS] = 0;
+    terminal_colors[col + row * TERMINAL_WIDTH_CHARS] = current_color;
+  }
+}
+
+void terminal_clear_screen() {
+  int i;
+  current_color = 0x07;
+  for(i = 0; i < TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS; i++) {
+    terminal_screen[i] = 0;
+    terminal_colors[i] = current_color;
+  }
+  cursor_row = 0;
+  cursor_col = 0;
+  cursor_visible_flag = 1;
+}
+
+#define TERMINAL_INPUT_MAX 80
+
+void terminal_input_string(char *input_buff) {
+  int button;
+  char **keyboard_current;
+  char symbol_flag;
+  char caps_flag;
+  char alt_flag;
+  char buff[80];
+  char offset = 0;
+
+  for(offset = 0; offset < TERMINAL_INPUT_MAX; offset++) {
+    buff[offset] = 0;
+  }
+
+  offset = 0;
+
+  while(1) {
+    if(symbol_flag) {
+      keyboard_current = keyboard_symbol;
+    }
+    else if(caps_flag) {
+      if(alt_flag) {
+        keyboard_current = alt_keyboard_enabled_flag ? keyboard_alt_caps : keyboard_caps;
+      }
+      else {
+        keyboard_current = keyboard_caps;
+      }
+    }
+    else {
+      if(alt_flag) {
+        keyboard_current = alt_keyboard_enabled_flag ? keyboard_alt_nocaps : keyboard_nocaps;
+      }
+      else {
+        keyboard_current = keyboard_nocaps;
+      }
+    }
+
+    drawButtonMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
+    
+    touchWaitPress();
+    button = touchCheckMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
+    if(button != -1) {
+      if(button == 11) {
+        if(offset > 0) {
+          buff[strlen(buff) - 1] = 0;
+          offset--;
+          terminal_print_char(0x09);
+          terminal_print_char(' ');
+          terminal_print_char(0x09);
+          terminal_show_screen();
+        }
+      }
+      else if(button == 24) {
+        caps_flag = !caps_flag;
+      }
+      else if(button == 36) {
+        symbol_flag = !symbol_flag;
+        if(!symbol_flag) {
+          if(alt_flag) {
+            alt_flag = 0;
+          }
+          else {
+            alt_flag = 1;
+          }
+        }
+      }
+      else {
+        if(button == 35) {
+          strcpy(input_buff, buff);
+          terminal_print_char('\n');
+          terminal_print_char('\r');
+          terminal_show_screen();
+          return;
+        }
+        else if(strlen(buff) < (TERMINAL_INPUT_MAX - 1)) {
+          buff[offset] = keyboard_current[button][0];
+          offset++;
+          buff[offset] = 0;
+          terminal_print_char(keyboard_current[button][0]);
+          terminal_show_screen();
+        }
+      }
+    }
   }
 }
 
@@ -4766,7 +5094,7 @@ void snake(char mode, char *io_buff) {
   int segment_x;
   int segment_y;
   int length = 3;
-  int record = length;
+  int hiscore = length;
   int i;
   char lose_flag = 0;
   char restart_flag = 1;
@@ -4861,7 +5189,7 @@ void snake(char mode, char *io_buff) {
       // Если уже что-то есть в этом месте, это либо тело, либо граница, либо еда
       if(head_x == bait_x && head_y == bait_y) {
         length++;
-        if(length > record) record = length;
+        if(length > hiscore) hiscore = length;
         beep_if_enabled();
         bait_flag = 1;
       }
@@ -4928,7 +5256,7 @@ void snake(char mode, char *io_buff) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "Length: %d", length);
     tft.drawString(buff, 1, 16, FONT_DEFAULT);
-    sprintf(buff, "Record: %d", record);
+    sprintf(buff, "Hi-score: %d", hiscore);
     tft.drawString(buff, tft.width() / 2, 16, FONT_DEFAULT);
 
     // Проигрыш
@@ -5442,6 +5770,7 @@ void color_settings(char mode, char *io_buff) {
     "Black & White",
     "Red",
     "Green",
+    "Night",
     "Random",
     NULL
   };
@@ -5640,8 +5969,30 @@ void color_settings(char mode, char *io_buff) {
           // Цвет ссылки
           color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
         }
-        // Random
+        // Night
         else if(scheme_selected == 5) {
+          // Цвет фона и текста
+          color_scheme_bg = colors[COLOR_INDEX_BLACK];
+          color_scheme_fg = colors[COLOR_INDEX_LIGHTGREY];
+          // Цвет заголовка и текста
+          color_scheme_title_bg = colors[COLOR_INDEX_NAVY];
+          color_scheme_title_fg = colors[COLOR_INDEX_BLUE];
+          // Цвет выделения и текста
+          color_scheme_selection_bg = colors[COLOR_INDEX_NAVY];
+          color_scheme_selection_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет кнопки и текста
+          color_scheme_button_bg = colors[COLOR_INDEX_BLACK];
+          color_scheme_button_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет нажатой кнопки и текста
+          color_scheme_button_active_bg = colors[COLOR_INDEX_NAVY];
+          color_scheme_button_active_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет неактивного текста
+          color_scheme_inactive_fg = colors[COLOR_INDEX_DARKGREY];
+          // Цвет ссылки
+          color_scheme_link_fg = colors[COLOR_INDEX_NAVY];
+        }
+        // Random
+        else if(scheme_selected == 6) {
           // Цвет фона и текста
           color_scheme_bg = colors[random(0, 16)];
           color_scheme_fg = colors[random(0, 16)];
@@ -9039,42 +9390,6 @@ void edit_file(char *title, char *filename) {
   char alt_flag = 0;
   int prev_width = 0;
   
-  char *keyboard_nocaps[] = {
-    "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
-    " ", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "-",
-    ":shift:", "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", ":enter:",
-    ":change:", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", " ",
-    NULL
-  };
-  char *keyboard_caps[] = {
-    "~",  "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", ":backspace:",
-    " ", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "_",
-    ":shift:", "A", "S", "D", "F", "G", "H", "J", "K", "L", ":", ":enter:",
-    ":change:", "Z", "X", "C", "V", "B", "N", "M", "<", ">", "?", " ",
-    NULL
-  };
-  char *keyboard_symbol[] = {
-    "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
-    " ",  "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "=",
-    ":shift:", "[", "]", "<", ">", ".", ",", ":", ";", "\"", "'", ":enter:",
-    ":change:", "{", "}", "+", "-", "*", "/", "\\", "~", "|", "?", " ",
-    NULL
-  };
-  char *keyboard_alt_nocaps[] = {
-    "\xB8",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
-    "\xE9", "\xF6", "\xF3", "\xEA", "\xE5", "\xED", "\xE3", "\xF8", "\xF9", "\xE7", "\xF5", "\xFA",
-    ":shift:", "\xF4", "\xFB", "\xE2", "\xE0", "\xEF", "\xF0", "\xEE", "\xEB", "\xE4", "\xE6", ":enter:",
-    ":change:", "\xFF", "\xF7", "\xF1", "\xEC", "\xE8", "\xF2", "\xFC", "\xE1", "\xFE", "\xFD", " ",
-    NULL
-  };
-  char *keyboard_alt_caps[] = {
-    "\xA8",  "!", "\"", "\xB9", ";", "%", ":", "?", "*", "(", ")", ":backspace:",
-    "\xC9", "\xD6", "\xD3", "\xCA", "\xC5", "\xCD", "\xC3", "\xD8", "\xD9", "\xC7", "\xD5", "\xDA",
-    ":shift:", "\xD4", "\xDB", "\xC2", "\xC0", "\xCF", "\xD0", "\xCE", "\xCB", "\xC4", "\xC6", ":enter:",
-    ":change:", "\xDF", "\xD7", "\xD1", "\xCC", "\xC8", "\xD2", "\xDC", "\xC1", "\xDE", "\xDD", " ",
-    NULL
-  };
-
   char **keyboard_current = keyboard_nocaps;
   fs::File file;
 
@@ -9901,6 +10216,333 @@ void hanoi_towers(char mode, char *io_buff) {
   }
 }
 
+#define MATCH_THREE_FIELD_WIDTH 8
+#define MATCH_THREE_FIELD_HEIGHT 8
+#define MATCH_THREE_FIELD_FIGURES 6
+#define MATCH_THREE_ACTION_COUNT_ONLY 0
+#define MATCH_THREE_ACTION_REMOVE_MATCHES 1
+
+// Три в ряд, как Bejeweled
+void match_three(char mode, char *io_buff) {
+  TS_Point p;
+  int touch_x, touch_y;
+  int row1, col1;
+  int row2, col2;
+  int button_pressed;
+  int moves = 3;
+  int user_moves = 0;
+  int score = 0;
+  int hiscore = 0;
+  int i;
+  char changes_found_flag = 0;
+  int column1, column2;
+  char restart_flag = 1;
+  char won_flag = 0;
+  int field[MATCH_THREE_FIELD_WIDTH * MATCH_THREE_FIELD_HEIGHT];
+  char buff[80];
+  char tmp;
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01000010, B01000010,
+    B01000010, B01000010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01001000, B00010010,
+    B01001000, B00010010,
+    B01010000, B00001010,
+    B01011111, B11111010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Match Three");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Match Three");
+
+  restart_flag = 1;
+  while(1) {
+    if(restart_flag) {
+      // Инициализируем
+      for(i = 0; i < MATCH_THREE_FIELD_WIDTH * MATCH_THREE_FIELD_HEIGHT; i++) {
+        field[i] = random(0, MATCH_THREE_FIELD_FIGURES);
+      }
+      score = 0;
+      restart_flag = 0;
+      user_moves = 0;
+      row1 = -1;
+      col1 = -1;
+      row2 = -1;
+      col2 = -1;
+    }
+
+    // Рисуем поле
+    match_three_show_field(field, col1, row1);
+
+    // Убираем совпадения, сдвигаем вниз, и снова убираем
+    changes_found_flag = 1;
+    while(changes_found_flag) {
+      score += match_three_find_matches(field, MATCH_THREE_ACTION_REMOVE_MATCHES);
+      match_three_show_field(field, col1, row1);
+      hiscore = max(hiscore, score);
+
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      sprintf(buff, "Score: %d     ", score);
+      tft.drawString(buff, 1, 20, FONT_DEFAULT);
+      sprintf(buff, "Hi-score: %d     ", hiscore);
+      tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
+      
+      changes_found_flag = 0;
+      while(match_three_shift_down(field) > 0) {
+        delay(100);
+        match_three_show_field(field, col1, row1);
+        changes_found_flag = 1;
+      }
+    }
+
+    // Проверяем доступные ходы
+    moves = match_three_moves_available(field);
+    if(moves == 0) {
+      drawInfo("No more moves");
+      restart_flag = 1;
+      continue;
+    }
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "Score: %d     ", score);
+    tft.drawString(buff, 1, 20, FONT_DEFAULT);
+    sprintf(buff, "Hi-score: %d     ", hiscore);
+    tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
+
+    // Ждём пользователя
+    touchWaitPress();
+    tft.fillRect(0, tft.height() - 15, tft.width(), 15, color_scheme_bg);
+    TS_Point p = touchscreen.getPoint();
+    touch_x = touchMapX(p.x, p.y);
+    touch_y = touchMapY(p.x, p.y);
+    if(col1 == -1) {
+      col1 = touch_x / (tft.width() / MATCH_THREE_FIELD_WIDTH);
+      row1 = (touch_y - 40) / (tft.width() / MATCH_THREE_FIELD_WIDTH);
+      if(col1 >= MATCH_THREE_FIELD_WIDTH || row1 >= MATCH_THREE_FIELD_HEIGHT) {
+        col1 = -1;
+        row1 = -1;
+      }
+    }
+    else {
+      col2 = touch_x / (tft.width() / MATCH_THREE_FIELD_WIDTH);
+      row2 = (touch_y - 40) / (tft.width() / MATCH_THREE_FIELD_WIDTH);
+      if(col2 >= MATCH_THREE_FIELD_WIDTH || row2 >= MATCH_THREE_FIELD_HEIGHT) {
+        col2 = -1;
+        row2 = -1;
+      }
+      // Проверяем валидность хода
+      else if(col1 == col2 && abs(row1 - row2) == 1 || row1 == row2 && abs(col1 - col2) == 1) {
+        tmp = field[col1 + row1 * MATCH_THREE_FIELD_WIDTH];
+        field[col1 + row1 * MATCH_THREE_FIELD_WIDTH] = field[col2 + row2 * MATCH_THREE_FIELD_WIDTH];
+        field[col2 + row2 * MATCH_THREE_FIELD_WIDTH] = tmp;
+        match_three_show_field(field, col1, row1);
+        if(match_three_find_matches(field, MATCH_THREE_ACTION_COUNT_ONLY) > 0) {
+          user_moves++;
+        }
+        else {
+          delay(100);
+          tmp = field[col1 + row1 * MATCH_THREE_FIELD_WIDTH];
+          field[col1 + row1 * MATCH_THREE_FIELD_WIDTH] = field[col2 + row2 * MATCH_THREE_FIELD_WIDTH];
+          field[col2 + row2 * MATCH_THREE_FIELD_WIDTH] = tmp;
+        }
+      }
+      col1 = -1;
+      row1 = -1;
+      col2 = -1;
+      row2 = -1;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+int match_three_moves_available(int *field) {
+  int row, col;
+  int moves = 0;
+  int tmp;
+  for(row = 0; row < MATCH_THREE_FIELD_HEIGHT - 1; row++) {
+    for(col = 0; col < MATCH_THREE_FIELD_WIDTH - 1; col++) {
+      // Переставляем со следующим по горизонтали, считаем ходы, откатываем
+      tmp = field[col + row * MATCH_THREE_FIELD_WIDTH];
+      field[col + row * MATCH_THREE_FIELD_WIDTH] = field[col + 1 + row * MATCH_THREE_FIELD_WIDTH];
+      field[col + 1 + row * MATCH_THREE_FIELD_WIDTH] = tmp;
+      moves += match_three_find_matches(field, MATCH_THREE_ACTION_COUNT_ONLY);
+      tmp = field[col + row * MATCH_THREE_FIELD_WIDTH];
+      field[col + row * MATCH_THREE_FIELD_WIDTH] = field[col + 1 + row * MATCH_THREE_FIELD_WIDTH];
+      field[col + 1 + row * MATCH_THREE_FIELD_WIDTH] = tmp;
+
+      // Переставляем со следующим по вертикали, считаем ходы, откатываем
+      tmp = field[col + row * MATCH_THREE_FIELD_WIDTH];
+      field[col + row * MATCH_THREE_FIELD_WIDTH] = field[col + (row + 1) * MATCH_THREE_FIELD_WIDTH];
+      field[col + (row + 1) * MATCH_THREE_FIELD_WIDTH] = tmp;
+      moves += match_three_find_matches(field, MATCH_THREE_ACTION_COUNT_ONLY);
+      tmp = field[col + row * MATCH_THREE_FIELD_WIDTH];
+      field[col + row * MATCH_THREE_FIELD_WIDTH] = field[col + (row + 1) * MATCH_THREE_FIELD_WIDTH];
+      field[col + (row + 1) * MATCH_THREE_FIELD_WIDTH] = tmp;
+    }
+  }
+  return moves;
+}
+
+void match_three_show_field(int *field, int col_selected, int row_selected) {
+  int row, col;
+  char buff[80];
+  // Эти цвета неплохо видно и на чёрном, и на белом
+  int item_to_color[] = {TFT_DARKGREY, TFT_RED, TFT_GREEN, TFT_BLUE, TFT_OLIVE, TFT_MAGENTA};
+  for(row = 0; row < MATCH_THREE_FIELD_HEIGHT; row++) {
+    for(col = 0; col < MATCH_THREE_FIELD_WIDTH; col++) {
+      tft.fillRect(
+        col * tft.width() / MATCH_THREE_FIELD_WIDTH,
+        40 + row * tft.width() / MATCH_THREE_FIELD_HEIGHT,
+        tft.width() / MATCH_THREE_FIELD_WIDTH,
+        tft.width() / MATCH_THREE_FIELD_HEIGHT,
+        color_scheme_bg
+      );
+      Serial.print((int)field[col + row * MATCH_THREE_FIELD_WIDTH]);
+      Serial.print(" ");
+      if(field[col + row * MATCH_THREE_FIELD_WIDTH] != -1) {
+        tft.setTextColor(item_to_color[field[col + row * MATCH_THREE_FIELD_WIDTH]], color_scheme_bg);
+        sprintf(buff, "%c", field[col + row * MATCH_THREE_FIELD_WIDTH] + 'A');
+        tft.drawCentreString(
+          buff,
+          col * tft.width() / MATCH_THREE_FIELD_WIDTH + tft.width() / (2 * MATCH_THREE_FIELD_WIDTH),
+          34 + row * tft.width() / MATCH_THREE_FIELD_HEIGHT + tft.width() / (3 * MATCH_THREE_FIELD_WIDTH),
+          FONT_BIG
+        );
+      }
+      if(col == col_selected && row == row_selected) {
+        tft.drawRect(
+        col * tft.width() / MATCH_THREE_FIELD_WIDTH,
+        40 + row * tft.width() / MATCH_THREE_FIELD_HEIGHT,
+        tft.width() / MATCH_THREE_FIELD_WIDTH,
+        tft.width() / MATCH_THREE_FIELD_HEIGHT,
+        color_scheme_fg
+        );
+      }
+    }
+    Serial.println();
+  }
+}
+
+int match_three_find_matches(int *field, int action) {
+  int field_next[MATCH_THREE_FIELD_WIDTH * MATCH_THREE_FIELD_HEIGHT];
+  int row, col;
+  int i;
+  int matches = 0;
+  char current_item;
+  int current_item_count;
+  // Копируем поле в следующее поле
+  for(i = 0; i < MATCH_THREE_FIELD_HEIGHT * MATCH_THREE_FIELD_WIDTH; i++) {
+    *(field_next + i) = *(field + i);
+  }
+  // Горизонтали
+  for(row = 0; row < MATCH_THREE_FIELD_HEIGHT; row++) {
+    for(col = 0; col < MATCH_THREE_FIELD_WIDTH; col++) {
+      if(col == 0) {
+        current_item = field[col + row * MATCH_THREE_FIELD_WIDTH];
+        current_item_count = 1;
+        continue;
+      }
+      else if(field[col + row * MATCH_THREE_FIELD_WIDTH] == current_item) {
+        current_item_count++;
+        if(current_item_count >= 3) {
+          matches++;
+          if(action == MATCH_THREE_ACTION_REMOVE_MATCHES) {
+            for(i = 0; i < current_item_count; i++) {
+              field_next[col - i + row * MATCH_THREE_FIELD_WIDTH] = -1;
+            }
+          }
+        }
+      }
+      else {
+        current_item = field[col + row * MATCH_THREE_FIELD_WIDTH];
+        current_item_count = 1;
+      }
+    }
+  }
+  // Вертикали
+  for(col = 0; col < MATCH_THREE_FIELD_WIDTH; col++) {
+    for(row = 0; row < MATCH_THREE_FIELD_HEIGHT; row++) {
+      if(row == 0) {
+        current_item = field[col + row * MATCH_THREE_FIELD_WIDTH];
+        current_item_count = 1;
+      }
+      else if(field[col + row * MATCH_THREE_FIELD_WIDTH] == current_item) {
+        current_item_count++;
+        if(current_item_count >= 3) {
+          matches++;
+          if(action == MATCH_THREE_ACTION_REMOVE_MATCHES) {
+            for(i = 0; i < current_item_count; i++) {
+              field_next[col + (row - i) * MATCH_THREE_FIELD_WIDTH] = -1;
+            }
+          }
+        }
+      }
+      else {
+        current_item = field[col + row * MATCH_THREE_FIELD_WIDTH];
+        current_item_count = 1;
+      }
+    }
+  }
+
+  // Копируем следущее поле в поле
+  for(i = 0; i < MATCH_THREE_FIELD_HEIGHT * MATCH_THREE_FIELD_WIDTH; i++) {
+    *(field + i) = *(field_next + i);
+  }
+
+  return matches;
+}
+
+int match_three_shift_down(int * field) {
+  int row, col;
+  int count = 0;
+  // Опускаем всё вниз
+  for(row = MATCH_THREE_FIELD_HEIGHT - 1; row > 0; row--) {
+    for(col = 0; col < MATCH_THREE_FIELD_WIDTH; col++) {
+      if(field[col + (row - 1) * MATCH_THREE_FIELD_WIDTH] != -1 && field[col + row * MATCH_THREE_FIELD_WIDTH] == -1) {
+        // Опускаем элемент
+        field[col + row * MATCH_THREE_FIELD_WIDTH] = field[col + (row - 1) * MATCH_THREE_FIELD_WIDTH];
+        field[col + (row - 1) * MATCH_THREE_FIELD_WIDTH] = -1;
+        count++;
+      }
+    }
+  }
+  // Заполняем пустые места сверху
+  row = 0;
+  for(col = 0; col < MATCH_THREE_FIELD_WIDTH; col++) {
+    if(field[col + row * MATCH_THREE_FIELD_WIDTH] == -1) {
+      field[col + row * MATCH_THREE_FIELD_WIDTH] = random(0, MATCH_THREE_FIELD_FIGURES);
+        count++;
+    }
+  }
+  return count;
+}
+
 void lights_off(char mode, char *io_buff) {
   int button_pressed;
   int moves_remain;
@@ -10486,41 +11128,6 @@ int drawPrompt(char *message, char *user_input) {
   int cursor_pos = 0;
   int i;
 
-  char *keyboard_nocaps[] = {
-    "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
-    " ", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "-",
-    ":shift:", "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", ":enter:",
-    ":change:", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", " ",
-    NULL
-  };
-  char *keyboard_caps[] = {
-    "~",  "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", ":backspace:",
-    " ", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "_",
-    ":shift:", "A", "S", "D", "F", "G", "H", "J", "K", "L", ":", ":enter:",
-    ":change:", "Z", "X", "C", "V", "B", "N", "M", "<", ">", "?", " ",
-    NULL
-  };
-  char *keyboard_symbol[] = {
-    "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
-    " ",  "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "=",
-    ":shift:", "[", "]", "<", ">", ".", ",", ":", ";", "\"", "'", ":enter:",
-    ":change:", "{", "}", "+", "-", "*", "/", "\\", "~", "|", "?", " ",
-    NULL
-  };
-  char *keyboard_alt_nocaps[] = {
-    "\xB8",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
-    "\xE9", "\xF6", "\xF3", "\xEA", "\xE5", "\xED", "\xE3", "\xF8", "\xF9", "\xE7", "\xF5", "\xFA",
-    ":shift:", "\xF4", "\xFB", "\xE2", "\xE0", "\xEF", "\xF0", "\xEE", "\xEB", "\xE4", "\xE6", ":enter:",
-    ":change:", "\xFF", "\xF7", "\xF1", "\xEC", "\xE8", "\xF2", "\xFC", "\xE1", "\xFE", "\xFD", " ",
-    NULL
-  };
-  char *keyboard_alt_caps[] = {
-    "\xA8",  "!", "\"", "\xB9", ";", "%", ":", "?", "*", "(", ")", ":backspace:",
-    "\xC9", "\xD6", "\xD3", "\xCA", "\xC5", "\xCD", "\xC3", "\xD8", "\xD9", "\xC7", "\xD5", "\xDA",
-    ":shift:", "\xD4", "\xDB", "\xC2", "\xC0", "\xCF", "\xD0", "\xCE", "\xCB", "\xC4", "\xC6", ":enter:",
-    ":change:", "\xDF", "\xD7", "\xD1", "\xCC", "\xC8", "\xD2", "\xDC", "\xC1", "\xDE", "\xDD", " ",
-    NULL
-  };
   char **keyboard_current = keyboard_nocaps;
 
   beep_if_enabled();
