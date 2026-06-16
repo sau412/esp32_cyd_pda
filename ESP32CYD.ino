@@ -56,6 +56,11 @@
 - Хранилище паролей
 - Воспроизведение монофонических мелодий
 - Выбор цветовой схемы
+- Три в ряд
+- Терминал
+- Приложения терминала: serial, ping, telnet
+- Бэкап через веб-интерфейс (очень медленно)
+- Восстановление через веб-интерфейс
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -112,22 +117,18 @@
 2026-06-13 Клавиши пианино белые при любой цветовой схеме, программная перезагрузка, включение альтернативной клавиатуры в настройках,
   баг цветов в игре жизнь (ничего не было видно), баг в информации о системе, доработка там же
 2026-06-14 Ночная цветовая схема
-2026-06-15 Три в ряд
+2026-06-15 Три в ряд, терминал
+2026-06-16 Больше команд терминала, serial, ping, telnet, бэкап через веб (медленно), восстановление через веб (не тестировал)
 
 Направления работы:
-- Терминал
 - IRC
 - (и) Воспроизведение MP3
-- (и) Читать всю ФС как файл (для бэкапов на SD/http сервер)
-- (и) Записывать всю ФС как файл (для восстановления из бэкапа)
 - Повтор последовательности (игра)
 - N назад (почти игра)
 - Устный счёт (почти игра)
 - Карточки для запоминания слов (PIM) - первая строка название, остальные - пояснение
-- MP3-плеер (PIM)
 - Интернет-радио (PIM)
-- Бэкапы (SD)
-- Бэкапы (через сеть)
+- Бэкапы (на SD)
 - 2048 (игра)
 - Арканоид (игра)
 - Тетрис (игра)
@@ -170,18 +171,31 @@
 */
 
 #define IS_WIFI_ENABLED
+//#define IS_SSH_ENABLED
 
 //#define USE_SD_AS_STORAGE
 
+// CYD
 #include <SPI.h>
 #include <TFT_eSPI.h>
 #include <XPT2046_Touchscreen.h>
 
+// Filesystem for FFat and SD
 #include "FS.h"
+
+// FFat
 #include "FFat.h"
+
+// SD
 #include "SD.h"
+
+// I2C
 #include <Wire.h>
-//#include "Audio.h" 
+
+// MP3
+//#include <Audio.h>
+
+//#include "esp_core_dump.h"
 
 #ifdef IS_WIFI_ENABLED
 
@@ -198,6 +212,14 @@
 
 // HTTP server
 #include <WebServer.h>
+
+#ifdef IS_SSH_ENABLED
+
+// SSH
+#include <libssh_esp32.h>
+#include <libssh/libssh.h>
+
+#endif
 
 #endif
 
@@ -239,6 +261,11 @@ SPIClass sdSPI(HSPI);
 SPIClass touchscreenSPI = SPIClass(VSPI);
 XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
 
+// Audio
+#define I2S_BCLK 26
+#define I2S_LRC 25
+#define I2S_DOUT 22
+
 #define FONT_MONOSPACE 1
 #define FONT_DEFAULT 2
 #define FONT_BIG 4
@@ -270,6 +297,7 @@ int cursor_row;
 int cursor_col;
 int current_color;
 char cursor_visible_flag = 1;
+char terminal_keyboard_redraw_flag = 0;
 
 // Цвета
 #define COLOR_INDEX_BLACK 0
@@ -406,6 +434,99 @@ char *keyboard_alt_caps[] = {
   NULL
 };
 
+// Класс для прямого чтения и записи раздела FFat
+class FFatContentsStream : public Stream {
+private:
+    long offset = 0;
+    int buff_offset = -1;
+    int chunk_size = 4096;
+    char *buff;
+
+    const esp_partition_t* partition = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA,         // Type (DATA or APP)
+        ESP_PARTITION_SUBTYPE_DATA_FAT,  // Subtype
+        NULL                             // Label name in your partition table
+      );
+
+public:
+    // Конструктор
+    FFatContentsStream() {
+      buff = (char*)malloc(chunk_size * sizeof(char));
+      esp_partition_read(partition, offset, buff, chunk_size);
+      Serial.printf("Reading offset %d\n", offset);
+      buff_offset = 0;
+    }
+    // Деструктор
+    ~FFatContentsStream() {
+      if(buff) {
+        free(buff);
+      }
+    }
+
+    // Core Print implementation requirement
+    size_t write(uint8_t data) override {
+      buff[buff_offset] = data;
+      buff_offset++;
+      if(buff_offset >= chunk_size) {
+        esp_partition_erase_range(partition, offset, chunk_size);
+        esp_partition_write(partition, offset, buff, chunk_size);
+        Serial.printf("Writing offset %d\n", offset);
+        offset += chunk_size;
+        buff_offset = 0;
+      }
+    }
+    // Core Stream implementation requirements
+    int available() override {
+      return offset < partition->size;
+    }
+
+    int read() override {
+      int result = -1;
+      if(buff_offset >= chunk_size) {
+        esp_err_t result = esp_partition_read(partition, offset, buff, chunk_size);
+        Serial.printf("Reading offset %d\n", offset);
+        buff_offset = 0;
+      }
+      if(offset < partition->size) {
+        offset++;
+        result = buff[buff_offset];
+        buff_offset++;
+        return result;
+      }
+      else {
+        return -1;
+      }
+    }
+
+    int peek() override {
+      char c;
+      if((offset + 1) < partition->size) {
+        if(buff_offset > 0 && buff_offset < chunk_size - 1) {
+          return buff[buff_offset + 1];
+        }
+        esp_err_t result = esp_partition_read(partition, offset + 1, &c, 1);
+        return c;
+      }
+      else {
+        return -1;
+      }
+    }
+
+    void flush() override {
+      esp_partition_erase_range(partition, offset, chunk_size);
+      esp_partition_write(partition, offset, buff, chunk_size);
+      offset += chunk_size;
+      buff_offset = 0;
+    }
+
+    long size() {
+      return partition->size;
+    }
+
+    char* name() {
+      return "ffat";
+    }
+};
 
 // Калибровка тач-скрина
 float d = -12314407;
@@ -484,6 +605,7 @@ void expenses(char mode, char *io_buff);
 void schedule(char mode, char *io_buff);
 void passwords(char mode, char *io_buff);
 void tunes(char mode, char *io_buff);
+void music(char mode, char *io_buff);
 void life(char mode, char *io_buff);
 void i2c_scanner(char mode, char *io_buff);
 void dashboard(char mode, char *io_buff);
@@ -524,6 +646,7 @@ function_application_pointer apps[40] = {
   books,
   passwords,
   tunes,
+  //music, // Music app is not ready yet
   //system_info,
   torch,
   draw,
@@ -1234,19 +1357,23 @@ void user_manual(char mode, char *io_buff) {
   "* For screensavers touch and hold anywhere to exit\n"
   "\n"
   "== Reader ==\n"
-  "Touch left side of the screen to scroll back, right side to scroll forward."
+  "Touch left side of the screen to scroll back, right side to scroll forward.\n"
   "\n"
   "== Contacts ==\n"
   "First line of the file is name, second is contact."
   "\n"
   "== RSS ==\n"
-  "First line of the file is name, second is RSS URL. HTTP and HTTPS are supported."
+  "First line of the file is name, second is RSS URL. HTTP and HTTPS are supported.\n"
   "\n"
   "== Schedule ==\n"
   "Touch day to view and edit plans for that day.\n"
   "\n"
   "== I2C Scanner ==\n"
   "Connect I2C bus to IO2 socket (3V3, IO22, IO27, GND) and press scan to scan.\n"
+  "\n"
+  "== Terminal ==\n"
+  "Commands available:\n"
+  "millis, micros, sleep, delay, date, reboot, reset, exit, serial, host, ping, cat, ping, telnet, ls, mkdir, rmdir, rm, touch, format"
   "\n"
   "== Filesystem ==\n"
   "/Settings - settings folder\n"
@@ -1669,22 +1796,26 @@ void files(char mode, char *io_buff) {
 void terminal(char mode, char *io_buff) {
   char buff[80];
   IPAddress ip;
+  fs::File file;
+  fs::File current_dir;
+  char byte;
+  int i;
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
     B01111111, B11111110,
-    B01000000, B00000010,
-    B01010000, B00000010,
-    B01001000, B00000010,
-    B01000100, B00000010,
-    B01000010, B00000010,
-    B01000001, B00000010,
-    B01000001, B00000010,
-    B01000010, B00000010,
-    B01000100, B00000010,
-    B01001000, B00000010,
-    B01010000, B11111010,
-    B01000000, B00000010,
+    B01111111, B11111110,
+    B01111111, B11111110,
+    B01101111, B11111110,
+    B01110111, B11111110,
+    B01111011, B11111110,
+    B01111101, B11111110,
+    B01111101, B11111110,
+    B01111011, B11111110,
+    B01110111, B11111110,
+    B01101111, B11111110,
+    B01111111, B00000110,
+    B01111111, B11111110,
     B01111111, B11111110,
     B00000000, B00000000
   };
@@ -1707,10 +1838,15 @@ void terminal(char mode, char *io_buff) {
     terminal_print(">");
     terminal_show_screen();
 
+    terminal_keyboard_redraw_flag = 1;
     terminal_input_string(buff);
-    Serial.println(buff);
-    //terminal_print(buff);
-    //terminal_print("\n\r");
+    terminal_show_screen();
+
+    if(global_exit_flag) {
+      touchExitActionReset();
+      return;
+    }
+
     if(strcmp(buff, "millis") == 0) {
       sprintf(buff, "%d\n\r", millis());
       terminal_print(buff);
@@ -1719,16 +1855,137 @@ void terminal(char mode, char *io_buff) {
       sprintf(buff, "%d\n\r", micros());
       terminal_print(buff);
     }
+    else if(strcmp(buff, "clear") == 0) {
+      terminal_clear_screen();
+    }
     else if(strcmp(buff, "reset") == 0) {
       terminal_clear_screen();
     }
     else if(strcmp(buff, "reboot") == 0) {
       ESP.restart();
     }
+    else if(strcmp(buff, "exit") == 0) {
+      global_exit_flag = 1;
+    }
     else if(strcmp(buff, "date") == 0) {
       set_local_time_from_unix_timestamp();
       sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d\n\r", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
       terminal_print(buff);
+    }
+    else if(strcmp(buff, "sleep") == 0) {
+      terminal_print("Usage: sleep {seconds}\n\r");
+    }
+    else if(memcmp(buff, "sleep ", 6) == 0) {
+      sscanf(buff + 6, "%d", &i);
+      delay(1000 * i);
+    }
+    else if(strcmp(buff, "delay") == 0) {
+      terminal_print("Usage: sleep {milliseconds}\n\r");
+    }
+    else if(memcmp(buff, "delay ", 6) == 0) {
+      sscanf(buff + 6, "%d", &i);
+      delay(i);
+    }
+    else if(strcmp(buff, "serial") == 0) {
+      terminal_serial("");
+    }
+    else if(memcmp(buff, "serial ", 7) == 0) {
+      terminal_serial(buff + 7);
+    }
+    else if(strcmp(buff, "format ffat") == 0) {
+      if(FFat.format() == true) {
+        terminal_print("Format FFat completed\n\r");
+      }
+      else {
+        terminal_print("Format FFat failed\n\r");
+      }
+      FFat.begin(true);
+      Storage.mkdir("/Settings");
+    }
+    else if(strcmp(buff, "ls") == 0) {
+      terminal_print("Usage: ls {directory}\n\r");
+    }
+    else if(memcmp(buff, "ls ", 3) == 0) {
+      current_dir = Storage.open(buff + 3);
+      if(current_dir && current_dir.isDirectory()) {
+        while(file = current_dir.openNextFile()) {
+          terminal_print((char *)file.name());
+          terminal_print("\n\r");
+        }
+      }
+      else {
+        terminal_print("Unable to open directory\n\r");
+      }
+    }
+    else if(strcmp(buff, "mkdir") == 0) {
+      terminal_print("Usage: mkdir {directory}\n\r");
+    }
+    else if(memcmp(buff, "mkdir ", 6) == 0) {
+      if(Storage.mkdir(buff + 6)) {
+        terminal_print("OK\n\r");
+      }
+      else {
+        terminal_print("Unable to create directory\n\r");
+      }
+    }
+    else if(strcmp(buff, "rmdir") == 0) {
+      terminal_print("Usage: rmdir {directory}\n\r");
+    }
+    else if(memcmp(buff, "rmdir ", 6) == 0) {
+      if(Storage.rmdir(buff + 6)) {
+        terminal_print("OK\n\r");
+      }
+      else {
+        terminal_print("Unable to remove directory\n\r");
+      }
+    }
+    else if(strcmp(buff, "cat") == 0) {
+      terminal_print("Usage: cat {file}\n\r");
+    }
+    else if(memcmp(buff, "cat ", 4) == 0) {
+      file = Storage.open(buff + 4);
+      if(file) {
+        while(file.available()) {
+          byte = file.read();
+          if(byte == '\n' && file.peek() == '\r') file.read();
+          if(byte == '\r' && file.peek() == '\n') file.read();
+          if(byte == '\n' || byte == '\r') {
+            terminal_print_char('\n');
+            terminal_print_char('\r');
+          }
+          else {
+            terminal_print_char(byte);
+          }
+        }
+        file.close();
+      }
+      else {
+        terminal_print("File not found\n\r");
+      }
+    }
+    else if(strcmp(buff, "touch") == 0) {
+      terminal_print("Usage: touch {filename}\n\r");
+    }
+    else if(memcmp(buff, "touch ", 6) == 0) {
+      file = Storage.open(buff + 6, FILE_APPEND);
+      if(file) {
+        file.close();
+        terminal_print("OK\n\r");
+      }
+      else {
+        terminal_print("File not found\n\r");
+      }
+    }
+    else if(strcmp(buff, "rm") == 0) {
+      terminal_print("Usage: rm {filename}\n\r");
+    }
+    else if(memcmp(buff, "rm ", 3) == 0) {
+      if(Storage.remove(buff + 3)) {
+        terminal_print("OK\n\r");
+      }
+      else {
+        terminal_print("File not found\n\r");
+      }
     }
 #ifdef IS_WIFI_ENABLED
     else if(strcmp(buff, "ip") == 0) {
@@ -1751,18 +2008,45 @@ void terminal(char mode, char *io_buff) {
       sprintf(buff, "%d\n\r", WiFi.RSSI());
       terminal_print(buff);
     }
+    else if(strcmp(buff, "host") == 0) {
+      terminal_print("Usage: host {hostname}\n\r");
+    }
     else if(memcmp(buff, "host ", 5) == 0) {
       WiFi.hostByName(buff + 5, ip);
       sprintf(buff, "%s\n\r", ip.toString().c_str());
       terminal_print(buff);
     }
+    else if(strcmp(buff, "ping") == 0) {
+      terminal_print("Usage: ping {hostname}\n\r");
+    }
+    else if(memcmp(buff, "ping ", 5) == 0) {
+      terminal_ping(buff + 5);
+    }
+    else if(strcmp(buff, "telnet") == 0) {
+      terminal_print("Usage: telnet {host} {port}");
+    }
+    else if(memcmp(buff, "telnet ", 7) == 0) {
+      terminal_telnet(buff + 7);
+    }
+#ifdef IS_SSH_ENABLED
+    else if(strcmp(buff, "ssh") == 0) {
+      terminal_print("Usage: ssh {host} {port}");
+    }
+    else if(memcmp(buff, "ssh ", 4) == 0) {
+      terminal_ssh(buff + 4);
+    }
+#endif
 #endif
     else {
       if(strcmp(buff, "")) {
         terminal_print("Unknown command\n\r");
       }
     }
-    terminal_show_screen();
+
+    if(global_exit_flag) {
+      touchExitActionReset();
+      return;
+    }
   }
 }
 
@@ -1774,17 +2058,34 @@ void terminal_print(char *string) {
 }
 
 void terminal_print_char(char c) {
-  if(c == '\n') {
-    cursor_row++;
+  // 0x00 Ignored
+  if(c == 0x00) {
   }
-  else if(c == '\r') {
-    cursor_col = 0;
+  else if(c == 0x07) {
+    beep_if_enabled();
   }
   else if(c == 0x08) {
-    cursor_col = (cursor_col / 8 + 1) * 8;
+    if(cursor_col > 0) cursor_col--;
   }
   else if(c == 0x09) {
+    cursor_col = (cursor_col / 8 + 1) * 8;
+  }
+  else if(c == 0x0A) {
+    cursor_row++;
+  }
+  else if(c == 0x0B) {
+    cursor_row++;
+  }
+  else if(c == 0x0C) {
+    terminal_clear_screen();
+  }
+  else if(c == 0x0D) {
+    cursor_col = 0;
+  }
+  else if(c == 0x7F) {
     if(cursor_col > 0) cursor_col--;
+    terminal_screen[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = 0;
+    terminal_colors[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
   }
   else {
     terminal_screen[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = c;
@@ -1817,6 +2118,9 @@ void terminal_show_screen() {
       }
       color_fg = terminal_colors[col + row * TERMINAL_WIDTH_CHARS] & 0x0F;
       color_bg = terminal_colors[col + row * TERMINAL_WIDTH_CHARS] >> 4;
+      if(row == cursor_row && col == cursor_col) {
+        color_bg = COLOR_INDEX_GREEN;
+      }
       tft.setTextColor(colors[color_fg], colors[color_bg]);
       tft.drawString(buff, col * 6, 16 + row * 8, FONT_MONOSPACE);
     }
@@ -1853,26 +2157,108 @@ void terminal_clear_screen() {
 #define TERMINAL_INPUT_MAX 80
 
 void terminal_input_string(char *input_buff) {
-  int button;
-  char **keyboard_current;
-  char symbol_flag;
-  char caps_flag;
-  char alt_flag;
   char buff[80];
-  char offset = 0;
-
+  static char prev_buff[80];
+  int byte;
+  int offset;
   for(offset = 0; offset < TERMINAL_INPUT_MAX; offset++) {
     buff[offset] = 0;
   }
 
   offset = 0;
 
+  terminal_keyboard_redraw_flag = 1;
+
+  while(1) {
+    if(Serial.available()) {
+      byte = Serial.read();
+    }
+    else {
+      byte = terminal_input_char();
+    }
+    if(byte != -1) {
+      if(byte == 0x00) {
+        // Ignored
+      }
+      else if(byte == 0x03) {
+        // Ctrl+C
+        buff[0] = 0;
+        strcpy(input_buff, buff);
+        terminal_print_char('\n');
+        terminal_print_char('\r');
+        terminal_show_screen();
+        return;
+      }
+      else if(byte == 0x04) {
+        // Ctrl+D
+        strcpy(input_buff, buff);
+        terminal_print_char('\n');
+        terminal_print_char('\r');
+        terminal_show_screen();
+        return;
+      }
+      else if(byte == 0x08) {
+        if(offset > 0) {
+          buff[strlen(buff) - 1] = 0;
+          offset--;
+          terminal_print_char(0x08);
+          terminal_print_char(' ');
+          terminal_print_char(0x08);
+          terminal_show_screen();
+        }
+      }
+      else if(byte == 0x09) {
+        // Ignored
+      }
+      else if(byte == 0x0C) {
+        // Ctrl+L
+        buff[0] = 0;
+        strcpy(input_buff, buff);
+        return;
+      }
+      else if(byte == '\n') {
+        strcpy(input_buff, buff);
+        terminal_print_char('\n');
+        terminal_print_char('\r');
+        terminal_show_screen();
+        return;
+      }
+      else if(strlen(buff) < (TERMINAL_INPUT_MAX - 1)) {
+        buff[offset] = byte;
+        offset++;
+        buff[offset] = 0;
+        terminal_print_char(byte);
+        terminal_show_screen();
+      }
+    }
+
+    if(global_exit_flag) {
+      return;
+    }
+  }
+}
+
+int terminal_input_char() {
+  int button;
+  char **keyboard_current;
+  static char symbol_flag = 0;
+  static char caps_flag = 0;
+  static char alt_keyboard_flag = 0;
+  static char alt_flag = 0;
+  static char ctrl_flag = 0;
+  static char esc_flag = 0;
+  
+  char *control_buttons[] = {
+    "Esc", "Ctrl", "Alt", "Tab", "<", ">", "U", "D",
+    NULL
+  };
+
   while(1) {
     if(symbol_flag) {
       keyboard_current = keyboard_symbol;
     }
     else if(caps_flag) {
-      if(alt_flag) {
+      if(alt_keyboard_flag) {
         keyboard_current = alt_keyboard_enabled_flag ? keyboard_alt_caps : keyboard_caps;
       }
       else {
@@ -1880,7 +2266,7 @@ void terminal_input_string(char *input_buff) {
       }
     }
     else {
-      if(alt_flag) {
+      if(alt_keyboard_flag) {
         keyboard_current = alt_keyboard_enabled_flag ? keyboard_alt_nocaps : keyboard_nocaps;
       }
       else {
@@ -1888,20 +2274,39 @@ void terminal_input_string(char *input_buff) {
       }
     }
 
-    drawButtonMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
-    
+    if(terminal_keyboard_redraw_flag) {
+      drawButtonMatrix(0, 176, tft.width(), 24, control_buttons, 4, 1);
+      drawButtonMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
+      terminal_keyboard_redraw_flag = 0;
+    }
+
+    if(touchCheckNowait() == 0) {
+      return -1;
+    }
     touchWaitPress();
+
+    button = touchCheckMatrix(0, 176, tft.width(), 24, control_buttons, 8, 1);
+    if(button != -1) {
+      if(button == 0) {
+        return 0x1B;
+      }
+      else if(button == 1) {
+        if(ctrl_flag) ctrl_flag = 0;
+        else ctrl_flag = 1;
+      }
+      else if(button == 2) {
+        if(alt_flag) alt_flag = 0;
+        else alt_flag = 1;
+      }
+      else if(button == 3) {
+        return 0x09;
+      }
+    }
+
     button = touchCheckMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
     if(button != -1) {
       if(button == 11) {
-        if(offset > 0) {
-          buff[strlen(buff) - 1] = 0;
-          offset--;
-          terminal_print_char(0x09);
-          terminal_print_char(' ');
-          terminal_print_char(0x09);
-          terminal_show_screen();
-        }
+        return 0x08;
       }
       else if(button == 24) {
         caps_flag = !caps_flag;
@@ -1909,33 +2314,320 @@ void terminal_input_string(char *input_buff) {
       else if(button == 36) {
         symbol_flag = !symbol_flag;
         if(!symbol_flag) {
-          if(alt_flag) {
-            alt_flag = 0;
+          if(alt_keyboard_flag) {
+            alt_keyboard_flag = 0;
           }
           else {
-            alt_flag = 1;
+            alt_keyboard_flag = 1;
           }
         }
       }
       else {
         if(button == 35) {
-          strcpy(input_buff, buff);
-          terminal_print_char('\n');
-          terminal_print_char('\r');
-          terminal_show_screen();
-          return;
+          caps_flag = 0;
+          return '\n';
         }
-        else if(strlen(buff) < (TERMINAL_INPUT_MAX - 1)) {
-          buff[offset] = keyboard_current[button][0];
-          offset++;
-          buff[offset] = 0;
-          terminal_print_char(keyboard_current[button][0]);
-          terminal_show_screen();
+        else {
+          caps_flag = 0;
+          if(ctrl_flag) {
+            return keyboard_current[button][0] & 0x1F;
+          }
+          else {
+            return keyboard_current[button][0];
+          }
         }
+      }
+    }
+
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      return -1;
+    }
+    touchWaitRelease();
+  }
+}
+
+int terminal_serial(char *arg) {
+  long speed;
+  int byte;
+
+  while(1) {
+    while(Serial.available()) {
+      byte = Serial.read();
+      if(byte == '\n') {
+        Serial.print('\r');
+        terminal_print_char('\r');
+      }
+      else if(byte == '\r') {
+        Serial.print('\n');
+        terminal_print_char('\n');
+      }
+      Serial.print((char)byte);
+      terminal_print_char(byte);
+      terminal_show_screen();
+    }
+    byte = terminal_input_char();
+    if(byte != -1) {
+      // Ctrl + C
+      if(byte == 0x03) {
+        return 0;
+      }
+      // Ctrl + D
+      if(byte == 0x04) {
+        return 0;
+      }
+      // Esc
+      if(byte == 0x1B) {
+        return 0;
+      }
+      else if(byte == '\n') {
+        Serial.print('\r');
+        terminal_print_char('\r');
+      }
+      Serial.print((char)byte);
+      terminal_print_char((char)byte);
+      terminal_show_screen();
+    }
+  }
+}
+
+int terminal_telnet(char *arg) {
+  long speed;
+  int byte;
+  int port = 0;
+  char host[80];
+  WiFiClient client;
+
+  sscanf(arg, "%s %d", host, &port);
+  if(port == 0) {
+    port = 23;
+  }
+
+  client.connect(host, port);
+  if (client.connected()) {
+    terminal_print("Connected\n\r");
+    terminal_show_screen();
+  }
+  else {
+    terminal_print("Not connected\n\r");
+    terminal_show_screen();
+    return 0;
+  }
+
+  while(1) {
+    while(client.available()) {
+      byte = client.read();
+      if(byte == '\n') {
+        //client.print('\r');
+        terminal_print_char('\r');
+      }
+      else if(byte == '\r') {
+        //client.print('\n');
+        terminal_print_char('\n');
+      }
+      //client.print((char)byte);
+      terminal_print_char(byte);
+      terminal_show_screen();
+    }
+    if(!client.connected()) {
+      terminal_print("Disconnected\n\r");
+      terminal_show_screen();
+      return 0;
+    }
+    byte = terminal_input_char();
+    if(byte != -1) {
+      // Esc
+      if(byte == 0x1B) {
+        client.stop();
+        return 0;
+      }
+      else if(byte == '\n') {
+        client.print('\r');
+        client.print('\n');
+        terminal_print_char('\r');
+        terminal_print_char('\n');
+      }
+      else {
+        client.print((char)byte);
+        terminal_print_char((char)byte);
+        terminal_show_screen();
       }
     }
   }
 }
+
+#ifdef IS_SSH_ENABLED
+
+int terminal_ssh(char *arg) {
+  long speed;
+  int byte;
+  int port = 22;
+  int bytes_read;
+  char host[80] = "example.com";
+  char ssh_user[80] = "username";
+  char ssh_pass[80] = "password";
+  char buff[80];
+  int rc;
+  ssh_channel channel;
+  ssh_session my_session = ssh_new();
+
+  ssh_options_set(my_session, SSH_OPTIONS_HOST, host);
+  ssh_options_set(my_session, SSH_OPTIONS_USER, ssh_user);
+  rc = ssh_connect(my_session);
+  if (rc != SSH_OK) {
+    terminal_print("Error connecting to server\n\r");
+    terminal_print((char *)ssh_get_error(my_session));
+    terminal_print("\n\r");
+    terminal_show_screen();
+    ssh_free(my_session);
+    return 0;
+  }
+  
+  rc = ssh_userauth_password(my_session, NULL, ssh_pass);
+  if (rc != SSH_AUTH_SUCCESS) {
+    terminal_print("Error authenticating\n\r");
+    terminal_print((char *)ssh_get_error(my_session));
+    terminal_print("\n\r");
+    terminal_show_screen();
+    ssh_disconnect(my_session);
+    ssh_free(my_session);
+    return 0;
+  }
+
+  // Open channel
+  channel = ssh_channel_new(my_session);
+  if (channel == NULL) {
+    terminal_print("Unable to open channel\n\r");
+    terminal_show_screen();
+    return 0;
+  }
+
+  // Open session
+  rc = ssh_channel_open_session(channel);
+  if (rc != SSH_OK) {
+    terminal_print("Unable to open session\n\r");
+    terminal_show_screen();
+    ssh_channel_free(channel);
+    return 0;
+  }
+
+  // Request PTY
+  if (ssh_channel_request_pty(channel) != SSH_OK) {
+      terminal_print("Unable to request PTY\n\r");
+      terminal_show_screen();
+      ssh_channel_close(channel);
+      ssh_channel_free(channel);
+      return 0;
+  }
+
+  // Request shell
+  if (ssh_channel_request_shell(channel) != SSH_OK) {
+      terminal_print("Unable to request shell\n\r");
+      terminal_show_screen();
+      ssh_channel_close(channel);
+      ssh_channel_free(channel);
+      return 0;
+  }
+
+  while(1) {
+    bytes_read = ssh_channel_read(channel, buff, 1, 0);
+    if(bytes_read > 0) {
+      byte = buff[0];
+      if(byte == '\n') {
+        //client.print('\r');
+        terminal_print_char('\r');
+      }
+      else if(byte == '\r') {
+        //client.print('\n');
+        terminal_print_char('\n');
+      }
+      //client.print((char)byte);
+      terminal_print_char(byte);
+      terminal_show_screen();
+    }
+
+    byte = terminal_input_char();
+    if(byte != -1) {
+      // Esc
+      if(byte == 0x1B) {
+        ssh_channel_send_eof(channel);
+        ssh_channel_close(channel);
+        ssh_channel_free(channel);
+        ssh_disconnect(my_session);
+        ssh_free(my_session);
+        return 0;
+      }
+      else if(byte == '\n') {
+        //client.print('\r');
+        //client.print('\n');
+        terminal_print_char('\r');
+        terminal_print_char('\n');
+      }
+      else {
+        //client.print((char)byte);
+        terminal_print_char((char)byte);
+        terminal_show_screen();
+      }
+    }
+  }
+}
+
+#endif
+
+#ifdef IS_WIFI_ENABLED
+
+int terminal_ping(char *ip) {
+  char buff[80];
+  int seq = 1;
+  long prev_millis = 0;
+  long total_count = 0;
+  long reply_count = 0;
+  float reply_sum = 0;
+  float reply_min = -1;
+  float reply_max = -1;
+  while(touchCheckNowait() == 0) {
+    total_count++;
+    if(Ping.ping(ip, 1)) {
+      sprintf(buff, "Reply %s: seq=%d t=%0.2f ms\n\r", ip, seq, Ping.averageTime());
+      reply_count++;
+      reply_sum += Ping.averageTime();
+      if(reply_min == -1) {
+        reply_min = Ping.averageTime();
+      }
+      else {
+        reply_min = min(reply_min, Ping.averageTime());
+      }
+      if(reply_max == -1) {
+        reply_max = Ping.averageTime();
+      }
+      else {
+        reply_max = max(reply_max, Ping.averageTime());
+      }
+    }
+    else {
+      sprintf(buff, "Error pinging %s, seq=%d\n\r", ip, seq);
+    }
+    terminal_print(buff);
+    terminal_show_screen();
+    while(millis() - prev_millis < 1000) {
+      if(touchCheckNowait()) break;
+    }
+    if(touchCheckNowait()) {
+      sprintf(buff, "-- Statistics --\n\r");
+      terminal_print(buff);
+      sprintf(buff, "%d pkts transmitted, %d received\n\r", total_count, reply_count);
+      terminal_print(buff);
+      sprintf(buff, "Rtt min/avg/max = %0.2f/%0.2f/%0.2f ms\n\r", reply_min, reply_sum / total_count, reply_max);
+      terminal_print(buff);
+      terminal_show_screen();
+      return 0;
+    }
+    prev_millis = millis();
+    seq++;
+  }
+}
+#endif
 
 // ====================================================
 // Заметки
@@ -2296,6 +2988,99 @@ void tunes(char mode, char *io_buff) {
   }
 
   pim_app("Tunes", TUNES_PATH, tunes_file_to_list, buttons, tunes_action);
+}
+
+// ====================================================
+// Проигрыватель MP3
+// ====================================================
+
+#define MUSIC_PATH "/Music"
+
+void music_action(int action_index, char *filename) {
+  fs::File file;
+  char buff[80];
+  char old_path_filename[80];
+  char new_path_filename[80];
+  if(action_index == 0) {
+    // Воспроизведение
+    sprintf(buff, "%s/%s", MUSIC_PATH, filename);
+    music_play(buff);
+  }
+  else if(action_index == 1) {
+    // Переименование
+    strcpy(buff, filename);
+    if(drawPrompt("New file name", buff) == 0) {
+      // Если название не пустое
+      if(strcmp(buff, "")) {
+        sprintf(old_path_filename, "%s/%s", MUSIC_PATH, filename);
+        sprintf(new_path_filename, "%s/%s", MUSIC_PATH, buff);
+        Storage.rename(old_path_filename, new_path_filename);
+      }
+    }
+  }
+  else if(action_index == 2) {
+    if(drawConfirm("Delete this file?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(buff, "%s/%s", MUSIC_PATH, filename);
+      Storage.remove(buff);
+    }
+  }
+}
+
+void music_file_to_list(fs::File file, char *buff) {
+  sprintf(buff, "%s", file.name());
+}
+
+void music_play(char *filename) {
+  drawError("Not implemented yet");
+  /*Audio audio;
+  fs::File file;
+  Serial.println(filename);
+  audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+  audio.setVolume(21);
+  //audio.setBufferSize(32000);
+  audio.connecttoFS(FFat, filename);
+  Serial.println("Loop...");
+  while(1) {
+    audio.loop();
+  }*/
+}
+
+void music(char mode, char *io_buff) {
+  char *buttons[] = {
+    "Play", "Rename", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000110, B00000010,
+    B01000101, B00000010,
+    B01000100, B10000010,
+    B01000100, B01000010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01000100, B01000010,
+    B01000100, B10000010,
+    B01000101, B00000010,
+    B01000110, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Music");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  pim_app("Music", MUSIC_PATH, music_file_to_list, buttons, music_action);
 }
 
 // ====================================================
@@ -6322,7 +7107,7 @@ void wifi_network_info() {
         drawPrompt("IP to ping", buff);
         if(strcmp(buff, "")) {
           if(Ping.ping(buff, 3)) {
-            sprintf(buff2, "Average of 3 pings is %d ms", Ping.averageTime());
+            sprintf(buff2, "3 pings avg=%0.2f ms", Ping.averageTime());
           }
           else {
             sprintf(buff2, "Error");
@@ -7220,6 +8005,9 @@ void http_file_access(char mode, char *io_buff) {
 
   httpServer.begin();
   httpServer.on("/", http_file_access_handle);
+  httpServer.on("/backup_and_restore", http_file_backup_and_restore_handle);
+  httpServer.on("/backup", http_fs_backup_handle);
+  httpServer.on("/restore", HTTP_POST, http_file_upload_handle_done, http_fs_restore_handle);
   httpServer.on("/upload", HTTP_POST, http_file_upload_handle_done, http_file_upload_handle);
 
   while(1) {
@@ -7233,6 +8021,46 @@ void http_file_access(char mode, char *io_buff) {
       return;
     }
     touchWaitRelease();
+  }
+}
+
+void http_file_backup_and_restore_handle() {
+  char *contents = "<a href='/'>Back</a> or <a href='/backup'>Download FFat backup</a><br>"
+  "<form method='POST' action='/restore' enctype='multipart/form-data'>"
+  "<p>Upload file to restore:</p>"
+  "<input type=file name=file>\n<input type=submit value='Upload'>\n"
+  "</form>"
+  ;
+  httpServer.send(200, "text/html", contents);
+}
+
+void http_fs_backup_handle() {
+  FFatContentsStream ffat_stream;
+  httpServer.sendHeader("Content-Disposition", "attachment; filename=\"fs.bin\"");
+  httpServer.streamFile(ffat_stream, "text/plain");
+}
+
+fs::File uploadFile;
+FFatContentsStream ffat_restore_stream;
+
+void http_fs_restore_handle() {
+  int i;
+  HTTPUpload& upload = httpServer.upload();
+
+  if (upload.status == UPLOAD_FILE_START) {
+  } 
+  else if (upload.status == UPLOAD_FILE_WRITE) {
+    Serial.printf("Uploaded chunk size %d\n", upload.currentSize);
+    for(i = 0; i < upload.currentSize; i++) {
+      ffat_restore_stream.write(upload.buf[i]);
+    }
+  } 
+  else if (upload.status == UPLOAD_FILE_END) {
+    ffat_restore_stream.flush();
+    // Обновляем ФС
+    if(FFat.begin(FORMAT_FS_IF_FAILED)) {
+      Serial.println("Restore ok");
+    }
   }
 }
 
@@ -7255,8 +8083,9 @@ void http_file_access_handle() {
     if(file.isDirectory()) {
       contents = (char *)malloc(20000 * sizeof(char));
       strcpy(contents, "");
-      sprintf(buff, "Used: %d bytes of %d bytes (%d %%)<br>\n", Storage.usedBytes(), Storage.totalBytes(), (int)floor(100 * Storage.usedBytes() / Storage.totalBytes()));
+      sprintf(buff, "Used: %d bytes of %d bytes (%d %%)", Storage.usedBytes(), Storage.totalBytes(), (int)floor(100 * Storage.usedBytes() / Storage.totalBytes()));
       strcat(contents, buff);
+      strcat(contents, " (<a href='/backup_and_restore'>backup and restore</a>)<br>\n");
       strcat(contents, "<b>Files:</b><br>\n<br>\n");
       http_file_access_show_dir(filename, contents);
       strcat(contents, upload_form_begin);
@@ -7317,8 +8146,6 @@ void http_file_access_show_dir(char *path, char *contents) {
   }
 }
 
-fs::File uploadFile;
-
 void http_file_upload_handle() {
   char buff[80];
   HTTPUpload& upload = httpServer.upload();
@@ -7376,7 +8203,6 @@ int get_file_http(char *url, char *buff) {
   http.end();
   return 0;
 }
-
 
 int get_file_https(char *url, char *buff) {
   int httpResponseCode;
@@ -12242,8 +13068,8 @@ void setup() {
       }
     }
   }
-  
-  // Ставим приложения
+
+  // Копируем ссылки на приложения
   for(i = 0; i < 40; i++) {
     main_apps[i] = apps[i];
   }
