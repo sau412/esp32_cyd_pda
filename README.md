@@ -69,7 +69,8 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Select color scheme and inversion
 * Software reboot app
 * Enable/disable russian keyboard app
-* Terminal
+* Terminal (with serial, ping, telnet)
+* Backup via web interface (very slow, ~40 minutes, no working restore for now)
 
 ## PIM apps
 * Calculator
@@ -105,17 +106,20 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Tunes - nokia melody player, try 4g1 8e1 8e1 4g1 8e1 8e1 8c1 8d1 8e1 8f1 2g1 8g1 8g1 8e1 8e1 8f1 8f1 8d1 8d1 4c1 4d1 2c1
 
 ## Terminal commands
-* millis
-* micros
-* date
-* reset
-* reboot
-* host
-* ip
-* gateway
-* dns
-* netmask
-* rssi
+* millis - show milliseconds after reboot
+* micros - show microseconds after reboot
+* date - show current date
+* reset - clear screen, reinit terminal
+* reboot - reboot CYD
+* host - resolve domain name
+* ip - show current ip
+* gateway - show current gateway
+* dns - show current DNS
+* netmask - show current netmask
+* rssi - show current RSSI value
+* ping - ping specified host continiously, touch screen to stop
+* serial [speed] - connect to serial port with specified speed, default is 115200
+* telnet - connect via telnet to specified host and port
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
