@@ -70,7 +70,8 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Software reboot app
 * Enable/disable russian keyboard app
 * Terminal (with serial, ping, telnet)
-* Backup via web interface (very slow, ~40 minutes, no working restore for now)
+* Backup via web interface (very slow, ~40 minutes for download, upload is pretty fast)
+* Select autorun app
 
 ## PIM apps
 * Calculator
@@ -98,8 +99,8 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Weather
 * Chat
 * File Server (for backups and file upload)
-* RSS Reader
-
+* RSS Reader - see https://en.wikipedia.org/wiki/RSS for details
+* IRC client - see https://en.wikipedia.org/wiki/IRC for details
 ## Sound
 * Piano
 * Metronome
@@ -117,9 +118,9 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * dns - show current DNS
 * netmask - show current netmask
 * rssi - show current RSSI value
-* ping - ping specified host continiously, touch screen to stop
+* ping {host} - ping specified host continiously, touch screen to stop
 * serial [speed] - connect to serial port with specified speed, default is 115200
-* telnet - connect via telnet to specified host and port
+* telnet {host} [port] - connect via telnet to specified host and port
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
