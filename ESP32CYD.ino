@@ -61,6 +61,8 @@
 - Приложения терминала: serial, ping, telnet
 - Бэкап через веб-интерфейс (очень медленно)
 - Восстановление через веб-интерфейс
+- IRC клиент
+- Выбор приложения для автозапуска
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -119,20 +121,22 @@
 2026-06-14 Ночная цветовая схема
 2026-06-15 Три в ряд, терминал
 2026-06-16 Больше команд терминала, serial, ping, telnet, бэкап через веб (медленно), восстановление через веб (не тестировал)
+2026-06-17 Восстановление из бэкапа, IRC, выбор приложения для автозапуска
 
 Направления работы:
-- IRC
-- (и) Воспроизведение MP3
 - Повтор последовательности (игра)
 - N назад (почти игра)
 - Устный счёт (почти игра)
 - Карточки для запоминания слов (PIM) - первая строка название, остальные - пояснение
-- Интернет-радио (PIM)
-- Бэкапы (на SD)
+
+== Потом ==
+- (и) Воспроизведение MP3
+- (и) Запись на SD
 - 2048 (игра)
 - Арканоид (игра)
 - Тетрис (игра)
-- Приложение выбор автозапуска
+- Интернет-радио (PIM) - требует MP3
+- Бэкапы (на SD) - требует SD
 
 Улучшения тут и там:
 - (б) Проблема при работе с SD, запись больше 2 кб
@@ -148,12 +152,9 @@
 - (д) Редактирование: меньше мигания
 - (д) Просмотр: меньше мигания
 - (д) Просмотр: прокручивать вперёд без перемотки файла
-- (д) Выложить шрифты на гитхаб
 - (д) Категории для PIM
-- (д) Возможность отключать звук
 - (д) Пасьянс - более чёткий указатель
 - (д) Если SD есть, то основная память SD, если нет то нет
-- (д) Автозапуск - настройка для выбора
 - (д) Преобразование из CP1251 в UTF8
 - (д) Парсинг JSON
 - (д) Получение погоды напрямую с weather.com
@@ -162,11 +163,14 @@
 - (д) Флаг автосохранения файла при редактировании и неактивности
 - (д) RSS лишние теги у фонтанки
 - (д) RSS текст ошибки пользователю
-- (д) Автояркость
+- (д) Автояркость - нужно определять вход резистора
 - (д) drawProgress - рисовать прогресс операции
 - (д) Serial как ввод клавиатуры
 - (д) Определять инверсию экрана
-- (д) Ночная тема
+- (д) Общий генератор названий для PIM - по имени файла (как draw, книги и mp3) и по первой строчке (как заметки и многое другое)
+- (д) Функция получения первой строки из файла (а может и второй тоже)
+- (д) Приложение для включения и отключения звука
+- (д) Получение времени через NTP
 
 */
 
@@ -452,8 +456,9 @@ public:
     // Конструктор
     FFatContentsStream() {
       buff = (char*)malloc(chunk_size * sizeof(char));
-      esp_partition_read(partition, offset, buff, chunk_size);
       Serial.printf("Reading offset %d\n", offset);
+      esp_partition_read(partition, offset, buff, chunk_size);
+      Serial.printf("Done\n");
       buff_offset = 0;
     }
     // Деструктор
@@ -465,15 +470,19 @@ public:
 
     // Core Print implementation requirement
     size_t write(uint8_t data) override {
+      //Serial.printf("o: %d\n", buff_offset);
       buff[buff_offset] = data;
       buff_offset++;
       if(buff_offset >= chunk_size) {
+        Serial.printf("Writing offset %d\n", offset);
         esp_partition_erase_range(partition, offset, chunk_size);
         esp_partition_write(partition, offset, buff, chunk_size);
-        Serial.printf("Writing offset %d\n", offset);
+        Serial.printf("Done\n");
+        delay(100);
         offset += chunk_size;
         buff_offset = 0;
       }
+      return 1;
     }
     // Core Stream implementation requirements
     int available() override {
@@ -483,8 +492,9 @@ public:
     int read() override {
       int result = -1;
       if(buff_offset >= chunk_size) {
-        esp_err_t result = esp_partition_read(partition, offset, buff, chunk_size);
         Serial.printf("Reading offset %d\n", offset);
+        esp_err_t result = esp_partition_read(partition, offset, buff, chunk_size);
+        Serial.printf("Done\n");
         buff_offset = 0;
       }
       if(offset < partition->size) {
@@ -581,6 +591,7 @@ void draw(char mode, char *io_buff);
 void wifi(char mode, char *io_buff);
 void gopher(char mode, char *io_buff);
 void rss(char mode, char *io_buff);
+void irc(char mode, char *io_buff);
 void chat(char mode, char *io_buff);
 void weather(char mode, char *io_buff);
 void http_file_access(char mode, char *io_buff);
@@ -624,6 +635,8 @@ void reboot(char mode, char *io_buff);
 void alt_keyboard_control(char mode, char *io_buff);
 void match_three(char mode, char *io_buff);
 void terminal(char mode, char *io_buff);
+void autorun(char mode, char *io_buff);
+
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
 void settings_group(char mode, char *io_buff);
@@ -654,6 +667,7 @@ function_application_pointer apps[40] = {
   wifi,
   gopher,
   rss,
+  irc,
   chat,
   weather,
   http_file_access,
@@ -730,6 +744,7 @@ function_application_pointer settings_apps[40] = {
   i2c_scanner,
   view_font,
   alt_keyboard_control,
+  autorun,
   reboot,
   NULL
 };
@@ -6949,7 +6964,7 @@ void wifi_select_network() {
     tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
     if(rescan_flag) {
       tft.setTextColor(color_scheme_fg, color_scheme_bg);
-      tft.drawString("Scanning...      ", 0, 16, FONT_DEFAULT);
+      tft.drawString("Scanning...      ", 1, 16, FONT_DEFAULT);
       for(network_index = 0; network_index < WIFI_MAX_NETWORKS; network_index++) {
         if(networks[network_index]) {
           free(networks[network_index]);
@@ -6979,15 +6994,15 @@ void wifi_select_network() {
     }
 
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    tft.drawString("Select network:", 0, 16, FONT_DEFAULT);
+    tft.drawString("Select network:", 1, 16, FONT_DEFAULT);
 
-    touchCheckList(8, 32, tft.width() - 8 * 2, tft.height() - 72, networks, 15, &network_offset, &network_selected);
-    drawList(8, 32, tft.width() - 8 * 2, tft.height() - 72, networks, 15, &network_offset, &network_selected);
+    touchCheckList(0, 32, tft.width(), tft.height() - 72, networks, 15, &network_offset, &network_selected);
+    drawList(0, 32, tft.width(), tft.height() - 72, networks, 15, &network_offset, &network_selected);
 
     drawButtonMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 2, 1);
     
     touchWaitPress();
-    touchCheckList(8, 32, tft.width() - 8 * 2, tft.height() - 32 - 40, networks, 15, &network_offset, &network_selected);
+    touchCheckList(0, 32, tft.width(), tft.height() - 32 - 40, networks, 15, &network_offset, &network_selected);
 
     button_pressed = touchCheckMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 2, 1);
     if(button_pressed != -1) {
@@ -8050,7 +8065,7 @@ void http_fs_restore_handle() {
   if (upload.status == UPLOAD_FILE_START) {
   } 
   else if (upload.status == UPLOAD_FILE_WRITE) {
-    Serial.printf("Uploaded chunk size %d\n", upload.currentSize);
+    //Serial.printf("Uploaded chunk size %d\n", upload.currentSize);
     for(i = 0; i < upload.currentSize; i++) {
       ffat_restore_stream.write(upload.buf[i]);
     }
@@ -8059,7 +8074,10 @@ void http_fs_restore_handle() {
     ffat_restore_stream.flush();
     // Обновляем ФС
     if(FFat.begin(FORMAT_FS_IF_FAILED)) {
-      Serial.println("Restore ok");
+      Serial.println("FFat mount ok");
+    }
+    else {
+      Serial.println("FFat mount failed");
     }
   }
 }
@@ -8572,6 +8590,715 @@ void rss(char mode, char *io_buff) {
   }
 
   pim_app("RSS", RSS_PATH, rss_file_to_list, buttons, rss_action);
+}
+
+// ====================================================
+// IRC
+// ====================================================
+
+#define IRC_PATH "/IRC"
+
+void irc_action(int action_index, char *filename) {
+  fs::File file;
+  char buff[80];
+  char name[80];
+  char host[80];
+  char port[20];
+  char pass[20];
+  char nick[20];
+  char ident[20];
+  char realname[20];
+  char *irc_template = "Server name\nhost=\nport=\npass=\nnick=\nident=\nrealname=\n---";
+  char *data;
+  char name_line_flag;
+  char byte;
+  int offset;
+  int http_code;
+
+  if(action_index == 0) {
+    // Редактируем новый файл
+    sprintf(buff, "%s/%s", IRC_PATH, "__New");
+    file = Storage.open(buff, FILE_WRITE);
+    file.print(irc_template);
+    file.close();
+    edit_file("New IRC server", buff);
+
+    file = Storage.open(buff);
+    if(!file) {
+      return;
+    }
+    else if(file.size() == 0) {
+      file.close();
+      Storage.remove(buff);
+    }
+    else {
+      file.close();
+      // Меняем название в соответствии с содержимым
+      pim_rename_file(IRC_PATH, "__New", NULL);
+    }
+  }
+  else if(action_index == 1) {
+    // Соединение с сервером
+    sprintf(buff, "%s/%s", IRC_PATH, filename);
+    file = Storage.open(buff);
+    offset = 0;
+    name[offset] = 0;
+    while(file.available()) {
+      byte = file.read();
+      if(byte == '\n') break;
+      name[offset] = byte;
+      offset++;
+      name[offset] = 0;
+      if(offset > 39) {
+        break;
+      }
+    }
+    file.close();
+
+    read_key_value_from_file(buff, "host", host);
+    read_key_value_from_file(buff, "port", port);
+    read_key_value_from_file(buff, "pass", pass);
+    read_key_value_from_file(buff, "nick", nick);
+    read_key_value_from_file(buff, "ident", ident);
+    read_key_value_from_file(buff, "realname", realname);
+
+    irc_chat(name, host, port, pass, nick, ident, realname);
+  }
+  else if(action_index == 2) {
+    // Редактируем существующий файл
+    sprintf(buff, "%s/%s", IRC_PATH, filename);
+    edit_file("Edit IRC server", buff);
+
+    // Меняем название в соответствии с содержимым
+    pim_rename_file(IRC_PATH, filename, NULL);
+  }
+  else if(action_index == 3) {
+    if(drawConfirm("Delete this IRC server?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(buff, "%s/%s", IRC_PATH, filename);
+      Storage.remove(buff);
+    }
+  }
+}
+
+#define IRC_MAX_CHATS 20
+#define IRC_HISTORY_LENGTH (TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS * 2)
+
+void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, char *ident, char *realname) {
+  char input_buff[400];
+  char message[300];
+  int message_offset = 0;
+  char buff[80];
+  char buff2[80];
+  char buff3[80];
+  char buff4[80];
+  char from[80];
+
+  char *chat_name[IRC_MAX_CHATS];
+  char *chat_history[IRC_MAX_CHATS];
+  int chat_index = 0;
+  int current_chat = 0;
+  int i;
+  char offset = 0;
+  int byte;
+  int port = 6667;
+  WiFiClient client;
+
+  clearScreen();
+  drawAppTitle(name);
+
+  terminal_clear_screen();
+  terminal_show_screen();
+
+  if(strcmp(port_text, "")) {
+    sscanf(port_text, "%d", &port);
+  }
+
+  terminal_clear_screen();
+  terminal_print("Connecting...\r\n");
+  terminal_show_screen();
+
+  client.connect(host, port);
+  if (!client.connected()) {
+    drawError("Connection error");
+    return;
+  }
+
+  for(i = 0; i < IRC_MAX_CHATS; i++) {
+    chat_name[i] = (char*)malloc(80 * sizeof(char));
+    chat_name[i][0] = 0;
+    chat_history[i] = (char*)malloc(IRC_HISTORY_LENGTH * sizeof(char));
+    memset(chat_history[i], 0, IRC_HISTORY_LENGTH);
+  }
+  strcpy(chat_name[0], "*");
+
+  if(strcmp(pass, "")) {
+    sprintf(buff, "PASS %s\r\n", pass);
+    client.write(buff);
+  }
+  if(strcmp(ident, "") == 0) {
+    strcpy(ident, "cyd");
+  }
+  if(strcmp(nick, "") == 0) {
+    sprintf(nick, "cyd%d", random(0, 10000));
+  }
+  if(strcmp(realname, "") == 0) {
+    sprintf(realname, "CYD");
+  }
+  
+  sprintf(buff, "NICK %s\r\n", nick);
+  client.write(buff);
+  sprintf(buff, "USER %s 0 * :%s\r\n", ident, realname);
+  client.write(buff);
+
+  offset = 0;
+  input_buff[offset] = 0;
+
+  terminal_keyboard_redraw_flag = 1;
+  message_offset = 0;
+  message[message_offset] = 0;
+  while(1) {
+    while(client.available()) {
+      byte = client.read();
+      //Serial.print((char)byte);
+      if(byte == '\n' || byte == '\r') {
+        if(strlen(input_buff) == 0) {
+          message_offset = 0;
+          continue;
+        }
+        Serial.println(input_buff);
+        //utf8_to_cp1251(input_buff);
+        if(memcmp(input_buff, "PING :", 6) == 0) {
+          sprintf(buff2, "PONG :%s\r\n", input_buff + 6);
+          client.write(buff2);
+          strcat(chat_history[0], buff2);
+        }
+
+        // Копируем сообщение как есть в серверный чат
+        irc_chat_history_add(chat_history[0], input_buff);
+
+        // Ищем признаки сообщения PRIVMSG
+        // Первое значение кто, второе - куда
+        if(input_buff[0] == ':') {
+          sscanf(input_buff, ":%s %s %s :", buff, buff3, buff2);
+        }
+        else {
+          strcpy(buff3, "");
+        }
+
+        // :nick!ident@host PRIVMSG dest :Hi
+        // :server NOTICE * :*** Looking up your hostname
+        if(strcmp(buff3, "PRIVMSG") == 0 || strcmp(buff3, "NOTICE") == 0) {
+          // Оставляем только ник отправителя
+          for(offset = 0; offset < strlen(buff); offset++) {
+            if(buff[offset] == '!') {
+              buff[offset] = 0;
+              break;
+            }
+          }
+          strcpy(buff3, buff);
+
+          // Если это канал, надо добавить сообщение в чат канала, а не отправителя
+          if(buff2[0] == '#' || buff2[0] == '&') {
+            strcpy(buff3, buff2);            
+          }
+
+          // Добавляем чат (если нужно, добавляем сообщение в этот чат)
+          chat_index = irc_find_or_add_chat_name(buff3, chat_name);
+          if(chat_index > 0) {
+            // Ищем начало сообщения, оно после :
+            for(offset = 1; offset < strlen(input_buff); offset++) {
+              if(input_buff[offset] == ':') {
+                offset++;
+                break;
+              }
+            }
+            
+            // Копируем в адресный чат
+            strcat(buff, ": ");
+            strcat(buff, input_buff + offset);
+            irc_chat_history_add(chat_history[chat_index], buff);
+          }
+        }
+        // :nick!ident@host JOIN :#t
+        if(strcmp(buff3, "JOIN") == 0) {
+          // Оставляем только ник
+          for(offset = 0; offset < strlen(buff); offset++) {
+            if(buff[offset] == '!') {
+              buff[offset] = 0;
+              break;
+            }
+          }
+          
+          // Находим название канала
+          for(offset = 1; offset < strlen(input_buff); offset++) {
+            if(input_buff[offset] == ':') {
+              offset++;
+              break;
+            }
+          }
+
+          // Добавляем канал в список чатов
+          chat_index = irc_find_or_add_chat_name(input_buff + offset, chat_name);
+          sprintf(buff2, "%s joined", buff);
+          irc_chat_history_add(chat_history[chat_index], buff2);
+        }
+        // :user!ident@host PART #test
+        if(strcmp(buff3, "PART") == 0) {
+          sscanf(input_buff, ":%s %s %s", buff, buff3, buff2);
+          
+          for(offset = 0; offset < strlen(buff); offset++) {
+            if(buff[offset] == '!') {
+              buff[offset] = 0;
+              break;
+            }
+          }
+          // Добавляем сообщение о выходе с канала
+          chat_index = irc_find_or_add_chat_name(buff2, chat_name);
+          sprintf(buff2, "%s leaved", buff);
+          irc_chat_history_add(chat_history[chat_index], buff2);
+        }
+        // :nick!ident@host KICK #chan who_kicked :reason
+        if(strcmp(buff3, "KICK") == 0) {
+          sscanf(input_buff, ":%s %s %s %s", buff, buff3, buff2, buff4);
+          
+          for(offset = 0; offset < strlen(buff); offset++) {
+            if(buff[offset] == '!') {
+              buff[offset] = 0;
+              break;
+            }
+          }
+          // Добавляем сообщение о кике с канала
+          chat_index = irc_find_or_add_chat_name(buff2, chat_name);
+          sprintf(buff2, "%s kicked by %s", buff, buff4);
+          irc_chat_history_add(chat_history[chat_index], buff2);
+        }
+        // :nick!ident@host MODE #chan modes modes modes
+        if(strcmp(buff3, "MODE") == 0) {
+          sscanf(input_buff, ":%s %s %s %s", buff, buff3, buff2, buff4);
+          
+          // Только режимы каналов
+          if(buff2[0] == '#' || buff2[0] == '&') {
+            for(offset = 0; offset < strlen(buff); offset++) {
+              if(buff[offset] == '!') {
+                buff[offset] = 0;
+                break;
+              }
+            }
+            // Найти второе слово
+            for(offset = 1; offset < strlen(input_buff); offset++) {
+              if(input_buff[offset] == ' ')  { offset++; break; }
+            }
+            // Третье слово
+            for(; offset < strlen(input_buff); offset++) {
+              if(input_buff[offset] == ' ')  { offset++; break; }
+            }
+            // Четвёртое слово
+            for(; offset < strlen(input_buff); offset++) {
+              if(input_buff[offset] == ' ')  { offset++; break; }
+            }
+
+            // Добавляем сообщение о смене режимов канала
+            chat_index = irc_find_or_add_chat_name(buff2, chat_name);
+            sprintf(buff2, "%s changed modes to %s", buff, input_buff + offset);
+            irc_chat_history_add(chat_history[chat_index], buff2);
+          }
+        }
+        // :nick!ident@host TOPIC #chan :test
+        if(strcmp(buff3, "TOPIC") == 0) {
+          for(offset = 0; offset < strlen(buff); offset++) {
+            if(buff[offset] == '!') {
+              buff[offset] = 0;
+              break;
+            }
+          }
+          for(offset = 1; offset < strlen(input_buff); offset++) {
+            if(input_buff[offset] == ':')  {
+              offset++;
+              break;
+            }
+          }
+
+          // Добавляем сообщение о смене топика
+          chat_index = irc_find_or_add_chat_name(buff2, chat_name);
+          sprintf(buff2, "%s changed topic to %s", buff, input_buff + offset);
+          irc_chat_history_add(chat_history[chat_index], buff2);
+        }
+        // :nick!ident@host NICK :newnick
+        if(strcmp(buff3, "NICK") == 0) {
+          for(offset = 0; offset < strlen(buff); offset++) {
+            if(buff[offset] == '!') {
+              buff[offset] = 0;
+              break;
+            }
+          }
+          for(offset = 1; offset < strlen(input_buff); offset++) {
+            if(input_buff[offset] == ':')  break;
+          }
+
+          sprintf(buff2, "%s changed nick to %s", buff, input_buff + offset);
+          // Добавляем сообщение о смене ника в чат ника
+          for(chat_index = 0; chat_index < IRC_MAX_CHATS; chat_index++) {
+            // Переименовываем чат, если есть
+            if(strcmp(buff, chat_name[chat_index]) == 0) {
+              strcpy(chat_name[chat_index], input_buff + offset);
+              irc_chat_history_add(chat_history[chat_index], buff2);
+            }
+          }
+
+          // Смена своего ника
+          if(strcmp(buff, nick) == 0) {
+            strcpy(nick, input_buff + offset);
+          }
+        }
+        // :nick!ident@host QUIT :Quit: leaving
+        if(strcmp(buff3, "QUIT") == 0) {
+          for(offset = 0; offset < strlen(buff); offset++) {
+            if(buff[offset] == '!') {
+              buff[offset] = 0;
+              break;
+            }
+          }
+          for(offset = 1; offset < strlen(input_buff); offset++) {
+            if(input_buff[offset] == ':')  break;
+          }
+
+          sprintf(buff2, "%s quit", buff, input_buff + offset);
+          // Добавляем сообщение о выходе в чат ника
+          for(chat_index = 0; chat_index < IRC_MAX_CHATS; chat_index++) {
+            // Переименовываем чат, если есть
+            if(strcmp(buff, chat_name[chat_index]) == 0) {
+              irc_chat_history_add(chat_history[chat_index], buff2);
+            }
+          }
+        }
+
+        // Показываем текущий чат
+        irc_show_current_chat(chat_history[current_chat], chat_name[current_chat], message);
+
+        // Очищаем буфер
+        offset = 0;
+        input_buff[offset] = 0;
+        continue;
+      }
+      input_buff[offset] = byte;
+      offset++;
+      input_buff[offset] = 0;
+    }
+
+    if(Serial.available()) {
+      byte = Serial.read();
+    }
+    else {
+      byte = irc_input_char();
+    }
+    if(byte != -1) {
+      // Предыдущая вкладка
+      if(byte == 1) {
+        do {
+        current_chat--;
+        if(current_chat < 0) {
+          current_chat = IRC_MAX_CHATS - 1;
+        }
+        } while(strcmp(chat_name[current_chat], "") == 0);
+      }
+      // Закрыть текущий чат
+      else if(byte == 2) {
+        if(current_chat != 0) {
+          // Нужно выйти из канала, если это канал
+
+          chat_name[current_chat][0] = 0;
+          chat_history[current_chat][0] = 0;
+        }
+        current_chat = 0;
+      }
+      // Следующая вкладка
+      else if(byte == 3) {
+        do {
+          current_chat++;
+          if(current_chat >= IRC_MAX_CHATS) {
+            current_chat = 0;
+          }
+        } while(strcmp(chat_name[current_chat], "") == 0);
+      }
+      else if(byte == 0x08) {
+        if(strlen(message) > 0) {
+          message[strlen(message) - 1] = 0;
+          message_offset--;
+        }
+      }
+      else if(byte == '\n') {
+        // Отправить сообщение
+        // Команда /query открывает чат с ником без отправки сообщения
+        if(memcmp(message, "/query ", 7)) {
+          chat_index = irc_find_or_add_chat_name(message + 7, chat_name);
+          strcpy(buff, "");
+        }
+        else if(message[0] == '/') {
+          strcpy(buff, message + 1);
+          strcat(buff, "\r\n");
+        }
+        else if(current_chat == 0) {
+          strcpy(buff, message);
+          strcat(buff, "\r\n");
+        }
+        else {
+          sprintf(buff, "PRIVMSG %s :%s\r\n", chat_name[current_chat], message);
+        }
+        // Если есть что отправлять - отправляем
+        if(strcmp(buff, "")) {
+          client.print(buff);
+          // Копируем сообщение как есть в серверный чат
+          irc_chat_history_add(chat_history[0], buff);
+          if(current_chat != 0) {
+            // Копируем в адресный чат
+            sprintf(buff, "%s: %s", nick, message);
+            irc_chat_history_add(chat_history[current_chat], buff);
+          }
+        }
+
+        // Очистить сообщение
+        message_offset = 0;
+        message[message_offset] = 0;
+      }
+      else {
+        message[message_offset] = byte;
+        message_offset++;
+        message[message_offset] = 0;
+      }
+
+      // Показываем текущий чат
+      irc_show_current_chat(chat_history[current_chat], chat_name[current_chat], message);
+    }
+
+    // Разъединение и выход
+    if(!client.connected() || global_exit_flag) {
+      if(client.connected()) {
+        client.stop();
+      }
+      if(!global_exit_flag) {
+        drawError("Disconnected");
+      }
+      else {
+        drawAppTitle("Exit");
+      }
+      touchWaitRelease();
+      touchExitActionReset();
+      for(i = 0; i < IRC_MAX_CHATS; i++) {
+        free(chat_name[i]);
+        free(chat_history[i]);
+      }
+      return;
+    }
+  }
+}
+
+void irc_show_current_chat(char *chat_history, char *chat_name, char *message) {
+    terminal_clear_screen();
+    terminal_print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+    terminal_print(chat_history);
+    terminal_print(chat_name);
+    terminal_print(">");
+    terminal_print(message);
+    terminal_show_screen();
+}
+
+// Добавить сообщение в историю чата
+void irc_chat_history_add(char *chat_history, char *message) {
+  int i;
+  if(strlen(chat_history) + strlen(message) >= IRC_HISTORY_LENGTH - 2) {
+    for(i = 0; i < IRC_HISTORY_LENGTH; i++) {
+      if(i + strlen(message) + 2 + 1 >= IRC_HISTORY_LENGTH) break;
+      chat_history[i] = chat_history[i + strlen(message) + 2];
+      chat_history[i + 1] = 0;
+    }
+  }
+  strcat(chat_history, message);
+  strcat(chat_history, "\r\n");
+}
+
+int irc_find_or_add_chat_name(char *new_name, char **chat_name) {
+  char chat_found_flag = 0;
+  int chat_index;
+
+  // Добавляем чат (если нужно, добавляем сообщение в этот чат)
+  for(chat_index = 1; chat_index < IRC_MAX_CHATS; chat_index++) {
+    if(strcmp(chat_name[chat_index], new_name) == 0) {
+      chat_found_flag = 1;
+      break;
+    }
+  }
+  // Ищем неиспользованный чат
+  if(!chat_found_flag) {
+    for(chat_index = 1; chat_index < IRC_MAX_CHATS; chat_index++) {
+      if(strcmp(chat_name[chat_index], "") == 0) {
+        strcpy(chat_name[chat_index], new_name);
+        chat_found_flag = 1;
+        break;
+      }
+    }
+  }
+  if(chat_found_flag) {
+    return chat_index;
+  }
+  return -1;
+}
+
+int irc_input_char() {
+  int button;
+  char **keyboard_current;
+  static char symbol_flag = 0;
+  static char caps_flag = 0;
+  static char alt_keyboard_flag = 0;
+  
+  char *control_buttons[] = {
+    "<Prev", "Close", "Next>",
+    NULL
+  };
+
+  while(1) {
+    if(symbol_flag) {
+      keyboard_current = keyboard_symbol;
+    }
+    else if(caps_flag) {
+      if(alt_keyboard_flag) {
+        keyboard_current = alt_keyboard_enabled_flag ? keyboard_alt_caps : keyboard_caps;
+      }
+      else {
+        keyboard_current = keyboard_caps;
+      }
+    }
+    else {
+      if(alt_keyboard_flag) {
+        keyboard_current = alt_keyboard_enabled_flag ? keyboard_alt_nocaps : keyboard_nocaps;
+      }
+      else {
+        keyboard_current = keyboard_nocaps;
+      }
+    }
+
+    if(terminal_keyboard_redraw_flag) {
+      drawButtonMatrix(0, 176, tft.width(), 24, control_buttons, 3, 1);
+      drawButtonMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
+      terminal_keyboard_redraw_flag = 0;
+    }
+
+    if(touchCheckNowait() == 0) {
+      return -1;
+    }
+    touchWaitPress();
+
+    button = touchCheckMatrix(0, 176, tft.width(), 24, control_buttons, 3, 1);
+    if(button != -1) {
+      terminal_keyboard_redraw_flag = 1;
+      if(button == 0) {
+        return 1;
+      }
+      else if(button == 1) {
+        return 2;
+      }
+      else if(button == 2) {
+        return 3;
+      }
+    }
+
+    button = touchCheckMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
+    if(button != -1) {
+      terminal_keyboard_redraw_flag = 1;
+      if(button == 11) {
+        return 0x08;
+      }
+      else if(button == 24) {
+        caps_flag = !caps_flag;
+      }
+      else if(button == 36) {
+        symbol_flag = !symbol_flag;
+        if(!symbol_flag) {
+          if(alt_keyboard_flag) {
+            alt_keyboard_flag = 0;
+          }
+          else {
+            alt_keyboard_flag = 1;
+          }
+        }
+      }
+      else {
+        if(button == 35) {
+          caps_flag = 0;
+          return '\n';
+        }
+        else {
+          caps_flag = 0;
+          return keyboard_current[button][0];
+        }
+      }
+    }
+
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      return -1;
+    }
+    touchWaitRelease();
+  }
+}
+
+void irc_file_to_list(fs::File file, char *buff) {
+  char left[80];
+  char right[80];
+  char byte;
+  int offset;
+  // Левая колонка - первая непустая строчка файла
+  offset = 0;
+  left[offset] = 0;
+  while(file.available()) {
+    byte = file.read();
+    if(byte == '\n') break;
+    left[offset] = byte;
+    offset++;
+    left[offset] = 0;
+    if(offset > 39) {
+      break;
+    }
+  }
+  sprintf(buff, "%s", left);
+}
+
+void irc(char mode, char *io_buff) {
+  char *buttons[] = {
+    "New", "Connect", "Edit", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01011111, B11111010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01011111, B11111010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "IRC");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  pim_app("IRC", IRC_PATH, irc_file_to_list, buttons, irc_action);
 }
 
 #endif
@@ -9436,6 +10163,7 @@ void view_font(char mode, char *io_buff) {
 
   byte = 0;
   while(1) {
+    tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
     for(i = 0; i < 16; i++) {
@@ -9451,6 +10179,159 @@ void view_font(char mode, char *io_buff) {
       drawAppTitle("Exit");
       store_current_timestamp();
       touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// ====================================================
+// Выбор приложения для автозапуска
+// ====================================================
+
+#define AUTORUN_MAX_APPS 100
+
+void autorun(char mode, char *io_buff) {
+  char **app_list;
+  int app_index;
+  int app_offset = 0;
+  int app_selected = 0;
+  char app_found = 0;
+  int i;
+  char buff[80];
+  int button_pressed;
+  char *buttons[] = {
+    "Run this app after reboot",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B10000010,
+    B01000001, B10000010,
+    B01000010, B10000010,
+    B01000100, B10000010,
+    B01001000, B11111010,
+    B01011111, B00010010,
+    B01000001, B00100010,
+    B01000001, B01000010,
+    B01000001, B10000010,
+    B01000001, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Autorun");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Autorun");
+
+  app_list = (char**)malloc(AUTORUN_MAX_APPS * sizeof(char *));
+  for(app_index = 0; app_index < AUTORUN_MAX_APPS; app_index++) {
+    app_list[app_index] = NULL;
+  }
+  // Получаем названия приложений, формируем список
+  app_list[0] = (char *)malloc(20 * sizeof(char));
+  strcpy(app_list[0], "None");
+
+  // Собираем список приложений из групп приложений
+  for(app_index = 0; main_apps[app_index] != NULL; app_index++) {
+    main_apps[app_index](APP_MODE_RETURN_NAME, buff);
+    app_found = 0;
+    for(i = 0; app_list[i] != NULL; i++) {
+      if(strcmp(app_list[i], buff) == 0) {
+        app_found = 1;
+        break;
+      }
+    }
+    if(!app_found) {
+      app_list[i] = (char *)malloc(20 * sizeof(char));
+      strcpy(app_list[i], buff);
+    }
+  }
+  for(app_index = 0; time_and_date_apps[app_index] != NULL; app_index++) {
+    time_and_date_apps[app_index](APP_MODE_RETURN_NAME, buff);
+    app_found = 0;
+    for(i = 0; app_list[i] != NULL; i++) {
+      if(strcmp(app_list[i], buff) == 0) {
+        app_found = 1;
+        break;
+      }
+    }
+    if(!app_found) {
+      app_list[i] = (char *)malloc(20 * sizeof(char));
+      strcpy(app_list[i], buff);
+    }
+  }
+  for(app_index = 0; games_apps[app_index] != NULL; app_index++) {
+    games_apps[app_index](APP_MODE_RETURN_NAME, buff);
+    app_found = 0;
+    for(i = 0; app_list[i] != NULL; i++) {
+      if(strcmp(app_list[i], buff) == 0) {
+        app_found = 1;
+        break;
+      }
+    }
+    if(!app_found) {
+      app_list[i] = (char *)malloc(20 * sizeof(char));
+      strcpy(app_list[i], buff);
+    }
+  }
+  for(app_index = 0; settings_apps[app_index] != NULL; app_index++) {
+    settings_apps[app_index](APP_MODE_RETURN_NAME, buff);
+    app_found = 0;
+    for(i = 0; app_list[i] != NULL; i++) {
+      if(strcmp(app_list[i], buff) == 0) {
+        app_found = 1;
+        break;
+      }
+    }
+    if(!app_found) {
+      app_list[i] = (char *)malloc(20 * sizeof(char));
+      strcpy(app_list[i], buff);
+    }
+  }
+  
+  while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.drawString("Select app:", 1, 16, FONT_DEFAULT);
+
+    touchCheckList(0, 32, tft.width(), tft.height() - 72, app_list, 15, &app_offset, &app_selected);
+    drawList(0, 32, tft.width(), tft.height() - 72, app_list, 15, &app_offset, &app_selected);
+
+    drawButtonMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+    
+    touchWaitPress();
+    touchCheckList(0, 32, tft.width(), tft.height() - 32 - 40, app_list, 15, &app_offset, &app_selected);
+
+    button_pressed = touchCheckMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        write_file_from_buff("/Settings/Autorun", app_list[app_selected]);
+        drawInfo("Autorun app set");
+      }
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      for(i = 0; i < AUTORUN_MAX_APPS; i++) {
+        if(app_list[i]) free(app_list[i]);
+      }
+      free(app_list);
       touchExitActionReset();
       return;
     }
@@ -13053,25 +13934,49 @@ void setup() {
 
   beep_if_enabled();
 
+  // Копируем ссылки на приложения
+  for(i = 0; i < 40; i++) {
+    main_apps[i] = apps[i];
+  }
+
   // Читаем информацию об автозапуске
   autorun_app_name[0] = 0;
   if(read_file_to_buff("/Settings/Autorun", 79, autorun_app_name)) {
     if(strcmp(autorun_app_name, "")) {
       // Если он есть, ищем название приложения и запускаем
       i = 0;
-      while(apps[i]) {
-        apps[i](APP_MODE_RETURN_NAME, buff);
+      while(main_apps[i]) {
+        main_apps[i](APP_MODE_RETURN_NAME, buff);
         if(strcmp(buff, autorun_app_name) == 0) {
-          apps[i](APP_MODE_LAUNCH, NULL);
+          main_apps[i](APP_MODE_LAUNCH, NULL);
+        }
+        i++;
+      }
+      i = 0;
+      while(time_and_date_apps[i]) {
+        time_and_date_apps[i](APP_MODE_RETURN_NAME, buff);
+        if(strcmp(buff, autorun_app_name) == 0) {
+          time_and_date_apps[i](APP_MODE_LAUNCH, NULL);
+        }
+        i++;
+      }
+      i = 0;
+      while(games_apps[i]) {
+        games_apps[i](APP_MODE_RETURN_NAME, buff);
+        if(strcmp(buff, autorun_app_name) == 0) {
+          games_apps[i](APP_MODE_LAUNCH, NULL);
+        }
+        i++;
+      }
+      i = 0;
+      while(settings_apps[i]) {
+        settings_apps[i](APP_MODE_RETURN_NAME, buff);
+        if(strcmp(buff, autorun_app_name) == 0) {
+          settings_apps[i](APP_MODE_LAUNCH, NULL);
         }
         i++;
       }
     }
-  }
-
-  // Копируем ссылки на приложения
-  for(i = 0; i < 40; i++) {
-    main_apps[i] = apps[i];
   }
 }
 
