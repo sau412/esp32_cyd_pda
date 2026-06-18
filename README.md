@@ -83,6 +83,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Drawing (with saving BMP)
 * Schedule
 * Passwords - AES-256 encrypted notes
+* Flashcards
 
 ## Games
 * Fifteen puzzle game - see https://en.wikipedia.org/wiki/15_puzzle for details
@@ -92,6 +93,9 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Memory Match - see https://en.wikipedia.org/wiki/Concentration_(card_game) for details
 * Hanoi Towers - see https://en.wikipedia.org/wiki/Tower_of_Hanoi for details
 * Match Tree - see https://en.wikipedia.org/wiki/Tile-matching_video_game for details
+* Simon
+* N back
+* Mental Math
 
 ## Wi-Fi
 * Wi-Fi connection
@@ -101,6 +105,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * File Server (for backups and file upload)
 * RSS Reader - see https://en.wikipedia.org/wiki/RSS for details
 * IRC client - see https://en.wikipedia.org/wiki/IRC for details
+
 ## Sound
 * Piano
 * Metronome
