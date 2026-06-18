@@ -63,6 +63,9 @@
 - Восстановление через веб-интерфейс
 - IRC клиент
 - Выбор приложения для автозапуска
+- Повтор последовательности (Simon)
+- N назад
+- Карточки для запоминания слов
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -122,25 +125,24 @@
 2026-06-15 Три в ряд, терминал
 2026-06-16 Больше команд терминала, serial, ping, telnet, бэкап через веб (медленно), восстановление через веб (не тестировал)
 2026-06-17 Восстановление из бэкапа, IRC, выбор приложения для автозапуска
+2026-06-18 IRC фикс багов, терминал фикс багов, повтор последовательности, N назад, устный счёт, поправил значки,
+  карточки для запоминания слов, возможность вводить текст через терминал (в том числе русский),
+  осмысленные сообщения об ошибке http
 
-Направления работы:
-- Повтор последовательности (игра)
-- N назад (почти игра)
-- Устный счёт (почти игра)
-- Карточки для запоминания слов (PIM) - первая строка название, остальные - пояснение
+Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование:
+- (д) Просмотр: прокручивать вперёд без перемотки файла
+- (д) Пасьянс - более чёткий указатель
+- (д) Приложение для включения и отключения звука
 
-== Потом ==
 - (и) Воспроизведение MP3
 - (и) Запись на SD
-- 2048 (игра)
-- Арканоид (игра)
-- Тетрис (игра)
-- Интернет-радио (PIM) - требует MP3
-- Бэкапы (на SD) - требует SD
-
-Улучшения тут и там:
 - (б) Проблема при работе с SD, запись больше 2 кб
 - (б) Гофер браузер - не прокручивать дальше конца файла
+- (д) Игра 2048
+- (д) Тетрис
+- (д) Арканоид
+- (д) Интернет-радио
+- (д) Бэкапы на SD
 - (д) В файловом менеджере открывать папки / файлы по двойному нажатию
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Погода: символ градуса или цельсия возле температуры (выглядит ужасно если взять другой шрифт. Нужно другое решение)
@@ -151,26 +153,19 @@
 - (д) Расписание: выводить планы на день по первому нажатию, редактирование по второму или двойному
 - (д) Редактирование: меньше мигания
 - (д) Просмотр: меньше мигания
-- (д) Просмотр: прокручивать вперёд без перемотки файла
-- (д) Категории для PIM
-- (д) Пасьянс - более чёткий указатель
-- (д) Если SD есть, то основная память SD, если нет то нет
-- (д) Преобразование из CP1251 в UTF8
+- (д) Если SD есть, то основная память SD, если нет то нет ЛИБО монтировать SD в папку?
 - (д) Парсинг JSON
 - (д) Получение погоды напрямую с weather.com
-- (д) Прерывать мелодии при касании
 - (д) Меньше мигания в мелодиях
-- (д) Флаг автосохранения файла при редактировании и неактивности
-- (д) RSS лишние теги у фонтанки
-- (д) RSS текст ошибки пользователю
-- (д) Автояркость - нужно определять вход резистора
 - (д) drawProgress - рисовать прогресс операции
-- (д) Serial как ввод клавиатуры
-- (д) Определять инверсию экрана
-- (д) Общий генератор названий для PIM - по имени файла (как draw, книги и mp3) и по первой строчке (как заметки и многое другое)
-- (д) Функция получения первой строки из файла (а может и второй тоже)
-- (д) Приложение для включения и отключения звука
 - (д) Получение времени через NTP
+- (д) Вывести многострочный текст
+- (д) Возможность выбрать звук для событий
+
+- (н) Категории для PIM
+- (н) Автояркость - нужно определять вход резистора
+- (н) Определять инверсию экрана
+- (н) Флаг автосохранения файла при редактировании и неактивности
 
 */
 
@@ -636,6 +631,10 @@ void alt_keyboard_control(char mode, char *io_buff);
 void match_three(char mode, char *io_buff);
 void terminal(char mode, char *io_buff);
 void autorun(char mode, char *io_buff);
+void simon(char mode, char *io_buff);
+void n_back(char mode, char *io_buff);
+void mental_math(char mode, char *io_buff);
+void flashcards(char mode, char *io_buff);
 
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
@@ -645,6 +644,88 @@ void launcher_return_back(char mode, char *io_buff);
 typedef void (*function_application_pointer) (char mode, char *io_buff);
 typedef void (*function_action_pointer) (int action, char *filename);
 typedef void (*function_conversion_pointer) (fs::File file, char *buff);
+
+function_application_pointer all_apps[] = {
+  launcher,
+  calculator,
+  files,
+  terminal,
+  notes,
+  contacts,
+  todo,
+  schedule,
+  expenses,
+  flashcards,
+  books,
+  passwords,
+  tunes,
+  //music, // Music app is not ready yet
+  system_info,
+  torch,
+  draw,
+#ifdef IS_WIFI_ENABLED
+  wifi,
+  gopher,
+  rss,
+  irc,
+  chat,
+  weather,
+  http_file_access,
+#endif
+  counter,
+  random_numbers,
+  timer,
+  stopwatch_app,
+  breathe,
+  piano,
+  metronome,
+  screen_test,
+  screensaver,
+  user_manual,
+  security,
+  brightness_app,
+  touch_calibration,
+  fifteen,
+  lights_off,
+  snake,
+  turkish_kerchief,
+  memory_match,
+  hanoi_towers,
+  life,
+  i2c_scanner,
+  dashboard,
+  fuzzy_clock,
+  set_clock,
+  view_font,
+  timer,
+  stopwatch_app,
+  breathe,
+  dashboard,
+  fuzzy_clock,
+  set_clock,
+  fifteen,
+  lights_off,
+  snake,
+  turkish_kerchief,
+  memory_match,
+  hanoi_towers,
+  match_three,
+  simon,
+  n_back,
+  mental_math,
+  system_info,
+  screen_test,
+  security,
+  brightness_app,
+  color_settings,
+  touch_calibration,
+  set_clock,
+  view_font,
+  alt_keyboard_control,
+  autorun,
+  reboot,
+  NULL
+};
 
 function_application_pointer apps[40] = {
   launcher,
@@ -656,6 +737,7 @@ function_application_pointer apps[40] = {
   todo,
   schedule,
   expenses,
+  flashcards,
   books,
   passwords,
   tunes,
@@ -723,6 +805,9 @@ function_application_pointer games_apps[40] = {
   memory_match,
   hanoi_towers,
   match_three,
+  simon,
+  n_back,
+  mental_math,
   NULL
 };
 function_application_pointer settings_apps[40] = {
@@ -2187,6 +2272,11 @@ void terminal_input_string(char *input_buff) {
   while(1) {
     if(Serial.available()) {
       byte = Serial.read();
+      if(byte >= 0xC0) {
+        if(Serial.available()) {
+          byte = utf8_to_cp1251_byte(byte, Serial.read());
+        }
+      }
     }
     else {
       byte = terminal_input_char();
@@ -2300,7 +2390,7 @@ int terminal_input_char() {
     }
     touchWaitPress();
 
-    button = touchCheckMatrix(0, 176, tft.width(), 24, control_buttons, 8, 1);
+    button = touchCheckMatrix(0, 176, tft.width(), 24, control_buttons, 4, 1);
     if(button != -1) {
       if(button == 0) {
         return 0x1B;
@@ -2692,24 +2782,7 @@ void notes_action(int action_index, char *filename) {
 }
 
 void notes_file_to_list(fs::File file, char *buff) {
-  char left[80];
-  char right[80];
-  char byte;
-  int offset;
-  // Левая колонка - первая непустая строчка файла
-  offset = 0;
-  left[offset] = 0;
-  while(file.available()) {
-    byte = file.read();
-    if(byte == '\n') break;
-    left[offset] = byte;
-    offset++;
-    left[offset] = 0;
-    if(offset > 39) {
-      break;
-    }
-  }
-  sprintf(buff, "%s", left);
+  stream_get_line_by_index(file, 0, buff);
 }
 
 void notes(char mode, char *io_buff) {
@@ -2747,6 +2820,181 @@ void notes(char mode, char *io_buff) {
   }
 
   pim_app("Notes", NOTES_PATH, notes_file_to_list, buttons, notes_action);
+}
+
+// ====================================================
+// Карточки для запоминания
+// ====================================================
+
+#define FLASHCARDS_PATH "/Flashcards"
+
+void flashcards_action(int action_index, char *filename) {
+  char **cards;
+  fs::File file;
+  fs::File current_dir;
+  char buff[80];
+  if(action_index == 0) {
+    // Редактируем новый файл
+    sprintf(buff, "%s/%s", FLASHCARDS_PATH, "__New");
+    //file = Storage.open(buff, FILE_WRITE);
+    //file.close();
+    edit_file("New flashcard", buff);
+
+    file = Storage.open(buff);
+    if(!file) {
+      return;
+    }
+    else if(file.size() == 0) {
+      file.close();
+      Storage.remove(buff);
+    }
+    else {
+      file.close();
+      // Меняем название в соответствии с содержимым
+      pim_rename_file(FLASHCARDS_PATH, "__New", NULL);
+    }
+  }
+  else if(action_index == 1) {
+    flashcards_learn();
+  }
+  else if(action_index == 2) {
+    // Редактируем существующий файл
+    sprintf(buff, "%s/%s", FLASHCARDS_PATH, filename);
+    edit_file("Edit flashcard", buff);
+
+    // Меняем название в соответствии с содержимым
+    pim_rename_file(FLASHCARDS_PATH, filename, NULL);
+  }
+  else if(action_index == 3) {
+    if(drawConfirm("Delete this flashcard?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(buff, "%s/%s", FLASHCARDS_PATH, filename);
+      Storage.remove(buff);
+    }
+  }
+}
+
+#define FLASHCARDS_MAX 1000
+#define FLASHCARDS_SCREEN_OFFSET 5
+void flashcards_learn() {
+  char **cards;
+  fs::File file;
+  fs::File current_dir;
+  char filename[80];
+  char buff[80];
+  char *tmp;
+  int offset, i, j;
+
+  // Выделение памяти
+  cards = (char**)malloc(FLASHCARDS_MAX * sizeof(char *));
+  for(i = 0; i < FLASHCARDS_MAX; i++) {
+    cards[i] = NULL;
+  }
+
+  // Выделить память
+  current_dir = Storage.open(FLASHCARDS_PATH);
+  if(current_dir && current_dir.isDirectory()) {
+    offset = 0;
+    while(file = current_dir.openNextFile()) {
+      if(file.isDirectory()) continue;
+      cards[offset] = (char *)malloc((strlen(file.name()) + 1)* sizeof(char));
+      strcpy(cards[offset], file.name());
+      offset++;
+    }
+    current_dir.close();
+
+    // Перемешиваем
+    for(i = 0; i < offset; i++) {
+      j = random(0, offset);
+      tmp = cards[i];
+      cards[i] = cards[j];
+      cards[j] = tmp;
+    }
+
+    // Пока карточки не закончились показываем
+    clearScreen();
+    drawAppTitle("Flashcards");
+
+    for(i = 0; i < offset; i++) {
+      // Показываем
+      sprintf(filename, "%s/%s", FLASHCARDS_PATH, cards[i]);
+      file_get_line_by_index(filename, 0, buff);
+      tft.fillRect(0, 16, tft.width(), (tft.height() - 16) / 2, color_scheme_bg);
+      tft.drawRect(
+        FLASHCARDS_SCREEN_OFFSET,
+        16 + FLASHCARDS_SCREEN_OFFSET,
+        tft.width() - FLASHCARDS_SCREEN_OFFSET * 2,
+        (tft.height() - 16) / 2 - FLASHCARDS_SCREEN_OFFSET * 2,
+        color_scheme_fg
+      );
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      tft.drawCentreString(buff, tft.width() / 2, (tft.height() - 16) / 4, FONT_DEFAULT);
+      tft.fillRect(0, (tft.height() - 16) / 2 + 16, tft.width(), (tft.height() - 16) / 2, color_scheme_bg);
+
+      touchWaitPress();
+
+      file_get_line_by_index(filename, 1, buff);
+      tft.fillRect(0, (tft.height() - 16) / 2 + 16, tft.width(), (tft.height() - 16) / 2, color_scheme_bg);
+      tft.drawRect(
+        FLASHCARDS_SCREEN_OFFSET,
+        (tft.height() - 16) / 2 + 16 + FLASHCARDS_SCREEN_OFFSET,
+        tft.width() - FLASHCARDS_SCREEN_OFFSET * 2,
+        (tft.height() - 16) / 2 - FLASHCARDS_SCREEN_OFFSET * 2,
+        color_scheme_fg
+      );
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      tft.drawCentreString(buff, tft.width() / 2, 3 * (tft.height() - 16) / 4, FONT_DEFAULT);
+
+      touchWaitRelease();
+    }
+  }
+
+  // Выйти
+  for(i = 0; i < FLASHCARDS_MAX; i++) {
+    if(cards[i]) free(cards[i]);
+  }
+  free(cards);
+}
+
+void flashcards_file_to_list(fs::File file, char *buff) {
+  stream_get_line_by_index(file, 0, buff);
+}
+
+void flashcards(char mode, char *io_buff) {
+  char *buttons[] = {
+    "New", "Learn", "Edit", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01001111, B11110010,
+    B01001000, B00000010,
+    B01001000, B00000010,
+    B01001111, B10000010,
+    B01001000, B00000010,
+    B01001000, B00000010,
+    B01001000, B00000010,
+    B01001000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Flashcards");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  pim_app("Flashcards", FLASHCARDS_PATH, flashcards_file_to_list, buttons, flashcards_action);
 }
 
 // ====================================================
@@ -2802,24 +3050,7 @@ void tunes_action(int action_index, char *filename) {
 }
 
 void tunes_file_to_list(fs::File file, char *buff) {
-  char left[80];
-  char right[80];
-  char byte;
-  int offset;
-  // Левая колонка - первая непустая строчка файла
-  offset = 0;
-  left[offset] = 0;
-  while(file.available()) {
-    byte = file.read();
-    if(byte == '\n') break;
-    left[offset] = byte;
-    offset++;
-    left[offset] = 0;
-    if(offset > 39) {
-      break;
-    }
-  }
-  sprintf(buff, "%s", left);
+  stream_get_line_by_index(file, 0, buff);
 }
 
 void tunes_play(char *filename) {
@@ -2964,6 +3195,9 @@ void tunes_play(char *filename) {
       tone(BUZZER_PIN, freq, length);
     }
     delay(length);
+
+    // Прерывать при касании экрана
+    if(touchCheckNowait() == 1) break;
   }
   file.close();
 }
@@ -3306,20 +3540,16 @@ void passwords_file_to_list(fs::File file, char *buff) {
   else {
     // Остальные расшифровывать, первые 64 байта
     decryptAES((uint8_t*) left, min(64, (int)file.size()), (uint8_t*) right);
-//Serial.println(__LINE__);
   }
 
   // Обрезать название до первого перевода строки
-//Serial.println(__LINE__);
   for(offset = 0; offset < 64; offset++) {
     if(right[offset] == '\n') {
       right[offset] = 0;
       break;
     }
   }
-//Serial.println(__LINE__);
   right[offset] = 0;
-//Serial.println(right);
   sprintf(buff, "%s", right);
 }
 
@@ -3422,34 +3652,8 @@ void contacts_action(int action_index, char *filename) {
 void contacts_file_to_list(fs::File file, char *buff) {
   char left[80];
   char right[80];
-  char byte;
-  int offset;
-  // Первая строчка - имя
-  offset = 0;
-  left[offset] = 0;
-  while(file.available()) {
-    byte = file.read();
-    if(byte == '\n') break;
-    left[offset] = byte;
-    offset++;
-    left[offset] = 0;
-    if(offset > 39) {
-      break;
-    }
-  }
-  // Вторая строчка - телефон (почта, аська, скайп, что угодно)
-  offset = 0;
-  right[offset] = 0;
-  while(file.available()) {
-    byte = file.read();
-    if(byte == '\n') break;
-    right[offset] = byte;
-    offset++;
-    right[offset] = 0;
-    if(offset > 39) {
-      break;
-    }
-  }
+  stream_get_line_by_index(file, 0, left);
+  stream_get_line_by_index(file, 0, right);
   sprintf(buff, "%s\t%s", left, right);
 }
 
@@ -3556,38 +3760,14 @@ void todo_action(int action_index, char *filename) {
 void todo_file_to_list(fs::File file, char *buff) {
   char left[80];
   char right[80];
-  char byte;
   char check = 0;
-  int offset;
   // Если имя файла начинается с 1 то отметка есть
   if(file.name()[0] == '1') {
     check = 1;
   }
-  // Левая колонка - название
-  offset = 0;
-  left[offset] = 0;
-  while(file.available()) {
-    byte = file.read();
-    if(byte == '\n') break;
-    if(offset <= 39) {
-      left[offset] = byte;
-      offset++;
-      left[offset] = 0;
-    }
-  }
-  // Правая колонка - есть ли что-то кроме названия
-  offset = 0;
-  right[offset] = 0;
-  while(file.available()) {
-    byte = file.read();
-    if(byte == '\n') break;
-    if(offset > 39) {
-      right[offset] = byte;
-      offset++;
-      right[offset] = 0;
-    }
-  }
-  sprintf(buff, "[%c] %s\t%s", check ? 'V' : ' ', left, strlen(right) > 0 ? "+" : "");
+  stream_get_line_by_index(file, 0, left);
+  stream_get_line_by_index(file, 0, right);
+  sprintf(buff, "[%c] %s\t%s", check ? 'X' : ' ', left, strlen(right) > 0 ? "+" : "");
 }
 
 void todo(char mode, char *io_buff) {
@@ -3683,53 +3863,17 @@ void expenses_file_to_list(fs::File file, char *buff) {
   float item;
   float summ = 0;
   // Левая колонка - первая непустая строчка файла (название категории)
-  offset = 0;
-  left[offset] = 0;
-  while(file.available()) {
-    byte = file.read();
-    if(byte == '\n' && file.peek() == '\r') {
-      file.read();
-    }
-    if(byte == '\r' && file.peek() == '\n') {
-      file.read();
-    }
-    if(byte == '\n' || byte == '\r') break;
-    if(offset <= 39) {
-      left[offset] = byte;
-      offset++;
-      left[offset] = 0;
-    }
-  }
+  stream_get_line_by_index(file, 0, left);
+
   // Суммируем последующие строки
-  offset = 0;
-  right[offset] = 0;
-  summ = 0;
   while(file.available()) {
-    byte = file.read();
-    right[offset] = byte;
-    offset++;
-    right[offset] = 0;
-    if(byte == '\n' && file.peek() == '\r') {
-      file.read();
-    }
-    if(byte == '\r' && file.peek() == '\n') {
-      file.read();
-    }
-    if(byte == '\n' || byte == '\r') {
-      item = 0;
-      sscanf(right, "%f", &item);
-      if(item) {
-        summ += item;
-      }
-      offset = 0;
-      right[offset] = 0;
-    }
-  }
-  if(strlen(right) > 0) {
+    stream_get_line_by_index(file, 0, right);
+    item = 0;
     sscanf(right, "%f", &item);
     if(item) {
       summ += item;
     }
+    offset = 0;
   }
 
   sprintf(buff, "%s\t%0.2f", left, summ);
@@ -7783,6 +7927,7 @@ void chat(char mode, char *io_buff) {
   char *messages = NULL;
   char *prev_messages = NULL;
   char update_flag;
+  int httpResponseCode;
   char *buttons[] = {
     "Send message",
     NULL
@@ -7829,7 +7974,9 @@ void chat(char mode, char *io_buff) {
   strcpy(nickname, "");
   read_file_to_buff(CHAT_NICKNAME_FILE, 79, nickname);
   while(1) {
-    drawPrompt("Your nickname (up to 10 chars)", nickname);
+    if(drawPrompt("Your nickname (up to 10 chars)", nickname) == 1) {
+      return;
+    }
     if(strlen(nickname) == 0) {
       drawError("Nickname cannot be empty");
       continue;
@@ -7917,7 +8064,8 @@ void chat(char mode, char *io_buff) {
         if(strlen(message) > 0) {
           if(strlen(message) < 80) {
             sprintf(query, "https://arikado.ru/cyd/chat_post.php?nickname=%s&message=%s", nickname, message);
-            if(get_file_https(query, buff) == 200) {
+            httpResponseCode = get_file_https(query, buff);
+            if(httpResponseCode == 200) {
               if(strcmp(buff, "ok")) {
                 drawError(buff);
               }
@@ -7926,7 +8074,13 @@ void chat(char mode, char *io_buff) {
               }
             }
             else {
-              drawError("Sending error");
+              if(httpResponseCode > 0) {
+                sprintf(buff, "HTTP code %s", httpResponseCode);
+              }
+              else {
+                http_get_error_text(httpResponseCode, buff);
+              }
+              drawError(buff);
             }
           }
           else {
@@ -8262,6 +8416,37 @@ int get_file_https(char *url, char *buff) {
   return 0;
 }
 
+void http_get_error_text(int httpResponseCode, char *buff) {
+  HTTPClient http;
+  strcpy(buff, http.errorToString(httpResponseCode).c_str());
+}
+
+// Конвертировать два байта в cp1251
+char utf8_to_cp1251_byte(char byte1, char byte2) {
+  char byte;
+  if(byte1 == 0xD0) {
+    if(byte2 == 0x81) {
+      byte = 0xA8; // Ё
+    }
+    else if(byte2 < 0xA0) {
+      byte = 0xC0 + byte2 - 0x90; // А-П
+    }
+    else {
+      byte = 0xD0 + byte2 - 0xA0; // Р-Я а-п
+    }
+  }
+  else if(byte1 == 0xD1) {
+    if(byte2 == 0x91) {
+      byte = 0xB8; // ё
+    }
+    else {
+      byte = 0xF0 + byte2 - 0x80; // р-я
+    }
+  }
+
+  return byte;
+}
+
 void utf8_to_cp1251(char *buff) {
   int read_offset = 0;
   int write_offset = 0;
@@ -8310,6 +8495,60 @@ void utf8_to_cp1251(char *buff) {
     write_offset++;
   }
   buff[write_offset] = 0;
+}
+
+void cp1251_to_utf8(char *in_buff, char *out_buff) {
+  int read_offset = 0;
+  int write_offset = 0;
+  unsigned char byte;
+  int length = strlen(in_buff);
+  while(read_offset < length) {
+    byte = in_buff[read_offset];
+    read_offset++;
+
+    if(byte <= 0x7F) {
+      out_buff[write_offset] = byte;
+      write_offset++;
+    }
+    else {
+      // Ё
+      if(byte == 0xA8) {
+        out_buff[write_offset] = 0xD0;
+        write_offset++;
+        out_buff[write_offset] = 0x81;
+        write_offset++;
+      }
+      // ё
+      if(byte == 0xB8) {
+        out_buff[write_offset] = 0xD1;
+        write_offset++;
+        out_buff[write_offset] = 0x91;
+        write_offset++;
+      }
+      // А-П
+      if(byte >= 0xC0 && byte <= 0xCF) {
+        out_buff[write_offset] = 0xD0;
+        write_offset++;
+        out_buff[write_offset] = 0x90 + byte - 0xC0;
+        write_offset++;
+      }
+      // Р-Я а-п
+      if(byte >= 0xD0 && byte <= 0xEF) {
+        out_buff[write_offset] = 0xD0;
+        write_offset++;
+        out_buff[write_offset] = 0xA0 + byte - 0xD0;
+        write_offset++;
+      }
+      // р-я
+      if(byte >= 0xF0 && byte <= 0xFF) {
+        out_buff[write_offset] = 0xD1;
+        write_offset++;
+        out_buff[write_offset] = 0x80 + byte - 0xF0;
+        write_offset++;
+      }
+    }
+  }
+  out_buff[write_offset] = 0;
 }
 
 // ====================================================
@@ -8400,7 +8639,12 @@ void rss_action(int action_index, char *filename) {
       
       http_code = get_file_https(buff, data);
       if(http_code != 200) {
-        sprintf(buff, "Error %d", http_code);
+        if(http_code > 0) {
+          sprintf(buff, "HTTP code %s", http_code);
+        }
+        else {
+          http_get_error_text(http_code, buff);
+        }
         drawError(buff);
         free(data);
         return;
@@ -8411,7 +8655,12 @@ void rss_action(int action_index, char *filename) {
       //Serial.println("Before http");
       http_code = get_file_http(buff, data);
       if(http_code != 200) {
-        sprintf(buff, "Error %d", http_code);
+        if(http_code > 0) {
+          sprintf(buff, "HTTP code %s", http_code);
+        }
+        else {
+          http_get_error_text(http_code, buff);
+        }
         drawError(buff);
         free(data);
         return;
@@ -8535,24 +8784,7 @@ void rss_convert_to_text(char *data) {
 }
 
 void rss_file_to_list(fs::File file, char *buff) {
-  char left[80];
-  char right[80];
-  char byte;
-  int offset;
-  // Левая колонка - первая непустая строчка файла
-  offset = 0;
-  left[offset] = 0;
-  while(file.available()) {
-    byte = file.read();
-    if(byte == '\n') break;
-    left[offset] = byte;
-    offset++;
-    left[offset] = 0;
-    if(offset > 39) {
-      break;
-    }
-  }
-  sprintf(buff, "%s", left);
+  stream_get_line_by_index(file, 0, buff);
 }
 
 void rss(char mode, char *io_buff) {
@@ -8560,6 +8792,26 @@ void rss(char mode, char *io_buff) {
     "New", "Read", "Edit", "Delete",
     NULL
   };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01011111, B00000010,
+    B01011111, B11000010,
+    B01000000, B11100010,
+    B01011100, B00110010,
+    B01011111, B00110010,
+    B01000011, B10011010,
+    B01000001, B10011010,
+    B01011100, B11011010,
+    B01011100, B11011010,
+    B01011100, B11011010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+/*
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -8579,7 +8831,7 @@ void rss(char mode, char *io_buff) {
     B01111111, B11111110,
     B00000000, B00000000
   };
-  
+*/  
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "RSS");
     return;
@@ -8687,6 +8939,7 @@ void irc_action(int action_index, char *filename) {
 void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, char *ident, char *realname) {
   char input_buff[400];
   char message[300];
+  char out_message[500];
   int message_offset = 0;
   char buff[80];
   char buff2[80];
@@ -8699,7 +8952,7 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
   int chat_index = 0;
   int current_chat = 0;
   int i;
-  char offset = 0;
+  int offset = 0;
   int byte;
   int port = 6667;
   WiFiClient client;
@@ -8763,11 +9016,13 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
       //Serial.print((char)byte);
       if(byte == '\n' || byte == '\r') {
         if(strlen(input_buff) == 0) {
-          message_offset = 0;
+          offset = 0;
           continue;
         }
+        Serial.println();
         Serial.println(input_buff);
-        //utf8_to_cp1251(input_buff);
+        Serial.println(strlen(input_buff));
+        utf8_to_cp1251(input_buff);
         if(memcmp(input_buff, "PING :", 6) == 0) {
           sprintf(buff2, "PONG :%s\r\n", input_buff + 6);
           client.write(buff2);
@@ -8986,8 +9241,14 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
       input_buff[offset] = 0;
     }
 
+    // Пользовательский ввод
     if(Serial.available()) {
       byte = Serial.read();
+      if(byte >= 0xC0) {
+        if(Serial.available()) {
+          byte = utf8_to_cp1251_byte(byte, Serial.read());
+        }
+      }
     }
     else {
       byte = irc_input_char();
@@ -9021,7 +9282,7 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
           }
         } while(strcmp(chat_name[current_chat], "") == 0);
       }
-      else if(byte == 0x08) {
+      else if(byte == 0x08 || byte == 0x7F) {
         if(strlen(message) > 0) {
           message[strlen(message) - 1] = 0;
           message_offset--;
@@ -9030,11 +9291,22 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
       else if(byte == '\n') {
         // Отправить сообщение
         // Команда /query открывает чат с ником без отправки сообщения
-        if(memcmp(message, "/query ", 7)) {
+        if(current_chat == 0 && memcmp(message, "query ", 6) == 0) {
+          chat_index = irc_find_or_add_chat_name(message + 6, chat_name);
+          if(chat_index > 0) {
+            current_chat = chat_index;
+          }
+          strcpy(buff, "");
+        }
+        else if(memcmp(message, "/query ", 7) == 0) {
           chat_index = irc_find_or_add_chat_name(message + 7, chat_name);
+          if(chat_index > 0) {
+            current_chat = chat_index;
+          }
           strcpy(buff, "");
         }
         else if(message[0] == '/') {
+          current_chat = 0;
           strcpy(buff, message + 1);
           strcat(buff, "\r\n");
         }
@@ -9047,7 +9319,8 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
         }
         // Если есть что отправлять - отправляем
         if(strcmp(buff, "")) {
-          client.print(buff);
+          cp1251_to_utf8(buff, out_message);
+          client.print(out_message);
           // Копируем сообщение как есть в серверный чат
           irc_chat_history_add(chat_history[0], buff);
           if(current_chat != 0) {
@@ -9085,8 +9358,8 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
       touchWaitRelease();
       touchExitActionReset();
       for(i = 0; i < IRC_MAX_CHATS; i++) {
-        free(chat_name[i]);
-        free(chat_history[i]);
+        if(chat_name[i]) free(chat_name[i]);
+        if(chat_history[i]) free(chat_history[i]);
       }
       return;
     }
@@ -9244,24 +9517,7 @@ int irc_input_char() {
 }
 
 void irc_file_to_list(fs::File file, char *buff) {
-  char left[80];
-  char right[80];
-  char byte;
-  int offset;
-  // Левая колонка - первая непустая строчка файла
-  offset = 0;
-  left[offset] = 0;
-  while(file.available()) {
-    byte = file.read();
-    if(byte == '\n') break;
-    left[offset] = byte;
-    offset++;
-    left[offset] = 0;
-    if(offset > 39) {
-      break;
-    }
-  }
-  sprintf(buff, "%s", left);
+  stream_get_line_by_index(file, 0, buff);
 }
 
 void irc(char mode, char *io_buff) {
@@ -10245,51 +10501,9 @@ void autorun(char mode, char *io_buff) {
   app_list[0] = (char *)malloc(20 * sizeof(char));
   strcpy(app_list[0], "None");
 
-  // Собираем список приложений из групп приложений
-  for(app_index = 0; main_apps[app_index] != NULL; app_index++) {
-    main_apps[app_index](APP_MODE_RETURN_NAME, buff);
-    app_found = 0;
-    for(i = 0; app_list[i] != NULL; i++) {
-      if(strcmp(app_list[i], buff) == 0) {
-        app_found = 1;
-        break;
-      }
-    }
-    if(!app_found) {
-      app_list[i] = (char *)malloc(20 * sizeof(char));
-      strcpy(app_list[i], buff);
-    }
-  }
-  for(app_index = 0; time_and_date_apps[app_index] != NULL; app_index++) {
-    time_and_date_apps[app_index](APP_MODE_RETURN_NAME, buff);
-    app_found = 0;
-    for(i = 0; app_list[i] != NULL; i++) {
-      if(strcmp(app_list[i], buff) == 0) {
-        app_found = 1;
-        break;
-      }
-    }
-    if(!app_found) {
-      app_list[i] = (char *)malloc(20 * sizeof(char));
-      strcpy(app_list[i], buff);
-    }
-  }
-  for(app_index = 0; games_apps[app_index] != NULL; app_index++) {
-    games_apps[app_index](APP_MODE_RETURN_NAME, buff);
-    app_found = 0;
-    for(i = 0; app_list[i] != NULL; i++) {
-      if(strcmp(app_list[i], buff) == 0) {
-        app_found = 1;
-        break;
-      }
-    }
-    if(!app_found) {
-      app_list[i] = (char *)malloc(20 * sizeof(char));
-      strcpy(app_list[i], buff);
-    }
-  }
-  for(app_index = 0; settings_apps[app_index] != NULL; app_index++) {
-    settings_apps[app_index](APP_MODE_RETURN_NAME, buff);
+  // Собираем список приложений
+  for(app_index = 0; all_apps[app_index] != NULL; app_index++) {
+    all_apps[app_index](APP_MODE_RETURN_NAME, buff);
     app_found = 0;
     for(i = 0; app_list[i] != NULL; i++) {
       if(strcmp(app_list[i], buff) == 0) {
@@ -10426,16 +10640,16 @@ void alt_keyboard_control(char mode, char *io_buff) {
     B00000000, B00000000,
     B01111111, B11111110,
     B01000000, B00000010,
-    B01000111, B11111010,
-    B01001000, B00001010,
-    B01010000, B00001010,
-    B01010000, B00001010,
-    B01001000, B00001010,
-    B01000111, B11111010,
-    B01000010, B00001010,
-    B01000100, B00001010,
-    B01001000, B00001010,
-    B01010000, B00001010,
+    B01000000, B00000010,
+    B01000011, B11110010,
+    B01000100, B00010010,
+    B01001000, B00010010,
+    B01000100, B00010010,
+    B01000011, B11110010,
+    B01000010, B00010010,
+    B01000100, B00010010,
+    B01001000, B00010010,
+    B01000000, B00000010,
     B01000000, B00000010,
     B01111111, B11111110,
     B00000000, B00000000
@@ -11081,6 +11295,7 @@ void edit_file(char *title, char *filename) {
   char cursor_line_number = 0;
   char set_cursor_from_touch = 0;
   char changes_present = 0;
+  char update_required_flag = 0;
 
   int string_offset;
   int file_line_number = 0; // Номер текущей строки в файле
@@ -11293,7 +11508,50 @@ void edit_file(char *title, char *filename) {
 
     drawButtonMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
     
-    touchWaitPress();
+    while(touchCheckNowait() == 0) {
+      while(Serial.available()) {
+        byte = Serial.read();
+        if(byte >= 0xC0) {
+          if(Serial.available()) {
+            byte = utf8_to_cp1251_byte(byte, Serial.read());
+          }
+        }
+        if(byte == '\r') byte = '\n';
+
+        // Бэкспейс
+        if(byte == 0x08 || byte == 0x7F) {
+          if(cursor_offset_bytes > 0) {
+            for(file_offset_bytes = cursor_offset_bytes - 1; file_offset_bytes < strlen(contents); file_offset_bytes++) {
+              contents[file_offset_bytes] = contents[file_offset_bytes + 1];
+            }
+            cursor_offset_bytes --;
+          }
+          changes_present = 1;
+          update_required_flag = 1;
+        }
+        // Печатаемые символы
+        else if(byte >= 0x20 && byte != 0x7F || byte == '\n') {
+          if(strlen(contents) < (EDIT_FILE_LENGTH_MAX - 1)) {
+            for(file_offset_bytes = strlen(contents); file_offset_bytes >= cursor_offset_bytes; file_offset_bytes--) {
+              contents[file_offset_bytes + 1] = contents[file_offset_bytes];
+            }
+            contents[cursor_offset_bytes] = byte;
+            cursor_offset_bytes++;
+            changes_present = 1;
+          }
+          update_required_flag = 1;
+        }
+      }
+      if(update_required_flag) {
+        break;
+      }
+    }
+    if(update_required_flag) {
+      update_required_flag = 0;
+      continue;
+    }
+
+    //touchWaitPress();
     button = touchCheckMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
     if(button != -1) {
       if(button == 11) {
@@ -11733,6 +11991,408 @@ void memory_match(char mode, char *io_buff) {
       steps = 0;
       level++;
       won_flag = 0;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+#define SIMON_TILES 25
+#define SIMON_MAX_LEVEL 50
+
+void simon(char mode, char *io_buff) {
+  int button_pressed;
+  int i;
+  int j;
+  int level = 1;
+  int hiscore = 0;
+  int step = 0;
+  int item_selected = -1;
+  char show_flag = 1;
+  char won_flag = 0;
+  char lose_flag = 0;
+  char buff[80];
+  int guess[SIMON_MAX_LEVEL];
+  char empty[] = "";
+  char *tmp = NULL;
+  char tap[] = "*tap*";
+  char *buttons_show[] = {
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01000011, B11000010,
+    B01000100, B00100010,
+    B01111100, B00111110,
+    B01111100, B00111110,
+    B01000100, B00100010,
+    B01000011, B11000010,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Simon");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Simon");
+
+  show_flag = 1;
+  while(1) {
+    if(show_flag) {
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+      // Перемешиваем
+      for(i = 0; i < level; i++) {
+        guess[i] = random(0, SIMON_TILES);
+        buttons_show[guess[i]] = tap;
+        drawButtonMatrix(0, 44, tft.width(), tft.width(), buttons_show, 5, 5);
+        delay(900);
+        buttons_show[guess[i]] = empty;
+        drawButtonMatrix(0, 44, tft.width(), tft.width(), buttons_show, 5, 5);
+        delay(100);
+      }
+      show_flag = 0;
+      step = 0;
+    }
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "Level: %d", level);
+    tft.drawString(buff, 8, 20, FONT_DEFAULT);
+    
+    hiscore = max(hiscore, level);
+    sprintf(buff, "Hi-score: %d", hiscore);
+    tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
+
+    sprintf(buff, "Step: %d", step + 1);
+    tft.drawCentreString(buff, tft.width() / 2, tft.width() + 44 + 8, FONT_DEFAULT);
+
+    drawButtonMatrix(0, 44, tft.width(), tft.width(), buttons_show, 5, 5);
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, 44, tft.width(), tft.width(), buttons_show, 5, 5);
+    if(button_pressed != -1) {
+      if(button_pressed == guess[step]) {
+        step++;
+        if(step >= level) {
+          drawInfo("You won!");
+          level++;
+          show_flag = 1;
+        }
+      }
+      else {
+        drawInfo("You lose!");
+        show_flag = 1;
+        level = 1;
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+#define N_BACK_TILES 25
+#define N_BACK_MAX_LEVEL 20
+
+void n_back(char mode, char *io_buff) {
+  int button_pressed;
+  int i;
+  int j;
+  int level = 0;
+  int hiscore = 0;
+  int step = 0;
+  int item_selected = -1;
+  char show_flag = 1;
+  char won_flag = 0;
+  char lose_flag = 0;
+  char buff[80];
+  int guess[N_BACK_MAX_LEVEL];
+  char empty[] = "";
+  char *tmp = NULL;
+  char tap[] = "*tap*";
+  char *buttons_show[] = {
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    empty, empty, empty, empty, empty,
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01001000, B00010010,
+    B01001100, B00010010,
+    B01001010, B00010010,
+    B01001001, B00010010,
+    B01001000, B10010010,
+    B01001000, B01010010,
+    B01001000, B00110010,
+    B01001000, B00010010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "N Back");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("N Back");
+
+  strcpy(buff, "");
+  if(drawPrompt("Level: 0 - 19", buff) == 0) {
+    sscanf(buff, "%d", &level);
+    if(level < 0) level = 0;
+    if(level >= N_BACK_MAX_LEVEL) level = N_BACK_MAX_LEVEL - 1;
+  }
+  else {
+    return;
+  }
+
+  show_flag = 1;
+  while(1) {
+    if(show_flag) {
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+      // Перемешиваем
+      for(i = 0; i < level + 1; i++) {
+        guess[i] = random(0, N_BACK_TILES);
+        buttons_show[guess[i]] = tap;
+        drawButtonMatrix(0, 44, tft.width(), tft.width(), buttons_show, 5, 5);
+        delay(900);
+        buttons_show[guess[i]] = empty;
+        drawButtonMatrix(0, 44, tft.width(), tft.width(), buttons_show, 5, 5);
+        delay(100);
+      }
+      show_flag = 0;
+      step = 0;
+    }
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "Level: %d", level);
+    tft.drawString(buff, 8, 20, FONT_DEFAULT);
+
+    sprintf(buff, "Step: %d", step);
+    tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
+
+    drawButtonMatrix(0, 44, tft.width(), tft.width(), buttons_show, 5, 5);
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, 44, tft.width(), tft.width(), buttons_show, 5, 5);
+    if(button_pressed != -1) {
+      if(button_pressed == guess[0]) {
+        // Сдвиг последовательности
+        for(i = 0; i < level; i++) {
+          guess[i] = guess[i + 1];
+        }
+        guess[level] = random(0, N_BACK_TILES);
+        buttons_show[guess[level]] = tap;
+        drawButtonMatrix(0, 44, tft.width(), tft.width(), buttons_show, 5, 5);
+        delay(900);
+        buttons_show[guess[level]] = empty;
+        drawButtonMatrix(0, 44, tft.width(), tft.width(), buttons_show, 5, 5);
+        delay(100);
+        step++;
+      }
+      else {
+        drawInfo("You lose!");
+        show_flag = 1;
+        step = 0;
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+#define MENTAL_MATH_MIN_LEVEL 3
+#define MENTAL_MATH_MAX_LEVEL 10000
+
+void mental_math(char mode, char *io_buff) {
+  int button_pressed;
+  int i;
+  int j;
+  int level = 0;
+  int hiscore = 0;
+  int step = 0;
+  long a, b;
+  long ans;
+  char op;
+  char show_flag = 1;
+  char found_flag = 0;
+  char won_flag = 0;
+  char lose_flag = 0;
+  char buff[80];
+  char empty[] = "";
+  char *tmp = NULL;
+  char tap[] = "*tap*";
+  char add_flag = 0;
+  char sub_flag = 0;
+  char mul_flag = 0;
+  char div_flag = 0;
+  char user_ans[80];
+  char *buttons[] = {
+    "7", "8", "9",
+    "4", "5", "6",
+    "1", "2", "3",
+    "<-", "0", "OK",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01001000, B00010010,
+    B01001100, B00110010,
+    B01001010, B01010010,
+    B01001001, B10010010,
+    B01001000, B00010010,
+    B01001000, B00010010,
+    B01001000, B00010010,
+    B01001000, B00010010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Mental Math");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Mental Math");
+
+  strcpy(buff, "");
+  if(drawPrompt("Max number: 1 - 10000", buff) == 0) {
+    sscanf(buff, "%d", &level);
+    if(level < MENTAL_MATH_MIN_LEVEL) level = MENTAL_MATH_MIN_LEVEL;
+    if(level >= MENTAL_MATH_MAX_LEVEL) level = MENTAL_MATH_MAX_LEVEL - 1;
+  }
+  else {
+    return;
+  }
+
+  show_flag = 1;
+  while(1) {
+    if(show_flag) {
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+      switch(random(0, 2)) {
+        case 0: op = '+'; break;
+        case 1: op = '-'; break;
+        case 2: op = '*'; break;
+        case 3: op = '/'; break;
+        case 4: op = '%'; break;
+        case 5: op = '^'; break;
+      }
+      found_flag = 0;
+      while(found_flag == 0) {
+        a = random(1, level + 1);
+        b = random(1, level + 1);
+        switch(op) {
+          default:
+          case '+': ans = a + b; if(ans < level) found_flag = 1; break;
+          case '-': ans = a - b; if(ans > 0) found_flag = 1; break;
+          case '*': ans = a * b; if(ans < level) found_flag = 1; break;
+          case '/': ans = a / b; if(a != b && a % b == 0) found_flag = 1; break;
+          case '%': ans = a % b; if(a > b) found_flag = 1; break;
+          case '^': ans = pow(a, b); if(pow(a, b) < level) found_flag = 1; break;
+        }
+      }
+      user_ans[0] = 0;
+      show_flag = 0;
+      step = 0;
+    }
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "%d %c %d", a, op, b);
+    tft.drawCentreString(buff, tft.width() / 2, 20, FONT_BIG);
+
+    tft.fillRect(0, 42, tft.width(), 32, color_scheme_bg);
+    tft.drawCentreString(user_ans, tft.width() / 2, 42, FONT_BIG);
+
+    drawButtonMatrix(0, 72, tft.width(), tft.height() - 72, buttons, 3, 4);
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, 72, tft.width(), tft.height() - 72, buttons, 3, 4);
+    if(button_pressed != -1) {
+      // Цифры
+      if(button_pressed >= 0 && button_pressed <= 8 || button_pressed == 10) {
+        if(strlen(user_ans) < 10) {
+          strcat(user_ans, buttons[button_pressed]);
+        }
+      }
+      // Backspace
+      else if(button_pressed == 9) {
+        if(strlen(user_ans) > 0) {
+          user_ans[strlen(user_ans) - 1] = 0;
+        }
+      }
+      // ОК
+      else if(button_pressed == 11) {
+        sprintf(buff, "%d", ans);
+        if(strcmp(buff, user_ans) != 0) {
+          sprintf(buff, "Error: %d %c %d = %d", a, op, b, ans);
+          drawInfo(buff);
+        }
+        show_flag = 1;
+      }
     }
 
     touchWaitReleaseOrExit();
@@ -12834,6 +13494,8 @@ int drawPrompt(char *message, char *user_input) {
   char visible_input[80];
   int cursor_pos = 0;
   int i;
+  int byte;
+  char update_required_flag = 0;
 
   char **keyboard_current = keyboard_nocaps;
 
@@ -12860,7 +13522,12 @@ int drawPrompt(char *message, char *user_input) {
         visible_input[i] = visible_input[i + 1];
       }
     }
-    cursor_pos = tft.drawString(visible_input, 8, PROMPT_OFFSET_Y + 20, FONT_DEFAULT);
+    if(strcmp(visible_input, input)) {
+      cursor_pos = tft.drawRightString(visible_input, tft.width() - 8, PROMPT_OFFSET_Y + 20, FONT_DEFAULT);
+    }
+    else {
+      cursor_pos = tft.drawString(visible_input, 8, PROMPT_OFFSET_Y + 20, FONT_DEFAULT);
+    }
     
     tft.fillRect(8 + cursor_pos + 1, PROMPT_OFFSET_Y + 20, 2, 16, color_scheme_selection_bg);
 
@@ -12888,7 +13555,37 @@ int drawPrompt(char *message, char *user_input) {
 
     drawButtonMatrix(0, PROMPT_OFFSET_Y + 40, tft.width(), 120, keyboard_current, 12, 4);
     
-    touchWaitPress();
+    while(touchCheckNowait() == 0) {
+      while(Serial.available()) {
+        byte = Serial.read();
+        if(byte >= 0xC0) {
+          if(Serial.available()) {
+            byte = utf8_to_cp1251_byte(byte, Serial.read());
+          }
+        }
+        // Бэкспейс
+        if(byte == 0x08 || byte == 0x7F) {
+          if(strlen(input) > 0) {
+            input[strlen(input) - 1] = 0;
+          }
+        }
+        // Печатаемые символы
+        else if(byte >= 0x20 && byte != 0x7F) {
+          update_required_flag = 1;
+          if(strlen(input) >= 79) continue;
+          input[strlen(input) + 1] = 0;
+          input[strlen(input)] = byte;
+        }
+      }
+      if(update_required_flag) {
+        break;
+      }
+    }
+    if(update_required_flag) {
+      update_required_flag = 0;
+      continue;
+    }
+    //touchWaitPress();
     button = touchCheckMatrix(0, PROMPT_OFFSET_Y + 40, tft.width(), 120, keyboard_current, 12, 4);
     if(button != -1) {
       if(button == 11) {
@@ -13563,6 +14260,49 @@ int write_key_value_to_file(char *filename, char *key, char *value) {
   return 0;
 }
 
+// Получить строку из файла по номеру строки (с нуля)
+int file_get_line_by_index(char *filename, int index, char *buff) {
+  fs::File file;
+  int result = 0;
+  file = Storage.open(filename);
+  if(file) {
+    result = stream_get_line_by_index(file, index, buff);
+    file.close();
+  }
+  return result;
+}
+
+// Получить строку из потока по номеру строки (с нуля)
+int stream_get_line_by_index(fs::File file, int index, char *buff) {
+  int str_index = 0;
+  int byte;
+  int buff_offset = 0;
+  strcpy(buff, "");
+
+  while(file.available()) {
+    byte = file.read();
+    if(byte == '\n' && file.peek() == '\r') file.read();
+    if(byte == '\r' && file.peek() == '\n') file.read();
+    if(byte == '\n' || byte == '\r') {
+      if(index == str_index) {
+        return 1;
+      }
+      str_index++;
+      strcpy(buff, "");
+      buff_offset = 0;
+    }
+    else {
+      buff[buff_offset] = byte;
+      buff_offset++;
+      buff[buff_offset] = 0;
+    }
+  }
+
+  if(index == str_index) {
+    return 1;
+  }
+}
+
 int get_brightness() {
   return global_brightness;
 }
@@ -13945,34 +14685,10 @@ void setup() {
     if(strcmp(autorun_app_name, "")) {
       // Если он есть, ищем название приложения и запускаем
       i = 0;
-      while(main_apps[i]) {
-        main_apps[i](APP_MODE_RETURN_NAME, buff);
+      while(all_apps[i]) {
+        all_apps[i](APP_MODE_RETURN_NAME, buff);
         if(strcmp(buff, autorun_app_name) == 0) {
-          main_apps[i](APP_MODE_LAUNCH, NULL);
-        }
-        i++;
-      }
-      i = 0;
-      while(time_and_date_apps[i]) {
-        time_and_date_apps[i](APP_MODE_RETURN_NAME, buff);
-        if(strcmp(buff, autorun_app_name) == 0) {
-          time_and_date_apps[i](APP_MODE_LAUNCH, NULL);
-        }
-        i++;
-      }
-      i = 0;
-      while(games_apps[i]) {
-        games_apps[i](APP_MODE_RETURN_NAME, buff);
-        if(strcmp(buff, autorun_app_name) == 0) {
-          games_apps[i](APP_MODE_LAUNCH, NULL);
-        }
-        i++;
-      }
-      i = 0;
-      while(settings_apps[i]) {
-        settings_apps[i](APP_MODE_RETURN_NAME, buff);
-        if(strcmp(buff, autorun_app_name) == 0) {
-          settings_apps[i](APP_MODE_LAUNCH, NULL);
+          all_apps[i](APP_MODE_LAUNCH, NULL);
         }
         i++;
       }
