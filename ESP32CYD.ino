@@ -11338,6 +11338,7 @@ void view_file(char *title, char *filename) {
       while(current_line_on_screen <= 18) {
         // Выводить строку только если достигнуто смещение в строках, иначе просто считать строки
         if(current_file_offset_lines >= show_file_offset_lines) {
+            tft.setTextColor(color_scheme_fg, color_scheme_bg);
             tft.drawString(current_string, 1, 16 + current_line_on_screen * 16, FONT_DEFAULT);
             current_line_on_screen++;
         }
@@ -11512,6 +11513,7 @@ void view_text(char *title, char *data) {
       while(current_line_on_screen <= 18) {
         // Выводить строку только если достигнуто смещение в строках, иначе просто считать строки
         if(current_file_offset_lines >= show_file_offset_lines) {
+          tft.setTextColor(color_scheme_fg, color_scheme_bg);
           tft.drawString(current_string, 1, 16 + current_line_on_screen * 16, FONT_DEFAULT);
           current_line_on_screen++;
         }
