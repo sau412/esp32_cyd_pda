@@ -126,6 +126,9 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * ping {host} - ping specified host continiously, touch screen to stop
 * serial [speed] - connect to serial port with specified speed, default is 115200
 * telnet {host} [port] - connect via telnet to specified host and port
+* beep - beep sound
+* tone - start sound tone
+* notone - stop tone
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
