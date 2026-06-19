@@ -66,6 +66,7 @@
 - Повтор последовательности (Simon)
 - N назад
 - Карточки для запоминания слов
+- Устный счёт
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -128,14 +129,15 @@
 2026-06-18 IRC фикс багов, терминал фикс багов, повтор последовательности, N назад, устный счёт, поправил значки,
   карточки для запоминания слов, возможность вводить текст через терминал (в том числе русский),
   осмысленные сообщения об ошибке http
+2026-06-19 Доработка турецкого платка, управление звуком, улучшенная прокрутка в книгах, I2C сканер в терминале,
+  звуковые команды в терминале, время через NTP при соединении, время в заголовке, транслит для названий файлов PIM,
+  сбор погоды напрямую
 
-Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование:
-- (д) Просмотр: прокручивать вперёд без перемотки файла
-- (д) Пасьянс - более чёткий указатель
-- (д) Приложение для включения и отключения звука
-
+Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое:
+- (п) Просмотреть справку, может быть что-то добавить
 - (и) Воспроизведение MP3
 - (и) Запись на SD
+- (и) ssh
 - (б) Проблема при работе с SD, запись больше 2 кб
 - (б) Гофер браузер - не прокручивать дальше конца файла
 - (д) Игра 2048
@@ -145,23 +147,29 @@
 - (д) Бэкапы на SD
 - (д) В файловом менеджере открывать папки / файлы по двойному нажатию
 - (д) Не прокручивать при редактировании дальше конца файла
-- (д) Погода: символ градуса или цельсия возле температуры (выглядит ужасно если взять другой шрифт. Нужно другое решение)
 - (д) Prompt - возможность переставлять курсор
 - (д) Гофер браузер - менять домашнюю страницу
 - (д) Гофер браузер - специальная домашняя страница для CYD с объяснениями
 - (д) Гофер браузер - кнопка назад
 - (д) Расписание: выводить планы на день по первому нажатию, редактирование по второму или двойному
 - (д) Редактирование: меньше мигания
-- (д) Просмотр: меньше мигания
 - (д) Если SD есть, то основная память SD, если нет то нет ЛИБО монтировать SD в папку?
-- (д) Парсинг JSON
-- (д) Получение погоды напрямую с weather.com
 - (д) Меньше мигания в мелодиях
-- (д) drawProgress - рисовать прогресс операции
-- (д) Получение времени через NTP
-- (д) Вывести многострочный текст
-- (д) Возможность выбрать звук для событий
+- (д) Вывести многострочный текст в указанное место (из файла, буфера, потока)
+- (д) RSS чтение потока, декодирование на лету
+- (д) wget для терминала - http, https
+- (д) Перекодирование файлов для терминала
+- (д) IRC подкрутить размеры буферов и названия
+- (д) Files подкрутить названия буферов
+- (д) IRC вылет при выходе
+- (д) Прокрутка терминала
+- (д) История ввода терминала (хотя бы небольшая)
+- (д) Терминал исполнение команды из строки
+- (д) Терминал несколько команд в строке через ;
+- (д) Терминал убирать пробелы в начале строки
 
+- (н) drawProgress - рисовать прогресс операции
+- (н) Возможность выбрать звук для событий
 - (н) Категории для PIM
 - (н) Автояркость - нужно определять вход резистора
 - (н) Определять инверсию экрана
@@ -191,10 +199,11 @@
 // I2C
 #include <Wire.h>
 
+// Time events
+#include <Ticker.h>
+
 // MP3
 //#include <Audio.h>
-
-//#include "esp_core_dump.h"
 
 #ifdef IS_WIFI_ENABLED
 
@@ -211,6 +220,10 @@
 
 // HTTP server
 #include <WebServer.h>
+
+// NTP
+#include <time.h>
+#include <esp_sntp.h>
 
 #ifdef IS_SSH_ENABLED
 
@@ -560,11 +573,13 @@ int global_brightness = 255;
 char is_beep_enabled = 1;
 
 // После подключения к вай-фаю можно узнать текущее время
-long global_unixtime_retrieved = 0;
-long global_unixtime_retrieved_millis = 0;
+time_t global_unixtime_retrieved = 0;
+time_t global_unixtime_retrieved_millis = 0;
 long global_timezone = 0;
 
 // Переменные для человекочитаемых параметров времени
+Ticker secondTicker;
+Ticker minuteTicker;
 int global_year = 0;
 int global_month = 0;
 int global_day = 0;
@@ -574,6 +589,8 @@ int global_seconds = 0;
 int global_moon_day = 0;
 int global_day_of_week = 0;
 char global_is_lap_year = 0;
+char app_title_enabled = 0;
+long app_title_updated_millis = 0;
 
 void launcher(char mode, char *io_buff);
 void calculator(char mode, char *io_buff);
@@ -627,7 +644,8 @@ void metronome(char mode, char *io_buff);
 void user_manual(char mode, char *io_buff);
 void color_settings(char mode, char *io_buff);
 void reboot(char mode, char *io_buff);
-void alt_keyboard_control(char mode, char *io_buff);
+void keyboard_control(char mode, char *io_buff);
+void sound_control(char mode, char *io_buff);
 void match_three(char mode, char *io_buff);
 void terminal(char mode, char *io_buff);
 void autorun(char mode, char *io_buff);
@@ -721,7 +739,8 @@ function_application_pointer all_apps[] = {
   touch_calibration,
   set_clock,
   view_font,
-  alt_keyboard_control,
+  keyboard_control,
+  sound_control,
   autorun,
   reboot,
   NULL
@@ -828,7 +847,8 @@ function_application_pointer settings_apps[40] = {
   set_clock,
   i2c_scanner,
   view_font,
-  alt_keyboard_control,
+  keyboard_control,
+  sound_control,
   autorun,
   reboot,
   NULL
@@ -1460,20 +1480,56 @@ void user_manual(char mode, char *io_buff) {
   "Touch left side of the screen to scroll back, right side to scroll forward.\n"
   "\n"
   "== Contacts ==\n"
-  "First line of the file is name, second is contact."
+  "First line of the file is name, second is contact info."
   "\n"
   "== RSS ==\n"
   "First line of the file is name, second is RSS URL. HTTP and HTTPS are supported.\n"
   "\n"
+  "== IRC ==\n"
+  "First line of the file is name, other are server settings. Server host required. SSL not supported.\n"
+  "Enter server commands to *> tab or use slash '/' before them.\n"
+  "/join #channel - join to channel\n"
+  "/part #channel - leave channel\n"
+  "/query nick - opens message tab with this nick\n"
+  "\n"
   "== Schedule ==\n"
   "Touch day to view and edit plans for that day.\n"
+  "\n"
+  "== Passwords ==\n"
+  "AES-256 encrypted notes. Shows garbage in case of wrong password.\n"
+  "\n"
+  "== Weather ==\n"
+  "Uses api.open-meteo.com for data.\n"
   "\n"
   "== I2C Scanner ==\n"
   "Connect I2C bus to IO2 socket (3V3, IO22, IO27, GND) and press scan to scan.\n"
   "\n"
   "== Terminal ==\n"
   "Commands available:\n"
-  "millis, micros, sleep, delay, date, reboot, reset, exit, serial, host, ping, cat, ping, telnet, ls, mkdir, rmdir, rm, touch, format"
+  "millis - milliseconds since boot\n"
+  "micros - microseconds since boot\n"
+  "clear - clear terminal\n"
+  "reset - clear terminal\n"
+  "reboot - reboot device\n"
+  "exit - exit terminal\n"
+  "date - current date\n"
+  "sleep - delay specified amount of seconds\n"
+  "delay - delay specified amount of milliseconds\n"
+  "format ffat - erase all in FFat storage\n"
+  "ls - show directory listing\n"
+  "mkdir - create new directory\n"
+  "rmdir - remove empty directory\n"
+  "cat - show file contents\n"
+  "rm - remove file\n"
+  "touch - create file\n"
+  "i2c - scan I2C devices\n"
+  "beep - beep as system event\n"
+  "tone - make sound tone\n"
+  "notone - stop sound tone\n"
+  "serial - connect to serial port\n"
+  "host - lookup DNS host\n"
+  "ping - ping host continiously\n"
+  "telnet - connect to host and port via telnet\n"
   "\n"
   "== Filesystem ==\n"
   "/Settings - settings folder\n"
@@ -1487,6 +1543,11 @@ void user_manual(char mode, char *io_buff) {
   "/Settings/Timezone - timezone offset in seconds\n"
   "/Settings/Wifi - Wi-Fi passwords\n"
   "/Settings/Autorun - auto start app after reset\n"
+  "/Settings/Inversion - inversion state\n"
+  "/Settings/Colors - color settings\n"
+  "/Settings/Coordinates - latitude and longitude for weather\n"
+  "/Settings/Keyboard - keyboard settings\n"
+  "/Settings/Sound - sound settings\n"
   "/Notes - notes folder\n"
   "/Images - draw folder\n"
   "/Expenses - expenses folder\n"
@@ -1495,6 +1556,11 @@ void user_manual(char mode, char *io_buff) {
   "/Todo - todo folder\n"
   "/Books - books folder\n"
   "/Schedule - schedule folder\n"
+  "/Flashcards - flashcards folder\n"
+  "/Passwords - encrypted notes folder\n"
+  "/Tunes - tunes folder\n"
+  "/RSS - RSS channels folder\n"
+  "/IRC - IRC settings folder\n"
   "\n"
   ;
   int i = 0;
@@ -1900,6 +1966,9 @@ void terminal(char mode, char *io_buff) {
   fs::File current_dir;
   char byte;
   int i;
+  int error;
+  int freq;
+  char found = 0;
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -1968,7 +2037,7 @@ void terminal(char mode, char *io_buff) {
       global_exit_flag = 1;
     }
     else if(strcmp(buff, "date") == 0) {
-      set_local_time_from_unix_timestamp();
+      //set_local_time_from_unix_timestamp();
       sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d\n\r", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
       terminal_print(buff);
     }
@@ -1980,7 +2049,7 @@ void terminal(char mode, char *io_buff) {
       delay(1000 * i);
     }
     else if(strcmp(buff, "delay") == 0) {
-      terminal_print("Usage: sleep {milliseconds}\n\r");
+      terminal_print("Usage: delay {milliseconds}\n\r");
     }
     else if(memcmp(buff, "delay ", 6) == 0) {
       sscanf(buff + 6, "%d", &i);
@@ -2086,6 +2155,37 @@ void terminal(char mode, char *io_buff) {
       else {
         terminal_print("File not found\n\r");
       }
+    }
+    // I2C
+    else if(strcmp(buff, "i2c") == 0) {
+      found = 0;
+      Wire.begin(I2C_SDA, I2C_SCL);
+      for(i = 1; i < 127; i++) {
+        Wire.beginTransmission(i);
+        error = Wire.endTransmission();
+        if(error == 0) {
+          sprintf(buff, "0x%02x\n\r", i);
+          terminal_print(buff);
+          found = 1;
+        }
+      }
+      if(!found) {
+        terminal_print("No I2C devices found\n\r");
+      }
+    }
+    // Звуки
+    else if(strcmp(buff, "beep") == 0) {
+      beep_if_enabled();
+    }
+    else if(strcmp(buff, "notone") == 0) {
+      noTone(BUZZER_PIN);
+    }
+    else if(strcmp(buff, "tone") == 0) {
+      terminal_print("Usage: tone {freq}\n\r");
+    }
+    else if(memcmp(buff, "tone ", 5) == 0) {
+      sscanf(buff + 5, "%d", &freq);
+      tone(BUZZER_PIN, freq);
     }
 #ifdef IS_WIFI_ENABLED
     else if(strcmp(buff, "ip") == 0) {
@@ -4409,7 +4509,8 @@ void pim_rename_file(char *path, char *old_filename, char *prefix) {
       break;
     }
     // Только алфавитно-цифровые символы
-    if(byte >= '0' && byte <= '9' || byte == ' ' || byte >= 'a' && byte <= 'z' || byte >= 'A' && byte <= 'Z') {
+    if(byte >= '0' && byte <= '9' || byte == ' ' || byte >= 'a' && byte <= 'z'
+      || byte >= 'A' && byte <= 'Z' || byte == 0xA8 || byte == 0xB8 || byte >= 0xC0) {
       // Пробел меняем на подчёркивание
       if(byte == ' ') byte = '_';
       new_filename[offset] = byte;
@@ -4420,6 +4521,7 @@ void pim_rename_file(char *path, char *old_filename, char *prefix) {
     if(byte == '\n' || byte == '\r') break;
   }
   file.close();
+  cp1251_to_translit(new_filename, new_filename);
 
   // Проверяем что такого названия нет
   if(strcmp("", new_filename) != 0) {
@@ -4531,7 +4633,7 @@ void schedule(char mode, char *io_buff) {
   drawAppTitle("Schedule");
 
   redraw_flag = 1;
-  set_local_time_from_unix_timestamp();
+  //set_local_time_from_unix_timestamp();
 
   day_of_week = (global_day_of_week + 7 - (global_day - 1) % 7) % 7;
   year = global_year;
@@ -6298,7 +6400,6 @@ void turkish_kerchief(char mode, char *io_buff) {
   int cell_color;
   long prev_millis = 0;
   TS_Point p;
-  char direction = 'u';
   int moves;
   int i;
   int j;
@@ -6308,6 +6409,10 @@ void turkish_kerchief(char mode, char *io_buff) {
   char buff[80];
   int suit_color;
   int tries;
+  int cursor_x = -1;
+  int cursor_y = -1;
+  char redraw_required = 1;
+
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -6458,69 +6563,79 @@ void turkish_kerchief(char mode, char *io_buff) {
       if(tries > 0) {
         restart_flag = 0;
       }
+      redraw_required = 1;
     }
 
-    // Нарисовать поле
-    for(y = 0; y < 6; y++) {
-      for(x = 0; x < 10; x++) {
-        if(x + y * 10 >= 52) break;
-        card = field[x + y * 10];
-        if(card == 0xFF) {
-          tft.fillRect(x * tft.width() / 10, 48 + y * 40, tft.width() / 10, 40, TFT_DARKGREEN);
-        }
-        else {
-          suit = card / 13;
-          card = card % 13;
-          sprintf(buff, "%s%s", cards[card], suits[suit]);
-
-          suit_color = TFT_BLACK;
-          if(suit <= 1) {
-            suit_color = TFT_RED;
+    if(redraw_required) {
+      // Нарисовать поле
+      for(y = 0; y < 6; y++) {
+        for(x = 0; x < 10; x++) {
+          if(x + y * 10 >= 52) break;
+          card = field[x + y * 10];
+          if(card == 0xFF) {
+            tft.fillRect(x * tft.width() / 10, 48 + y * 40, tft.width() / 10, 40, TFT_DARKGREEN);
           }
-          tft.setTextColor(suit_color, TFT_WHITE);
-          tft.fillRoundRect(x * tft.width() / 10 + 1, 48 + y * 40 + 1, tft.width() / 10 - 2, 40 - 2, 3, TFT_WHITE);
-          tft.drawRoundRect(x * tft.width() / 10 + 1, 48 + y * 40 + 1, tft.width() / 10 - 2, 40 - 2, 3, TFT_BLACK);
-          tft.drawCentreString(cards[card], x * tft.width() / 10 + tft.width() / 20, 48 + y * 40 + 4, FONT_DEFAULT);
-          image_from_bits(x * tft.width() / 10 + tft.width() / 20 - 4, 48 + y * 40 + 20 + 2, suit_images[suit], suit_color, TFT_WHITE);
+          else {
+            suit = card / 13;
+            card = card % 13;
+            sprintf(buff, "%s%s", cards[card], suits[suit]);
+
+            suit_color = TFT_BLACK;
+            if(suit <= 1) {
+              suit_color = TFT_RED;
+            }
+            tft.setTextColor(suit_color, TFT_WHITE);
+            tft.fillRoundRect(x * tft.width() / 10 + 1, 48 + y * 40 + 1, tft.width() / 10 - 2, 40 - 2, 3, TFT_WHITE);
+            tft.drawRoundRect(x * tft.width() / 10 + 1, 48 + y * 40 + 1, tft.width() / 10 - 2, 40 - 2, 3, TFT_BLACK);
+            tft.drawCentreString(cards[card], x * tft.width() / 10 + tft.width() / 20, 48 + y * 40 + 4, FONT_DEFAULT);
+            image_from_bits(x * tft.width() / 10 + tft.width() / 20 - 4, 48 + y * 40 + 20 + 2, suit_images[suit], suit_color, TFT_WHITE);
+          }
         }
       }
-    }
 
-    // Количество ходов
-    moves = 0;
-    cards_present_flag = 0;
-    for(i = 0; i < 9; i++) {
-      // Берём одну карту
-      y = 5;
-      card1 = 0xFF;
-      while(field[i + y * 10] == 0xFF) {
-        y--;
-        if(y < 0) break;
-
-      }
-      if(y >= 0) card1 = field[i + y * 10] % 13;
-      if(card1 == 0xFF) continue;
-      cards_present_flag = 1;
-
-      for(j = i + 1; j < 10; j++) {
-        // Берём другую карту
+      // Количество ходов
+      moves = 0;
+      cards_present_flag = 0;
+      for(i = 0; i < 9; i++) {
+        // Берём одну карту
         y = 5;
-        card2 = 0xFF;
-        while(field[j + y * 10] == 0xFF) {
+        card1 = 0xFF;
+        while(field[i + y * 10] == 0xFF) {
           y--;
           if(y < 0) break;
+
         }
-        if(y >= 0) card2 = field[j + y * 10] % 13;
-        if(card2 != 0xFF) cards_present_flag = 1;
-        if(card1 == card2) {
-          moves++;
-          break;
+        if(y >= 0) card1 = field[i + y * 10] % 13;
+        if(card1 == 0xFF) continue;
+        cards_present_flag = 1;
+
+        for(j = i + 1; j < 10; j++) {
+          // Берём другую карту
+          y = 5;
+          card2 = 0xFF;
+          while(field[j + y * 10] == 0xFF) {
+            y--;
+            if(y < 0) break;
+          }
+          if(y >= 0) card2 = field[j + y * 10] % 13;
+          if(card2 != 0xFF) cards_present_flag = 1;
+          if(card1 == card2) {
+            moves++;
+            break;
+          }
         }
       }
+      tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
+      sprintf(buff, "Moves: %d", moves);
+      tft.drawString(buff, 1, 16, FONT_DEFAULT);
+
+      // Рисуем курсор
+      if(cursor_x > 0 && cursor_y > 0) {
+        tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
+        tft.drawCentreString("\x1E", cursor_x, cursor_y, FONT_MONOSPACE);
+      }
+      redraw_required = 0;
     }
-    tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
-    sprintf(buff, "Moves: %d", moves);
-    tft.drawString(buff, 1, 16, FONT_DEFAULT);
 
     if(cards_present_flag == 0) {
       drawInfo("You won!");
@@ -6532,6 +6647,7 @@ void turkish_kerchief(char mode, char *io_buff) {
       restart_flag = 1;
       continue;
     }
+
     touchWaitPress();
 
     // Смотрим, какая колонка выбрана
@@ -6542,9 +6658,25 @@ void turkish_kerchief(char mode, char *io_buff) {
     column2 = column1;
     column1 = touch_x / (tft.width() / 10);
 
-    tft.fillRect(0, tft.height() - 16, tft.width(), 16, TFT_DARKGREEN);
-    tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
-    tft.drawCentreString("^", column1 * tft.width() / 10 + tft.width() / 20, tft.height() - 16, FONT_DEFAULT);
+    y = 5;
+    while(field[column1 + y * 10] == 0xFF) {
+      y--;
+      if(y < 0) break;
+    }
+
+    // Стираем прошлый курсор (если есть)
+    if(cursor_x > 0 && cursor_y > 0) {
+      tft.setTextColor(TFT_DARKGREEN, TFT_DARKGREEN);
+      tft.drawCentreString("\x1E", cursor_x, cursor_y, FONT_MONOSPACE);
+      cursor_x = -1;
+      cursor_y = -1;
+    }
+    if(y >= 0) {
+      cursor_x = column1 * tft.width() / 10 + tft.width() / 20;
+      cursor_y = 48 + 40 + y * 40 + 4;
+      tft.setTextColor(TFT_WHITE, TFT_DARKGREEN);
+      tft.drawCentreString("\x1E", cursor_x, cursor_y, FONT_MONOSPACE);
+    }
 
     if(column2 != -1 && column1 != column2) {
       // Берём одну карту
@@ -6586,6 +6718,15 @@ void turkish_kerchief(char mode, char *io_buff) {
 
         column1 = -1;
         column2 = -1;
+        
+        // Стираем прошлый курсор (если есть)
+        if(cursor_x > 0 && cursor_y > 0) {
+          tft.setTextColor(TFT_DARKGREEN, TFT_DARKGREEN);
+          tft.drawCentreString("\x1E", cursor_x, cursor_y, FONT_MONOSPACE);
+          cursor_x = -1;
+          cursor_y = -1;
+        }
+        redraw_required = 1;
       }
     }
 
@@ -6634,6 +6775,8 @@ void screensaver(char mode, char *io_buff) {
     memcpy(io_buff, app_icon, 34);
     return;
   }
+
+  disableAppTitle();
 
   tft.fillScreen(TFT_BLACK);
   for(i = 0; i != STAR_COUNT; i++) {
@@ -7303,14 +7446,31 @@ void wifi_network_info() {
   }
 }
 
+void WiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+  Serial.println("WiFiConnected");
+  //drawAppTitleRight();
+
+  get_current_timestamp_wifi_begin();
+}
+
+void get_current_timestamp_wifi_begin() {
+  const char* ntpServer = "pool.ntp.org";
+  sntp_set_time_sync_notification_cb(timeSyncCallback);
+  configTime(0, 0, ntpServer);
+}
+
+void timeSyncCallback(struct timeval *tv) {
+  Serial.println("timeSyncCallback");
+  time(&global_unixtime_retrieved);
+  //drawAppTitleRight();
+}
+
 void get_current_timestamp_wifi() {
-  HTTPClient http;
-  int httpResponseCode;
-  char buff[80];
-  if(get_file_https("https://arikado.ru/cyd/unixtime.php", buff) == 200) {
-    sscanf(buff, "%lu", &global_unixtime_retrieved);
-    global_unixtime_retrieved_millis = millis();
+  get_current_timestamp_wifi_begin();
+  while(sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED) {
+    delay(100);
   }
+  time(&global_unixtime_retrieved);
 }
 
 #define GOPHER_BYTES_MAX 32768
@@ -7746,12 +7906,20 @@ void weather(char mode, char *io_buff) {
   int button_pressed;
   int wifi_status;
   long prev_update_data_millis;
+  long info_update_data_millis = 0;
+  int httpResponseCode;
   int i;
-  char url[80];
+  int j;
+  int wind_speed;
+  char url[120];
   char buff[80];
-  char weather[80];
+  char *weather_json;
+  char *tmp;
   char temp[80];
   char wind[80];
+  char weather_text[80];
+  char weather_code[80];
+  int weather_code_number;
   char temp_flag;
   char wind_flag;
   char weather_flag;
@@ -7796,51 +7964,101 @@ void weather(char mode, char *io_buff) {
   drawAppTitle("Weather");
 
   wifi_status = WiFi.status();
-  if(wifi_status != WL_CONNECTED && global_unixtime_retrieved == 0) {
+  if(wifi_status != WL_CONNECTED) {
     drawError("Wi-Fi connection required");
     return;
   }
+
+  weather_json = (char *)malloc(1000 * sizeof(char));
 
   update_flag = 1;
   prev_update_data_millis = millis();
   while(1) {
     if(update_flag) {
-      sprintf(url, "https://arikado.ru/cyd/weather.php?lat=%f&lon=%f", global_lat, global_lon);
-      if(get_file_https(url, buff) == 200) {
-        prev_update_data_millis = millis();
-
-        temp_flag = 1;
-        wind_flag = 0;
-        weather_flag = 0;
+      sprintf(url, "https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&current_weather=true&windspeed_unit=ms", global_lat, global_lon);
+      httpResponseCode = get_file_https(url, weather_json);
+      if(httpResponseCode == 200) {
         strcpy(temp, "");
         strcpy(wind, "");
-        strcpy(weather, "");
-        
-        for(i = 0; i < strlen(buff); i++) {
-          if(buff[i] == ',') {
-            if(temp_flag) {
-              temp_flag = 0;
-              wind_flag = 1;
-              // Начало строки с температурой, без градусов цельсия
-              memcpy(temp, buff, i - 2);
-              temp[i - 2] = 0;
-              from_offset = i + 1;
+        strcpy(weather_code, "");
+        prev_update_data_millis = millis();
+        // Пропускаем начало
+        tmp = strchr(weather_json, '}');
+        // Теперь ищем значения
+        for(i = 0; i < strlen(tmp); i++) {
+          if(strlen(tmp + i) > 14 && memcmp(tmp + i, "\"temperature\":", 14) == 0) {
+            memcpy(temp, tmp + i + 14, 10);
+            for(j = 0; j < strlen(temp); j++) {
+              if(temp[j] == ',') {
+                temp[j] = 0;
+                break;
+              }
             }
-            else if(wind_flag) {
-              wind_flag = 0;
-              weather_flag = 1;
-              memcpy(wind, buff + from_offset + 1, i - from_offset - 1);
-              wind[i - from_offset - 1] = 0;
-              strcpy(weather, buff + i + 2);
+          }
+          if(strlen(tmp + i) > 12 && memcmp(tmp + i, "\"windspeed\":", 12) == 0) {
+            memcpy(wind, tmp + i + 12, 10);
+            for(j = 0; j < strlen(wind); j++) {
+              if(wind[j] == ',') {
+                wind[j] = 0;
+                break;
+              }
+            }
+          }
+          if(strlen(tmp + i) > 14 && memcmp(tmp + i, "\"weathercode\":", 14) == 0) {
+            memcpy(weather_code, tmp + i + 14, 10);
+            for(j = 0; j < strlen(weather_code); j++) {
+              if(weather_code[j] == '}') {
+                weather_code[j] = 0;
+                break;
+              }
             }
           }
         }
+
+        sscanf(wind, "%d", &wind_speed);
+        sprintf(wind, "%d m/s", wind_speed);
+
+        weather_code_number = -1;
+        sscanf(weather_code, "%d", &weather_code_number);
+        switch(weather_code_number) {
+          default: strcpy(weather_text, "Unknown weather code"); break;
+          case 0: strcpy(weather_text, "Clear sky"); break;
+          case 1: strcpy(weather_text, "Mainly clear"); break;
+          case 2: strcpy(weather_text, "Partly cloudly"); break;
+          case 3: strcpy(weather_text, "Overcast"); break;
+          case 45: strcpy(weather_text, "Fog"); break;
+          case 48: strcpy(weather_text, "Depositing rime fog"); break;
+          case 51: strcpy(weather_text, "Light drizzle"); break;
+          case 53: strcpy(weather_text, "Moderate drizzle"); break;
+          case 55: strcpy(weather_text, "Dense drizzle"); break;
+          case 56: strcpy(weather_text, "Light freezing drizzle"); break;
+          case 57: strcpy(weather_text, "Dense freezing drizzle"); break;
+          case 61: strcpy(weather_text, "Slight rain"); break;
+          case 63: strcpy(weather_text, "Moderate rain"); break;
+          case 65: strcpy(weather_text, "Dense rain"); break;
+          case 66: strcpy(weather_text, "Light freezing rain"); break;
+          case 67: strcpy(weather_text, "Dense freezing rain"); break;
+          case 71: strcpy(weather_text, "Slight snow"); break;
+          case 73: strcpy(weather_text, "Moderate snow"); break;
+          case 75: strcpy(weather_text, "Dense snow"); break;
+          case 77: strcpy(weather_text, "Snow grains"); break;
+          case 80: strcpy(weather_text, "Slight rain showers"); break;
+          case 81: strcpy(weather_text, "Moderate rain showers"); break;
+          case 82: strcpy(weather_text, "Violent rain showers"); break;
+          case 85: strcpy(weather_text, "Slight snow showers"); break;
+          case 86: strcpy(weather_text, "Heavy snow showers"); break;
+          case 95: strcpy(weather_text, "Thunderstorm"); break;
+          case 96: strcpy(weather_text, "Thunderstorm with light hail"); break;
+          case 99: strcpy(weather_text, "Thunderstorm with heavy hail"); break;
+        }
+
         tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
         tft.setTextColor(color_scheme_fg, color_scheme_bg);
         tft.drawCentreString(temp, tft.width() / 2, 35, FONT_BIGGER);
+        tft.drawString("o", tft.width() / 2 + tft.textWidth(temp, FONT_BIGGER) / 2, 30, FONT_BIG);
 
         tft.drawCentreString(wind, tft.width() / 2, 100, FONT_BIG);
-        tft.drawCentreString(weather, tft.width() / 2, 150, FONT_DEFAULT);
+        tft.drawCentreString(weather_text, tft.width() / 2, 150, FONT_DEFAULT);
         update_flag = 0;
       }
     }
@@ -7852,16 +8070,20 @@ void weather(char mode, char *io_buff) {
     sprintf(buff, "%f", global_lon);
     tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 32 + 8, FONT_DEFAULT);
 
-    while(!touchCheckNowait()) {
-      tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
-      sprintf(buff, "  Next update in %d min %d sec  ",
-        (prev_update_data_millis + WEATHER_AUTO_UPDATE_INTERVAL - millis()) / 60000,
-        ((prev_update_data_millis + WEATHER_AUTO_UPDATE_INTERVAL - millis()) / 1000) % 60
-      );
-      tft.drawCentreString(buff, tft.width() / 2, tft.height() - 128, FONT_DEFAULT);
 
+    while(!touchCheckNowait()) {
+      if(millis() - info_update_data_millis >= 1000) {
+        info_update_data_millis = millis();
+        tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
+        sprintf(buff, "  Next update in %d min %d sec  ",
+          (prev_update_data_millis + WEATHER_AUTO_UPDATE_INTERVAL - millis()) / 60000,
+          ((prev_update_data_millis + WEATHER_AUTO_UPDATE_INTERVAL - millis()) / 1000) % 60
+        );
+
+        tft.drawCentreString(buff, tft.width() / 2, tft.height() - 128, FONT_DEFAULT);
+      }
       if(millis() - prev_update_data_millis > WEATHER_AUTO_UPDATE_INTERVAL) {
-        update_flag = 1;
+        update_flag = 0;
         break;
       }
     }
@@ -7869,6 +8091,7 @@ void weather(char mode, char *io_buff) {
     if(touchCheckNowait() == 0 && update_flag) {
       continue;
     }
+    
     touchWaitPress();
 
     button_pressed = touchCheckMatrix(0, tft.height() - 96, tft.width() / 2, 96, buttons, 1, 3);
@@ -7900,9 +8123,10 @@ void weather(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      // Флаг не сбрасываем, так как не основное приложение
+      free(weather_json);
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -8094,12 +8318,12 @@ void chat(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      // Флаг не сбрасываем, так как не основное приложение
       drawAppTitle("Exit");
       touchWaitRelease();
       free(messages);
       free(prev_messages);
       free(query);
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -8187,6 +8411,7 @@ void http_file_access(char mode, char *io_buff) {
       global_exit_flag = 0;
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -8416,9 +8641,10 @@ int get_file_https(char *url, char *buff) {
   return 0;
 }
 
-void http_get_error_text(int httpResponseCode, char *buff) {
+char * http_get_error_text(int httpResponseCode, char *buff) {
   HTTPClient http;
   strcpy(buff, http.errorToString(httpResponseCode).c_str());
+  return buff;
 }
 
 // Конвертировать два байта в cp1251
@@ -8544,6 +8770,41 @@ void cp1251_to_utf8(char *in_buff, char *out_buff) {
         out_buff[write_offset] = 0xD1;
         write_offset++;
         out_buff[write_offset] = 0x80 + byte - 0xF0;
+        write_offset++;
+      }
+    }
+  }
+  out_buff[write_offset] = 0;
+}
+
+void cp1251_to_translit(char *in_buff, char *out_buff) {
+  char *encoding = "ABVGDEJZIJKLMNOPRSTUFHC4WW'I'EUAabvgdejzijklmnoprstufhc4ww'i'eua";
+  int read_offset = 0;
+  int write_offset = 0;
+  unsigned char byte;
+  int length = strlen(in_buff);
+  while(read_offset < length) {
+    byte = in_buff[read_offset];
+    read_offset++;
+
+    if(byte <= 0x7F) {
+      out_buff[write_offset] = byte;
+      write_offset++;
+    }
+    else {
+      // Ё
+      if(byte == 0xA8) {
+        out_buff[write_offset] = 'E';
+        write_offset++;
+      }
+      // ё
+      if(byte == 0xB8) {
+        out_buff[write_offset] = 'e';
+        write_offset++;
+      }
+      // Остальные
+      if(byte >= 0xC0) {
+        out_buff[write_offset] = *(encoding + byte - 0xC0);
         write_offset++;
       }
     }
@@ -9670,9 +9931,9 @@ void i2c_scanner(char mode, char *io_buff) {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      // Флаг не сбрасываем, так как не основное приложение
       drawAppTitle("Exit");
       touchWaitRelease();
+      touchExitActionReset();
       return;
     }
     touchWaitRelease();
@@ -9768,29 +10029,12 @@ void dashboard(char mode, char *io_buff) {
     if(millis() - prev_update_data_millis > CLOCK_UPDATE_DATA_INTERVAL) {
       prev_update_data_millis = millis();
 
-#ifdef IS_WIFI_ENABLED
-      if(global_unixtime_retrieved == 0) {
-        get_current_timestamp_wifi();
-      }
-
-      // Погода
-      sprintf(buff, "https://arikado.ru/cyd/weather.php?lat=%f&lon=%f", global_lat, global_lon);
-      if(get_file_https(buff, weather) != 200) {
-        strcpy(weather, "Weather unknown");
-      }
-
-      // Курсы валют
-      if(get_file_https("https://arikado.ru/cyd/rates.php", rates) != 200) {
-        strcpy(rates, "Rates unknown");
-      }
-#endif
-
       tft.fillRect(0, 242, tft.width(), tft.height() - 242, color_scheme_bg);
     }
     if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
       prev_update_millis = millis();
 
-      set_local_time_from_unix_timestamp();
+      //set_local_time_from_unix_timestamp();
 
       day_of_week = global_day_of_week;
       year = global_year;
@@ -9951,25 +10195,9 @@ void fuzzy_clock(char mode, char *io_buff) {
   clearScreen();
   drawAppTitle("Fuzzy Clock");
 
-#ifdef IS_WIFI_ENABLED
-  wifi_status = WiFi.status();
-  if(wifi_status != WL_CONNECTED && global_unixtime_retrieved == 0) {
-    drawError("Wi-Fi connection required");
-    return;
-  }
-
-  get_current_timestamp_wifi();
-  store_current_timestamp();
-#endif
-
   prev_update_millis = -FUZZY_CLOCK_UPDATE_SCREEN_INTERVAL;
   while(1) {
     if(millis() - prev_update_millis > FUZZY_CLOCK_UPDATE_SCREEN_INTERVAL) {
-#ifdef IS_WIFI_ENABLED
-      if(global_unixtime_retrieved == 0) {
-        get_current_timestamp_wifi();
-      }
-#endif
       prev_update_millis = millis();
 
       unix_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
@@ -10184,6 +10412,7 @@ void set_clock(char mode, char *io_buff) {
   char timer_run = 0;
   char auto_restart = 0;
   char redraw_flag = 0;
+  char something_changed = 0;
   char buff[80];
   char *buttons_up[] = {
     "+", "+", "+",
@@ -10232,9 +10461,10 @@ void set_clock(char mode, char *io_buff) {
   drawAppTitle("Set Clock");
 
   redraw_flag = 1;
+  something_changed = 0;
   while(1) {
     // Обновляем время
-    set_local_time_from_unix_timestamp();
+    //set_local_time_from_unix_timestamp();
     // Рисуем время
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
@@ -10266,7 +10496,7 @@ void set_clock(char mode, char *io_buff) {
     sprintf(buff, " %02d ", global_seconds);
     tft.drawCentreString(buff, 5 * tft.width() / 6, 206, FONT_BIG);
 
-    // Если таймер запущен и касаний нет - остальное не рисуем
+    // Если ничего не случилось то просто обновляем время
     if(redraw_flag == 0 && touchCheckNowait() == 0) {
       continue;
     }
@@ -10296,6 +10526,7 @@ void set_clock(char mode, char *io_buff) {
         global_unixtime_retrieved += 24 * 60 * 60;
       }
       redraw_flag = 1;
+      something_changed = 1;
     }
     button_pressed = touchCheckMatrix(0, 84, tft.width(), 32, buttons_down, 3, 1);
     if(button_pressed != -1) {
@@ -10309,6 +10540,7 @@ void set_clock(char mode, char *io_buff) {
         global_unixtime_retrieved -= 24 * 60 * 60;
       }
       redraw_flag = 1;
+      something_changed = 1;
     }
 
     // Часовой пояс
@@ -10338,6 +10570,7 @@ void set_clock(char mode, char *io_buff) {
         global_unixtime_retrieved += 1;
       }
       redraw_flag = 1;
+      something_changed = 1;
     }
     button_pressed = touchCheckMatrix(0, 234, tft.width(), 32, buttons_down, 3, 1);
     if(button_pressed != -1) {
@@ -10351,6 +10584,7 @@ void set_clock(char mode, char *io_buff) {
         global_unixtime_retrieved -= 1;
       }
       redraw_flag = 1;
+      something_changed = 1;
     }
 
 #ifdef IS_WIFI_ENABLED
@@ -10360,6 +10594,7 @@ void set_clock(char mode, char *io_buff) {
       if(button_pressed == 0) {
         get_current_timestamp_wifi();
         store_current_timestamp();
+        something_changed = 0;
       }
     }
 #endif
@@ -10367,7 +10602,9 @@ void set_clock(char mode, char *io_buff) {
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
       drawAppTitle("Exit");
-      store_current_timestamp();
+      if(something_changed) {
+        store_current_timestamp();
+      }
       touchWaitRelease();
       touchExitActionReset();
       return;
@@ -10433,7 +10670,6 @@ void view_font(char mode, char *io_buff) {
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
       drawAppTitle("Exit");
-      store_current_timestamp();
       touchWaitRelease();
       touchExitActionReset();
       return;
@@ -10613,7 +10849,6 @@ void reboot(char mode, char *io_buff) {
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
       drawAppTitle("Exit");
-      store_current_timestamp();
       touchWaitRelease();
       touchExitActionReset();
       return;
@@ -10623,16 +10858,16 @@ void reboot(char mode, char *io_buff) {
 }
 
 // ====================================================
-// Доп клавиатура вкл/выкл
+// Управление клавиатурой
 // ====================================================
 
-void alt_keyboard_control(char mode, char *io_buff) {
+void keyboard_control(char mode, char *io_buff) {
   int i;
   unsigned char byte;
   int button_pressed;
   char buff[80];
   char *buttons[] = {
-    "Change state",
+    "Alt keyboard",
     NULL
   };
   char app_icon[] = {
@@ -10656,7 +10891,7 @@ void alt_keyboard_control(char mode, char *io_buff) {
   };
 
   if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Alt Keyboard");
+    strcpy(io_buff, "Keyboard");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -10665,7 +10900,7 @@ void alt_keyboard_control(char mode, char *io_buff) {
   }
 
   clearScreen();
-  drawAppTitle("Alt Keyboard");
+  drawAppTitle("Keyboard");
 
   while(1) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
@@ -10693,11 +10928,94 @@ void alt_keyboard_control(char mode, char *io_buff) {
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
       drawAppTitle("Exit");
-      store_current_timestamp();
       touchWaitRelease();
 
       if(drawConfirm("Save changes?") == 0) {
         write_key_value_to_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", (char*)(alt_keyboard_enabled_flag ? "1" : "0"));
+      }
+
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// ====================================================
+// Управление звуком
+// ====================================================
+
+void sound_control(char mode, char *io_buff) {
+  int i;
+  unsigned char byte;
+  int button_pressed;
+  char buff[80];
+  char *buttons[] = {
+    "Beep on events",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00111010,
+    B01000000, B01001010,
+    B01000000, B10001010,
+    B01011111, B00001010,
+    B01010001, B00001010,
+    B01010001, B00001010,
+    B01011111, B00001010,
+    B01000000, B10001010,
+    B01000000, B01001010,
+    B01000000, B00111010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Sound");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Sound");
+
+  while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+    drawButtonMatrix(0, 20, tft.width() / 2, 32, buttons, 1, 1);
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "  %s  ", is_beep_enabled ? "ON" : "OFF");
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28, FONT_DEFAULT);
+
+    touchWaitPress();
+
+    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32, buttons, 1, 1);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        if(is_beep_enabled) {
+          is_beep_enabled = 0;
+        }
+        else {
+          is_beep_enabled = 1;
+        }
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+
+      if(drawConfirm("Save changes?") == 0) {
+        write_key_value_to_file("/Settings/Sound", "beep_enabled_flag", (char*)(is_beep_enabled ? "1" : "0"));
       }
 
       touchExitActionReset();
@@ -10719,7 +11037,7 @@ void set_local_time_from_unix_timestamp() {
   int month;
   int day;
   char is_lap_year;
-  char retry_retrieve;
+  char retry_retrieve = 0;
   int prev_day;
 
   // Если время уже было откуда-то загружено и день был установлен, то есть эта функция уже отработала раз
@@ -10782,6 +11100,8 @@ void set_local_time_from_unix_timestamp() {
 
   // Если дата изменилась
   if(retry_retrieve && global_day != day) {
+    Serial.printf("global_day=%d\n", global_day);
+    Serial.printf("day=%d\n", day);
     store_current_timestamp();
   }
 
@@ -10803,24 +11123,6 @@ void store_current_timestamp() {
   unsigned long current_timestamp;
   unsigned long saved_timestamp;
 
-/*
-  // Если время не было обновлено - ничего не делаем
-  if(global_unixtime_retrieved == 0) return;
-
-
-  read_file_to_buff("/Settings/Timestamp", 79, buff);
-  sscanf(buff, "%lu", &saved_timestamp);
-
-  // Сохраняем время если разница больше суток в любую сторону
-  // Компилятор ругается что нельзя взять модуль от unsigned
-  if((current_timestamp > saved_timestamp && current_timestamp - saved_timestamp >= 86400)
-    ||
-    (current_timestamp < saved_timestamp && saved_timestamp - current_timestamp >= 86400)
-  ) {
-    sprintf(buff, "%lu", current_timestamp);
-    write_file_from_buff("/Settings/Timestamp", buff);
-  }
-  */
   Serial.println("store_current_timestamp");
   current_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
   sprintf(buff, "%lu", current_timestamp);
@@ -10880,6 +11182,8 @@ void screen_test(char mode, char *io_buff) {
     return;
   }
 
+  disableAppTitle();
+
   for(i = 0; i < 8; i++) {
     tft.fillScreen(colors[i]);
 
@@ -10920,21 +11224,17 @@ void screen_test(char mode, char *io_buff) {
 void view_file(char *title, char *filename) {
   fs::File file;
   int word_offset;
-  int word_in_line_offset = 0;
   int show_file_offset_lines = 0;
   int current_file_offset_lines = 0;
   int current_line_on_screen = 0;
   int touch_x, touch_y;
   int i;
-  char new_line_flag = 0;
-  char show_line_flag = 0;
-  char show_next_line_flag = 0;
-  char long_string_flag = 0;
-  char last_line_visible_flag = 0;
+  char new_line_flag;
   char byte;
   char buff[80];
   char current_string[80];
   char current_word[80];
+  char rewind_required = 1;
 
   clearScreen();
   drawAppTitle(title);
@@ -10955,47 +11255,52 @@ void view_file(char *title, char *filename) {
     sscanf(buff, "%d", &show_file_offset_lines);
   }
 
+  rewind_required = 1;
   while(1) {
-    // Вывести текст по текущему смещению
-    // Начинаем с начала файла и читаем пока не попадём на отображаемую часть
-    file.seek(0);
-    current_file_offset_lines = 0;
     current_line_on_screen = 0;
-    word_in_line_offset = 0;
-    current_string[0] = 0;
     tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
 
-    word_offset = 0;
-    current_word[word_offset] = 0;
-    while(file.available()) {
-      // Читаем слово
+    // Вывести текст по текущему смещению
+    if(rewind_required) {
+      // Начинаем с начала файла и читаем пока не попадём на отображаемую часть
+      file.seek(0);
+      current_file_offset_lines = 0;
+      current_string[0] = 0;
+
+      word_offset = 0;
+      current_word[word_offset] = 0;
+
+      rewind_required = 0;
       new_line_flag = 0;
-      show_line_flag = 0;
-      long_string_flag = 0;
-      while(file.available()) {
-        byte = file.read();
-        current_word[word_offset] = byte;
-        word_offset++;
-        current_word[word_offset] = 0;
-        if(byte == '\n') {
-          if(file.peek() == '\r') file.read();
-        }
-        if(byte == '\r') {
-          if(file.peek() == '\n') file.read();
-        }
-        // Пробел, дефис, перевод строки завершают слово
-        if(byte == '\n' || byte == '\r') {
-          new_line_flag = 1;
-        }
-        if(byte == ' ' || byte == '\n' || byte == '\r') {
-          break;
-        }
-        // Кроме дефиса в начале слова
-        if(byte == '-' && word_offset > 0) {
-          break;
-        }
-        if(word_offset >= 60) {
-          break;
+    }
+
+    while(file.available()) {
+      if(!new_line_flag) {
+        while(file.available()) {
+          byte = file.read();
+          current_word[word_offset] = byte;
+          word_offset++;
+          current_word[word_offset] = 0;
+          if(byte == '\n') {
+            if(file.peek() == '\r') file.read();
+          }
+          if(byte == '\r') {
+            if(file.peek() == '\n') file.read();
+          }
+          // Пробел, дефис, перевод строки завершают слово
+          if(byte == '\n' || byte == '\r') {
+            new_line_flag = 1;
+          }
+          if(byte == ' ' || byte == '\n' || byte == '\r') {
+            break;
+          }
+          // Кроме дефиса в начале слова
+          if(byte == '-' && word_offset > 0) {
+            break;
+          }
+          if(word_offset >= 60) {
+            break;
+          }
         }
       }
 
@@ -11038,6 +11343,8 @@ void view_file(char *title, char *filename) {
         }
         current_file_offset_lines++;
         current_string[0] = 0;
+        if(strlen(current_word) == 0) new_line_flag = 0;
+        if(current_line_on_screen > 18) break;
 
         // Если файл закончился или есть остаток строки,
         // а место на экране ещё есть, нужно вывести остаток из current_word
@@ -11057,12 +11364,14 @@ void view_file(char *title, char *filename) {
           }
           current_word[i] = 0;
           word_offset = strlen(current_word);
+
+          new_line_flag = 0;
         }
         else {
           break;
         }
       }
-      current_string[0] = 0;
+      //current_string[0] = 0;
 
       // Если экран заполнен - выходим
       if(current_line_on_screen > 18) {
@@ -11079,6 +11388,7 @@ void view_file(char *title, char *filename) {
       // Левая часть экрана - назад
       if(touch_x < tft.width() / 2) {
           show_file_offset_lines -= 19;
+          rewind_required = 1;
           if(show_file_offset_lines < 0) {
             show_file_offset_lines = 0;
           }
@@ -11109,7 +11419,6 @@ void view_file(char *title, char *filename) {
 // Совместить две функции сложно
 void view_text(char *title, char *data) {
   int word_offset;
-  int word_in_line_offset = 0;
   int show_file_offset_lines = 0;
   int current_file_offset_lines = 0;
   int current_line_on_screen = 0;
@@ -11118,10 +11427,6 @@ void view_text(char *title, char *data) {
   int data_offset = 0;
   int data_length = strlen(data);
   char new_line_flag = 0;
-  char show_line_flag = 0;
-  char show_next_line_flag = 0;
-  char long_string_flag = 0;
-  char last_line_visible_flag = 0;
   char byte;
   char buff[80];
   char current_string[80];
@@ -11137,7 +11442,6 @@ void view_text(char *title, char *data) {
     data_offset = 0;
     current_file_offset_lines = 0;
     current_line_on_screen = 0;
-    word_in_line_offset = 0;
     current_string[0] = 0;
     tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
 
@@ -11146,8 +11450,6 @@ void view_text(char *title, char *data) {
     while(data_offset < data_length) {
       // Читаем слово
       new_line_flag = 0;
-      show_line_flag = 0;
-      long_string_flag = 0;
       while(data_offset < data_length) {
         byte = data[data_offset];
         data_offset++;
@@ -12320,7 +12622,7 @@ void mental_math(char mode, char *io_buff) {
   drawAppTitle("Mental Math");
 
   strcpy(buff, "");
-  if(drawPrompt("Max number: 1 - 10000", buff) == 0) {
+  if(drawPrompt("Max number: 3 - 10000", buff) == 0) {
     sscanf(buff, "%d", &level);
     if(level < MENTAL_MATH_MIN_LEVEL) level = MENTAL_MATH_MIN_LEVEL;
     if(level >= MENTAL_MATH_MAX_LEVEL) level = MENTAL_MATH_MAX_LEVEL - 1;
@@ -13445,16 +13747,39 @@ void clearScreen() {
 
 void drawAppTitle(char *name) {
   char buff[80];
+  app_title_enabled = 1;
   tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
-  tft.fillRect(0, 0, tft.width(), 16, color_scheme_title_bg);
+  tft.fillRect(0, 0, tft.width() / 2, 16, color_scheme_title_bg);
   tft.drawString(name, 16, 0, FONT_DEFAULT);
-  // Рисовать время в заголовке неплохая идея, но тогда надо ещё заголовок постоянно обновлять
-  /*
-  if(global_unixtime_retrieved > 0) {
-    sprintf(buff, "%d:%02d", global_hours, global_minutes);
-    tft.drawRightString(buff, tft.width() - 16, 0, FONT_DEFAULT);
+
+  app_title_updated_millis = -1000;
+  drawAppTitleRight();
+}
+
+void drawAppTitleRight() {
+  char buff[80];
+  char wifi_connection_flag = 0;
+
+  if(!app_title_enabled) return;
+  // Не обновлять слишком часто
+  if(millis() - app_title_updated_millis < 1000) return;
+  app_title_updated_millis = millis();
+
+#ifdef IS_WIFI_ENABLED
+  if(WiFi.status() == WL_CONNECTED) {
+    wifi_connection_flag = 1;
   }
-  */
+#endif
+  tft.fillRect(tft.width() / 2, 0, tft.width() / 2, 16, color_scheme_title_bg);
+  if(global_unixtime_retrieved > 0) {
+    sprintf(buff, "%s %d:%02d", wifi_connection_flag ? "W" : "", global_hours, global_minutes);
+  }
+  tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
+  tft.drawRightString(buff, tft.width() - 16, 0, FONT_DEFAULT);
+}
+
+void disableAppTitle() {
+  app_title_enabled = 0;
 }
 
 void drawError(char *message) {
@@ -14035,6 +14360,8 @@ int touchMapY(int x, int y) {
 }
 
 char touchIsExitAction() {
+  // Обновить заголовок
+  drawAppTitleRight();
   // Уже стоит флаг
   if(global_exit_flag) {
     return 1;
@@ -14083,6 +14410,7 @@ void touchExitActionReset() {
 
 void touchWaitPress() {
   while(!touchscreen.tirqTouched() || !touchscreen.touched()) {
+    drawAppTitleRight();
     global_exit_flag_touch_begin = 0;
     if(global_exit_flag) return;
     if(digitalRead(BOOT_BUTTON_PIN) == LOW) saveScreenshot();
@@ -14454,6 +14782,15 @@ void decryptAES(uint8_t* input, int dataLen, uint8_t* output) {
   //output[originalLen] = 0;
 }
 
+// Вызывать в фоне каждую минуту
+void minutely() {
+}
+
+// Вызывать в фоне каждую секунду
+void secondly() {
+  set_local_time_from_unix_timestamp();
+}
+
 void setup() {
   fs::File file;
   char byte;
@@ -14651,11 +14988,10 @@ void setup() {
     sscanf(buff, "%f %f", &global_lat, &global_lon);
   }
 
+  // Настройки звука
   is_beep_enabled = 1;
-  if(read_file_to_buff("/Settings/Sound", 79, buff)) {
-    if(buff[0] == '0') {
-      is_beep_enabled = 0;
-    }
+  if(read_key_value_from_file("/Settings/Sound", "beep_enabled_flag", buff)) {
+    sscanf(buff, "%d", &is_beep_enabled);
   }
 
   // Настройки клавиатуры
@@ -14666,6 +15002,7 @@ void setup() {
 
 #ifdef IS_WIFI_ENABLED
   WiFi.begin();
+  WiFi.onEvent(WiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
 #endif
 
   // Получить текущее время из сохранённого в ФС
@@ -14678,6 +15015,12 @@ void setup() {
   for(i = 0; i < 40; i++) {
     main_apps[i] = apps[i];
   }
+
+  // Функция тикер
+  // Каждую минуту
+  minuteTicker.attach(60, minutely);
+  // Каждую секунду
+  secondTicker.attach(1.0, secondly); 
 
   // Читаем информацию об автозапуске
   autorun_app_name[0] = 0;
