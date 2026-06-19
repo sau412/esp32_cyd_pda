@@ -93,15 +93,15 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Memory Match - see https://en.wikipedia.org/wiki/Concentration_(card_game) for details
 * Hanoi Towers - see https://en.wikipedia.org/wiki/Tower_of_Hanoi for details
 * Match Tree - see https://en.wikipedia.org/wiki/Tile-matching_video_game for details
-* Simon
-* N back
-* Mental Math
+* Simon - see https://en.wikipedia.org/wiki/Simon_(game) for details
+* N back - see https://en.wikipedia.org/wiki/N-back for details
+* Mental Math - see https://en.wikipedia.org/wiki/Mental_calculation for details :)
 
 ## Wi-Fi
 * Wi-Fi connection
 * Gopher browser - see https://ru.wikipedia.org/wiki/Gopher for details
 * Weather
-* Chat
+* Chat - simple chat for CYD PDA users
 * File Server (for backups and file upload)
 * RSS Reader - see https://en.wikipedia.org/wiki/RSS for details
 * IRC client - see https://en.wikipedia.org/wiki/IRC for details
