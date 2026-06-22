@@ -67,6 +67,8 @@
 - N назад
 - Карточки для запоминания слов
 - Устный счёт
+- MP3-плеер
+- Интернет-радио плеер
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -132,29 +134,25 @@
 2026-06-19 Доработка турецкого платка, управление звуком, улучшенная прокрутка в книгах, I2C сканер в терминале,
   звуковые команды в терминале, время через NTP при соединении, время в заголовке, транслит для названий файлов PIM,
   сбор погоды напрямую
+2026-06-22 Терминал, несколько команд через ";", убирать пробелы в начале строки, отдельная процедура для исполнения из строки,
+  gopher кнопка "назад", MP3-плеер, интернет-радио плеер, Files открытие по двойному нажатию
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое:
+- (и) Крутая калибровка
 - (п) Просмотреть справку, может быть что-то добавить
-- (и) Воспроизведение MP3
 - (и) Запись на SD
-- (и) ssh
 - (б) Проблема при работе с SD, запись больше 2 кб
 - (б) Гофер браузер - не прокручивать дальше конца файла
 - (д) Игра 2048
 - (д) Тетрис
 - (д) Арканоид
-- (д) Интернет-радио
 - (д) Бэкапы на SD
-- (д) В файловом менеджере открывать папки / файлы по двойному нажатию
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор
-- (д) Гофер браузер - менять домашнюю страницу
-- (д) Гофер браузер - специальная домашняя страница для CYD с объяснениями
-- (д) Гофер браузер - кнопка назад
 - (д) Расписание: выводить планы на день по первому нажатию, редактирование по второму или двойному
 - (д) Редактирование: меньше мигания
 - (д) Если SD есть, то основная память SD, если нет то нет ЛИБО монтировать SD в папку?
-- (д) Меньше мигания в мелодиях
+- (д) Меньше мигания в PIM
 - (д) Вывести многострочный текст в указанное место (из файла, буфера, потока)
 - (д) RSS чтение потока, декодирование на лету
 - (д) wget для терминала - http, https
@@ -164,9 +162,10 @@
 - (д) IRC вылет при выходе
 - (д) Прокрутка терминала
 - (д) История ввода терминала (хотя бы небольшая)
-- (д) Терминал исполнение команды из строки
-- (д) Терминал несколько команд в строке через ;
-- (д) Терминал убирать пробелы в начале строки
+- (д) Индикация работы сети (ожидания ответа от сети)
+- (б) Gopher иногда дублируются строки
+- (д) IRC поддержка SSL (через WiFiClientSecure)
+- (б) Terminal, не отображается Exit
 
 - (н) drawProgress - рисовать прогресс операции
 - (н) Возможность выбрать звук для событий
@@ -174,6 +173,9 @@
 - (н) Автояркость - нужно определять вход резистора
 - (н) Определять инверсию экрана
 - (н) Флаг автосохранения файла при редактировании и неактивности
+- (и) ssh - Debug exception reason: BREAK instr
+- (д) Гофер браузер - специальная домашняя страница для CYD с объяснениями
+- (д) Гофер браузер - менять домашнюю страницу
 
 */
 
@@ -237,6 +239,14 @@
 
 // Encryption library for password storage
 #include "mbedtls/aes.h"
+
+// Music & MP3
+#include "AudioFileSourceFS.h"
+#include "AudioFileSourceID3.h"
+#include "AudioGeneratorMP3.h"
+#include "AudioOutputI2SNoDAC.h"
+#include "AudioFileSourceICYStream.h"
+#include "AudioFileSourceBuffer.h"
 
 #define FORMAT_FS_IF_FAILED false
 
@@ -555,6 +565,10 @@ float ay = 19840 / d;
 float by = -1109440 / d;
 float cy = 325691200 / d;
 
+#define CALIBRATION_QUANT 80
+int calibration_x[240 / CALIBRATION_QUANT];
+int calibration_y[320 / CALIBRATION_QUANT];
+
 unsigned long global_touch_begin;
 unsigned long global_touch_length;
 TS_Point global_touch_p;
@@ -575,6 +589,7 @@ char is_beep_enabled = 1;
 // После подключения к вай-фаю можно узнать текущее время
 time_t global_unixtime_retrieved = 0;
 time_t global_unixtime_retrieved_millis = 0;
+char global_unixtime_synced = 0;
 long global_timezone = 0;
 
 // Переменные для человекочитаемых параметров времени
@@ -611,6 +626,7 @@ void http_file_access(char mode, char *io_buff);
 void screen_test(char mode, char *io_buff);
 void screensaver(char mode, char *io_buff);
 void touch_calibration(char mode, char *io_buff);
+void touch_calibration_test(char mode, char *io_buff);
 void fifteen(char mode, char *io_buff);
 void security(char mode, char *io_buff);
 void counter(char mode, char *io_buff);
@@ -629,6 +645,7 @@ void schedule(char mode, char *io_buff);
 void passwords(char mode, char *io_buff);
 void tunes(char mode, char *io_buff);
 void music(char mode, char *io_buff);
+void webradio(char mode, char *io_buff);
 void life(char mode, char *io_buff);
 void i2c_scanner(char mode, char *io_buff);
 void dashboard(char mode, char *io_buff);
@@ -677,7 +694,8 @@ function_application_pointer all_apps[] = {
   books,
   passwords,
   tunes,
-  //music, // Music app is not ready yet
+  music,
+  webradio,
   system_info,
   torch,
   draw,
@@ -697,12 +715,15 @@ function_application_pointer all_apps[] = {
   breathe,
   piano,
   metronome,
+  music,
+  webradio,
   screen_test,
   screensaver,
   user_manual,
   security,
   brightness_app,
   touch_calibration,
+  //touch_calibration_test,
   fifteen,
   lights_off,
   snake,
@@ -736,7 +757,6 @@ function_application_pointer all_apps[] = {
   security,
   brightness_app,
   color_settings,
-  touch_calibration,
   set_clock,
   view_font,
   keyboard_control,
@@ -760,7 +780,8 @@ function_application_pointer apps[40] = {
   books,
   passwords,
   tunes,
-  //music, // Music app is not ready yet
+  music, // Music app is not ready yet
+  webradio,
   //system_info,
   torch,
   draw,
@@ -801,6 +822,7 @@ function_application_pointer apps[40] = {
   time_and_date_group,
   games_group,
   settings_group,
+  //touch_calibration_test,
   NULL
 };
 function_application_pointer time_and_date_apps[40] = {
@@ -1361,7 +1383,7 @@ void system_info(char mode, char *io_buff) {
 
     i = 0;
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    sprintf(buff, "ESP32 CYD PDA by sau412");
+    sprintf(buff, "ESP32 CYD PDA v1.1 by sau412");
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
@@ -1737,16 +1759,24 @@ void files(char mode, char *io_buff) {
     }
 
     // Сначала проверить нажатия, потом нарисовать, так нажатие сработает сразу
+    prev_file_selected = file_selected;
     touchCheckList(0, 40, 240, 192, files, 12, &file_offset, &file_selected);
     drawList(0, 40, 240, 192, files, 12, &file_offset, &file_selected);
 
     drawButtonMatrix(0, 240, tft.width(), 80, file_operations, 4, 2);
 
     touchWaitPress();
-    touchCheckList(0, 40, 240, 192, files, 12, &file_offset, &file_selected);
-
+    current_op = -1;
+    if(touchCheckList(0, 40, 240, 192, files, 12, &file_offset, &file_selected) != -1) {
+      if(prev_file_selected == file_selected) {
+        current_op = 1; 
+      }
+    }
+    else {
     // Операции
-    current_op = touchCheckMatrix(0, 240, tft.width(), 80, file_operations, 4, 2);
+      current_op = touchCheckMatrix(0, 240, tft.width(), 80, file_operations, 4, 2);
+    }
+
     if(current_op != -1) {
       // Находим нужный файл
       current_dir = Storage.open(path);
@@ -1797,7 +1827,7 @@ void files(char mode, char *io_buff) {
             file_offset = 0;
           }
           else {
-            sprintf(buff2, "View: %s%s", path, file.name());
+            sprintf(buff2, "%s%s", path, file.name());
             sprintf(buff3, "%s%s", path, file.name());
             view_file(buff2, buff3);
           }
@@ -1809,7 +1839,7 @@ void files(char mode, char *io_buff) {
           drawError("Unable to edit directory");
         }
         else {
-          sprintf(buff2, "Edit: %s%s", path, file.name());
+          sprintf(buff2, "%s%s", path, file.name());
           sprintf(buff3, "%s%s", path, file.name());
           edit_file(buff2, buff3);
         }
@@ -1961,14 +1991,6 @@ void files(char mode, char *io_buff) {
 // ====================================================
 void terminal(char mode, char *io_buff) {
   char buff[80];
-  IPAddress ip;
-  fs::File file;
-  fs::File current_dir;
-  char byte;
-  int i;
-  int error;
-  int freq;
-  char found = 0;
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -2011,241 +2033,291 @@ void terminal(char mode, char *io_buff) {
     terminal_input_string(buff);
     terminal_show_screen();
 
+    terminal_execute(buff);
+
     if(global_exit_flag) {
       touchExitActionReset();
       return;
     }
 
-    if(strcmp(buff, "millis") == 0) {
-      sprintf(buff, "%d\n\r", millis());
-      terminal_print(buff);
+    if(global_exit_flag) {
+      touchExitActionReset();
+      return;
     }
-    else if(strcmp(buff, "micros") == 0) {
-      sprintf(buff, "%d\n\r", micros());
-      terminal_print(buff);
-    }
-    else if(strcmp(buff, "clear") == 0) {
-      terminal_clear_screen();
-    }
-    else if(strcmp(buff, "reset") == 0) {
-      terminal_clear_screen();
-    }
-    else if(strcmp(buff, "reboot") == 0) {
-      ESP.restart();
-    }
-    else if(strcmp(buff, "exit") == 0) {
-      global_exit_flag = 1;
-    }
-    else if(strcmp(buff, "date") == 0) {
-      //set_local_time_from_unix_timestamp();
-      sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d\n\r", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
-      terminal_print(buff);
-    }
-    else if(strcmp(buff, "sleep") == 0) {
-      terminal_print("Usage: sleep {seconds}\n\r");
-    }
-    else if(memcmp(buff, "sleep ", 6) == 0) {
-      sscanf(buff + 6, "%d", &i);
-      delay(1000 * i);
-    }
-    else if(strcmp(buff, "delay") == 0) {
-      terminal_print("Usage: delay {milliseconds}\n\r");
-    }
-    else if(memcmp(buff, "delay ", 6) == 0) {
-      sscanf(buff + 6, "%d", &i);
-      delay(i);
-    }
-    else if(strcmp(buff, "serial") == 0) {
-      terminal_serial("");
-    }
-    else if(memcmp(buff, "serial ", 7) == 0) {
-      terminal_serial(buff + 7);
-    }
-    else if(strcmp(buff, "format ffat") == 0) {
-      if(FFat.format() == true) {
-        terminal_print("Format FFat completed\n\r");
-      }
-      else {
-        terminal_print("Format FFat failed\n\r");
-      }
-      FFat.begin(true);
-      Storage.mkdir("/Settings");
-    }
-    else if(strcmp(buff, "ls") == 0) {
-      terminal_print("Usage: ls {directory}\n\r");
-    }
-    else if(memcmp(buff, "ls ", 3) == 0) {
-      current_dir = Storage.open(buff + 3);
-      if(current_dir && current_dir.isDirectory()) {
-        while(file = current_dir.openNextFile()) {
-          terminal_print((char *)file.name());
-          terminal_print("\n\r");
-        }
-      }
-      else {
-        terminal_print("Unable to open directory\n\r");
+  }
+}
+
+// ====================================================
+// Выполнить командную строку, в которой могут быть несколько команд через ; 
+// ====================================================
+void terminal_execute(char *str) {
+  int byte;
+  char *next_cmd_start;
+  int i;
+  while(*(str) == ' ') str++;
+  // Если несколько команд, разделённых точкой с запятой, то выполняем их последовательно
+  next_cmd_start = strchr(str, ';');
+  if(!next_cmd_start) {
+    terminal_execute_single(str);
+  }
+  else {
+    while(next_cmd_start) {
+      // Вместо точки с запятой подставить конец строки
+      *(next_cmd_start) = 0;
+      terminal_execute_single(str);
+      // Вернуть точку с запятой
+      *(next_cmd_start) = ';';
+      // Переставить указатель выполняемой команды на после точки с запятой
+      str = next_cmd_start + 1;
+      // Найти следующую точку с запятой
+      next_cmd_start = strchr(str, ';');
+      if(!next_cmd_start) {
+        while(*(str) == ' ') str++;
+        terminal_execute_single(str);
       }
     }
-    else if(strcmp(buff, "mkdir") == 0) {
-      terminal_print("Usage: mkdir {directory}\n\r");
+  }
+}
+
+// ====================================================
+// Выполнить одну команду терминала
+// ====================================================
+void terminal_execute_single(char *str) {
+  char buff[80];
+  int i;
+  int byte;
+  int error;
+  int freq;
+  char found = 0;
+
+  IPAddress ip;
+  fs::File file;
+  fs::File current_dir;
+
+  if(strcmp(str, "millis") == 0) {
+    sprintf(buff, "%d\n\r", millis());
+    terminal_print(buff);
+  }
+  else if(strcmp(str, "micros") == 0) {
+    sprintf(buff, "%d\n\r", micros());
+    terminal_print(buff);
+  }
+  else if(strcmp(str, "clear") == 0) {
+    terminal_clear_screen();
+  }
+  else if(strcmp(str, "reset") == 0) {
+    terminal_clear_screen();
+  }
+  else if(strcmp(str, "reboot") == 0) {
+    ESP.restart();
+  }
+  else if(strcmp(str, "exit") == 0) {
+    global_exit_flag = 1;
+  }
+  else if(strcmp(str, "date") == 0) {
+    //set_local_time_from_unix_timestamp();
+    sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d\n\r", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
+    terminal_print(buff);
+  }
+  else if(strcmp(str, "sleep") == 0) {
+    terminal_print("Usage: sleep {seconds}\n\r");
+  }
+  else if(memcmp(str, "sleep ", 6) == 0) {
+    sscanf(str + 6, "%d", &i);
+    delay(1000 * i);
+  }
+  else if(strcmp(str, "delay") == 0) {
+    terminal_print("Usage: delay {milliseconds}\n\r");
+  }
+  else if(memcmp(str, "delay ", 6) == 0) {
+    sscanf(str + 6, "%d", &i);
+    delay(i);
+  }
+  else if(strcmp(str, "serial") == 0) {
+    terminal_serial("");
+  }
+  else if(memcmp(str, "serial ", 7) == 0) {
+    terminal_serial(str + 7);
+  }
+  else if(strcmp(str, "format ffat") == 0) {
+    if(FFat.format() == true) {
+      terminal_print("Format FFat completed\n\r");
     }
-    else if(memcmp(buff, "mkdir ", 6) == 0) {
-      if(Storage.mkdir(buff + 6)) {
-        terminal_print("OK\n\r");
-      }
-      else {
-        terminal_print("Unable to create directory\n\r");
-      }
-    }
-    else if(strcmp(buff, "rmdir") == 0) {
-      terminal_print("Usage: rmdir {directory}\n\r");
-    }
-    else if(memcmp(buff, "rmdir ", 6) == 0) {
-      if(Storage.rmdir(buff + 6)) {
-        terminal_print("OK\n\r");
-      }
-      else {
-        terminal_print("Unable to remove directory\n\r");
-      }
-    }
-    else if(strcmp(buff, "cat") == 0) {
-      terminal_print("Usage: cat {file}\n\r");
-    }
-    else if(memcmp(buff, "cat ", 4) == 0) {
-      file = Storage.open(buff + 4);
-      if(file) {
-        while(file.available()) {
-          byte = file.read();
-          if(byte == '\n' && file.peek() == '\r') file.read();
-          if(byte == '\r' && file.peek() == '\n') file.read();
-          if(byte == '\n' || byte == '\r') {
-            terminal_print_char('\n');
-            terminal_print_char('\r');
-          }
-          else {
-            terminal_print_char(byte);
-          }
-        }
-        file.close();
-      }
-      else {
-        terminal_print("File not found\n\r");
-      }
-    }
-    else if(strcmp(buff, "touch") == 0) {
-      terminal_print("Usage: touch {filename}\n\r");
-    }
-    else if(memcmp(buff, "touch ", 6) == 0) {
-      file = Storage.open(buff + 6, FILE_APPEND);
-      if(file) {
-        file.close();
-        terminal_print("OK\n\r");
-      }
-      else {
-        terminal_print("File not found\n\r");
-      }
-    }
-    else if(strcmp(buff, "rm") == 0) {
-      terminal_print("Usage: rm {filename}\n\r");
-    }
-    else if(memcmp(buff, "rm ", 3) == 0) {
-      if(Storage.remove(buff + 3)) {
-        terminal_print("OK\n\r");
-      }
-      else {
-        terminal_print("File not found\n\r");
-      }
-    }
-    // I2C
-    else if(strcmp(buff, "i2c") == 0) {
-      found = 0;
-      Wire.begin(I2C_SDA, I2C_SCL);
-      for(i = 1; i < 127; i++) {
-        Wire.beginTransmission(i);
-        error = Wire.endTransmission();
-        if(error == 0) {
-          sprintf(buff, "0x%02x\n\r", i);
-          terminal_print(buff);
-          found = 1;
-        }
-      }
-      if(!found) {
-        terminal_print("No I2C devices found\n\r");
-      }
-    }
-    // Звуки
-    else if(strcmp(buff, "beep") == 0) {
-      beep_if_enabled();
-    }
-    else if(strcmp(buff, "notone") == 0) {
-      noTone(BUZZER_PIN);
-    }
-    else if(strcmp(buff, "tone") == 0) {
-      terminal_print("Usage: tone {freq}\n\r");
-    }
-    else if(memcmp(buff, "tone ", 5) == 0) {
-      sscanf(buff + 5, "%d", &freq);
-      tone(BUZZER_PIN, freq);
-    }
-#ifdef IS_WIFI_ENABLED
-    else if(strcmp(buff, "ip") == 0) {
-      sprintf(buff, "%s\n\r", WiFi.localIP().toString());
-      terminal_print(buff);
-    }
-    else if(strcmp(buff, "netmask") == 0) {
-      sprintf(buff, "%s\n\r", WiFi.subnetMask().toString());
-      terminal_print(buff);
-    }
-    else if(strcmp(buff, "gateway") == 0) {
-      sprintf(buff, "%s\n\r", WiFi.gatewayIP().toString());
-      terminal_print(buff);
-    }
-    else if(strcmp(buff, "dns") == 0) {
-      sprintf(buff, "%s\n\r", WiFi.dnsIP().toString());
-      terminal_print(buff);
-    }
-    else if(strcmp(buff, "rssi") == 0) {
-      sprintf(buff, "%d\n\r", WiFi.RSSI());
-      terminal_print(buff);
-    }
-    else if(strcmp(buff, "host") == 0) {
-      terminal_print("Usage: host {hostname}\n\r");
-    }
-    else if(memcmp(buff, "host ", 5) == 0) {
-      WiFi.hostByName(buff + 5, ip);
-      sprintf(buff, "%s\n\r", ip.toString().c_str());
-      terminal_print(buff);
-    }
-    else if(strcmp(buff, "ping") == 0) {
-      terminal_print("Usage: ping {hostname}\n\r");
-    }
-    else if(memcmp(buff, "ping ", 5) == 0) {
-      terminal_ping(buff + 5);
-    }
-    else if(strcmp(buff, "telnet") == 0) {
-      terminal_print("Usage: telnet {host} {port}");
-    }
-    else if(memcmp(buff, "telnet ", 7) == 0) {
-      terminal_telnet(buff + 7);
-    }
-#ifdef IS_SSH_ENABLED
-    else if(strcmp(buff, "ssh") == 0) {
-      terminal_print("Usage: ssh {host} {port}");
-    }
-    else if(memcmp(buff, "ssh ", 4) == 0) {
-      terminal_ssh(buff + 4);
-    }
-#endif
-#endif
     else {
-      if(strcmp(buff, "")) {
-        terminal_print("Unknown command\n\r");
+      terminal_print("Format FFat failed\n\r");
+    }
+    FFat.begin(true);
+    Storage.mkdir("/Settings");
+  }
+  else if(strcmp(str, "ls") == 0) {
+    terminal_print("Usage: ls {directory}\n\r");
+  }
+  else if(memcmp(str, "ls ", 3) == 0) {
+    current_dir = Storage.open(str + 3);
+    if(current_dir && current_dir.isDirectory()) {
+      while(file = current_dir.openNextFile()) {
+        terminal_print((char *)file.name());
+        terminal_print("\n\r");
       }
     }
-
-    if(global_exit_flag) {
-      touchExitActionReset();
-      return;
+    else {
+      terminal_print("Unable to open directory\n\r");
+    }
+  }
+  else if(strcmp(str, "mkdir") == 0) {
+    terminal_print("Usage: mkdir {directory}\n\r");
+  }
+  else if(memcmp(str, "mkdir ", 6) == 0) {
+    if(Storage.mkdir(str + 6)) {
+      terminal_print("OK\n\r");
+    }
+    else {
+      terminal_print("Unable to create directory\n\r");
+    }
+  }
+  else if(strcmp(str, "rmdir") == 0) {
+    terminal_print("Usage: rmdir {directory}\n\r");
+  }
+  else if(memcmp(str, "rmdir ", 6) == 0) {
+    if(Storage.rmdir(str + 6)) {
+      terminal_print("OK\n\r");
+    }
+    else {
+      terminal_print("Unable to remove directory\n\r");
+    }
+  }
+  else if(strcmp(str, "cat") == 0) {
+    terminal_print("Usage: cat {file}\n\r");
+  }
+  else if(memcmp(str, "cat ", 4) == 0) {
+    file = Storage.open(str + 4);
+    if(file) {
+      while(file.available()) {
+        byte = file.read();
+        if(byte == '\n' && file.peek() == '\r') file.read();
+        if(byte == '\r' && file.peek() == '\n') file.read();
+        if(byte == '\n' || byte == '\r') {
+          terminal_print_char('\n');
+          terminal_print_char('\r');
+        }
+        else {
+          terminal_print_char(byte);
+        }
+      }
+      file.close();
+    }
+    else {
+      terminal_print("File not found\n\r");
+    }
+  }
+  else if(strcmp(str, "touch") == 0) {
+    terminal_print("Usage: touch {filename}\n\r");
+  }
+  else if(memcmp(str, "touch ", 6) == 0) {
+    file = Storage.open(str + 6, FILE_APPEND);
+    if(file) {
+      file.close();
+      terminal_print("OK\n\r");
+    }
+    else {
+      terminal_print("File not found\n\r");
+    }
+  }
+  else if(strcmp(str, "rm") == 0) {
+    terminal_print("Usage: rm {filename}\n\r");
+  }
+  else if(memcmp(str, "rm ", 3) == 0) {
+    if(Storage.remove(str + 3)) {
+      terminal_print("OK\n\r");
+    }
+    else {
+      terminal_print("File not found\n\r");
+    }
+  }
+  // I2C
+  else if(strcmp(str, "i2c") == 0) {
+    found = 0;
+    Wire.begin(I2C_SDA, I2C_SCL);
+    for(i = 1; i < 127; i++) {
+      Wire.beginTransmission(i);
+      error = Wire.endTransmission();
+      if(error == 0) {
+        sprintf(buff, "0x%02x\n\r", i);
+        terminal_print(buff);
+        found = 1;
+      }
+    }
+    if(!found) {
+      terminal_print("No I2C devices found\n\r");
+    }
+  }
+  // Звуки
+  else if(strcmp(str, "beep") == 0) {
+    beep_if_enabled();
+  }
+  else if(strcmp(str, "notone") == 0) {
+    noTone(BUZZER_PIN);
+  }
+  else if(strcmp(str, "tone") == 0) {
+    terminal_print("Usage: tone {freq}\n\r");
+  }
+  else if(memcmp(str, "tone ", 5) == 0) {
+    sscanf(str + 5, "%d", &freq);
+    tone(BUZZER_PIN, freq);
+  }
+#ifdef IS_WIFI_ENABLED
+  else if(strcmp(str, "ip") == 0) {
+    sprintf(buff, "%s\n\r", WiFi.localIP().toString());
+    terminal_print(buff);
+  }
+  else if(strcmp(str, "netmask") == 0) {
+    sprintf(buff, "%s\n\r", WiFi.subnetMask().toString());
+    terminal_print(buff);
+  }
+  else if(strcmp(str, "gateway") == 0) {
+    sprintf(buff, "%s\n\r", WiFi.gatewayIP().toString());
+    terminal_print(buff);
+  }
+  else if(strcmp(str, "dns") == 0) {
+    sprintf(buff, "%s\n\r", WiFi.dnsIP().toString());
+    terminal_print(buff);
+  }
+  else if(strcmp(str, "rssi") == 0) {
+    sprintf(buff, "%d\n\r", WiFi.RSSI());
+    terminal_print(buff);
+  }
+  else if(strcmp(str, "host") == 0) {
+    terminal_print("Usage: host {hostname}\n\r");
+  }
+  else if(memcmp(str, "host ", 5) == 0) {
+    WiFi.hostByName(str + 5, ip);
+    sprintf(buff, "%s\n\r", ip.toString().c_str());
+    terminal_print(buff);
+  }
+  else if(strcmp(str, "ping") == 0) {
+    terminal_print("Usage: ping {hostname}\n\r");
+  }
+  else if(memcmp(str, "ping ", 5) == 0) {
+    terminal_ping(str + 5);
+  }
+  else if(strcmp(str, "telnet") == 0) {
+    terminal_print("Usage: telnet {host} {port}");
+  }
+  else if(memcmp(str, "telnet ", 7) == 0) {
+    terminal_telnet(str + 7);
+  }
+#ifdef IS_SSH_ENABLED
+  else if(strcmp(str, "ssh") == 0) {
+    terminal_print("Usage: ssh {host} {port}");
+  }
+  else if(memcmp(str, "ssh ", 4) == 0) {
+    terminal_ssh(str + 4);
+  }
+#endif
+#endif
+  else {
+    if(strcmp(str, "")) {
+      terminal_print("Unknown command\n\r");
     }
   }
 }
@@ -2670,16 +2742,24 @@ int terminal_ssh(char *arg) {
   int port = 22;
   int bytes_read;
   char host[80] = "example.com";
-  char ssh_user[80] = "username";
+  char ssh_user[80] = "user";
   char ssh_pass[80] = "password";
   char buff[80];
   int rc;
   ssh_channel channel;
+Serial.println(__LINE__); delay(1000);
   ssh_session my_session = ssh_new();
-
+  if (my_session == NULL) {
+    Serial.println("Error creating SSH session");
+    return 0;
+  }
+Serial.println(__LINE__); delay(1000);
   ssh_options_set(my_session, SSH_OPTIONS_HOST, host);
+Serial.println(__LINE__); delay(1000);
   ssh_options_set(my_session, SSH_OPTIONS_USER, ssh_user);
+Serial.println(__LINE__); delay(1000);
   rc = ssh_connect(my_session);
+Serial.println(__LINE__); delay(1000);
   if (rc != SSH_OK) {
     terminal_print("Error connecting to server\n\r");
     terminal_print((char *)ssh_get_error(my_session));
@@ -2689,7 +2769,9 @@ int terminal_ssh(char *arg) {
     return 0;
   }
   
+Serial.println(__LINE__); delay(100);
   rc = ssh_userauth_password(my_session, NULL, ssh_pass);
+Serial.println(__LINE__); delay(100);
   if (rc != SSH_AUTH_SUCCESS) {
     terminal_print("Error authenticating\n\r");
     terminal_print((char *)ssh_get_error(my_session));
@@ -2701,7 +2783,9 @@ int terminal_ssh(char *arg) {
   }
 
   // Open channel
+Serial.println(__LINE__); delay(100);
   channel = ssh_channel_new(my_session);
+Serial.println(__LINE__); delay(100);
   if (channel == NULL) {
     terminal_print("Unable to open channel\n\r");
     terminal_show_screen();
@@ -2709,7 +2793,9 @@ int terminal_ssh(char *arg) {
   }
 
   // Open session
+Serial.println(__LINE__); delay(100);
   rc = ssh_channel_open_session(channel);
+Serial.println(__LINE__); delay(100);
   if (rc != SSH_OK) {
     terminal_print("Unable to open session\n\r");
     terminal_show_screen();
@@ -2718,6 +2804,7 @@ int terminal_ssh(char *arg) {
   }
 
   // Request PTY
+Serial.println(__LINE__); delay(100);
   if (ssh_channel_request_pty(channel) != SSH_OK) {
       terminal_print("Unable to request PTY\n\r");
       terminal_show_screen();
@@ -2727,6 +2814,7 @@ int terminal_ssh(char *arg) {
   }
 
   // Request shell
+Serial.println(__LINE__); delay(100);
   if (ssh_channel_request_shell(channel) != SSH_OK) {
       terminal_print("Unable to request shell\n\r");
       terminal_show_screen();
@@ -2736,6 +2824,7 @@ int terminal_ssh(char *arg) {
   }
 
   while(1) {
+Serial.println(__LINE__); delay(100);
     bytes_read = ssh_channel_read(channel, buff, 1, 0);
     if(bytes_read > 0) {
       byte = buff[0];
@@ -3381,18 +3470,25 @@ void music_file_to_list(fs::File file, char *buff) {
 }
 
 void music_play(char *filename) {
-  drawError("Not implemented yet");
-  /*Audio audio;
-  fs::File file;
-  Serial.println(filename);
-  audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-  audio.setVolume(21);
-  //audio.setBufferSize(32000);
-  audio.connecttoFS(FFat, filename);
-  Serial.println("Loop...");
-  while(1) {
-    audio.loop();
-  }*/
+  AudioGeneratorMP3 *mp3;
+  AudioFileSourceFS *file;
+  AudioOutputI2SNoDAC *out;
+  AudioFileSourceID3 *id3;
+
+  file = new AudioFileSourceFS(Storage, filename);
+  id3 = new AudioFileSourceID3(file);
+  out = new AudioOutputI2SNoDAC();
+  out->SetPinout(-1, -1, BUZZER_PIN);
+  mp3 = new AudioGeneratorMP3();
+  mp3->begin(id3, out);
+  while(mp3->isRunning()) {
+    if(!mp3->loop()) {
+      mp3->stop();
+    }
+    if(touchCheckNowait() == 1) {
+      mp3->stop();
+    }
+  }
 }
 
 void music(char mode, char *io_buff) {
@@ -3430,6 +3526,125 @@ void music(char mode, char *io_buff) {
   }
 
   pim_app("Music", MUSIC_PATH, music_file_to_list, buttons, music_action);
+}
+
+// ====================================================
+// Проигрыватель интернет-радио
+// ====================================================
+
+#define WEBRADIO_PATH "/Webradio"
+
+void webradio_action(int action_index, char *filename) {
+  fs::File file;
+  char buff[80];
+  if(action_index == 0) {
+    // Редактируем новый файл
+    sprintf(buff, "%s/%s", WEBRADIO_PATH, "__New");
+    edit_file("New webradio", buff);
+
+    file = Storage.open(buff);
+    if(!file) {
+      return;
+    }
+    else if(file.size() == 0) {
+      file.close();
+      Storage.remove(buff);
+    }
+    else {
+      file.close();
+      // Меняем название в соответствии с содержимым
+      pim_rename_file(WEBRADIO_PATH, "__New", NULL);
+    }
+  }
+  else if(action_index == 1) {
+    // Воспроизведение
+    sprintf(buff, "%s/%s", WEBRADIO_PATH, filename);
+    webradio_play(buff);
+  }
+  else if(action_index == 2) {
+    // Редактируем существующий файл
+    sprintf(buff, "%s/%s", WEBRADIO_PATH, filename);
+    edit_file("Edit webradio", buff);
+
+    // Меняем название в соответствии с содержимым
+    pim_rename_file(WEBRADIO_PATH, filename, NULL);
+  }
+  else if(action_index == 3) {
+    if(drawConfirm("Delete this webradio?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(buff, "%s/%s", WEBRADIO_PATH, filename);
+      Storage.remove(buff);
+    }
+  }
+}
+
+void webradio_file_to_list(fs::File file, char *buff) {
+  stream_get_line_by_index(file, 0, buff);
+}
+
+void webradio_play(char *filename) {
+  char url[80];
+  AudioGeneratorMP3 *mp3;
+  AudioFileSourceICYStream *file;
+  AudioOutputI2SNoDAC *out;
+  AudioFileSourceID3 *id3;
+  AudioFileSourceBuffer *buff;
+
+  file_get_line_by_index(filename, 1, url);
+Serial.println(url);
+  file = new AudioFileSourceICYStream(url);
+  buff = new AudioFileSourceBuffer(file, 2048);
+  out = new AudioOutputI2SNoDAC();
+  out->SetPinout(-1, -1, BUZZER_PIN);
+  mp3 = new AudioGeneratorMP3();
+  mp3->begin(buff, out);
+
+  while(mp3->isRunning()) {
+    if(!mp3->loop()) {
+      mp3->stop();
+    }
+    if(touchCheckNowait() == 1) {
+      mp3->stop();
+    }
+  }
+  Serial.println("Finished");
+}
+
+void webradio(char mode, char *io_buff) {
+  char *buttons[] = {
+    "New", "Play", "Edit", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01001100, B00110010,
+    B01010000, B00001010,
+    B01010101, B10101010,
+    B01010101, B10101010,
+    B01010001, B10001010,
+    B01001101, B10110010,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Webradio");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  pim_app("Webradio", WEBRADIO_PATH, webradio_file_to_list, buttons, webradio_action);
 }
 
 // ====================================================
@@ -4585,6 +4800,7 @@ void schedule(char mode, char *io_buff) {
   char next_month_dow;
   char is_lap_year;
   char touch_check_flag;
+  char record_present = 0;
 
   char *day_of_week_name[] = {
     "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
@@ -4669,6 +4885,7 @@ void schedule(char mode, char *io_buff) {
 
       prev_month_dow = 0;
       next_month_dow = 0;
+      record_present = 0;
       for(cal_row = 0; cal_row < 7; cal_row++) {
         for(cal_col = 0; cal_col < 7; cal_col++) {
           if(cal_row == 0) {
@@ -4679,6 +4896,16 @@ void schedule(char mode, char *io_buff) {
               prev_month_dow = cal_col;
               continue;
             }
+
+            record_present = 0;
+            // Проверяем заметки на отображаемый день
+            sprintf(buff, "%s/%04d-%02d-%02d", SCHEDULE_PATH, year, month, cal_day);
+            file = Storage.open(filename);
+            if(file) {
+              record_present = 1;
+              file.close();
+            }
+
             sprintf(buff, "%d", cal_day);
             next_month_dow = cal_col;
             if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
@@ -4708,6 +4935,9 @@ void schedule(char mode, char *io_buff) {
             tft.setTextColor(color_scheme_fg, color_scheme_bg);
           }
           tft.drawCentreString(buff, (cal_col + 0.5) * tft.width() / 7, 70 + cal_row * 32, FONT_DEFAULT);
+          if(record_present) {
+            tft.drawRightString("+", (cal_col + 1) * tft.width() / 7, 70 + cal_row * 32, FONT_MONOSPACE);
+          }
         }
       }
       redraw_flag = 0;
@@ -7461,6 +7691,7 @@ void get_current_timestamp_wifi_begin() {
 
 void timeSyncCallback(struct timeval *tv) {
   Serial.println("timeSyncCallback");
+  global_unixtime_synced = 1;
   time(&global_unixtime_retrieved);
   //drawAppTitleRight();
 }
@@ -7474,6 +7705,7 @@ void get_current_timestamp_wifi() {
 }
 
 #define GOPHER_BYTES_MAX 32768
+#define GOPHER_HISTORY_LENGTH 10
 
 void gopher(char mode, char *io_buff) {
   int wifi_status;
@@ -7482,13 +7714,15 @@ void gopher(char mode, char *io_buff) {
   char path[80];
   char address_to_go[160];
   char *page = NULL;
+  char *history[10];
   char reload_page;
   char ask_address;
   char type;
   int page_offset;
   int button_pressed;
+  int i;
   char *buttons[] = {
-    "PgUp", "Home", "URL", "PgDn",
+    "PgUp", "Back", "URL", "PgDn",
     NULL
   };
   char app_icon[] = {
@@ -7521,6 +7755,11 @@ void gopher(char mode, char *io_buff) {
   }
 
   page = (char *)malloc(GOPHER_BYTES_MAX * sizeof(char));
+
+  for(i = 0; i < GOPHER_HISTORY_LENGTH; i++) {
+    history[i] = (char *)malloc(80 * sizeof(char));
+    strcpy(history[i], "");
+  }
   clearScreen();
   drawAppTitle("Gopher Browser");
 
@@ -7533,19 +7772,27 @@ void gopher(char mode, char *io_buff) {
   ask_address = 0;
   
   strcpy(address, "gopher.floodgap.com");
-  //strcpy(address, "gopher.floodgap.com:70/0gopher/proxy");
+  //strcpy(history[0], address);
+
   while(1) {
     // Спрашиваем адрес
     if(ask_address) {
-      drawPrompt("Enter address", address);
-      if(strlen(address) > 0) {
-        reload_page = 1;
+      if(drawPrompt("Enter address", address) == 0) {
+        if(strlen(address) > 0) {
+          if(strcmp(history[0], address) != 0) {
+            for(i = GOPHER_HISTORY_LENGTH - 1; i > 0 ; i--) {
+              strcpy(history[i], history[i - 1]);
+            }
+            strcpy(history[0], address);
+          }
+          reload_page = 1;
+        }
       }
       ask_address = 0;
     }
     if(reload_page) {
+      page_offset = 0;
       if(gopher_get_page(address, page, &type)) {
-        page_offset = 0;
       }
       else {
         drawError("Error fetching data");
@@ -7563,10 +7810,21 @@ void gopher(char mode, char *io_buff) {
 
     drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 4, 1);
     
+for(i = 0; i < GOPHER_HISTORY_LENGTH; i++) {
+  Serial.printf("%d %s\n", i, history[i]);
+}
+
     touchWaitPress();
     gopher_show_page(page, &page_offset, type, 1, address_to_go);
     if(strlen(address_to_go) > 0) {
       strcpy(address, address_to_go);
+      if(strcmp(history[0], address) != 0) {
+        for(i = GOPHER_HISTORY_LENGTH - 1; i > 0 ; i--) {
+          strcpy(history[i], history[i - 1]);
+        }
+        strcpy(history[0], address);
+      }
+
       reload_page = 1;
     }
 
@@ -7577,7 +7835,21 @@ void gopher(char mode, char *io_buff) {
         if(page_offset < 0) page_offset = 0;
       }
       if(button_pressed == 1) {
-        strcpy(address, "gopher.floodgap.com");
+        // Если текущий адрес уже в истории, то сдвинуть адреса
+        if(strcmp(address, history[0]) == 0) {
+          for(i = 0; i < GOPHER_HISTORY_LENGTH - 2; i++) {
+            strcpy(history[i], history[i + 1]);
+          }
+        }
+        if(history[0][0]) {
+          strcpy(address, history[0]);
+        }
+        else {
+          strcpy(address, "gopher.floodgap.com");
+        }
+        for(i = 0; i < GOPHER_HISTORY_LENGTH - 2; i++) {
+          strcpy(history[i], history[i + 1]);
+        }
         reload_page = 1;
       }
       if(button_pressed == 2) {
@@ -7593,6 +7865,9 @@ void gopher(char mode, char *io_buff) {
       drawAppTitle("Exit");
       touchWaitRelease();
       free(page);
+      for(i = 0; i < GOPHER_HISTORY_LENGTH; i++) {
+        if(history[i]) free(history[i]);
+      }
       touchExitActionReset();
       return;
     }
@@ -7683,6 +7958,7 @@ int gopher_get_page(char *address, char *buff_output, char *type) {
     return 1;
   }
 
+  strcpy(buff_output, "");
   if (client.connect(server, port)) {
     client.println(path);
     query_start_millis = millis();
@@ -7691,7 +7967,6 @@ int gopher_get_page(char *address, char *buff_output, char *type) {
       if(millis() - query_start_millis > 10000) return 0;
     }
 
-    strcpy(buff_output, "");
     while (client.available()) {
       line = client.readStringUntil('\r');
       //Serial.println(line);
@@ -7703,6 +7978,14 @@ int gopher_get_page(char *address, char *buff_output, char *type) {
     }
     client.stop();
     return 1;
+  }
+  else {
+    if(type == 0) {
+      strcpy(buff_output, "Unable to connect");
+    }
+    else {
+      strcpy(buff_output, "3Unable to connect\t\terror.host\n0");
+    }
   }
   return 0;
 }
@@ -8607,31 +8890,13 @@ int get_file_https(char *url, char *buff) {
   int offset;
   WiFiClientSecure *client = new WiFiClientSecure;
   HTTPClient https;
-  WiFiClient* stream;
-
-  //Serial.println(url);
 
   if(client) {
     client->setInsecure();
     if (https.begin(*client, url)) {
       httpResponseCode = https.GET();
-      //Serial.println(httpResponseCode);
-      //Serial.println(https.errorToString(httpResponseCode));
       if (httpResponseCode > 0) {
         strcpy(buff, https.getString().c_str());
-        // Чтение через stream добавляет лишние байты (?!)
-        /*stream = https.getStreamPtr();
-        offset = 0;
-        while(stream->available()) {
-          byte = stream->read();
-          buff[offset] = byte;
-          offset++;
-          buff[offset] = 0;
-        }*/
-        //Serial.println(offset);
-        //Serial.println("---");
-        //Serial.println(buff);
-        //Serial.println("---");
         https.end();
       }
       https.end();
@@ -9586,7 +9851,7 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
           irc_chat_history_add(chat_history[0], buff);
           if(current_chat != 0) {
             // Копируем в адресный чат
-            sprintf(buff, "%s: %s", nick, message);
+            sprintf(buff, "<%s> %s", nick, message);
             irc_chat_history_add(chat_history[current_chat], buff);
           }
         }
@@ -11934,6 +12199,100 @@ void edit_file(char *title, char *filename) {
   }
 }
 
+void touch_calibration_test(char mode, char *io_buff) {
+  char buff[80];
+  TS_Point p;
+  int i;
+  int x, y;
+  
+  int touch_x;
+  int touch_y;
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00111010,
+    B01000000, B01110010,
+    B01000000, B11100010,
+    B01000001, B11000010,
+    B01000011, B10000010,
+    B01000111, B00000010,
+    B01010100, B00000010,
+    B01001000, B00000010,
+    B01010100, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Calibration2");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  app_title_enabled = 0;
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+  clearScreen();
+  for(y = 0; y < tft.height() / CALIBRATION_QUANT; y++) {
+    for(x = 0; x < tft.width() / CALIBRATION_QUANT; x++) {
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      tft.drawCentreString("Touch cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
+      tft.drawLine(
+        x * CALIBRATION_QUANT - 5 + CALIBRATION_QUANT / (2),
+        y * CALIBRATION_QUANT - 5 + CALIBRATION_QUANT / (2),
+        x * CALIBRATION_QUANT + 5 + CALIBRATION_QUANT / (2),
+        y * CALIBRATION_QUANT + 5 + CALIBRATION_QUANT / (2),
+        color_scheme_fg
+      );
+      tft.drawLine(
+        x * CALIBRATION_QUANT - 5 + CALIBRATION_QUANT / (2),
+        y * CALIBRATION_QUANT + 5 + CALIBRATION_QUANT / (2),
+        x * CALIBRATION_QUANT + 5 + CALIBRATION_QUANT / (2),
+        y * CALIBRATION_QUANT - 5 + CALIBRATION_QUANT / (2),
+        color_scheme_fg
+      );
+
+      touchWaitPress();
+      delay(200);
+      p = touchscreen.getPoint();
+      calibration_x[x] = p.x;
+      calibration_y[y] = p.y;
+
+      clearScreen();
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      tft.drawCentreString("Release", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
+      touchWaitRelease();
+      delay(200);
+    }
+  }
+
+  clearScreen();
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
+  tft.drawCentreString("Done!", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
+  touchWaitRelease();
+  touch_calibration_save_test();
+  
+  clearScreen();
+  while(1) {
+    tft.drawPixel(x + CALIBRATION_QUANT / (2), y + CALIBRATION_QUANT / (2), TFT_WHITE);
+    touchWaitPress();
+    p = touchscreen.getPoint();
+    x = touchMapX_test(p.x, p.y);
+    y = touchMapY_test(p.x, p.y);
+    Serial.printf("px = %d, py = %d, x=%d, y=%d\n", p.x, p.y, x, y);
+
+    tft.drawPixel(x + CALIBRATION_QUANT / (2), y + CALIBRATION_QUANT / (2), TFT_BLACK);
+    delay(10);
+  }
+}
+
 void touch_calibration(char mode, char *io_buff) {
   char buff[80];
   TS_Point p1, p2, p3;
@@ -11971,6 +12330,7 @@ void touch_calibration(char mode, char *io_buff) {
   }
 
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
+  app_title_enabled = 0;
 
   clearScreen();
   tft.drawCentreString("Touch left top cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
@@ -12035,6 +12395,48 @@ void touch_calibration_save() {
   if(file) {
     sprintf(buff, "%f %f %f %f %f %f", ax, bx, cx, ay, by, cy);
     file.print(buff);
+    file.close();
+  }
+}
+
+// Сохранение данных калибровки в ФС
+void touch_calibration_save_test() {
+  fs::File file;
+  char buff[80];
+  int x, y;
+
+  file = Storage.open("/Settings/Calibration2", FILE_WRITE);
+  if(file) {
+    for(x = 0; x < tft.width() / CALIBRATION_QUANT; x++) {
+      sprintf(buff, "%d\n", calibration_x[x]);
+      file.print(buff);
+    }
+    
+    for(y = 0; y < tft.height() / CALIBRATION_QUANT; y++) {
+      sprintf(buff, "%d\n", calibration_y[y]);
+      file.print(buff);
+    }
+    file.close();
+  }
+}
+
+// Загрузка данных калибровки из ФС
+void touch_calibration_load_test() {
+  fs::File file;
+  char *buff;
+  int i;
+  int x, y;
+
+  file = Storage.open("/Settings/Calibration2");
+  if(file) {
+    for(x = 0; x < tft.width() / 16; x++) {
+      buff = (char*)file.readStringUntil('\n').c_str();
+      sscanf(buff, "%d", calibration_x + x);
+    }
+    for(y = 0; y < tft.height() / 16; y++) {
+      buff = (char*)file.readStringUntil('\n').c_str();
+      sprintf(buff, "%d", calibration_y + y);
+    }
     file.close();
   }
 }
@@ -13774,7 +14176,11 @@ void drawAppTitleRight() {
 #endif
   tft.fillRect(tft.width() / 2, 0, tft.width() / 2, 16, color_scheme_title_bg);
   if(global_unixtime_retrieved > 0) {
-    sprintf(buff, "%s %d:%02d", wifi_connection_flag ? "W" : "", global_hours, global_minutes);
+    sprintf(buff, "%s%s %d:%02d",
+      wifi_connection_flag ? "W" : "",
+      global_unixtime_synced ? "T" : "",
+      global_hours, global_minutes
+    );
   }
   tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
   tft.drawRightString(buff, tft.width() - 16, 0, FONT_DEFAULT);
@@ -14352,6 +14758,45 @@ int touchCheckList(int left_x, int top_y, int width, int height, char **str, int
 }
 
 // Простые функции тач-скрина
+int touchMapX_test(int px, int py) {
+  int x, y;
+  int x_min = -1;
+  int y_min = -1;
+  float d_min = 100000;
+  float d_current;
+  // Ищем ближайшую точку
+  for(y = 0; y < tft.height() / CALIBRATION_QUANT; y++) {
+    for(x = 0; x < tft.width() / CALIBRATION_QUANT; x++) {
+      d_current = abs(px - calibration_x[x]) + abs(py - calibration_y[y]);
+      if(d_current < d_min) {
+        x_min = x;
+        y_min = y;
+        d_min = d_current;
+      }
+    }
+  }
+  return x_min * CALIBRATION_QUANT;
+}
+
+int touchMapY_test(int px, int py) {
+  int x, y;
+  int x_min = -1;
+  int y_min = -1;
+  float d_min = 100000;
+  float d_current;
+  // Ищем ближайшую точку
+  for(y = 0; y < tft.height() / CALIBRATION_QUANT; y++) {
+    for(x = 0; x < tft.width() / CALIBRATION_QUANT; x++) {
+      d_current = abs(px - calibration_x[x]) + abs(py - calibration_y[y]);
+      if(d_current < d_min) {
+        x_min = x;
+        y_min = y;
+        d_min = d_current;
+      }
+    }
+  }
+  return y_min * CALIBRATION_QUANT;
+}
 
 int touchMapX(int x, int y) {
   return ax * x + bx * y + cx;
