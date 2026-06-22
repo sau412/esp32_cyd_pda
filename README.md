@@ -43,6 +43,10 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * To force perform calibration on start hold touchscreen during reboot
 * You can set password in Security app. Password asked when power on. Password stored in a plaintext, no encryption
 
+# Status bar symbols
+* W - connected to Wi-Fi
+* T - time synced with NTP
+
 # Applications/Functions
 * File management (with viewing and editing support)
 * Touch sensor calibration
