@@ -16,13 +16,15 @@ PDA is Personal Digital Assistant. Small handheld computer. Like smartphone with
 
 # Required libraries
 * TFT_eSPI - install via arduino library manager
-* XPT2046_Touchscreen - install via arduino library manager
+* XPT2046_Bitbang - install via arduino library manager
+* ESPping
+* Ticker
 
 # Installation via Arduino IDE
 * Install Arduino IDE
 * Install Required libraries (see above)
 * Replace User_Setup.h with a file from https://github.com/witnessmenow/ESP32-Cheap-Yellow-Display/blob/main/DisplayConfig/User_Setup.h
-* Add ESP32 libraries 
+* Add ESP32 libraries
 * Board Selection: In the Arduino IDE, go to Tools > Board and select ESP32-2432S028R
 * Set in Arduino IDE Tools - Partition scheme - No OTA (2 MP APP/2 MB FATFS)
 * Compile and upload
@@ -76,6 +78,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Terminal (with serial, ping, telnet)
 * Backup via web interface (very slow, ~40 minutes for download, upload is pretty fast)
 * Select autorun app
+* Oscilloscope
 
 ## PIM apps
 * Calculator
