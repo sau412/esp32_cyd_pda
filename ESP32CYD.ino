@@ -69,6 +69,7 @@
 - Устный счёт
 - MP3-плеер
 - Интернет-радио плеер
+- Осциллограф
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -136,12 +137,12 @@
   сбор погоды напрямую
 2026-06-22 Терминал, несколько команд через ";", убирать пробелы в начале строки, отдельная процедура для исполнения из строки,
   gopher кнопка "назад", MP3-плеер, интернет-радио плеер, Files открытие по двойному нажатию
+2026-06-23 Осциллограф (частично)
+2026-06-24 Осциллограф, настройки отступа экранной клавиатуры, запись на SD, программное чтение с тачпада, другая библиотека калибровки
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое:
 - (и) Крутая калибровка
 - (п) Просмотреть справку, может быть что-то добавить
-- (и) Запись на SD
-- (б) Проблема при работе с SD, запись больше 2 кб
 - (б) Гофер браузер - не прокручивать дальше конца файла
 - (д) Игра 2048
 - (д) Тетрис
@@ -166,6 +167,17 @@
 - (б) Gopher иногда дублируются строки
 - (д) IRC поддержка SSL (через WiFiClientSecure)
 - (б) Terminal, не отображается Exit
+- (б) В рисовании заголовок накладывается
+- (д) Рисование, выбор инструмента
+- (д) Просмотр скриншотов
+- (б) Schedule не создаётся папка
+- (д) Launcher увод стилуса
+- (д) Не отжимать кнопку если увод касания меньше 100 мс
+- (д) Цвета Volcov Commander
+- (д) Просмотр любых BMP
+- (д) Просмотр скриншотов
+- (д) RSS обработка при загрузке
+- (б) Картинки заголовок при сохранении
 
 - (н) drawProgress - рисовать прогресс операции
 - (н) Возможность выбрать звук для событий
@@ -176,18 +188,24 @@
 - (и) ssh - Debug exception reason: BREAK instr
 - (д) Гофер браузер - специальная домашняя страница для CYD с объяснениями
 - (д) Гофер браузер - менять домашнюю страницу
+- (н) Brainfuck интерпретатор
+- (н) Basic интерпретатор
+- (н) Пакетные файлы
+- (н) Вольтметр
+- (н) Триггерные кнопки (не ясно как использовать) или чекбоксы
+- (н) Квадратные значки в лаунчере
 
 */
 
 #define IS_WIFI_ENABLED
 //#define IS_SSH_ENABLED
 
-//#define USE_SD_AS_STORAGE
+#define USE_SD_AS_STORAGE
 
 // CYD
 #include <SPI.h>
 #include <TFT_eSPI.h>
-#include <XPT2046_Touchscreen.h>
+#include <XPT2046_Bitbang.h>
 
 // Filesystem for FFat and SD
 #include "FS.h"
@@ -203,9 +221,6 @@
 
 // Time events
 #include <Ticker.h>
-
-// MP3
-//#include <Audio.h>
 
 #ifdef IS_WIFI_ENABLED
 
@@ -260,7 +275,7 @@ TFT_eSPI tft = TFT_eSPI();
 #define XPT2046_CS 33    // T_CS
 
 #define BACKLIGHT_LED 21
-#define LIGHT_SENSOR 34
+#define LIGHT_SENSOR_PIN 34
 
 #define LED_RED 4
 #define LED_GREEN 16
@@ -279,9 +294,8 @@ TFT_eSPI tft = TFT_eSPI();
 #define SD_MISO 19
 #define SD_MOSI 23
 
-SPIClass sdSPI(HSPI);
-SPIClass touchscreenSPI = SPIClass(VSPI);
-XPT2046_Touchscreen touchscreen(XPT2046_CS, XPT2046_IRQ);
+SPIClass sdSPI(VSPI);
+XPT2046_Bitbang touchscreen(XPT2046_MOSI, XPT2046_MISO, XPT2046_CLK, XPT2046_CS);
 
 // Audio
 #define I2S_BCLK 26
@@ -367,8 +381,13 @@ int color_scheme_inactive_fg = colors[COLOR_INDEX_LIGHTGREY];
 // Цвет ссылки
 int color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
 
+// Настройки клавиатуры
 // Альтернативная клавиатура
 char alt_keyboard_enabled_flag = 1;
+// Отступы справа и слева
+char keyboard_indent_left = 0;
+char keyboard_indent_right = 0;
+#define KEYBOARD_INDENT_SIZE 24
 
 // Значки
 char enter[] = {
@@ -571,7 +590,7 @@ int calibration_y[320 / CALIBRATION_QUANT];
 
 unsigned long global_touch_begin;
 unsigned long global_touch_length;
-TS_Point global_touch_p;
+TouchPoint global_touch_p;
 int global_touch_x;
 int global_touch_y;
 char global_touch_present_flag;
@@ -670,6 +689,7 @@ void simon(char mode, char *io_buff);
 void n_back(char mode, char *io_buff);
 void mental_math(char mode, char *io_buff);
 void flashcards(char mode, char *io_buff);
+void oscilloscope(char mode, char *io_buff);
 
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
@@ -715,8 +735,6 @@ function_application_pointer all_apps[] = {
   breathe,
   piano,
   metronome,
-  music,
-  webradio,
   screen_test,
   screensaver,
   user_manual,
@@ -724,24 +742,13 @@ function_application_pointer all_apps[] = {
   brightness_app,
   touch_calibration,
   //touch_calibration_test,
-  fifteen,
-  lights_off,
-  snake,
-  turkish_kerchief,
-  memory_match,
-  hanoi_towers,
+  oscilloscope,
   life,
   i2c_scanner,
   dashboard,
   fuzzy_clock,
   set_clock,
   view_font,
-  timer,
-  stopwatch_app,
-  breathe,
-  dashboard,
-  fuzzy_clock,
-  set_clock,
   fifteen,
   lights_off,
   snake,
@@ -752,13 +759,7 @@ function_application_pointer all_apps[] = {
   simon,
   n_back,
   mental_math,
-  system_info,
-  screen_test,
-  security,
-  brightness_app,
   color_settings,
-  set_clock,
-  view_font,
   keyboard_control,
   sound_control,
   autorun,
@@ -780,7 +781,7 @@ function_application_pointer apps[40] = {
   books,
   passwords,
   tunes,
-  music, // Music app is not ready yet
+  music,
   webradio,
   //system_info,
   torch,
@@ -796,29 +797,14 @@ function_application_pointer apps[40] = {
 #endif
   counter,
   random_numbers,
-  //timer,
-  //stopwatch_app,
-  //breathe,
   piano,
   metronome,
-  //screen_test,
   screensaver,
   user_manual,
-  //security,
-  //brightness_app,
-  //touch_calibration,
-  //fifteen,
-  //lights_off,
-  //snake,
-  //turkish_kerchief,
-  //memory_match,
-  //hanoi_towers,
   life,
   i2c_scanner,
+  oscilloscope,
   dashboard,
-  //fuzzy_clock,
-  //set_clock,
-  //view_font,
   time_and_date_group,
   games_group,
   settings_group,
@@ -901,6 +887,11 @@ void launcher(char mode, char *io_buff) {
     B00000000, B00000000
   };
 
+  int row, col;
+  char app_name[80];
+  char app_icon[80];
+  int apps_eol = 0;
+  
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Launcher");
     return;
@@ -912,11 +903,6 @@ void launcher(char mode, char *io_buff) {
 
   clearScreen();
   drawAppTitle("Launcher");
-
-  int row, col;
-  char app_name[80];
-  char app_icon[80];
-  int apps_eol = 0;
 
   redraw_flag = 1;
   while(1) {
@@ -944,9 +930,8 @@ void launcher(char mode, char *io_buff) {
     touchWaitRelease();
     touchWaitPress();
 
-    TS_Point p = touchscreen.getPoint();
-    touch_x = touchMapX(p.x, p.y);
-    touch_y = touchMapY(p.x, p.y);
+    touch_x = global_touch_x;
+    touch_y = global_touch_y;
 
     row = (touch_y - 16) / 16;
     col = touch_x / (tft.width() / 2);
@@ -1468,7 +1453,7 @@ void system_info(char mode, char *io_buff) {
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
-    sprintf(buff, "Light sensor: %d    ", analogRead(LIGHT_SENSOR));
+    sprintf(buff, "Light sensor: %d    ", analogRead(LIGHT_SENSOR_PIN));
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
@@ -1640,8 +1625,6 @@ void files(char mode, char *io_buff) {
   char user_input[80];
   char byte;
   char **files = NULL; // 14 элементов на экране
-  int touch_x;
-  int touch_y;
   int i;
   char *file_operations[] = {
     "New",    "View", "Edit", "Rename",
@@ -2524,6 +2507,8 @@ int terminal_input_char() {
   static char alt_flag = 0;
   static char ctrl_flag = 0;
   static char esc_flag = 0;
+  int indent_left = (keyboard_indent_left ? KEYBOARD_INDENT_SIZE : 0);
+  int indent_width = (keyboard_indent_left ? KEYBOARD_INDENT_SIZE : 0) + (keyboard_indent_right ? KEYBOARD_INDENT_SIZE : 0);
   
   char *control_buttons[] = {
     "Esc", "Ctrl", "Alt", "Tab", "<", ">", "U", "D",
@@ -2552,8 +2537,8 @@ int terminal_input_char() {
     }
 
     if(terminal_keyboard_redraw_flag) {
-      drawButtonMatrix(0, 176, tft.width(), 24, control_buttons, 4, 1);
-      drawButtonMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
+      drawButtonMatrix(indent_left, 176, tft.width() - indent_width, 24, control_buttons, 4, 1);
+      drawButtonMatrix(indent_left, 200, tft.width() - indent_width, 120, keyboard_current, 12, 4);
       terminal_keyboard_redraw_flag = 0;
     }
 
@@ -2562,7 +2547,7 @@ int terminal_input_char() {
     }
     touchWaitPress();
 
-    button = touchCheckMatrix(0, 176, tft.width(), 24, control_buttons, 4, 1);
+    button = touchCheckMatrix(indent_left, 176, tft.width() - indent_width, 24, control_buttons, 4, 1);
     if(button != -1) {
       if(button == 0) {
         return 0x1B;
@@ -2580,7 +2565,7 @@ int terminal_input_char() {
       }
     }
 
-    button = touchCheckMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
+    button = touchCheckMatrix(indent_left, 200, tft.width() - indent_width, 120, keyboard_current, 12, 4);
     if(button != -1) {
       if(button == 11) {
         return 0x08;
@@ -4431,7 +4416,6 @@ void draw_edit(char *title, char *filename) {
   };
 
   int i;
-  TS_Point p;
   
   int color = TFT_BLACK;
   int color_index = 0;
@@ -4499,17 +4483,15 @@ void draw_edit(char *title, char *filename) {
   color = TFT_BLACK;
   while(1) {
     touchWaitPress();
-    while(touchscreen.tirqTouched() && touchscreen.touched()) {
-      touchCheckNowait();
-      p = touchscreen.getPoint();
-      touch_x = touchMapX(p.x, p.y);
-      touch_y = touchMapY(p.x, p.y);
+    while(global_touch_present_flag) {
+      touch_x = global_touch_x;
+      touch_y = global_touch_y;
 
       if(touch_x >= 0 && touch_x < tft.width() && touch_y >= 16 && touch_y < 304) {
         // Если линия движется медленно, рисовать линию
         // Нужно для избегания рывков линии при подъёме стилуса
         if(touch_started) {
-          if(abs(touch_x - prev_touch_x) + abs(touch_y - prev_touch_y) < 10) {
+          if(abs(touch_x - prev_touch_x) + abs(touch_y - prev_touch_y) < 20) {
             tft.drawLine(prev_touch_x, prev_touch_y, touch_x, touch_y, colors[color_index]);
           }
         }
@@ -4527,9 +4509,8 @@ void draw_edit(char *title, char *filename) {
       if(touch_x >= 0 && touch_x < tft.width() && touch_y >= 304 && touch_y < tft.height()) {
         color_index = floor(touch_x * 16 / tft.width());
       }
-      touchCheckNowait();
 
-      //touchWaitReleaseOrExit();
+      touchCheckNowait();
       if(global_exit_flag) {
         drawAppTitle("Exit");
         touchWaitRelease();
@@ -6159,7 +6140,7 @@ void life(char mode, char *io_buff) {
   int near_count;
   char current_cell;
   long prev_millis;
-  TS_Point p;
+  TouchPoint p;
   char *buttons[] = {
     "Start", "Step", "Stop", "Rnd", "Clr",
     NULL
@@ -6259,9 +6240,8 @@ void life(char mode, char *io_buff) {
 
     touchWaitPress();
     // Смотрим, нет ли попадания в поле
-    p = touchscreen.getPoint();
-    touch_x = touchMapX(p.x, p.y);
-    touch_y = touchMapY(p.x, p.y);
+    touch_x = global_touch_x;
+    touch_y = global_touch_y;
     if(touch_y >= 17 && touch_y < 280) {
       x = touch_x / LIFE_CELL_PIXELS;
       y = (touch_y - 17) / LIFE_CELL_PIXELS;
@@ -6360,7 +6340,7 @@ void snake(char mode, char *io_buff) {
   int touch_x, touch_y;
   int cell_color;
   long prev_millis = 0;
-  TS_Point p;
+  TouchPoint p;
   char direction = 'u';
   char next_direction = direction;
   int head_x = SNAKE_FIELD_WIDTH_CELLS / 2;
@@ -6546,14 +6526,11 @@ void snake(char mode, char *io_buff) {
       continue;
     }
 
-//    drawButtonMatrix(0, 280, tft.width(), 40, buttons, 5, 1);
-
     touchWaitPress();
     // Смотрим, нет ли попадания в поле
-    p = touchscreen.getPoint();
     // Относительные единицы!
-    touch_x = touchMapX(p.x, p.y) * 100 / tft.width();
-    touch_y = touchMapY(p.x, p.y) * 100 / tft.height();
+    touch_x = global_touch_x * 100 / tft.width();
+    touch_y = global_touch_y * 100 / tft.height();
     if(touch_x > touch_y) {
       if(touch_x > 100 - touch_y) {
         if(direction != 'l') next_direction = 'r';
@@ -6629,7 +6606,7 @@ void turkish_kerchief(char mode, char *io_buff) {
   int touch_x, touch_y;
   int cell_color;
   long prev_millis = 0;
-  TS_Point p;
+  TouchPoint p;
   int moves;
   int i;
   int j;
@@ -6881,9 +6858,9 @@ void turkish_kerchief(char mode, char *io_buff) {
     touchWaitPress();
 
     // Смотрим, какая колонка выбрана
-    p = touchscreen.getPoint();
-    touch_x = touchMapX(p.x, p.y);
-    touch_y = touchMapY(p.x, p.y);
+    //p = touchscreen.getTouch();
+    touch_x = global_touch_x;
+    touch_y = global_touch_y;
 
     column2 = column1;
     column1 = touch_x / (tft.width() / 10);
@@ -7088,6 +7065,7 @@ void color_settings(char mode, char *io_buff) {
     "Red",
     "Green",
     "Night",
+    "Volcov Commander",
     "Random",
     NULL
   };
@@ -7308,8 +7286,30 @@ void color_settings(char mode, char *io_buff) {
           // Цвет ссылки
           color_scheme_link_fg = colors[COLOR_INDEX_NAVY];
         }
-        // Random
+        // Volcov Commander
         else if(scheme_selected == 6) {
+          // Цвет фона и текста
+          color_scheme_bg = colors[COLOR_INDEX_NAVY];
+          color_scheme_fg = colors[COLOR_INDEX_CYAN];
+          // Цвет заголовка и текста
+          color_scheme_title_bg = colors[COLOR_INDEX_DARKCYAN];
+          color_scheme_title_fg = colors[COLOR_INDEX_BLACK];
+          // Цвет выделения и текста
+          color_scheme_selection_bg = colors[COLOR_INDEX_BLACK];
+          color_scheme_selection_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет кнопки и текста
+          color_scheme_button_bg = colors[COLOR_INDEX_DARKCYAN];
+          color_scheme_button_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет нажатой кнопки и текста
+          color_scheme_button_active_bg = colors[COLOR_INDEX_BLACK];
+          color_scheme_button_active_fg = colors[COLOR_INDEX_WHITE];
+          // Цвет неактивного текста
+          color_scheme_inactive_fg = colors[COLOR_INDEX_LIGHTGREY];
+          // Цвет ссылки
+          color_scheme_link_fg = colors[COLOR_INDEX_WHITE];
+        }
+        // Random
+        else if(scheme_selected == 7) {
           // Цвет фона и текста
           color_scheme_bg = colors[random(0, 16)];
           color_scheme_fg = colors[random(0, 16)];
@@ -7810,10 +7810,6 @@ void gopher(char mode, char *io_buff) {
 
     drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 4, 1);
     
-for(i = 0; i < GOPHER_HISTORY_LENGTH; i++) {
-  Serial.printf("%d %s\n", i, history[i]);
-}
-
     touchWaitPress();
     gopher_show_page(page, &page_offset, type, 1, address_to_go);
     if(strlen(address_to_go) > 0) {
@@ -8010,7 +8006,6 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
   char line_shown;
   int line_offset;
   int touch_line = -1;
-  TS_Point p;
   int touch_x, touch_y;
 
   page_byte_offset = 0;
@@ -8021,9 +8016,8 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
   strcpy(address_to_go, "");
 
   if(touchCheckNowait()) {
-    p = touchscreen.getPoint();
-    touch_x = touchMapX(p.x, p.y);
-    touch_y = touchMapY(p.x, p.y);
+    touch_x = global_touch_x;
+    touch_y = global_touch_y;
     if(touch_y >= 32 && touch_y < tft.height() - 32) {
       touch_line = (touch_y - 32) / 8;
     }
@@ -8499,7 +8493,7 @@ void chat(char mode, char *io_buff) {
   
   messages = (char*)malloc(2048 * sizeof(char));
   prev_messages = (char*)malloc(2048 * sizeof(char));
-  query = (char*)malloc(300 * sizeof(char));
+  query = (char*)malloc(1000 * sizeof(char));
 
   messages[0] = 0;
   prev_messages[0] = 0;
@@ -8570,7 +8564,13 @@ void chat(char mode, char *io_buff) {
         drawPrompt("Message to send", message);
         if(strlen(message) > 0) {
           if(strlen(message) < 80) {
-            sprintf(query, "https://arikado.ru/cyd/chat_post.php?nickname=%s&message=%s", nickname, message);
+            sprintf(query, "https://arikado.ru/cyd/chat_post.php?nickname=%s&message=", nickname);
+            // URLencode message
+            for(i = 0; i < strlen(message); i++) {
+              sprintf(buff, "%%%02X", message[i]);
+              strcat(query, buff);
+            }
+            Serial.println(query);
             httpResponseCode = get_file_https(query, buff);
             if(httpResponseCode == 200) {
               if(strcmp(buff, "ok")) {
@@ -9949,7 +9949,9 @@ int irc_input_char() {
   static char symbol_flag = 0;
   static char caps_flag = 0;
   static char alt_keyboard_flag = 0;
-  
+  int indent_left = (keyboard_indent_left ? KEYBOARD_INDENT_SIZE : 0);
+  int indent_width = (keyboard_indent_left ? KEYBOARD_INDENT_SIZE : 0) + (keyboard_indent_right ? KEYBOARD_INDENT_SIZE : 0);
+
   char *control_buttons[] = {
     "<Prev", "Close", "Next>",
     NULL
@@ -9977,8 +9979,8 @@ int irc_input_char() {
     }
 
     if(terminal_keyboard_redraw_flag) {
-      drawButtonMatrix(0, 176, tft.width(), 24, control_buttons, 3, 1);
-      drawButtonMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
+      drawButtonMatrix(indent_left, 176, tft.width() - indent_width, 24, control_buttons, 3, 1);
+      drawButtonMatrix(indent_left, 200, tft.width() - indent_width, 120, keyboard_current, 12, 4);
       terminal_keyboard_redraw_flag = 0;
     }
 
@@ -9987,7 +9989,7 @@ int irc_input_char() {
     }
     touchWaitPress();
 
-    button = touchCheckMatrix(0, 176, tft.width(), 24, control_buttons, 3, 1);
+    button = touchCheckMatrix(indent_left, 176, tft.width() - indent_width, 24, control_buttons, 3, 1);
     if(button != -1) {
       terminal_keyboard_redraw_flag = 1;
       if(button == 0) {
@@ -10001,7 +10003,7 @@ int irc_input_char() {
       }
     }
 
-    button = touchCheckMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
+    button = touchCheckMatrix(indent_left, 200, tft.width() - indent_width, 120, keyboard_current, 12, 4);
     if(button != -1) {
       terminal_keyboard_redraw_flag = 1;
       if(button == 11) {
@@ -11131,8 +11133,11 @@ void keyboard_control(char mode, char *io_buff) {
   unsigned char byte;
   int button_pressed;
   char buff[80];
+  char *contents;
   char *buttons[] = {
     "Alt keyboard",
+    "Indent left",
+    "Indent right",
     NULL
   };
   char app_icon[] = {
@@ -11170,15 +11175,19 @@ void keyboard_control(char mode, char *io_buff) {
   while(1) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
-    drawButtonMatrix(0, 20, tft.width() / 2, 32, buttons, 1, 1);
+    drawButtonMatrix(0, 20, tft.width() / 2, 32 * 3, buttons, 1, 3);
 
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "  %s  ", alt_keyboard_enabled_flag ? "ON" : "OFF");
     tft.drawCentreString(buff, 3 * tft.width() / 4, 28, FONT_DEFAULT);
+    sprintf(buff, "  %s  ", keyboard_indent_left ? "ON" : "OFF");
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 32 + 28, FONT_DEFAULT);
+    sprintf(buff, "  %s  ", keyboard_indent_right ? "ON" : "OFF");
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 32 + 32 + 28, FONT_DEFAULT);
 
     touchWaitPress();
 
-    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32, buttons, 1, 1);
+    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32 * 3, buttons, 1, 3);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
         if(alt_keyboard_enabled_flag) {
@@ -11186,6 +11195,22 @@ void keyboard_control(char mode, char *io_buff) {
         }
         else {
           alt_keyboard_enabled_flag = 1;
+        }
+      }
+      if(button_pressed == 1) {
+        if(keyboard_indent_left) {
+          keyboard_indent_left = 0;
+        }
+        else {
+          keyboard_indent_left = 1;
+        }
+      }
+      if(button_pressed == 2) {
+        if(keyboard_indent_right) {
+          keyboard_indent_right = 0;
+        }
+        else {
+          keyboard_indent_right = 1;
         }
       }
     }
@@ -11196,7 +11221,25 @@ void keyboard_control(char mode, char *io_buff) {
       touchWaitRelease();
 
       if(drawConfirm("Save changes?") == 0) {
-        write_key_value_to_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", (char*)(alt_keyboard_enabled_flag ? "1" : "0"));
+        contents = (char *)malloc(500 * sizeof(char));
+        if(contents) {
+          contents[0] = 0;
+
+          sprintf(buff, "alt_keyboard_enabled_flag=%s\n", alt_keyboard_enabled_flag ? "1" : "0");
+          strcat(contents, buff);
+          sprintf(buff, "keyboard_indent_left=%s\n", keyboard_indent_left ? "1" : "0");
+          strcat(contents, buff);
+          sprintf(buff, "keyboard_indent_right=%s\n", keyboard_indent_right ? "1" : "0");
+          strcat(contents, buff);
+
+          write_file_from_buff("/Settings/Keyboard", contents);
+
+          free(contents);
+        }
+        else {
+          drawError("Cannot allocate memory");
+        }
+        //write_key_value_to_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", (char*)(alt_keyboard_enabled_flag ? "1" : "0"));
       }
 
       touchExitActionReset();
@@ -11647,9 +11690,8 @@ void view_file(char *title, char *filename) {
 
     touchWaitPress();
     // Смотрим куда нажатие, двигаемся либо вперёд по файлу, либо назад
-    TS_Point p = touchscreen.getPoint();
-    touch_x = touchMapX(p.x, p.y);
-    touch_y = touchMapY(p.x, p.y);
+    touch_x = global_touch_x;
+    touch_y = global_touch_y;
     if(touch_y > 16) {
       // Левая часть экрана - назад
       if(touch_x < tft.width() / 2) {
@@ -11819,9 +11861,8 @@ void view_text(char *title, char *data) {
 
     touchWaitPress();
     // Смотрим куда нажатие, двигаемся либо вперёд по файлу, либо назад
-    TS_Point p = touchscreen.getPoint();
-    touch_x = touchMapX(p.x, p.y);
-    touch_y = touchMapY(p.x, p.y);
+    touch_x = global_touch_x;
+    touch_y = global_touch_y;
     if(touch_y > 16) {
       // Левая часть экрана - назад
       if(touch_x < tft.width() / 2) {
@@ -11880,7 +11921,9 @@ void edit_file(char *title, char *filename) {
   char symbol_flag = 0;
   char alt_flag = 0;
   int prev_width = 0;
-  
+  int indent_left = (keyboard_indent_left ? KEYBOARD_INDENT_SIZE : 0);
+  int indent_width = (keyboard_indent_left ? KEYBOARD_INDENT_SIZE : 0) + (keyboard_indent_right ? KEYBOARD_INDENT_SIZE : 0);
+  TouchPoint p;
   char **keyboard_current = keyboard_nocaps;
   fs::File file;
 
@@ -12075,7 +12118,7 @@ void edit_file(char *title, char *filename) {
       }
     }
 
-    drawButtonMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
+    drawButtonMatrix(indent_left, 200, tft.width() - indent_width, 120, keyboard_current, 12, 4);
     
     while(touchCheckNowait() == 0) {
       while(Serial.available()) {
@@ -12121,7 +12164,7 @@ void edit_file(char *title, char *filename) {
     }
 
     //touchWaitPress();
-    button = touchCheckMatrix(0, 200, tft.width(), 120, keyboard_current, 12, 4);
+    button = touchCheckMatrix(indent_left, 200, tft.width() - indent_width, 120, keyboard_current, 12, 4);
     if(button != -1) {
       if(button == 11) {
         if(cursor_offset_bytes > 0) {
@@ -12165,9 +12208,8 @@ void edit_file(char *title, char *filename) {
     }
 
     // Смотрим куда нажатие, ставим курсор в ближайшее место
-    TS_Point p = touchscreen.getPoint();
-    touch_x = touchMapX(p.x, p.y);
-    touch_y = touchMapY(p.x, p.y);
+    touch_x = global_touch_x;
+    touch_y = global_touch_y;
     // В текстовую часть экрана
     set_cursor_from_touch = 0;
     if(touch_y >= 16 && touch_y < 192) {
@@ -12201,12 +12243,10 @@ void edit_file(char *title, char *filename) {
 
 void touch_calibration_test(char mode, char *io_buff) {
   char buff[80];
-  TS_Point p;
+  TouchPoint p;
   int i;
   int x, y;
   
-  int touch_x;
-  int touch_y;
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -12261,7 +12301,7 @@ void touch_calibration_test(char mode, char *io_buff) {
 
       touchWaitPress();
       delay(200);
-      p = touchscreen.getPoint();
+      p = touchscreen.getTouch();
       calibration_x[x] = p.x;
       calibration_y[y] = p.y;
 
@@ -12283,23 +12323,26 @@ void touch_calibration_test(char mode, char *io_buff) {
   while(1) {
     tft.drawPixel(x + CALIBRATION_QUANT / (2), y + CALIBRATION_QUANT / (2), TFT_WHITE);
     touchWaitPress();
-    p = touchscreen.getPoint();
-    x = touchMapX_test(p.x, p.y);
-    y = touchMapY_test(p.x, p.y);
-    Serial.printf("px = %d, py = %d, x=%d, y=%d\n", p.x, p.y, x, y);
+    p = touchscreen.getTouch();
+    x = touchMapX_test(p.xRaw, p.yRaw);
+    y = touchMapY_test(p.xRaw, p.yRaw);
+    Serial.printf("px = %d, py = %d, x=%d, y=%d\n", p.xRaw, p.yRaw, x, y);
 
     tft.drawPixel(x + CALIBRATION_QUANT / (2), y + CALIBRATION_QUANT / (2), TFT_BLACK);
     delay(10);
   }
 }
 
+#define CALIBRATION_SMOOTH_POINTS 100
+
 void touch_calibration(char mode, char *io_buff) {
   char buff[80];
-  TS_Point p1, p2, p3;
+  TouchPoint p;
+  long x_raw_1, x_raw_2, x_raw_3;
+  long y_raw_1, y_raw_2, y_raw_3;
+  int i;
   int offset = 10;
   
-  int touch_x;
-  int touch_y;
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -12332,37 +12375,74 @@ void touch_calibration(char mode, char *io_buff) {
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
   app_title_enabled = 0;
 
+  if(touchCheckNowait()) {
+    clearScreen();
+    tft.drawCentreString("Release", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
+    touchWaitRelease();
+    delay(1000);  
+  }
+
   clearScreen();
-  tft.drawCentreString("Touch left top cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
+  tft.drawCentreString("Touch and hold left top cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
   tft.drawLine(offset - 5, offset - 5, offset + 5, offset + 5, color_scheme_fg);
   tft.drawLine(offset - 5, offset + 5, offset + 5, offset - 5, color_scheme_fg);
   delay(1000);
   touchWaitPress();
-  p1 = touchscreen.getPoint();
+  delay(100);
+  x_raw_1 = 0;
+  y_raw_1 = 0;
+  for(i = 0; i < CALIBRATION_SMOOTH_POINTS; i++) {
+    p = touchscreen.getTouch();
+    x_raw_1 += p.xRaw;
+    y_raw_1 += p.yRaw;
+  }
+  x_raw_1 /= CALIBRATION_SMOOTH_POINTS;
+  y_raw_1 /= CALIBRATION_SMOOTH_POINTS;
+
   clearScreen();
   tft.drawCentreString("Release", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
   touchWaitRelease();
   delay(1000);  
 
   clearScreen();
-  tft.drawCentreString("Touch left bottom cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
+  tft.drawCentreString("Touch and hold left bottom cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
   tft.drawLine(offset - 5, tft.height() - 2 - offset - 5, offset + 5, tft.height() - 2 - offset + 5, color_scheme_fg);
   tft.drawLine(offset - 5, tft.height() - 2 - offset + 5, offset + 5, tft.height() - 2 - offset - 5, color_scheme_fg);
   delay(1000);
   touchWaitPress();
-  p2 = touchscreen.getPoint();
+  delay(100);
+  x_raw_2 = 0;
+  y_raw_2 = 0;
+  for(i = 0; i < CALIBRATION_SMOOTH_POINTS; i++) {
+    p = touchscreen.getTouch();
+    x_raw_2 += p.xRaw;
+    y_raw_2 += p.yRaw;
+  }
+  x_raw_2 /= CALIBRATION_SMOOTH_POINTS;
+  y_raw_2 /= CALIBRATION_SMOOTH_POINTS;
+
   clearScreen();
   tft.drawCentreString("Release", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
   touchWaitRelease();
   delay(1000);  
 
   clearScreen();
-  tft.drawCentreString("Touch right top cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
+  tft.drawCentreString("Touch and hold right top cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
   tft.drawLine(tft.width() - 2 - offset - 5, offset - 5, tft.width() - 2 - offset + 5, offset + 5, color_scheme_fg);
   tft.drawLine(tft.width() - 2 - offset - 5, offset + 5, tft.width() - 2 - offset + 5, offset - 5, color_scheme_fg);
   delay(1000);
   touchWaitPress();
-  p3 = touchscreen.getPoint();
+  delay(100);
+  x_raw_3 = 0;
+  y_raw_3 = 0;
+  for(i = 0; i < CALIBRATION_SMOOTH_POINTS; i++) {
+    p = touchscreen.getTouch();
+    x_raw_3 += p.xRaw;
+    y_raw_3 += p.yRaw;
+  }
+  x_raw_3 /= CALIBRATION_SMOOTH_POINTS;
+  y_raw_3 /= CALIBRATION_SMOOTH_POINTS;
+
   clearScreen();
   tft.drawCentreString("Release", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
   touchWaitRelease();
@@ -12370,15 +12450,15 @@ void touch_calibration(char mode, char *io_buff) {
 
   // Вычисление коэффициентов ax, bx, cx, ay, by, cy методом Крамера
   // d - определитель матрицы
-  d = det3(p1.x, p1.y, 1, p2.x, p2.y, 1, p3.x, p3.y, 1);
+  d = det3(x_raw_1, y_raw_1, 1, x_raw_2, y_raw_2, 1, x_raw_3, y_raw_3, 1);
 
-  ax = det3(offset, p1.y, 1, offset, p2.y, 1, tft.width() - offset - 1, p3.y, 1) / d;
-  bx = det3(p1.x, offset, 1, p2.x, offset, 1, p3.x, tft.width() - offset - 1, 1) / d;
-  cx = det3(p1.x, p1.y, offset, p2.x, p2.y, offset, p3.x, p3.y, tft.width() - offset - 1) / d;
+  ax = det3(offset, y_raw_1, 1, offset, y_raw_2, 1, tft.width() - offset - 1, y_raw_3, 1) / d;
+  bx = det3(x_raw_1, offset, 1, x_raw_2, offset, 1, x_raw_3, tft.width() - offset - 1, 1) / d;
+  cx = det3(x_raw_1, y_raw_1, offset, x_raw_2, y_raw_2, offset, x_raw_3, y_raw_3, tft.width() - offset - 1) / d;
 
-  ay = det3(offset, p1.y, 1, tft.height() - offset - 1, p2.y, 1, offset, p3.y, 1) / d;
-  by = det3(p1.x, offset, 1, p2.x, tft.height() - offset - 1, 1, p3.x, offset, 1) / d;
-  cy = det3(p1.x, p1.y, offset, p2.x, p2.y, tft.height() - offset - 1, p3.x, p3.y, offset) / d;
+  ay = det3(offset, y_raw_1, 1, tft.height() - offset - 1, y_raw_2, 1, offset, y_raw_3, 1) / d;
+  by = det3(x_raw_1, offset, 1, x_raw_2, tft.height() - offset - 1, 1, x_raw_3, offset, 1) / d;
+  cy = det3(x_raw_1, y_raw_1, offset, x_raw_2, y_raw_2, tft.height() - offset - 1, x_raw_3, y_raw_3, offset) / d;
 
   clearScreen();
   tft.drawCentreString("Done!", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
@@ -12439,6 +12519,411 @@ void touch_calibration_load_test() {
     }
     file.close();
   }
+}
+
+void oscilloscope(char mode, char *io_buff) {
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B10000010,
+    B01100000, B11000010,
+    B01010000, B10100010,
+    B01001000, B10010010,
+    B01000100, B10001010,
+    B01000010, B10000110,
+    B01000001, B10000010,
+    B01000000, B10000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  int source_offset, source_selected;
+  int button_pressed;
+  char *buttons[] = {
+    "Select",
+    NULL
+  };
+  char *sources_list[] = {
+    "Software Sinus 1 Hz",
+    "A34 Light Sensor",
+    "Wi-Fi RSSI",
+    "Ping gateway",
+    "IO21",
+    "IO22",
+    "IO27",
+    "IO35",
+    "Serial",
+    NULL,
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Oscillosope");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Oscillosope");
+
+  source_offset = 0;
+  source_selected = 0;
+  while(1) {
+    touchCheckList(0, 32, tft.width(), tft.height() - 72, sources_list, 15, &source_offset, &source_selected);
+    drawList(0, 32, tft.width(), tft.height() - 72, sources_list, 15, &source_offset, &source_selected);
+
+    drawButtonMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+    
+    touchWaitPress();
+    touchCheckList(0, 32, tft.width(), tft.height() - 32 - 40, sources_list, 15, &source_offset, &source_selected);
+    
+    button_pressed = touchCheckMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+    if(button_pressed != -1) {
+      oscilloscope_show(sources_list[source_selected], source_selected);
+
+      clearScreen();
+      drawAppTitle("Oscillosope");
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void oscilloscope_show(char *name, int input_index) {
+  int values[240];
+  int current_value;
+  int value_min;
+  int value_max;
+  int window_min;
+  int window_max;
+  long values_sum;
+  int values_total;
+  int button_pressed;
+  int i;
+  long interval_millis;
+  long prev_value_millis;
+  int freq;
+  int xstep;
+  int ystep;
+  int offset;
+  char rescan_flag;
+  char show_remain_flag;
+  char draw_buttons_flag;
+  char buff[80];
+  char *buttons[] = {
+    "+", "Start", "Stop", "-",
+    NULL
+  };
+
+  for(i = 0; i < 240; i++) {
+    values[i] = 0;
+  }
+
+  clearScreen();
+  drawAppTitle(name);
+
+  rescan_flag = 1;
+  offset = 0;
+  interval_millis = 100;
+  prev_value_millis = millis();
+  tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+
+  // Квадратное окошко
+  tft.fillRect(0, 16, tft.width(), tft.width(), TFT_BLACK);
+
+  draw_buttons_flag = 1;
+  while(1) {
+    if(rescan_flag) {
+      if(interval_millis >= 30) {
+        if(millis() - prev_value_millis > interval_millis) {
+          prev_value_millis = millis();
+
+          for(i = 0; i < 239; i++) {
+            values[i] = values[i + 1];
+          }
+
+          values[239] = oscilloscope_get_value(input_index);
+
+          oscilloscope_draw_values(values, interval_millis);
+          if(show_remain_flag) {
+            //Serial.println("NDC");
+          }
+          show_remain_flag = 1;
+        }
+        else {
+          if(show_remain_flag) {
+            //Serial.println(millis() - prev_value_millis);
+            show_remain_flag = 0;
+          }
+        }
+      }
+      else {
+        for(i = 0; i < 240; i++) {
+          values[i] = oscilloscope_get_value(input_index);
+          while(millis() - prev_value_millis < interval_millis) {
+          }
+          if(touchCheckNowait()) break;
+          prev_value_millis = millis();
+        }
+
+        // Значения
+        if(touchCheckNowait() == 0) {
+          oscilloscope_draw_values(values, interval_millis);
+        }
+      }
+    }
+
+    if(draw_buttons_flag) {
+      drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 4, 1);
+      draw_buttons_flag = 0;
+    }
+
+    if(touchCheckNowait() == 0 && rescan_flag == 1) continue;
+
+    touchWaitPress();
+    draw_buttons_flag = 1;
+    
+    button_pressed = touchCheckMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 4, 1);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        if(interval_millis == 1) interval_millis = 2;
+        else if(interval_millis == 2) interval_millis = 3;
+        else if(interval_millis == 3) interval_millis = 5;
+        else if(interval_millis == 5) interval_millis = 10;
+        else if(interval_millis == 10) interval_millis = 20;
+        else if(interval_millis == 20) interval_millis = 50;
+        else if(interval_millis == 50) interval_millis = 100;
+        else if(interval_millis == 100) interval_millis = 200;
+        else if(interval_millis == 200) interval_millis = 500;
+        else if(interval_millis == 500) interval_millis = 1000;
+        else interval_millis += 1000;
+        oscilloscope_draw_values(values, interval_millis);
+      }
+      else if(button_pressed == 1) {
+        rescan_flag = 1;
+      }
+      else if(button_pressed == 2) {
+        rescan_flag = 0;
+      }
+      else if(button_pressed == 3) {
+        if(interval_millis == 1) interval_millis = 1;
+        else if(interval_millis == 2) interval_millis = 1;
+        else if(interval_millis == 3) interval_millis = 2;
+        else if(interval_millis == 5) interval_millis = 3;
+        else if(interval_millis == 10) interval_millis = 5;
+        else if(interval_millis == 20) interval_millis = 10;
+        else if(interval_millis == 50) interval_millis = 20;
+        else if(interval_millis == 100) interval_millis = 50;
+        else if(interval_millis == 200) interval_millis = 100;
+        else if(interval_millis == 500) interval_millis = 200;
+        else if(interval_millis == 1000) interval_millis = 500;
+        else interval_millis -= 1000;
+        oscilloscope_draw_values(values, interval_millis);
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void oscilloscope_draw_values(int *values, int interval_millis) {
+  int i;
+  int x, y;
+  int pixel_color;
+  int value_min;
+  int value_max;
+  long values_sum;
+  int values_total;
+  int window_min;
+  int window_max;
+  int xstep;
+  int ystep;
+  int value_last;
+  char buff[80];
+  static int old_values[240];
+  static char first_run_flag = 1;
+
+  if(first_run_flag) {
+    for(i = 0; i < 240; i ++) {
+      old_values[i] = 16 + tft.width() / 2;
+    }
+    first_run_flag = 0;
+  }
+
+  // Оси
+  for(i = 10; i < 240; i += 20) {
+    tft.drawLine(i, 16, i, 16 + tft.width() - 1, TFT_DARKGREEN);
+    tft.drawLine(0, 16 + i, tft.width() - 1, 16 + i, TFT_DARKGREEN);
+  }
+
+  // Ищем значения
+  values_total = 0;
+  values_sum = 0;
+  for(i = 0; i < 240; i++) {
+    if(i == 0) {
+      value_min = values[i];
+      value_max = values[i];
+    }
+    else {
+      value_min = min(value_min, values[i]);
+      value_max = max(value_max, values[i]);
+    }
+    values_sum += values[i];
+    values_total++;
+  }
+
+  if(value_max - value_min < 20) {
+    window_min = value_min - 5;
+    window_max = value_max + 5;
+  }
+  else {
+    window_min = value_min - (value_max - value_min) / 12;
+    window_max = value_max + (value_max - value_min) / 12;
+  }
+  xstep = (window_max - window_min) / 10;
+  ystep = interval_millis * 240 / 12;
+
+  // Выводим значения
+  for(i = 0; i < 240; i++) {
+    if(i == 0) {
+      tft.drawPixel(i, old_values[i], TFT_BLACK);
+//      tft.drawPixel(i, 16 + tft.width() - (values[i] - window_min) * tft.width() / (window_max - window_min), TFT_YELLOW);
+      if(i < 239) {
+        tft.drawLine(
+          i,
+          old_values[i],
+          i + 1,
+          old_values[i + 1],
+          TFT_BLACK
+        );
+      }
+    }
+    else {
+      if(i < 239) {
+        tft.drawLine(
+          i,
+          old_values[i],
+          i + 1,
+          old_values[i + 1],
+          TFT_BLACK
+        );
+      }
+      tft.drawLine(
+        i - 1,
+        16 + tft.width() - (values[i - 1] - window_min) * tft.width() / (window_max - window_min),
+        i,
+        16 + tft.width() - (values[i] - window_min) * tft.width() / (window_max - window_min),
+        TFT_YELLOW
+      );
+    }
+  }
+
+  for(i = 0; i < 240; i++) {
+    old_values[i] = 16 + tft.width() - (values[i] - window_min) * tft.width() / (window_max - window_min);
+  }
+
+  value_last = values[239];
+
+  // Выводим значения параметров
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+  sprintf(buff, "Vmin = %d                    ", value_min);
+  buff[20] = 0;
+  tft.drawString(buff, 1, 16 + tft.width() + 1, FONT_MONOSPACE);
+  sprintf(buff, "Vmax = %d                    ", value_max);
+  buff[20] = 0;
+  tft.drawString(buff, 1, 16 + tft.width() + 1 + 8, FONT_MONOSPACE);
+  sprintf(buff, "Vavg = %g                    ", (float)values_sum / values_total);
+  buff[20] = 0;
+  tft.drawString(buff, 1, 16 + tft.width() + 1 + 16, FONT_MONOSPACE);
+  sprintf(buff, "Ampl = %d                    ", value_max - value_min);
+  buff[20] = 0;
+  tft.drawString(buff, 1, 16 + tft.width() + 1 + 24, FONT_MONOSPACE);
+
+  sprintf(buff, "V = %d                    ", value_last);
+  buff[20] = 0;
+  tft.drawString(buff, tft.width() / 2, 16 + tft.width() + 1, FONT_MONOSPACE);
+  sprintf(buff, "Int = %d ms                    ", interval_millis);
+  buff[20] = 0;
+  tft.drawString(buff, tft.width() / 2, 16 + tft.width() + 1 + 8, FONT_MONOSPACE);
+  sprintf(buff, "Xstep = %d                    ", xstep);
+  buff[20] = 0;
+  tft.drawString(buff, tft.width() / 2, 16 + tft.width() + 1 + 16, FONT_MONOSPACE);
+  sprintf(buff, "Ystep = %d ms                    ", ystep);
+  buff[20] = 0;
+  tft.drawString(buff, tft.width() / 2, 16 + tft.width() + 1 + 24, FONT_MONOSPACE);
+}
+
+int oscilloscope_get_value(int input_index) {
+  static char first_run_flag = 1;
+  static int value;
+  int byte;
+  static char buff[80];
+  if(first_run_flag) {
+    buff[0] = 0;
+  }
+
+  if(input_index == 0) {
+    return 100 * sin(2 * PI * millis() / 1000);
+  }
+  else if(input_index == 1) {
+    return  analogRead(LIGHT_SENSOR_PIN);
+  }
+  else if(input_index == 2) {
+    return WiFi.RSSI();
+  }
+  else if(input_index == 3) {
+    Ping.ping(WiFi.gatewayIP().toString().c_str(), 1);
+    return (int)Ping.averageTime();
+  }
+  else if(input_index == 4) {
+    return analogRead(21);
+  }
+  else if(input_index == 5) {
+    return analogRead(22);
+  }
+  else if(input_index == 6) {
+    return analogRead(27);
+  }
+  else if(input_index == 7) {
+    return analogRead(35);
+  }
+  else if(input_index == 8) {
+    if(Serial.available()) {
+      buff[0] = 0;
+      while(Serial.available()) {
+        byte = Serial.read();
+        if(strlen(buff) > 0) {
+          if(byte == '\n' || byte == '\r') break;
+        }
+        buff[strlen(buff) + 1] = 0;
+        buff[strlen(buff)] = byte;
+      }
+    }
+    sscanf(buff, "%d", &value);
+    return value;
+  }
+  return 0;
 }
 
 void fifteen(char mode, char *io_buff) {
@@ -13115,7 +13600,7 @@ void mental_math(char mode, char *io_buff) {
 #define HANOI_TOWERS_MAX_LEVEL 16
 
 void hanoi_towers(char mode, char *io_buff) {
-  TS_Point p;
+  TouchPoint p;
   int touch_x, touch_y;
   int button_pressed;
   int i;
@@ -13230,9 +13715,9 @@ void hanoi_towers(char mode, char *io_buff) {
 
     touchWaitPress();
     tft.fillRect(0, tft.height() - 15, tft.width(), 15, color_scheme_bg);
-    TS_Point p = touchscreen.getPoint();
-    touch_x = touchMapX(p.x, p.y);
-    touch_y = touchMapY(p.x, p.y);
+
+    touch_x = global_touch_x;
+    touch_y = global_touch_y;
 
     if(column1 == -1) {
       column1 = touch_x / (tft.width() / 3);
@@ -13297,7 +13782,7 @@ void hanoi_towers(char mode, char *io_buff) {
 
 // Три в ряд, как Bejeweled
 void match_three(char mode, char *io_buff) {
-  TS_Point p;
+  TouchPoint p;
   int touch_x, touch_y;
   int row1, col1;
   int row2, col2;
@@ -13403,9 +13888,9 @@ void match_three(char mode, char *io_buff) {
     // Ждём пользователя
     touchWaitPress();
     tft.fillRect(0, tft.height() - 15, tft.width(), 15, color_scheme_bg);
-    TS_Point p = touchscreen.getPoint();
-    touch_x = touchMapX(p.x, p.y);
-    touch_y = touchMapY(p.x, p.y);
+
+    touch_x = global_touch_x;
+    touch_y = global_touch_y;
     if(col1 == -1) {
       col1 = touch_x / (tft.width() / MATCH_THREE_FIELD_WIDTH);
       row1 = (touch_y - 40) / (tft.width() / MATCH_THREE_FIELD_WIDTH);
@@ -13752,7 +14237,7 @@ void lights_off(char mode, char *io_buff) {
 }
 
 void piano(char mode, char *io_buff) {
-  TS_Point p;
+  TouchPoint p;
   int touch_x, touch_y;
   int i;
   char buff[80];
@@ -13821,9 +14306,8 @@ void piano(char mode, char *io_buff) {
     }
     else {
       do {
-        p = touchscreen.getPoint();
-        touch_x = touchMapX(p.x, p.y);
-        touch_y = touchMapY(p.x, p.y);
+        touch_x = global_touch_x;
+        touch_y = global_touch_y;
 
         // Белые
         if(touch_y >= 240 && touch_y < 272) {
@@ -14229,6 +14713,8 @@ int drawPrompt(char *message, char *user_input) {
   int i;
   int byte;
   char update_required_flag = 0;
+  int indent_left = (keyboard_indent_left ? KEYBOARD_INDENT_SIZE : 0);
+  int indent_width = (keyboard_indent_left ? KEYBOARD_INDENT_SIZE : 0) + (keyboard_indent_right ? KEYBOARD_INDENT_SIZE : 0);
 
   char **keyboard_current = keyboard_nocaps;
 
@@ -14286,7 +14772,7 @@ int drawPrompt(char *message, char *user_input) {
       }
     }
 
-    drawButtonMatrix(0, PROMPT_OFFSET_Y + 40, tft.width(), 120, keyboard_current, 12, 4);
+    drawButtonMatrix(indent_left, PROMPT_OFFSET_Y + 40, tft.width()- indent_width, 120, keyboard_current, 12, 4);
     
     while(touchCheckNowait() == 0) {
       while(Serial.available()) {
@@ -14319,7 +14805,7 @@ int drawPrompt(char *message, char *user_input) {
       continue;
     }
     //touchWaitPress();
-    button = touchCheckMatrix(0, PROMPT_OFFSET_Y + 40, tft.width(), 120, keyboard_current, 12, 4);
+    button = touchCheckMatrix(indent_left, PROMPT_OFFSET_Y + 40, tft.width() - indent_width, 120, keyboard_current, 12, 4);
     if(button != -1) {
       if(button == 11) {
         if(strlen(input) > 0) {
@@ -14532,23 +15018,22 @@ int touchCheckMatrix(int left_x, int top_y, int width, int height, char **str, i
   char is_eol = 0;
   char is_touch;
   char is_inside;
-  TS_Point p;
-  if(!touchscreen.tirqTouched() || !touchscreen.touched()) return -1;
 
-  p = touchscreen.getPoint();
-  touch_x = touchMapX(p.x, p.y);
-  touch_y = touchMapY(p.x, p.y);
+  if(!global_touch_present_flag) return -1;
+
+  touch_x = global_touch_x;
+  touch_y = global_touch_y;
 
   for(y = 0; y < rows; y++) {
     for(x = 0; x < cols; x++) {
       if(!is_eol) {
         if(str[x + y * cols]) {
+          // Если касание внутри кнопки
           if(left_x + x * width / cols + 1 <= touch_x && touch_x <= left_x + (x + 1) * width / cols - 1
             && top_y + y * height / rows + 1 <= touch_y && touch_y <= top_y + (y + 1) * height / rows - 1
           ) {
-            // Если пользователь отпустил кнопку внутри кнопки - засчитать срабатывание
+            // Если пользователь отпустил кнопку удерживая стилус внутри кнопки - засчитать срабатывание
             while(1) {
-              is_touch = touchCheckNowait();
               if(left_x + x * width / cols + 1 <= touch_x && touch_x <= left_x + (x + 1) * width / cols - 1
               && top_y + y * height / rows + 1 <= touch_y && touch_y <= top_y + (y + 1) * height / rows - 1) {
                 is_inside = 1;
@@ -14558,10 +15043,10 @@ int touchCheckMatrix(int left_x, int top_y, int width, int height, char **str, i
               }
               bg_color = color_scheme_button_bg;
               fg_color = color_scheme_button_fg;
+              is_touch = touchCheckNowait();
               if(is_touch) {
-                p = touchscreen.getPoint();
-                touch_x = touchMapX(p.x, p.y);
-                touch_y = touchMapY(p.x, p.y);
+                touch_x = global_touch_x;
+                touch_y = global_touch_y;
                 if(is_inside) {
                   bg_color = color_scheme_button_active_bg;
                   fg_color = color_scheme_button_active_fg;
@@ -14706,13 +15191,11 @@ int touchCheckList(int left_x, int top_y, int width, int height, char **str, int
 
   int touch_x;
   int touch_y;
-  TS_Point p;
   
-  if(!touchscreen.tirqTouched() || !touchscreen.touched()) return -1;
+  if(!global_touch_present_flag) return -1;
 
-  p = touchscreen.getPoint();
-  touch_x = touchMapX(p.x, p.y);
-  touch_y = touchMapY(p.x, p.y);
+  touch_x = global_touch_x;
+  touch_y = global_touch_y;
 
   // Для прокрутки нужно знать количество строк
   for(last_row = 0; str[last_row] != NULL; last_row++) {}
@@ -14798,52 +15281,63 @@ int touchMapY_test(int px, int py) {
   return y_min * CALIBRATION_QUANT;
 }
 
-int touchMapX(int x, int y) {
-  return ax * x + bx * y + cx;
+int touchMapX(int x_raw, int y_raw) {
+  int x = ax * x_raw + bx * y_raw + cx;
+  if(x < 0) x = 0;
+  if(x >= tft.width()) x = tft.width() - 1;
+  return x;
 }
 
-int touchMapY(int x, int y) {
-  return ay * x + by * y + cy;
+int touchMapY(int x_raw, int y_raw) {
+  int y = ay * x_raw + by * y_raw + cy;
+  if(y < 0) y = 0;
+  if(y >= tft.height()) y = tft.height() - 1;
+  return y;
 }
 
 char touchIsExitAction() {
+  Serial.println("touchIsExitAction");
   // Обновить заголовок
   drawAppTitleRight();
   // Уже стоит флаг
+//Serial.println(__LINE__);
   if(global_exit_flag) {
+//Serial.println(__LINE__);
     return 1;
   }
 
   // Нет касания
-  if(!touchscreen.tirqTouched() || !touchscreen.touched()) {
+//Serial.println(__LINE__);
+  if(!global_touch_present_flag) {
     global_exit_flag_touch_begin = 0;
+//Serial.println(__LINE__);
     return 0;
   }
   
+//Serial.println(__LINE__);
   if(global_exit_flag_touch_begin == 0) {
     global_exit_flag_touch_begin = millis();
   }
 
-  // Касание сместилось
-  global_touch_p = touchscreen.getPoint();
-  global_touch_x = touchMapX(global_touch_p.x, global_touch_p.y);
-  global_touch_y = touchMapY(global_touch_p.x, global_touch_p.y);
-
   // Мимо заголовка?
-  if(global_touch_y < 0 || global_touch_y >= 32) {
+//Serial.println(__LINE__);
+  if(global_touch_y < 0 || global_touch_y >= 16) {
     global_exit_flag_touch_begin = 0;
     global_exit_flag_touch_length = 0;
+//Serial.printf("global_touch_y = %d\n", global_touch_y);
     return 0;
   }
 
   global_exit_flag_touch_length = millis() - global_exit_flag_touch_begin;
 
   // Если все условия выполнились - сообщаем о сигнале на выход
-  //Serial.println(global_exit_flag_touch_length);
+//Serial.println(global_exit_flag_touch_length);
+//Serial.println(__LINE__);
   if(global_exit_flag_touch_length >= 1000) {
     global_exit_flag_touch_begin = 0;
     global_exit_flag_touch_length = 0;
     global_exit_flag = 1;
+//Serial.println(__LINE__);
     return 1;
   }
   return 0;
@@ -14856,7 +15350,8 @@ void touchExitActionReset() {
 }
 
 void touchWaitPress() {
-  while(!touchscreen.tirqTouched() || !touchscreen.touched()) {
+  //Serial.println("touchWaitPress begin");
+  while(!touchPollTouchStatus()) {
     drawAppTitleRight();
     global_exit_flag_touch_begin = 0;
     if(global_exit_flag) return;
@@ -14864,18 +15359,15 @@ void touchWaitPress() {
   }
   global_touch_begin = millis();
   delay(20);
-  global_touch_p = touchscreen.getPoint();
-  global_touch_x = touchMapX(global_touch_p.x, global_touch_p.y);
-  global_touch_y = touchMapY(global_touch_p.x, global_touch_p.y);
+  //global_touch_p = touchscreen.getTouch();
+  global_touch_x = touchMapX(global_touch_p.xRaw, global_touch_p.yRaw);
+  global_touch_y = touchMapY(global_touch_p.xRaw, global_touch_p.yRaw);
   global_touch_present_flag = 1;
+  //Serial.println("touchWaitPress end");
 }
 
 void touchWaitReleaseOrExit() {
-  while(touchscreen.tirqTouched() && touchscreen.touched()) {
-    global_touch_p = touchscreen.getPoint();
-    global_touch_x = touchMapX(global_touch_p.x, global_touch_p.y);
-    global_touch_y = touchMapY(global_touch_p.x, global_touch_p.y);
-    global_touch_length = millis() - global_touch_begin;
+  while(touchPollTouchStatus()) {
     touchIsExitAction();
     if(global_exit_flag) break;
   }
@@ -14883,39 +15375,56 @@ void touchWaitReleaseOrExit() {
 }
 
 void touchWaitRelease() {
-  while(touchscreen.tirqTouched() && touchscreen.touched()) {
-    global_touch_p = touchscreen.getPoint();
-    global_touch_x = touchMapX(global_touch_p.x, global_touch_p.y);
-    global_touch_y = touchMapY(global_touch_p.x, global_touch_p.y);
-    global_touch_length = millis() - global_touch_begin;
+  Serial.println("touchWaitRelease begin");
+  while(touchPollTouchStatus()) {
     touchIsExitAction();
   }
   global_touch_present_flag = 0;
+  Serial.println("touchWaitRelease end");
 }
 
 char touchCheckNowait() {
   if(digitalRead(BOOT_BUTTON_PIN) == LOW) saveScreenshot();
   // Проверить касание без блокировки
-  if(touchscreen.tirqTouched() && touchscreen.touched()) {
-    if(!global_touch_present_flag) {
-      global_touch_present_flag = 1;
-      global_touch_begin = millis();
-    }
-    global_touch_p = touchscreen.getPoint();
-    global_touch_x = touchMapX(global_touch_p.x, global_touch_p.y);
-    global_touch_y = touchMapY(global_touch_p.x, global_touch_p.y);
-    global_touch_length = millis() - global_touch_begin;
-
+  if(touchPollTouchStatus()) {
     touchIsExitAction();
     return 1;
   }
   else {
-    global_touch_length = 0;
-    if(global_touch_present_flag) {
-      global_touch_present_flag = 0;
-    }
     return 0;
   }
+}
+
+#define TOUCH_SMOOTH_POINTS 10
+
+char touchPollTouchStatus() {
+  global_touch_p = touchscreen.getTouch();
+  if(digitalRead(XPT2046_IRQ) == LOW) {
+    //Serial.printf("xRaw = %d yRaw = %d zRaw = %d IRQ = %d\n", global_touch_p.xRaw, global_touch_p.yRaw, global_touch_p.zRaw, digitalRead(XPT2046_IRQ) == HIGH ? 1 : 0);
+    if(global_touch_p.zRaw > 0) {
+      // Запоминаем начало касания
+      if(!global_touch_present_flag) {
+        global_touch_present_flag = 1;
+        global_touch_begin = millis();
+        global_touch_x = touchMapX(global_touch_p.xRaw, global_touch_p.yRaw);
+        global_touch_y = touchMapY(global_touch_p.xRaw, global_touch_p.yRaw);
+      }
+      else {
+        // Небольшое сглаживание от дребезга
+        global_touch_x = (touchMapX(global_touch_p.xRaw, global_touch_p.yRaw) + (TOUCH_SMOOTH_POINTS - 1) * global_touch_x) / TOUCH_SMOOTH_POINTS;
+        global_touch_y = (touchMapY(global_touch_p.xRaw, global_touch_p.yRaw) + (TOUCH_SMOOTH_POINTS - 1) * global_touch_y) / TOUCH_SMOOTH_POINTS;
+      }
+      //Serial.printf("x = %d, y = %d\n", global_touch_x, global_touch_y);
+      global_touch_length = millis() - global_touch_begin;
+      global_touch_present_flag = 1;
+      return 1;
+    }
+  }
+  if(global_touch_present_flag) {
+    global_touch_present_flag = 0;
+  }
+  global_touch_length = 0;
+  return 0;
 }
 
 /*
@@ -15259,14 +15768,16 @@ void setup() {
   pinMode(LED_BLUE, OUTPUT);
   pinMode(BACKLIGHT_LED, OUTPUT);
 
-  pinMode(LIGHT_SENSOR, INPUT);
+  pinMode(LIGHT_SENSOR_PIN, INPUT);
+  pinMode(XPT2046_IRQ, INPUT_PULLUP);
 
   // Start the SPI for the touchscreen and init the touchscreen
-  touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
-  touchscreen.begin(touchscreenSPI);
+  //touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+  //touchscreen.begin(touchscreenSPI);
+  touchscreen.begin();
   // Set the Touchscreen rotation in landscape mode
   // Note: in some displays, the touchscreen might be upside down, so you might need to set the rotation to 3: touchscreen.setRotation(3);
-  touchscreen.setRotation(2);
+  //touchscreen.setRotation(2);
 
   // Инициализация экрана, 
   tft.init();
@@ -15397,7 +15908,7 @@ void setup() {
     ax = 0;
     sscanf(buff, "%f %f %f %f %f %f", &ax, &bx, &cx, &ay, &by, &cy);
   }
-  if(touchscreen.tirqTouched() && touchscreen.touched()) {
+  if(touchPollTouchStatus()) {
     calibration_required = 1;
   }
 
@@ -15445,6 +15956,14 @@ void setup() {
   alt_keyboard_enabled_flag = 1;
   if(read_key_value_from_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", buff)) {
     sscanf(buff, "%d", &alt_keyboard_enabled_flag);
+  }
+  keyboard_indent_left = 0;
+  if(read_key_value_from_file("/Settings/Keyboard", "keyboard_indent_left", buff)) {
+    sscanf(buff, "%d", &keyboard_indent_left);
+  }
+  keyboard_indent_right = 0;
+  if(read_key_value_from_file("/Settings/Keyboard", "keyboard_indent_right", buff)) {
+    sscanf(buff, "%d", &keyboard_indent_right);
   }
 
 #ifdef IS_WIFI_ENABLED
