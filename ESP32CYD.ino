@@ -70,6 +70,7 @@
 - MP3-плеер
 - Интернет-радио плеер
 - Осциллограф
+- Выбор хранилища при запуске
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -138,47 +139,37 @@
 2026-06-22 Терминал, несколько команд через ";", убирать пробелы в начале строки, отдельная процедура для исполнения из строки,
   gopher кнопка "назад", MP3-плеер, интернет-радио плеер, Files открытие по двойному нажатию
 2026-06-23 Осциллограф (частично)
-2026-06-24 Осциллограф, настройки отступа экранной клавиатуры, запись на SD, программное чтение с тачпада, другая библиотека калибровки
+2026-06-24 Осциллограф, настройки отступа экранной клавиатуры, запись на SD, программное чтение с тачпада, другая библиотека калибровки,
+  цвета Volcov Commander
+2026-06-25 Программный выбор ФС, приложение выбора ФС, выбор ФС при запуске, меньше мигания в заголовке,
+  осциллограф пинг до 8.8.8.8, рисование текущий цвет, gopher не мотать за конец файла, gopher дублирование строк,
+  не отображается Exit в терминале, schedule не создаётся папка, schedule отметка если есть запись на день,
+  наименования переменных в Files, наименования переменных в IRC
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое:
-- (и) Крутая калибровка
-- (п) Просмотреть справку, может быть что-то добавить
-- (б) Гофер браузер - не прокручивать дальше конца файла
 - (д) Игра 2048
 - (д) Тетрис
 - (д) Арканоид
-- (д) Бэкапы на SD
+- (д) Бэкапы FFat на SD
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор
-- (д) Расписание: выводить планы на день по первому нажатию, редактирование по второму или двойному
 - (д) Редактирование: меньше мигания
-- (д) Если SD есть, то основная память SD, если нет то нет ЛИБО монтировать SD в папку?
-- (д) Меньше мигания в PIM
-- (д) Вывести многострочный текст в указанное место (из файла, буфера, потока)
 - (д) RSS чтение потока, декодирование на лету
 - (д) wget для терминала - http, https
 - (д) Перекодирование файлов для терминала
-- (д) IRC подкрутить размеры буферов и названия
-- (д) Files подкрутить названия буферов
-- (д) IRC вылет при выходе
-- (д) Прокрутка терминала
-- (д) История ввода терминала (хотя бы небольшая)
-- (д) Индикация работы сети (ожидания ответа от сети)
-- (б) Gopher иногда дублируются строки
-- (д) IRC поддержка SSL (через WiFiClientSecure)
-- (б) Terminal, не отображается Exit
-- (б) В рисовании заголовок накладывается
-- (д) Рисование, выбор инструмента
-- (д) Просмотр скриншотов
-- (б) Schedule не создаётся папка
+- (д) IRC подкрутить размеры буферов
 - (д) Launcher увод стилуса
-- (д) Не отжимать кнопку если увод касания меньше 100 мс
-- (д) Цвета Volcov Commander
+- (д) Меньше мигания в PIM
+- (п) Просмотреть справку, может быть что-то добавить
 - (д) Просмотр любых BMP
 - (д) Просмотр скриншотов
-- (д) RSS обработка при загрузке
-- (б) Картинки заголовок при сохранении
 
+- (д) Вывести многострочный текст в указанное место (из файла, буфера, потока)
+- (д) Расписание: выводить планы на день по первому нажатию, редактирование по второму или двойному (требуется многострочный текст)
+
+- (и) Крутая калибровка
+- (и) IRC вылет при выходе
+- (н) Индикация работы сети (ожидания ответа от сети)
 - (н) drawProgress - рисовать прогресс операции
 - (н) Возможность выбрать звук для событий
 - (н) Категории для PIM
@@ -194,6 +185,13 @@
 - (н) Вольтметр
 - (н) Триггерные кнопки (не ясно как использовать) или чекбоксы
 - (н) Квадратные значки в лаунчере
+- (н) Выбирать SD или FFat для каждого приложения отдельно
+- (н) Рисование, толщина инструмента
+- (н) Прокрутка терминала
+- (н) История ввода терминала (хотя бы небольшая)
+- (н) IRC поддержка SSL (через WiFiClientSecure)
+- (н) IRC поддержка UTF-8 вкл-выкл
+- (н) Не отжимать кнопку если увод касания меньше 100 мс
 
 */
 
@@ -312,16 +310,9 @@ XPT2046_Bitbang touchscreen(XPT2046_MOSI, XPT2046_MISO, XPT2046_CLK, XPT2046_CS)
 #define APP_MODE_LAUNCH 1
 #define APP_MODE_RETURN_NAME 0
 #define APP_MODE_RETURN_ICON 2
+#define APP_MODE_SPECIAL 3
 
 #define EDIT_FILE_LENGTH_MAX 8192
-
-#ifdef USE_SD_AS_STORAGE
-#define Storage SD
-//FS Storage = SD; 
-#else
-#define Storage FFat
-//FS Storage = FFat;
-#endif
 
 // Терминал
 #define TERMINAL_WIDTH_CHARS 40
@@ -475,6 +466,16 @@ char *keyboard_alt_caps[] = {
   NULL
 };
 
+
+#define STORAGE_TYPE_NONE 0
+#define STORAGE_TYPE_FFAT 1
+#define STORAGE_TYPE_SD 2
+
+fs::FS *Storage = nullptr;
+int storage_type = 0;
+char sd_available_flag = 0;
+char ffat_available_flag = 0;
+
 // Класс для прямого чтения и записи раздела FFat
 class FFatContentsStream : public Stream {
 private:
@@ -623,8 +624,12 @@ int global_seconds = 0;
 int global_moon_day = 0;
 int global_day_of_week = 0;
 char global_is_lap_year = 0;
+
+// Параметры приложений
+char current_app_title[80];
 char app_title_enabled = 0;
 long app_title_updated_millis = 0;
+char global_io_flag = 0;
 
 void launcher(char mode, char *io_buff);
 void calculator(char mode, char *io_buff);
@@ -690,6 +695,7 @@ void n_back(char mode, char *io_buff);
 void mental_math(char mode, char *io_buff);
 void flashcards(char mode, char *io_buff);
 void oscilloscope(char mode, char *io_buff);
+void select_storage_app(char mode, char *io_buff);
 
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
@@ -763,6 +769,7 @@ function_application_pointer all_apps[] = {
   keyboard_control,
   sound_control,
   autorun,
+  select_storage_app,
   reboot,
   NULL
 };
@@ -858,6 +865,7 @@ function_application_pointer settings_apps[40] = {
   keyboard_control,
   sound_control,
   autorun,
+  select_storage_app,
   reboot,
   NULL
 };
@@ -1420,34 +1428,59 @@ void system_info(char mode, char *io_buff) {
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
-    if(Storage.totalBytes() > 4096 * 1024) {
-      sprintf(buff, "Storage Total: %d MiB ", Storage.totalBytes() / (1024 * 1024));
-    }
-    else if(Storage.totalBytes() > 1024) {
-      sprintf(buff, "Storage Total: %d kiB ", Storage.totalBytes() / (1024));
-    }
-    else {
-      sprintf(buff, "Storage Total: %d bytes ", Storage.totalBytes());
-    }
-    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
-    i++;
+    if(storage_type == STORAGE_TYPE_FFAT) {
+      if(FFat.totalBytes() > 4096 * 1024) {
+        sprintf(buff, "FFat Total: %d MiB ", FFat.totalBytes() / (1024 * 1024));
+      }
+      else if(FFat.totalBytes() > 1024) {
+        sprintf(buff, "FFat Total: %d kiB ", FFat.totalBytes() / (1024));
+      }
+      else {
+        sprintf(buff, "FFat Total: %d bytes ", FFat.totalBytes());
+      }
+      tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+      i++;
 
-    if(Storage.usedBytes() > 4096 * 1024) {
-      sprintf(buff, "Storage Used: %d MiB (%d%%) ", Storage.usedBytes() / (1024 * 1024), (int)floor(100 * Storage.usedBytes() / Storage.totalBytes()));
+      if(FFat.usedBytes() > 4096 * 1024) {
+        sprintf(buff, "FFat Used: %d MiB (%d%%) ", FFat.usedBytes() / (1024 * 1024), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
+      }
+      else if(FFat.usedBytes() > 4096) {
+        sprintf(buff, "FFat Used: %d kiB (%d%%) ", FFat.usedBytes() / (1024), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
+      }
+      else {
+        sprintf(buff, "FFat Used: %d bytes (%d%%) ", FFat.usedBytes(), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
+      }
+      tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+      i++;
     }
-    else if(Storage.usedBytes() > 4096) {
-      sprintf(buff, "Storage Used: %d kiB (%d%%) ", Storage.usedBytes() / (1024), (int)floor(100 * Storage.usedBytes() / Storage.totalBytes()));
-    }
-    else {
-      sprintf(buff, "Storage Used: %d bytes (%d%%) ", Storage.usedBytes(), (int)floor(100 * Storage.usedBytes() / Storage.totalBytes()));
-    }
-    tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
-    i++;
+    else if(storage_type == STORAGE_TYPE_SD) {
+      if(SD.totalBytes() > 4096 * 1024) {
+        sprintf(buff, "FFat Total: %d MiB ", SD.totalBytes() / (1024 * 1024));
+      }
+      else if(SD.totalBytes() > 1024) {
+        sprintf(buff, "FFat Total: %d kiB ", SD.totalBytes() / (1024));
+      }
+      else {
+        sprintf(buff, "FFat Total: %d bytes ", SD.totalBytes());
+      }
+      tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+      i++;
 
+      if(SD.usedBytes() > 4096 * 1024) {
+        sprintf(buff, "FFat Used: %d MiB (%d%%) ", SD.usedBytes() / (1024 * 1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+      }
+      else if(SD.usedBytes() > 4096) {
+        sprintf(buff, "FFat Used: %d kiB (%d%%) ", SD.usedBytes() / (1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+      }
+      else {
+        sprintf(buff, "FFat Used: %d bytes (%d%%) ", SD.usedBytes(), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+      }
+      tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
+      i++;
+    }
     sprintf(buff, "---");
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
-
 
     sprintf(buff, "Uptime: %dh %dm %ds     ", millis() / 3600000, (millis() / 60000) % 60, (millis() / 1000) % 60);
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
@@ -1619,9 +1652,8 @@ void files(char mode, char *io_buff) {
   int current_op = -1;
   char show_updir = 0;
   char path[80] = "/";
-  char buff2[80];
-  char buff3[80];
-  char buff4[80];
+  char buff[80];
+  char filename_to[80];
   char user_input[80];
   char byte;
   char **files = NULL; // 14 элементов на экране
@@ -1676,7 +1708,7 @@ void files(char mode, char *io_buff) {
     }
 
     // Список файлов
-    current_dir = Storage.open(path);
+    current_dir = Storage->open(path);
     file_index = 0;
 
     if (!current_dir) {
@@ -1690,7 +1722,7 @@ void files(char mode, char *io_buff) {
         if(drawConfirm("Format storage?") == 0) {
           FFat.format();
           FFat.begin(FORMAT_FS_IF_FAILED);
-          Storage.mkdir("/Settings");
+          Storage->mkdir("/Settings");
         }
       }
 #endif
@@ -1699,10 +1731,10 @@ void files(char mode, char *io_buff) {
 
     // Текущий путь
     file_index = 0;
-    sprintf(buff2, "Path: %s", path);
+    sprintf(buff, "Path: %s", path);
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.fillRect(0, 16, tft.width(), 16, color_scheme_bg);
-    tft.drawString(buff2, 8, 16, FONT_DEFAULT);
+    tft.drawString(buff, 8, 16, FONT_DEFAULT);
 
     // Освобождаем память
     if(files) {
@@ -1716,27 +1748,27 @@ void files(char mode, char *io_buff) {
     files[0] = NULL;
     //delay(1000);
     if(strcmp(path, "/")) {
-      sprintf(buff2, "[u] ..");
-      files[file_index] = (char*)malloc((strlen(buff2) + 1) * sizeof(char));
-      strcpy(files[file_index], buff2);
+      sprintf(buff, "[u] ..");
+      files[file_index] = (char*)malloc((strlen(buff) + 1) * sizeof(char));
+      strcpy(files[file_index], buff);
       files[file_index + 1] = NULL;
       file_index ++;
     }
     while(file = current_dir.openNextFile()) {
       //realloc(files, (file_index + 2) * sizeof(char*));
       if(file.isDirectory()) {
-        sprintf(buff2, "%s\t%s", file.name(), "[dir]");
+        sprintf(buff, "%s\t%s", file.name(), "[dir]");
       }
       else {
         if(file.size() > 4096) {
-          sprintf(buff2, "%s\t%dk", file.name(), file.size() / 1024);
+          sprintf(buff, "%s\t%dk", file.name(), file.size() / 1024);
         }
         else {
-          sprintf(buff2, "%s\t%db", file.name(), file.size());
+          sprintf(buff, "%s\t%db", file.name(), file.size());
         }
       }
-      files[file_index] = (char*)malloc((strlen(buff2) + 1) * sizeof(char));
-      strcpy(files[file_index], buff2);
+      files[file_index] = (char*)malloc((strlen(buff) + 1) * sizeof(char));
+      strcpy(files[file_index], buff);
       files[file_index + 1] = NULL;
       file_index ++;
     }
@@ -1762,7 +1794,7 @@ void files(char mode, char *io_buff) {
 
     if(current_op != -1) {
       // Находим нужный файл
-      current_dir = Storage.open(path);
+      current_dir = Storage->open(path);
       file_index = 0;
       if(strcmp(path, "/")) {
         file_index++;
@@ -1777,8 +1809,8 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         drawPrompt("New file name", user_input);
         if(strlen(user_input) > 0) {
-          sprintf(buff2, "%s%s", path, user_input);
-          file = Storage.open(buff2, FILE_WRITE);
+          sprintf(buff, "%s%s", path, user_input);
+          file = Storage->open(buff, FILE_WRITE);
           if (!file) {
             drawAlert("Failed to create new file");
             return;
@@ -1810,9 +1842,8 @@ void files(char mode, char *io_buff) {
             file_offset = 0;
           }
           else {
-            sprintf(buff2, "%s%s", path, file.name());
-            sprintf(buff3, "%s%s", path, file.name());
-            view_file(buff2, buff3);
+            sprintf(buff, "%s%s", path, file.name());
+            view_file(buff, buff);
           }
         }
       }
@@ -1822,9 +1853,8 @@ void files(char mode, char *io_buff) {
           drawError("Unable to edit directory");
         }
         else {
-          sprintf(buff2, "%s%s", path, file.name());
-          sprintf(buff3, "%s%s", path, file.name());
-          edit_file(buff2, buff3);
+          sprintf(buff, "%s%s", path, file.name());
+          edit_file(buff, buff);
         }
       }
       // Переименование
@@ -1832,12 +1862,12 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         drawPrompt("Rename file name", user_input);
         if(strlen(user_input) != 0) {
-          sprintf(buff3, "%s%s", path, file.name());
-          sprintf(buff4, "%s%s", path, user_input);
-          if(!Storage.rename(buff3, buff4)) {
+          sprintf(buff, "%s%s", path, file.name());
+          sprintf(filename_to, "%s%s", path, user_input);
+          if(!Storage->rename(buff, filename_to)) {
             drawAlert("Rename failed");
-            drawInfo(buff3);
-            drawInfo(buff4);
+            drawInfo(buff);
+            drawInfo(filename_to);
           }
         }
       }
@@ -1845,8 +1875,8 @@ void files(char mode, char *io_buff) {
       if(current_op == 4) {
         strcpy(user_input, "");
         drawPrompt("New directory name", user_input);
-        sprintf(buff3, "%s%s", path, user_input);
-        if (!Storage.mkdir(buff3)) {
+        sprintf(buff, "%s%s", path, user_input);
+        if(!Storage->mkdir(buff)) {
           drawAlert("Failed to create new directory");
           return;
         }
@@ -1856,25 +1886,25 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         drawPrompt("Enter path to copy", user_input);
         if(strlen(user_input) != 0) {
-          sprintf(buff3, "%s%s", path, file.name());
-          strcpy(buff4, user_input);
+          sprintf(buff, "%s%s", path, file.name());
+          strcpy(filename_to, user_input);
           
           // Если путь без / в начале, то это относительный путь
           if(user_input[0] != '/') {
-            sprintf(buff4, "%s%s", path, user_input);
+            sprintf(filename_to, "%s%s", path, user_input);
           }
-          strcpy(user_input, buff4);
+          strcpy(user_input, filename_to);
 
           // Если путь не заканчивается на /, то надо проверить, папка это или файл, который нужно создать
           if(user_input[strlen(user_input) - 1] == '/') {
-            sprintf(buff4, "%s%s", user_input, file.name());
+            sprintf(filename_to, "%s%s", user_input, file.name());
           }
           else {
             // Если это папка нужно добавить '/' и имя файла
-            current_dir = Storage.open(user_input);
+            current_dir = Storage->open(user_input);
             if(current_dir) {
               if(current_dir.isDirectory()) {
-                sprintf(buff4, "%s/%s", user_input, file.name());
+                sprintf(filename_to, "%s/%s", user_input, file.name());
               }
               current_dir.close();
             }
@@ -1882,8 +1912,8 @@ void files(char mode, char *io_buff) {
           }
 
           // Копирование
-          file = Storage.open(buff3);
-          file_copy = Storage.open(buff4, FILE_WRITE);
+          file = Storage->open(buff);
+          file_copy = Storage->open(filename_to, FILE_WRITE);
           if(!file) {
             drawAlert("Cannot open source file");
           }
@@ -1905,44 +1935,48 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         drawPrompt("Enter path to move", user_input);
         if(strlen(user_input) != 0) {
-          sprintf(buff3, "%s%s", path, file.name());
-          strcpy(buff4, user_input);
+          sprintf(buff, "%s%s", path, file.name());
+          strcpy(filename_to, user_input);
 
           // Если путь без / в начале, то это относительный путь
           if(user_input[0] != '/') {
-            sprintf(buff4, "%s%s", path, user_input);
+            sprintf(filename_to, "%s%s", path, user_input);
           }
-          strcpy(user_input, buff4);
+          strcpy(user_input, filename_to);
 
           // Если путь заканчивается без /, то надо проверить, папка это или файл, который нужно создать
           if(user_input[strlen(user_input) - 1] == '/') {
-            sprintf(buff4, "%s%s", user_input, file.name());
+            sprintf(filename_to, "%s%s", user_input, file.name());
           }
           else {
             // Если это папка нужно добавить '/' и имя файла
-            current_dir = Storage.open(user_input);
+            current_dir = Storage->open(user_input);
             if(current_dir && current_dir.isDirectory()) {
-              sprintf(buff4, "%s/%s", user_input, file.name());
+              sprintf(filename_to, "%s/%s", user_input, file.name());
             }
             current_dir.close();
           }
-          sprintf(buff4, "%s", user_input);
-          if(!Storage.rename(buff3, buff4)) {
+          sprintf(filename_to, "%s", user_input);
+          if(!Storage->rename(buff, filename_to)) {
             drawAlert("Rename failed");
-            drawInfo(buff3);
-            drawInfo(buff4);
+            drawInfo(buff);
+            drawInfo(filename_to);
           }
         }
       }
       // Удаление
       if(current_op == 7) {
         if(drawConfirm("Delete file?") == 0) {
-          sprintf(buff3, "%s%s", path, file.name());
+          sprintf(buff, "%s%s", path, file.name());
           if(file.isDirectory()) {
-            Storage.rmdir(buff3);
+            if(!Storage->rmdir(buff)) {
+              drawError("Remove directory failed");
+            }
           }
           else {
-            Storage.remove(buff3);
+            if(!Storage->remove(buff)) {
+              drawError("Remove failed");
+            }
           }
           current_op = -1;
           file_selected = 0;
@@ -2130,13 +2164,13 @@ void terminal_execute_single(char *str) {
       terminal_print("Format FFat failed\n\r");
     }
     FFat.begin(true);
-    Storage.mkdir("/Settings");
+    Storage->mkdir("/Settings");
   }
   else if(strcmp(str, "ls") == 0) {
     terminal_print("Usage: ls {directory}\n\r");
   }
   else if(memcmp(str, "ls ", 3) == 0) {
-    current_dir = Storage.open(str + 3);
+    current_dir = Storage->open(str + 3);
     if(current_dir && current_dir.isDirectory()) {
       while(file = current_dir.openNextFile()) {
         terminal_print((char *)file.name());
@@ -2151,7 +2185,7 @@ void terminal_execute_single(char *str) {
     terminal_print("Usage: mkdir {directory}\n\r");
   }
   else if(memcmp(str, "mkdir ", 6) == 0) {
-    if(Storage.mkdir(str + 6)) {
+    if(Storage->mkdir(str + 6)) {
       terminal_print("OK\n\r");
     }
     else {
@@ -2162,7 +2196,7 @@ void terminal_execute_single(char *str) {
     terminal_print("Usage: rmdir {directory}\n\r");
   }
   else if(memcmp(str, "rmdir ", 6) == 0) {
-    if(Storage.rmdir(str + 6)) {
+    if(Storage->rmdir(str + 6)) {
       terminal_print("OK\n\r");
     }
     else {
@@ -2173,7 +2207,7 @@ void terminal_execute_single(char *str) {
     terminal_print("Usage: cat {file}\n\r");
   }
   else if(memcmp(str, "cat ", 4) == 0) {
-    file = Storage.open(str + 4);
+    file = Storage->open(str + 4);
     if(file) {
       while(file.available()) {
         byte = file.read();
@@ -2197,7 +2231,7 @@ void terminal_execute_single(char *str) {
     terminal_print("Usage: touch {filename}\n\r");
   }
   else if(memcmp(str, "touch ", 6) == 0) {
-    file = Storage.open(str + 6, FILE_APPEND);
+    file = Storage->open(str + 6, FILE_APPEND);
     if(file) {
       file.close();
       terminal_print("OK\n\r");
@@ -2210,7 +2244,7 @@ void terminal_execute_single(char *str) {
     terminal_print("Usage: rm {filename}\n\r");
   }
   else if(memcmp(str, "rm ", 3) == 0) {
-    if(Storage.remove(str + 3)) {
+    if(Storage->remove(str + 3)) {
       terminal_print("OK\n\r");
     }
     else {
@@ -2250,19 +2284,19 @@ void terminal_execute_single(char *str) {
   }
 #ifdef IS_WIFI_ENABLED
   else if(strcmp(str, "ip") == 0) {
-    sprintf(buff, "%s\n\r", WiFi.localIP().toString());
+    sprintf(buff, "%s\n\r", WiFi.localIP().toString().c_str());
     terminal_print(buff);
   }
   else if(strcmp(str, "netmask") == 0) {
-    sprintf(buff, "%s\n\r", WiFi.subnetMask().toString());
+    sprintf(buff, "%s\n\r", WiFi.subnetMask().toString().c_str());
     terminal_print(buff);
   }
   else if(strcmp(str, "gateway") == 0) {
-    sprintf(buff, "%s\n\r", WiFi.gatewayIP().toString());
+    sprintf(buff, "%s\n\r", WiFi.gatewayIP().toString().c_str());
     terminal_print(buff);
   }
   else if(strcmp(str, "dns") == 0) {
-    sprintf(buff, "%s\n\r", WiFi.dnsIP().toString());
+    sprintf(buff, "%s\n\r", WiFi.dnsIP().toString().c_str());
     terminal_print(buff);
   }
   else if(strcmp(str, "rssi") == 0) {
@@ -2493,6 +2527,8 @@ void terminal_input_string(char *input_buff) {
     }
 
     if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
       return;
     }
   }
@@ -2601,6 +2637,7 @@ int terminal_input_char() {
       }
     }
 
+    touchWaitReleaseOrExit();
     if(global_exit_flag) {
       drawAppTitle("Exit");
       touchWaitRelease();
@@ -2920,17 +2957,17 @@ void notes_action(int action_index, char *filename) {
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", NOTES_PATH, "__New");
-    //file = Storage.open(buff, FILE_WRITE);
+    //file = Storage->open(buff, FILE_WRITE);
     //file.close();
     edit_file("New note", buff);
 
-    file = Storage.open(buff);
+    file = Storage->open(buff);
     if(!file) {
       return;
     }
     else if(file.size() == 0) {
       file.close();
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
     else {
       file.close();
@@ -2950,7 +2987,7 @@ void notes_action(int action_index, char *filename) {
     if(drawConfirm("Delete this note?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", NOTES_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -3010,17 +3047,17 @@ void flashcards_action(int action_index, char *filename) {
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", FLASHCARDS_PATH, "__New");
-    //file = Storage.open(buff, FILE_WRITE);
+    //file = Storage->open(buff, FILE_WRITE);
     //file.close();
     edit_file("New flashcard", buff);
 
-    file = Storage.open(buff);
+    file = Storage->open(buff);
     if(!file) {
       return;
     }
     else if(file.size() == 0) {
       file.close();
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
     else {
       file.close();
@@ -3043,7 +3080,7 @@ void flashcards_action(int action_index, char *filename) {
     if(drawConfirm("Delete this flashcard?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", FLASHCARDS_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -3066,7 +3103,7 @@ void flashcards_learn() {
   }
 
   // Выделить память
-  current_dir = Storage.open(FLASHCARDS_PATH);
+  current_dir = Storage->open(FLASHCARDS_PATH);
   if(current_dir && current_dir.isDirectory()) {
     offset = 0;
     while(file = current_dir.openNextFile()) {
@@ -3183,17 +3220,17 @@ void tunes_action(int action_index, char *filename) {
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", TUNES_PATH, "__New");
-    //file = Storage.open(buff, FILE_WRITE);
+    //file = Storage->open(buff, FILE_WRITE);
     //file.close();
     edit_file("New tune", buff);
 
-    file = Storage.open(buff);
+    file = Storage->open(buff);
     if(!file) {
       return;
     }
     else if(file.size() == 0) {
       file.close();
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
     else {
       file.close();
@@ -3218,7 +3255,7 @@ void tunes_action(int action_index, char *filename) {
     if(drawConfirm("Delete this tune?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", TUNES_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -3248,7 +3285,7 @@ void tunes_play(char *filename) {
     261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88, 523.25
     };
 
-  file = Storage.open(filename);
+  file = Storage->open(filename);
   // Пропустить первую строчку
   while(file.available()) {
       byte = file.read();
@@ -3437,7 +3474,7 @@ void music_action(int action_index, char *filename) {
       if(strcmp(buff, "")) {
         sprintf(old_path_filename, "%s/%s", MUSIC_PATH, filename);
         sprintf(new_path_filename, "%s/%s", MUSIC_PATH, buff);
-        Storage.rename(old_path_filename, new_path_filename);
+        Storage->rename(old_path_filename, new_path_filename);
       }
     }
   }
@@ -3445,7 +3482,7 @@ void music_action(int action_index, char *filename) {
     if(drawConfirm("Delete this file?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", MUSIC_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -3460,7 +3497,7 @@ void music_play(char *filename) {
   AudioOutputI2SNoDAC *out;
   AudioFileSourceID3 *id3;
 
-  file = new AudioFileSourceFS(Storage, filename);
+  file = new AudioFileSourceFS(*Storage, filename);
   id3 = new AudioFileSourceID3(file);
   out = new AudioOutputI2SNoDAC();
   out->SetPinout(-1, -1, BUZZER_PIN);
@@ -3527,13 +3564,13 @@ void webradio_action(int action_index, char *filename) {
     sprintf(buff, "%s/%s", WEBRADIO_PATH, "__New");
     edit_file("New webradio", buff);
 
-    file = Storage.open(buff);
+    file = Storage->open(buff);
     if(!file) {
       return;
     }
     else if(file.size() == 0) {
       file.close();
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
     else {
       file.close();
@@ -3558,7 +3595,7 @@ void webradio_action(int action_index, char *filename) {
     if(drawConfirm("Delete this webradio?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", WEBRADIO_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -3654,13 +3691,13 @@ void passwords_action(int action_index, char *filename) {
     sprintf(filename_with_path_new, "%s/%s", PASSWORDS_PATH, "__New");
     edit_file("New password", filename_with_path_new);
 
-    file = Storage.open(filename_with_path_new);
+    file = Storage->open(filename_with_path_new);
     if(!file) {
       return;
     }
     else if(file.size() == 0) {
       file.close();
-      Storage.remove(filename_with_path_new);
+      Storage->remove(filename_with_path_new);
     }
     else {
       file.close();
@@ -3668,7 +3705,7 @@ void passwords_action(int action_index, char *filename) {
       index = 1;
       while(1) {
         sprintf(filename_with_path, "%s/%d", PASSWORDS_PATH, index);
-        file = Storage.open(filename_with_path);
+        file = Storage->open(filename_with_path);
         if(file) {
           file.close();
         }
@@ -3696,7 +3733,7 @@ void passwords_action(int action_index, char *filename) {
       index = 1;
       while(1) {
         sprintf(filename_with_path, "%s/%d", PASSWORDS_PATH, index);
-        file = Storage.open(filename_with_path);
+        file = Storage->open(filename_with_path);
         if(file) {
           file.close();
         }
@@ -3720,7 +3757,7 @@ void passwords_action(int action_index, char *filename) {
     if(drawConfirm("Delete this password?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(filename_with_path, "%s/%s", PASSWORDS_PATH, filename);
-      Storage.remove(filename_with_path);
+      Storage->remove(filename_with_path);
     }
   }
 }
@@ -3753,12 +3790,12 @@ void passwords_file_encrypt(char *filename_with_path) {
 
   // Записываем двочиный файл
   // write_file_from_buff только для текстовых файлов
-  file = Storage.open(filename_with_path, FILE_WRITE);
+  file = Storage->open(filename_with_path, FILE_WRITE);
   file.write((const uint8_t *)data_out, 16 + (((strlen(data_in) + 1) / 16) + 1) * 16);
   file.close();
 
   // Удалить расшифрованный файл
-  Storage.remove(filename_with_path_new);
+  Storage->remove(filename_with_path_new);
 
   free(data_in);
   free(data_out);
@@ -3772,7 +3809,7 @@ void passwords_file_decrypt(char *filename_with_path) {
   long file_size = 0;
 
   // Нужен размер файла
-  file = Storage.open(filename_with_path);
+  file = Storage->open(filename_with_path);
   file_size = file.size();
   file.close();
   
@@ -3790,7 +3827,7 @@ void passwords_file_decrypt(char *filename_with_path) {
 
   // Читаем двоичный файл (!)
   // read_file_to_buff только для текстовых файлов
-  file = Storage.open(filename_with_path);
+  file = Storage->open(filename_with_path);
   file.read((unsigned char*)data_in, file.size());
   file.close();
   //read_file_to_buff(filename_with_path, EDIT_FILE_LENGTH_MAX + 16, data_in);
@@ -3913,18 +3950,18 @@ void contacts_action(int action_index, char *filename) {
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", CONTACTS_PATH, "__New");
-    //file = Storage.open(buff, FILE_WRITE);
+    //file = Storage->open(buff, FILE_WRITE);
     //file.close();
     edit_file("New contact", buff);
 
     // Меняем название в соответствии с содержимым
-    file = Storage.open(buff);
+    file = Storage->open(buff);
     if(!file) {
       return;
     }
     else if(file.size() == 0) {
       file.close();
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
     else {
       file.close();
@@ -3944,7 +3981,7 @@ void contacts_action(int action_index, char *filename) {
     if(drawConfirm("Delete this contact?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", CONTACTS_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -4009,17 +4046,17 @@ void todo_action(int action_index, char *filename) {
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", TODO_PATH, "__New");
-    //file = Storage.open(buff, FILE_WRITE);
+    //file = Storage->open(buff, FILE_WRITE);
     //file.close();
     edit_file("New todo item", buff);
 
-    file = Storage.open(buff);
+    file = Storage->open(buff);
     if(!file) {
       return;
     }
     else if(file.size() == 0) {
       file.close();
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
     else {
       file.close();
@@ -4038,7 +4075,7 @@ void todo_action(int action_index, char *filename) {
     }
     sprintf(old_path_filename, "%s/%s", TODO_PATH, filename);
     sprintf(new_path_filename, "%s/%s", TODO_PATH, new_filename);
-    Storage.rename(old_path_filename, new_path_filename);
+    Storage->rename(old_path_filename, new_path_filename);
   }
   else if(action_index == 2) {
     // Редактируем существующий файл
@@ -4052,7 +4089,7 @@ void todo_action(int action_index, char *filename) {
     if(drawConfirm("Delete this todo item?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", TODO_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -4122,7 +4159,7 @@ void expenses_action(int action_index, char *filename) {
     // Добавляем категорию
     if(drawPrompt("Category name", name) == 0) {
       sprintf(buff, "%s/%s", EXPENSES_PATH, "__New");
-      file = Storage.open(buff, FILE_WRITE);
+      file = Storage->open(buff, FILE_WRITE);
       file.println(name);
       file.close();
 
@@ -4140,7 +4177,7 @@ void expenses_action(int action_index, char *filename) {
       }
       else {
         sprintf(buff, "%s/%s", EXPENSES_PATH, filename);
-        file = Storage.open(buff, FILE_APPEND);
+        file = Storage->open(buff, FILE_APPEND);
         file.println(name);
         file.close();
       }
@@ -4150,7 +4187,7 @@ void expenses_action(int action_index, char *filename) {
     if(drawConfirm("Delete this category?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", EXPENSES_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -4242,7 +4279,7 @@ void books_action(int action_index, char *filename) {
       if(strcmp(buff, "")) {
         sprintf(old_path_filename, "%s/%s", BOOKS_PATH, filename);
         sprintf(new_path_filename, "%s/%s", BOOKS_PATH, buff);
-        Storage.rename(old_path_filename, new_path_filename);
+        Storage->rename(old_path_filename, new_path_filename);
       }
     }
   }
@@ -4250,7 +4287,7 @@ void books_action(int action_index, char *filename) {
     if(drawConfirm("Delete this book?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", BOOKS_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -4324,7 +4361,7 @@ void draw_action(int action_index, char *filename) {
     while(1) {
       index++;
       sprintf(buff, "%s/Draw %d.bmp", DRAW_PATH, index);
-      file = Storage.open(buff);
+      file = Storage->open(buff);
       if(!file) {
         break;
       }
@@ -4345,7 +4382,7 @@ void draw_action(int action_index, char *filename) {
       if(strcmp(buff, "")) {
         sprintf(old_path_filename, "%s/%s", DRAW_PATH, filename);
         sprintf(new_path_filename, "%s/%s", DRAW_PATH, buff);
-        Storage.rename(old_path_filename, new_path_filename);
+        Storage->rename(old_path_filename, new_path_filename);
       }
     }
   }
@@ -4353,7 +4390,7 @@ void draw_action(int action_index, char *filename) {
     if(drawConfirm("Delete this image?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", DRAW_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -4437,7 +4474,7 @@ void draw_edit(char *title, char *filename) {
   drawAppTitle("Loading...");
 
   // Загрузка из файла (если он есть)
-  file = Storage.open(filename);
+  file = Storage->open(filename);
   if(file) {
     // Пропускаем заголовок BMP (у меня вышло 118 байт, но лучше ориентироваться на размер файла)
     i = file.size() - tft.width() * (tft.height() - 32) / 2;
@@ -4479,6 +4516,7 @@ void draw_edit(char *title, char *filename) {
     tft.fillRect(color_index * tft.width() / 16, 304, tft.width() / 16, 16, colors[color_index]);
   }
   color_index = 0;
+  tft.fillRect(color_index * tft.width() / 16 + 6, 304 + 6, tft.width() / 16 - 12, 16 - 12, colors[15 - color_index]);
 
   color = TFT_BLACK;
   while(1) {
@@ -4507,7 +4545,10 @@ void draw_edit(char *title, char *filename) {
       prev_touch_x = touch_x;
       prev_touch_y = touch_y;
       if(touch_x >= 0 && touch_x < tft.width() && touch_y >= 304 && touch_y < tft.height()) {
+        tft.fillRect(color_index * tft.width() / 16, 304, tft.width() / 16, 16, colors[color_index]);
         color_index = floor(touch_x * 16 / tft.width());
+        tft.fillRect(color_index * tft.width() / 16, 304, tft.width() / 16, 16, colors[color_index]);
+        tft.fillRect(color_index * tft.width() / 16 + 6, 304 + 6, tft.width() / 16 - 12, 16 - 12, colors[15 - color_index]);
       }
 
       touchCheckNowait();
@@ -4516,7 +4557,7 @@ void draw_edit(char *title, char *filename) {
         touchWaitRelease();
         if(modified) {
           drawAppTitle("Saving...");
-          file = Storage.open(filename, FILE_WRITE);
+          file = Storage->open(filename, FILE_WRITE);
           file.write((const uint8_t *)draw_header, 118);
           // Записываем данные изображения с экрана
           x = 0;
@@ -4582,8 +4623,6 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
   int i;
   int offset;
   char buff[80];
-  char buff2[80];
-  char buff3[80];
   char left[80];
   char right[80];
   char byte;
@@ -4624,10 +4663,10 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
         visible_list[i] = NULL;
       }
       // Получаем список файлов
-      current_dir = Storage.open(path);
+      current_dir = Storage->open(path);
       if(!current_dir) {
-        Storage.mkdir(path);
-        current_dir = Storage.open(path);
+        Storage->mkdir(path);
+        current_dir = Storage->open(path);
         if(!current_dir) {
           drawError("Cannot open path");
           return;
@@ -4695,7 +4734,7 @@ void pim_rename_file(char *path, char *old_filename, char *prefix) {
   int offset;
 
   sprintf(old_path_filename, "%s/%s", path, old_filename);
-  file = Storage.open(old_path_filename);
+  file = Storage->open(old_path_filename);
   new_filename[0] = 0;
   offset = 0;
   while(file.available()) {
@@ -4722,7 +4761,7 @@ void pim_rename_file(char *path, char *old_filename, char *prefix) {
   // Проверяем что такого названия нет
   if(strcmp("", new_filename) != 0) {
     sprintf(new_path_filename, "%s/%s%s", path, prefix ? prefix : "", new_filename);
-    file = Storage.open(new_path_filename);
+    file = Storage->open(new_path_filename);
     if(file) {
       file.close();
       strcpy(new_filename, "");
@@ -4734,7 +4773,7 @@ void pim_rename_file(char *path, char *old_filename, char *prefix) {
     for(offset = 1;; offset++) {
       sprintf(new_filename, "%d", offset);
       sprintf(new_path_filename, "%s/%s%s", path, prefix ? prefix : "", new_filename);
-      file = Storage.open(new_path_filename);
+      file = Storage->open(new_path_filename);
       if(!file) {
         break;
       }
@@ -4746,10 +4785,10 @@ void pim_rename_file(char *path, char *old_filename, char *prefix) {
   if(strcmp("", new_filename) != 0 && strcmp(old_filename, new_filename)) {
     sprintf(new_path_filename, "%s/%s%s", path, prefix ? prefix : "", new_filename);
     // Проверяем что мы не затрём какой-нибудь файл
-    file = Storage.open(new_path_filename);
+    file = Storage->open(new_path_filename);
     if(!file) {
       // И только тогда переименовываем
-      Storage.rename(old_path_filename, new_path_filename);
+      Storage->rename(old_path_filename, new_path_filename);
     }
     else {
       file.close();
@@ -4832,6 +4871,11 @@ void schedule(char mode, char *io_buff) {
   redraw_flag = 1;
   //set_local_time_from_unix_timestamp();
 
+  // Создать папку если её нет
+  if(!Storage->exists(SCHEDULE_PATH)) {
+    Storage->mkdir(SCHEDULE_PATH);
+  }
+
   day_of_week = (global_day_of_week + 7 - (global_day - 1) % 7) % 7;
   year = global_year;
   month = global_month;
@@ -4881,10 +4925,8 @@ void schedule(char mode, char *io_buff) {
             record_present = 0;
             // Проверяем заметки на отображаемый день
             sprintf(buff, "%s/%04d-%02d-%02d", SCHEDULE_PATH, year, month, cal_day);
-            file = Storage.open(filename);
-            if(file) {
+            if(Storage->exists(buff)) {
               record_present = 1;
-              file.close();
             }
 
             sprintf(buff, "%d", cal_day);
@@ -4929,12 +4971,12 @@ void schedule(char mode, char *io_buff) {
       sprintf(filename, "%s/%04d-%02d-%02d", SCHEDULE_PATH, year, month, selected_day);
       sprintf(buff, "%04d-%02d-%02d", year, month, selected_day);
       // Если файла нет, то его нужно создать
-      file = Storage.open(filename);
+      file = Storage->open(filename);
       if(file) {
         file.close();
       }
       else {
-        file = Storage.open(filename, FILE_WRITE);
+        file = Storage->open(filename, FILE_WRITE);
         file.print(schedule_file_template);
         file.close();
       }
@@ -5166,7 +5208,7 @@ void security(char mode, char *io_buff) {
       }
       // Удаление пароля
       else if(button_pressed == 2) {
-        Storage.remove("/Settings/Password");
+        Storage->remove("/Settings/Password");
         drawInfo("Password deleted");
         tft.fillRect(0, 16, tft.width(), tft.height(), color_scheme_bg);
       }
@@ -5468,6 +5510,91 @@ void brightness_app(char mode, char *io_buff) {
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
       save_brightness();
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// Select storage app
+void select_storage_app(char mode, char *io_buff) {
+  int button_pressed;
+  int result = 0;
+  int i;
+  char buff[80];
+  char *buttons[] = {
+    "None",
+    "FFat (Internal)",
+    "SD card",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11110000,
+    B01010101, B01001000,
+    B01010101, B01000100,
+    B01010101, B01000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Select Storage");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Select Storage");
+
+  while(1) {
+    drawButtonMatrix(0, 50, tft.width(), tft.height() - 50, buttons, 1, 3);
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, 50, tft.width(), tft.height() - 50, buttons, 1, 3);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+      }
+      else if(button_pressed == 1) {
+        if(ffat_available_flag) {
+          Storage = &FFat;
+          storage_type = STORAGE_TYPE_FFAT;
+          if(mode == APP_MODE_SPECIAL) return;
+        }
+        else {
+          drawError("FFat is not available");
+        }
+      }
+      else if(button_pressed == 2) {
+        if(sd_available_flag) {
+          Storage = &SD;
+          storage_type = STORAGE_TYPE_SD;
+          if(mode == APP_MODE_SPECIAL) return;
+        }
+        else {
+          drawError("SD is not available");
+        }
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
       drawAppTitle("Exit");
       touchWaitRelease();
       touchExitActionReset();
@@ -7530,6 +7657,7 @@ void wifi_select_network() {
         WiFi.begin(networks[network_selected], password);
         millis_connecting_start = millis();
         do {
+          touchCheckNowait();
           wifi_status = WiFi.status();
           if(millis() - millis_connecting_start >= 30000) break;
         } while (wifi_status == WL_DISCONNECTED || wifi_status == WL_IDLE_STATUS);
@@ -7581,7 +7709,7 @@ void wifi_network_info() {
   int button_pressed;
   int prev_update_millis = 0;
   char buff[80];
-  char buff2[80];
+  char ip_to_ping[80];
   IPAddress ip;
 
   char *buttons[] = {
@@ -7607,20 +7735,19 @@ void wifi_network_info() {
       sprintf(buff, "My MAC: %02x:%02x:%02x:%02x:%02x:%02x  ", WiFi.macAddress()[0], WiFi.macAddress()[1], WiFi.macAddress()[2], WiFi.macAddress()[3], WiFi.macAddress()[4], WiFi.macAddress()[5]);
       tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
       screen_offset += 16;
-      sprintf(buff, "IP: %s  ", WiFi.localIP().toString());
+      sprintf(buff, "IP: %s  ", WiFi.localIP().toString().c_str());
       tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
       screen_offset += 16;
-      sprintf(buff, "Netmask: %s  ", WiFi.subnetMask().toString());
+      sprintf(buff, "Netmask: %s  ", WiFi.subnetMask().toString().c_str());
       tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
       screen_offset += 16;
-      // Какой-то глюк с этим адресом
-      //sprintf(buff, "Broadcast: %s", WiFi.broadcastIP().toString());
-      //tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
-      //screen_offset += 16;
-      sprintf(buff, "Gateway: %s  ", WiFi.gatewayIP().toString());
+      sprintf(buff, "Broadcast: %s   ", WiFi.broadcastIP().toString().c_str());
       tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
       screen_offset += 16;
-      sprintf(buff, "DNS: %s  ", WiFi.dnsIP().toString());
+      sprintf(buff, "Gateway: %s  ", WiFi.gatewayIP().toString().c_str());
+      tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
+      screen_offset += 16;
+      sprintf(buff, "DNS: %s  ", WiFi.dnsIP().toString().c_str());
       tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
       screen_offset += 16;
 
@@ -7635,16 +7762,16 @@ void wifi_network_info() {
     if(button_pressed != -1) {
       // Ping
       if(button_pressed == 0) {
-        strcpy(buff, "");
-        drawPrompt("IP to ping", buff);
-        if(strcmp(buff, "")) {
-          if(Ping.ping(buff, 3)) {
-            sprintf(buff2, "3 pings avg=%0.2f ms", Ping.averageTime());
+        strcpy(ip_to_ping, "");
+        drawPrompt("IP to ping", ip_to_ping);
+        if(strcmp(ip_to_ping, "") != 0) {
+          if(Ping.ping(ip_to_ping, 3)) {
+            sprintf(buff, "3 pings avg=%0.2f ms", Ping.averageTime());
           }
           else {
-            sprintf(buff2, "Error");
+            sprintf(buff, "Error");
           }
-          drawInfo(buff2);
+          drawInfo(buff);
         }
       }
       // Resolve host
@@ -7718,7 +7845,8 @@ void gopher(char mode, char *io_buff) {
   char reload_page;
   char ask_address;
   char type;
-  int page_offset;
+  char end_reached_flag;
+  int page_offset = 0;
   int button_pressed;
   int i;
   char *buttons[] = {
@@ -7806,12 +7934,12 @@ void gopher(char mode, char *io_buff) {
 
     // Выводим всё
     tft.fillRect(0, 32, tft.width(), tft.height() - 32, color_scheme_bg);
-    gopher_show_page(page, &page_offset, type, 0, address_to_go);
+    gopher_show_page(page, &page_offset, type, 0, address_to_go, &end_reached_flag);
 
     drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 4, 1);
     
     touchWaitPress();
-    gopher_show_page(page, &page_offset, type, 1, address_to_go);
+    gopher_show_page(page, &page_offset, type, 1, address_to_go, &end_reached_flag);
     if(strlen(address_to_go) > 0) {
       strcpy(address, address_to_go);
       if(strcmp(history[0], address) != 0) {
@@ -7852,7 +7980,9 @@ void gopher(char mode, char *io_buff) {
         ask_address = 1;
       }
       if(button_pressed == 3) {
-        page_offset += 31;
+        if(end_reached_flag == 0) {
+          page_offset += 31;
+        }
       }
     }
 
@@ -7880,7 +8010,7 @@ int gopher_get_page(char *address, char *buff_output, char *type) {
   char port_flag;
   char path_flag;
   char type_flag;
-  char finish_flag;
+  
   WiFiClient client;
   String line;
   long query_start_millis;
@@ -7892,7 +8022,6 @@ int gopher_get_page(char *address, char *buff_output, char *type) {
   path_flag = 0;
   type_flag = 0;
   str_offset = 0;
-  finish_flag = 0;
   strcpy(server, "");
   strcpy(path, "");
   strcpy(buff_output, "");
@@ -7965,7 +8094,6 @@ int gopher_get_page(char *address, char *buff_output, char *type) {
 
     while (client.available()) {
       line = client.readStringUntil('\r');
-      //Serial.println(line);
       if(strlen(buff_output) + strlen(line.c_str()) >= GOPHER_BYTES_MAX) {
         break;
       }
@@ -7986,7 +8114,7 @@ int gopher_get_page(char *address, char *buff_output, char *type) {
   return 0;
 }
 
-void gopher_show_page(char *page, int *offset_lines, char address_type, char get_touch_address, char *address_to_go) {
+void gopher_show_page(char *page, int *offset_lines, char address_type, char get_touch_address, char *address_to_go, char *end_reached_flag) {
   int current_line = 0;
   int screen_offset = 0;
   long page_byte_offset;
@@ -8013,6 +8141,7 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
   line_type = 0;
   line_skip_to_end = 0;
   new_line_flag = 1;
+  *end_reached_flag = 0;
   strcpy(address_to_go, "");
 
   if(touchCheckNowait()) {
@@ -8028,6 +8157,16 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
     for(buff_offset = 0; buff_offset < 199; buff_offset++) {
       if(page[page_byte_offset] == '\n') {
         page_byte_offset++;
+        if(page[page_byte_offset] == '\r') {
+          page_byte_offset++;
+        }
+        break;
+      }
+      if(page[page_byte_offset] == '\r') {
+        page_byte_offset++;
+        if(page[page_byte_offset] == '\n') {
+          page_byte_offset++;
+        }
         break;
       }
       buff_line[buff_offset] = page[page_byte_offset];
@@ -8035,6 +8174,12 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
       page_byte_offset++;
       if(page[page_byte_offset] == 0) break;
     }
+
+    if(strcmp(buff_line, "") == 0 && page[page_byte_offset] == 0) {
+      *end_reached_flag = 1;
+      break;
+    }
+
     // Парсить её
     if(address_type == '0') {
       strcpy(text, buff_line);
@@ -8051,6 +8196,7 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
     line_offset = 0;
     line_shown = 0;
     while(line_shown == 0) {
+      // Заполняем буфер строки
       for(buff_offset = 0; buff_offset < 40; line_offset++) {
         if(text[line_offset] == 0) {
           buff[buff_offset] = 0;
@@ -8097,10 +8243,22 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
         tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
       }
       tft.drawString(buff, 1, 32 + screen_offset * 8, FONT_MONOSPACE);
+      if(tft.textWidth(buff, FONT_MONOSPACE) < tft.width()) {
+        tft.fillRect(
+          tft.textWidth(buff, FONT_MONOSPACE),
+          32 + screen_offset * 8,
+          tft.width() - tft.textWidth(buff, FONT_MONOSPACE),
+          8,
+          color_scheme_bg
+        );
+      }
       screen_offset++;
       current_line++;
     }
-    if(page[page_byte_offset] == 0) break;
+    if(page[page_byte_offset] == 0) {
+      *end_reached_flag = 1;
+      break;
+    }
   }
 }
 
@@ -8119,6 +8277,11 @@ void gopher_parse_line(char *line, char *line_type, char *line_text, char *path,
   port_flag = 0;
   line_offset = 0;
   text_offset = 0;
+  strcpy(line_text, "");
+  strcpy(path, "");
+  strcpy(server, "");
+  strcpy(port, "");
+
   while(line[line_offset] != 0) {
     if(line_type_flag) {
       line_type_flag = 0;
@@ -8676,7 +8839,7 @@ void http_file_access(char mode, char *io_buff) {
 
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
   tft.drawString("Use next URL to control files:", 1, 20, FONT_DEFAULT);
-  sprintf(buff, "http://%s/", WiFi.localIP().toString());
+  sprintf(buff, "http://%s/", WiFi.localIP().toString().c_str());
   tft.drawString(buff, 1, 36, FONT_DEFAULT);
 
   httpServer.begin();
@@ -8758,13 +8921,18 @@ void http_file_access_handle() {
   else {
     strcpy(filename, "/");
   }
-  file = Storage.open(filename);
+  file = Storage->open(filename);
   if(file) {
     if(file.isDirectory()) {
       contents = (char *)malloc(20000 * sizeof(char));
       strcpy(contents, "");
-      sprintf(buff, "Used: %d bytes of %d bytes (%d %%)", Storage.usedBytes(), Storage.totalBytes(), (int)floor(100 * Storage.usedBytes() / Storage.totalBytes()));
-      strcat(contents, buff);
+      if(storage_type == STORAGE_TYPE_FFAT) {
+        sprintf(buff, "Used: %d bytes of %d bytes (%d %%)", FFat.usedBytes(), FFat.totalBytes(), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
+      }
+      else if(storage_type == STORAGE_TYPE_SD) {
+        sprintf(buff, "Used: %d bytes of %d bytes (%d %%)", SD.usedBytes(), SD.totalBytes(), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+      }
+      //strcat(contents, buff);
       strcat(contents, " (<a href='/backup_and_restore'>backup and restore</a>)<br>\n");
       strcat(contents, "<b>Files:</b><br>\n<br>\n");
       http_file_access_show_dir(filename, contents);
@@ -8793,7 +8961,7 @@ void http_file_access_show_dir(char *path, char *contents) {
   fs::File current_dir;
   char buff[80];
   char updir[80];
-  current_dir = Storage.open(path);
+  current_dir = Storage->open(path);
   if(current_dir.isDirectory()) {
     // Если это не корневая папка, то добавляем ссылки
     if(strcmp(path, "/")) {
@@ -8842,7 +9010,7 @@ void http_file_upload_handle() {
 
     //Serial.printf("Start upload: %s\n", filename.c_str());
     // Open file for writing in LittleFS
-    uploadFile = Storage.open(filename, FILE_WRITE);
+    uploadFile = Storage->open(filename, FILE_WRITE);
   } 
   else if (upload.status == UPLOAD_FILE_WRITE) {
     if (uploadFile) {
@@ -9096,17 +9264,17 @@ void rss_action(int action_index, char *filename) {
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", RSS_PATH, "__New");
-    //file = Storage.open(buff, FILE_WRITE);
+    //file = Storage->open(buff, FILE_WRITE);
     //file.close();
     edit_file("New RSS", buff);
 
-    file = Storage.open(buff);
+    file = Storage->open(buff);
     if(!file) {
       return;
     }
     else if(file.size() == 0) {
       file.close();
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
     else {
       file.close();
@@ -9118,7 +9286,7 @@ void rss_action(int action_index, char *filename) {
     // Чтение RSS
     // Получить ссылку
     sprintf(buff, "%s/%s", RSS_PATH, filename);
-    file = Storage.open(buff);
+    file = Storage->open(buff);
     name_line_flag = 1;
     offset = 0;
     while(file.available()) {
@@ -9220,7 +9388,7 @@ void rss_action(int action_index, char *filename) {
     if(drawConfirm("Delete this RSS?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", RSS_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -9396,18 +9564,18 @@ void irc_action(int action_index, char *filename) {
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", IRC_PATH, "__New");
-    file = Storage.open(buff, FILE_WRITE);
+    file = Storage->open(buff, FILE_WRITE);
     file.print(irc_template);
     file.close();
     edit_file("New IRC server", buff);
 
-    file = Storage.open(buff);
+    file = Storage->open(buff);
     if(!file) {
       return;
     }
     else if(file.size() == 0) {
       file.close();
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
     else {
       file.close();
@@ -9418,7 +9586,7 @@ void irc_action(int action_index, char *filename) {
   else if(action_index == 1) {
     // Соединение с сервером
     sprintf(buff, "%s/%s", IRC_PATH, filename);
-    file = Storage.open(buff);
+    file = Storage->open(buff);
     offset = 0;
     name[offset] = 0;
     while(file.available()) {
@@ -9454,7 +9622,7 @@ void irc_action(int action_index, char *filename) {
     if(drawConfirm("Delete this IRC server?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", IRC_PATH, filename);
-      Storage.remove(buff);
+      Storage->remove(buff);
     }
   }
 }
@@ -9469,9 +9637,10 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
   int message_offset = 0;
   char buff[80];
   char buff2[80];
-  char buff3[80];
-  char buff4[80];
+  char actor[80];
+  char dest_name[80];
   char from[80];
+  char action[80];
 
   char *chat_name[IRC_MAX_CHATS];
   char *chat_history[IRC_MAX_CHATS];
@@ -9550,9 +9719,9 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
         Serial.println(strlen(input_buff));
         utf8_to_cp1251(input_buff);
         if(memcmp(input_buff, "PING :", 6) == 0) {
-          sprintf(buff2, "PONG :%s\r\n", input_buff + 6);
-          client.write(buff2);
-          strcat(chat_history[0], buff2);
+          sprintf(buff, "PONG :%s\r\n", input_buff + 6);
+          client.write(buff);
+          strcat(chat_history[0], buff);
         }
 
         // Копируем сообщение как есть в серверный чат
@@ -9561,31 +9730,30 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
         // Ищем признаки сообщения PRIVMSG
         // Первое значение кто, второе - куда
         if(input_buff[0] == ':') {
-          sscanf(input_buff, ":%s %s %s :", buff, buff3, buff2);
+          sscanf(input_buff, ":%s %s %s :", actor, action, dest_name);
         }
         else {
-          strcpy(buff3, "");
+          strcpy(action, "");
         }
 
         // :nick!ident@host PRIVMSG dest :Hi
         // :server NOTICE * :*** Looking up your hostname
-        if(strcmp(buff3, "PRIVMSG") == 0 || strcmp(buff3, "NOTICE") == 0) {
+        if(strcmp(action, "PRIVMSG") == 0 || strcmp(action, "NOTICE") == 0) {
           // Оставляем только ник отправителя
-          for(offset = 0; offset < strlen(buff); offset++) {
-            if(buff[offset] == '!') {
-              buff[offset] = 0;
+          for(offset = 0; offset < strlen(actor); offset++) {
+            if(actor[offset] == '!') {
+              actor[offset] = 0;
               break;
             }
           }
-          strcpy(buff3, buff);
 
           // Если это канал, надо добавить сообщение в чат канала, а не отправителя
-          if(buff2[0] == '#' || buff2[0] == '&') {
-            strcpy(buff3, buff2);            
+          if(dest_name[0] != '#' && dest_name[0] != '&') {
+            strcpy(dest_name, actor);
           }
 
           // Добавляем чат (если нужно, добавляем сообщение в этот чат)
-          chat_index = irc_find_or_add_chat_name(buff3, chat_name);
+          chat_index = irc_find_or_add_chat_name(dest_name, chat_name);
           if(chat_index > 0) {
             // Ищем начало сообщения, оно после :
             for(offset = 1; offset < strlen(input_buff); offset++) {
@@ -9596,17 +9764,16 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
             }
             
             // Копируем в адресный чат
-            strcat(buff, ": ");
-            strcat(buff, input_buff + offset);
+            sprintf(buff, "<%s> %s", actor, input_buff + offset);
             irc_chat_history_add(chat_history[chat_index], buff);
           }
         }
         // :nick!ident@host JOIN :#t
-        if(strcmp(buff3, "JOIN") == 0) {
+        if(strcmp(action, "JOIN") == 0) {
           // Оставляем только ник
-          for(offset = 0; offset < strlen(buff); offset++) {
-            if(buff[offset] == '!') {
-              buff[offset] = 0;
+          for(offset = 0; offset < strlen(actor); offset++) {
+            if(actor[offset] == '!') {
+              actor[offset] = 0;
               break;
             }
           }
@@ -9621,27 +9788,27 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
 
           // Добавляем канал в список чатов
           chat_index = irc_find_or_add_chat_name(input_buff + offset, chat_name);
-          sprintf(buff2, "%s joined", buff);
-          irc_chat_history_add(chat_history[chat_index], buff2);
+          sprintf(buff, "%s joined", actor);
+          irc_chat_history_add(chat_history[chat_index], buff);
         }
         // :user!ident@host PART #test
-        if(strcmp(buff3, "PART") == 0) {
-          sscanf(input_buff, ":%s %s %s", buff, buff3, buff2);
+        if(strcmp(action, "PART") == 0) {
+          sscanf(input_buff, ":%s %s %s", actor, action, dest_name);
           
-          for(offset = 0; offset < strlen(buff); offset++) {
-            if(buff[offset] == '!') {
-              buff[offset] = 0;
+          for(offset = 0; offset < strlen(actor); offset++) {
+            if(actor[offset] == '!') {
+              actor[offset] = 0;
               break;
             }
           }
           // Добавляем сообщение о выходе с канала
-          chat_index = irc_find_or_add_chat_name(buff2, chat_name);
-          sprintf(buff2, "%s leaved", buff);
-          irc_chat_history_add(chat_history[chat_index], buff2);
+          chat_index = irc_find_or_add_chat_name(dest_name, chat_name);
+          sprintf(buff, "%s leaved", actor);
+          irc_chat_history_add(chat_history[chat_index], buff);
         }
         // :nick!ident@host KICK #chan who_kicked :reason
-        if(strcmp(buff3, "KICK") == 0) {
-          sscanf(input_buff, ":%s %s %s %s", buff, buff3, buff2, buff4);
+        if(strcmp(action, "KICK") == 0) {
+          sscanf(input_buff, ":%s %s %s %s", buff2, action, dest_name, actor);
           
           for(offset = 0; offset < strlen(buff); offset++) {
             if(buff[offset] == '!') {
@@ -9650,19 +9817,19 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
             }
           }
           // Добавляем сообщение о кике с канала
-          chat_index = irc_find_or_add_chat_name(buff2, chat_name);
-          sprintf(buff2, "%s kicked by %s", buff, buff4);
-          irc_chat_history_add(chat_history[chat_index], buff2);
+          chat_index = irc_find_or_add_chat_name(dest_name, chat_name);
+          sprintf(buff, "%s kicked by %s", buff2, actor);
+          irc_chat_history_add(chat_history[chat_index], buff);
         }
         // :nick!ident@host MODE #chan modes modes modes
-        if(strcmp(buff3, "MODE") == 0) {
-          sscanf(input_buff, ":%s %s %s %s", buff, buff3, buff2, buff4);
+        if(strcmp(action, "MODE") == 0) {
+          sscanf(input_buff, ":%s %s %s", actor, action, dest_name);
           
           // Только режимы каналов
-          if(buff2[0] == '#' || buff2[0] == '&') {
-            for(offset = 0; offset < strlen(buff); offset++) {
-              if(buff[offset] == '!') {
-                buff[offset] = 0;
+          if(dest_name[0] == '#' || dest_name[0] == '&') {
+            for(offset = 0; offset < strlen(actor); offset++) {
+              if(actor[offset] == '!') {
+                actor[offset] = 0;
                 break;
               }
             }
@@ -9680,16 +9847,16 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
             }
 
             // Добавляем сообщение о смене режимов канала
-            chat_index = irc_find_or_add_chat_name(buff2, chat_name);
-            sprintf(buff2, "%s changed modes to %s", buff, input_buff + offset);
-            irc_chat_history_add(chat_history[chat_index], buff2);
+            chat_index = irc_find_or_add_chat_name(dest_name, chat_name);
+            sprintf(buff, "%s changed modes to %s", actor, input_buff + offset);
+            irc_chat_history_add(chat_history[chat_index], buff);
           }
         }
         // :nick!ident@host TOPIC #chan :test
-        if(strcmp(buff3, "TOPIC") == 0) {
-          for(offset = 0; offset < strlen(buff); offset++) {
-            if(buff[offset] == '!') {
-              buff[offset] = 0;
+        if(strcmp(action, "TOPIC") == 0) {
+          for(offset = 0; offset < strlen(actor); offset++) {
+            if(actor[offset] == '!') {
+              actor[offset] = 0;
               break;
             }
           }
@@ -9701,15 +9868,15 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
           }
 
           // Добавляем сообщение о смене топика
-          chat_index = irc_find_or_add_chat_name(buff2, chat_name);
-          sprintf(buff2, "%s changed topic to %s", buff, input_buff + offset);
-          irc_chat_history_add(chat_history[chat_index], buff2);
+          chat_index = irc_find_or_add_chat_name(actor, chat_name);
+          sprintf(buff, "%s changed topic to %s", actor, input_buff + offset);
+          irc_chat_history_add(chat_history[chat_index], buff);
         }
         // :nick!ident@host NICK :newnick
-        if(strcmp(buff3, "NICK") == 0) {
-          for(offset = 0; offset < strlen(buff); offset++) {
-            if(buff[offset] == '!') {
-              buff[offset] = 0;
+        if(strcmp(action, "NICK") == 0) {
+          for(offset = 0; offset < strlen(actor); offset++) {
+            if(actor[offset] == '!') {
+              actor[offset] = 0;
               break;
             }
           }
@@ -9717,26 +9884,26 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
             if(input_buff[offset] == ':')  break;
           }
 
-          sprintf(buff2, "%s changed nick to %s", buff, input_buff + offset);
+          sprintf(buff, "%s changed nick to %s", actor, input_buff + offset);
           // Добавляем сообщение о смене ника в чат ника
           for(chat_index = 0; chat_index < IRC_MAX_CHATS; chat_index++) {
             // Переименовываем чат, если есть
-            if(strcmp(buff, chat_name[chat_index]) == 0) {
+            if(strcmp(actor, chat_name[chat_index]) == 0) {
               strcpy(chat_name[chat_index], input_buff + offset);
-              irc_chat_history_add(chat_history[chat_index], buff2);
+              irc_chat_history_add(chat_history[chat_index], buff);
             }
           }
 
           // Смена своего ника
-          if(strcmp(buff, nick) == 0) {
+          if(strcmp(actor, nick) == 0) {
             strcpy(nick, input_buff + offset);
           }
         }
         // :nick!ident@host QUIT :Quit: leaving
-        if(strcmp(buff3, "QUIT") == 0) {
-          for(offset = 0; offset < strlen(buff); offset++) {
-            if(buff[offset] == '!') {
-              buff[offset] = 0;
+        if(strcmp(action, "QUIT") == 0) {
+          for(offset = 0; offset < strlen(actor); offset++) {
+            if(actor[offset] == '!') {
+              actor[offset] = 0;
               break;
             }
           }
@@ -9744,12 +9911,12 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
             if(input_buff[offset] == ':')  break;
           }
 
-          sprintf(buff2, "%s quit", buff, input_buff + offset);
+          sprintf(buff, "%s quit", actor, input_buff + offset);
           // Добавляем сообщение о выходе в чат ника
           for(chat_index = 0; chat_index < IRC_MAX_CHATS; chat_index++) {
             // Переименовываем чат, если есть
-            if(strcmp(buff, chat_name[chat_index]) == 0) {
-              irc_chat_history_add(chat_history[chat_index], buff2);
+            if(strcmp(actor, chat_name[chat_index]) == 0) {
+              irc_chat_history_add(chat_history[chat_index], buff);
             }
           }
         }
@@ -11548,7 +11715,7 @@ void view_file(char *title, char *filename) {
   drawAppTitle(title);
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
-  file = Storage.open(filename);
+  file = Storage->open(filename);
   if(!file) {
     drawError("Cannot open file");
     return;
@@ -11934,7 +12101,7 @@ void edit_file(char *title, char *filename) {
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
   contents[0] = 0;
-  file = Storage.open(filename);
+  file = Storage->open(filename);
   if(file) {
     if(file.isDirectory()) {
       drawError("Cannot edit directory");
@@ -12224,7 +12391,7 @@ void edit_file(char *title, char *filename) {
       if(changes_present) {
         // Спрашиваем о сохранении, сохраняем если да
         if(drawConfirm("Save changes?") == 0) {
-          file = Storage.open(filename, FILE_WRITE);
+          file = Storage->open(filename, FILE_WRITE);
           file_offset_bytes = 0;
           //while(contents[file_offset_bytes] != 0) {
             file.print(contents);
@@ -12276,7 +12443,7 @@ void touch_calibration_test(char mode, char *io_buff) {
     return;
   }
 
-  app_title_enabled = 0;
+  disableAppTitle();
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
   clearScreen();
@@ -12372,9 +12539,9 @@ void touch_calibration(char mode, char *io_buff) {
     return;
   }
 
+  disableAppTitle();
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
-  app_title_enabled = 0;
-
+  
   if(touchCheckNowait()) {
     clearScreen();
     tft.drawCentreString("Release", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
@@ -12383,7 +12550,7 @@ void touch_calibration(char mode, char *io_buff) {
   }
 
   clearScreen();
-  tft.drawCentreString("Touch and hold left top cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
+  tft.drawCentreString("Touch and hold cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
   tft.drawLine(offset - 5, offset - 5, offset + 5, offset + 5, color_scheme_fg);
   tft.drawLine(offset - 5, offset + 5, offset + 5, offset - 5, color_scheme_fg);
   delay(1000);
@@ -12405,7 +12572,7 @@ void touch_calibration(char mode, char *io_buff) {
   delay(1000);  
 
   clearScreen();
-  tft.drawCentreString("Touch and hold left bottom cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
+  tft.drawCentreString("Touch and hold cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
   tft.drawLine(offset - 5, tft.height() - 2 - offset - 5, offset + 5, tft.height() - 2 - offset + 5, color_scheme_fg);
   tft.drawLine(offset - 5, tft.height() - 2 - offset + 5, offset + 5, tft.height() - 2 - offset - 5, color_scheme_fg);
   delay(1000);
@@ -12427,7 +12594,7 @@ void touch_calibration(char mode, char *io_buff) {
   delay(1000);  
 
   clearScreen();
-  tft.drawCentreString("Touch and hold right top cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
+  tft.drawCentreString("Touch and hold cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
   tft.drawLine(tft.width() - 2 - offset - 5, offset - 5, tft.width() - 2 - offset + 5, offset + 5, color_scheme_fg);
   tft.drawLine(tft.width() - 2 - offset - 5, offset + 5, tft.width() - 2 - offset + 5, offset - 5, color_scheme_fg);
   delay(1000);
@@ -12471,7 +12638,7 @@ void touch_calibration(char mode, char *io_buff) {
 void touch_calibration_save() {
   fs::File file;
   char buff[80];
-  file = Storage.open("/Settings/Calibration", FILE_WRITE);
+  file = Storage->open("/Settings/Calibration", FILE_WRITE);
   if(file) {
     sprintf(buff, "%f %f %f %f %f %f", ax, bx, cx, ay, by, cy);
     file.print(buff);
@@ -12485,7 +12652,7 @@ void touch_calibration_save_test() {
   char buff[80];
   int x, y;
 
-  file = Storage.open("/Settings/Calibration2", FILE_WRITE);
+  file = Storage->open("/Settings/Calibration2", FILE_WRITE);
   if(file) {
     for(x = 0; x < tft.width() / CALIBRATION_QUANT; x++) {
       sprintf(buff, "%d\n", calibration_x[x]);
@@ -12507,7 +12674,7 @@ void touch_calibration_load_test() {
   int i;
   int x, y;
 
-  file = Storage.open("/Settings/Calibration2");
+  file = Storage->open("/Settings/Calibration2");
   if(file) {
     for(x = 0; x < tft.width() / 16; x++) {
       buff = (char*)file.readStringUntil('\n').c_str();
@@ -12552,6 +12719,7 @@ void oscilloscope(char mode, char *io_buff) {
     "A34 Light Sensor",
     "Wi-Fi RSSI",
     "Ping gateway",
+    "Ping 8.8.8.8",
     "IO21",
     "IO22",
     "IO27",
@@ -12848,29 +13016,29 @@ void oscilloscope_draw_values(int *values, int interval_millis) {
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
   sprintf(buff, "Vmin = %d                    ", value_min);
-  buff[20] = 0;
+  buff[19] = 0;
   tft.drawString(buff, 1, 16 + tft.width() + 1, FONT_MONOSPACE);
   sprintf(buff, "Vmax = %d                    ", value_max);
-  buff[20] = 0;
+  buff[19] = 0;
   tft.drawString(buff, 1, 16 + tft.width() + 1 + 8, FONT_MONOSPACE);
   sprintf(buff, "Vavg = %g                    ", (float)values_sum / values_total);
-  buff[20] = 0;
+  buff[19] = 0;
   tft.drawString(buff, 1, 16 + tft.width() + 1 + 16, FONT_MONOSPACE);
   sprintf(buff, "Ampl = %d                    ", value_max - value_min);
-  buff[20] = 0;
+  buff[19] = 0;
   tft.drawString(buff, 1, 16 + tft.width() + 1 + 24, FONT_MONOSPACE);
 
   sprintf(buff, "V = %d                    ", value_last);
-  buff[20] = 0;
+  buff[19] = 0;
   tft.drawString(buff, tft.width() / 2, 16 + tft.width() + 1, FONT_MONOSPACE);
   sprintf(buff, "Int = %d ms                    ", interval_millis);
-  buff[20] = 0;
+  buff[19] = 0;
   tft.drawString(buff, tft.width() / 2, 16 + tft.width() + 1 + 8, FONT_MONOSPACE);
   sprintf(buff, "Xstep = %d                    ", xstep);
-  buff[20] = 0;
+  buff[19] = 0;
   tft.drawString(buff, tft.width() / 2, 16 + tft.width() + 1 + 16, FONT_MONOSPACE);
   sprintf(buff, "Ystep = %d ms                    ", ystep);
-  buff[20] = 0;
+  buff[19] = 0;
   tft.drawString(buff, tft.width() / 2, 16 + tft.width() + 1 + 24, FONT_MONOSPACE);
 }
 
@@ -12894,21 +13062,25 @@ int oscilloscope_get_value(int input_index) {
   }
   else if(input_index == 3) {
     Ping.ping(WiFi.gatewayIP().toString().c_str(), 1);
-    return (int)Ping.averageTime();
+    return Ping.averageTime();
   }
   else if(input_index == 4) {
-    return analogRead(21);
+    Ping.ping("8.8.8.8", 1);
+    return Ping.averageTime();
   }
   else if(input_index == 5) {
-    return analogRead(22);
+    return analogRead(21);
   }
   else if(input_index == 6) {
-    return analogRead(27);
+    return analogRead(22);
   }
   else if(input_index == 7) {
-    return analogRead(35);
+    return analogRead(27);
   }
   else if(input_index == 8) {
+    return analogRead(35);
+  }
+  else if(input_index == 9) {
     if(Serial.available()) {
       buff[0] = 0;
       while(Serial.available()) {
@@ -14564,9 +14736,9 @@ void saveScreenshot() {
   beep_if_enabled();
 
   // Создать папку если её ещё нет
-  file = Storage.open("/Screenshots");
+  file = Storage->open("/Screenshots");
   if(!file) {
-    Storage.mkdir("/Screenshots");
+    Storage->mkdir("/Screenshots");
   }
   else {
     file.close();
@@ -14576,7 +14748,7 @@ void saveScreenshot() {
   i = 0;
   while(1) {
     sprintf(filename, "/Screenshots/%d.bmp", i);
-    file = Storage.open(filename);
+    file = Storage->open(filename);
     if(file) {
       file.close();
     }
@@ -14587,7 +14759,7 @@ void saveScreenshot() {
   }
 
   // Сохраняем скриншот
-  file = Storage.open(filename, FILE_WRITE);
+  file = Storage->open(filename, FILE_WRITE);
   file.write((const uint8_t *)bmp_header, 118);
 
   // Записываем данные изображения с экрана
@@ -14636,9 +14808,7 @@ void clearScreen() {
 void drawAppTitle(char *name) {
   char buff[80];
   app_title_enabled = 1;
-  tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
-  tft.fillRect(0, 0, tft.width() / 2, 16, color_scheme_title_bg);
-  tft.drawString(name, 16, 0, FONT_DEFAULT);
+  strcpy(current_app_title, name);
 
   app_title_updated_millis = -1000;
   drawAppTitleRight();
@@ -14647,6 +14817,7 @@ void drawAppTitle(char *name) {
 void drawAppTitleRight() {
   char buff[80];
   char wifi_connection_flag = 0;
+  int right_offset;
 
   if(!app_title_enabled) return;
   // Не обновлять слишком часто
@@ -14658,16 +14829,37 @@ void drawAppTitleRight() {
     wifi_connection_flag = 1;
   }
 #endif
-  tft.fillRect(tft.width() / 2, 0, tft.width() / 2, 16, color_scheme_title_bg);
-  if(global_unixtime_retrieved > 0) {
-    sprintf(buff, "%s%s %d:%02d",
-      wifi_connection_flag ? "W" : "",
-      global_unixtime_synced ? "T" : "",
-      global_hours, global_minutes
-    );
+
+  // Рисуем правую часть
+  tft.fillRect(tft.width() - 16, 0, 16, 16, color_scheme_title_bg);
+  right_offset += 16;
+
+  sprintf(buff, "%s%s%s%s%s %d:%02d",
+    global_io_flag ? "N" : "",
+    storage_type == STORAGE_TYPE_SD? "S" : "",
+    storage_type == STORAGE_TYPE_FFAT? "F" : "",
+    wifi_connection_flag ? "W" : "",
+    global_unixtime_synced ? "T" : "",
+    global_hours, global_minutes
+  );
+
+  // Рисуем время и статус
+  tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
+  tft.drawRightString(buff, tft.width() - right_offset, 0, FONT_DEFAULT);
+  right_offset += tft.textWidth(buff, FONT_DEFAULT);
+
+  // Рисуем название, правую часть
+  strcpy(buff, current_app_title);
+  while(16 + tft.textWidth(buff, FONT_DEFAULT) + right_offset > tft.width()) {
+    if(strlen(buff) == 0) break;
+    buff[strlen(buff) - 1] = 0;
   }
   tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
-  tft.drawRightString(buff, tft.width() - 16, 0, FONT_DEFAULT);
+  tft.fillRect(0, 0, 16, 16, color_scheme_title_bg);
+  tft.drawString(current_app_title, 16, 0, FONT_DEFAULT);
+
+  // Заполняем серединку
+  tft.fillRect(16 + tft.textWidth(buff, FONT_DEFAULT), 0, tft.width() - 16 - tft.textWidth(buff, FONT_DEFAULT) - right_offset, 16, color_scheme_title_bg);
 }
 
 void disableAppTitle() {
@@ -14905,7 +15097,7 @@ void checkPasswordUntilCorrect(char *correct_password) {
   drawAppTitle("Enter Password");
 
   // Читаем информацию о владельце
-  file = Storage.open("/Settings/Owner");
+  file = Storage->open("/Settings/Owner");
   if(file) {
     offset = 0;
     owner_info[0] = 0;
@@ -15437,7 +15629,7 @@ char read_file_to_buff(char *filename, int limit, char *buff) {
   fs::File file;
   char byte;
   int offset;
-  file = Storage.open(filename);
+  file = Storage->open(filename);
   offset = 0;
   buff[offset] = 0;
   if(file) {
@@ -15457,7 +15649,7 @@ char read_file_to_buff(char *filename, int limit, char *buff) {
 int write_file_from_buff(char *filename, char *buff) {
   fs::File file;
   int offset = 0;
-  file = Storage.open(filename, FILE_WRITE);
+  file = Storage->open(filename, FILE_WRITE);
   if(file) {
     while(buff[offset]) {
       file.print(buff[offset]);
@@ -15475,7 +15667,7 @@ int read_key_value_from_file(char *filename, char *key, char *value) {
   int offset = 0;
   char str[80];
   char byte;
-  file = Storage.open(filename);
+  file = Storage->open(filename);
   strcpy(value, "");
   if(file) {
     while(file.available()) {
@@ -15511,9 +15703,9 @@ int write_key_value_to_file(char *filename, char *key, char *value) {
   char old_filename[80];
   char byte;
   sprintf(old_filename, "%s_old", filename);
-  Storage.rename(filename, old_filename);
-  new_file = Storage.open(filename, FILE_WRITE);
-  old_file = Storage.open(old_filename);
+  Storage->rename(filename, old_filename);
+  new_file = Storage->open(filename, FILE_WRITE);
+  old_file = Storage->open(old_filename);
 
   if(new_file) {
     while(old_file && old_file.available()) {
@@ -15538,7 +15730,7 @@ int write_key_value_to_file(char *filename, char *key, char *value) {
 
     new_file.close();
     old_file.close();
-    Storage.remove(old_filename);
+    Storage->remove(old_filename);
     return 1;
   }
   return 0;
@@ -15548,7 +15740,7 @@ int write_key_value_to_file(char *filename, char *key, char *value) {
 int file_get_line_by_index(char *filename, int index, char *buff) {
   fs::File file;
   int result = 0;
-  file = Storage.open(filename);
+  file = Storage->open(filename);
   if(file) {
     result = stream_get_line_by_index(file, index, buff);
     file.close();
@@ -15758,7 +15950,6 @@ void setup() {
   int index;
   char calibration_required = 0;
   char password_present;
-  char fs_present = 0;
 
   Serial.begin(115200);
 
@@ -15775,9 +15966,6 @@ void setup() {
   //touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
   //touchscreen.begin(touchscreenSPI);
   touchscreen.begin();
-  // Set the Touchscreen rotation in landscape mode
-  // Note: in some displays, the touchscreen might be upside down, so you might need to set the rotation to 3: touchscreen.setRotation(3);
-  //touchscreen.setRotation(2);
 
   // Инициализация экрана, 
   tft.init();
@@ -15786,43 +15974,35 @@ void setup() {
   // Очистка
   clearScreen();
 
-  // Инициализация FFat/SD
-    // Инициализация SD
-#ifdef USE_SD_AS_STORAGE
-  sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
-  if (!SD.begin(SD_CS, sdSPI)) {
-    Serial.println("SD Card initialization failed!");
-    fs_present = 0;
-  }
-  else {
-    Serial.println("SD Card ok!");
-    fs_present = 1;
-  }
-#else
-  if (FFat.begin(FORMAT_FS_IF_FAILED)) {
-    fs_present = 1;
-  }
-  else {
-    fs_present = 0;
-  }
-#endif
+  global_io_flag = 0;
 
+  // Инициализация хранилища
+  storage_type = STORAGE_TYPE_NONE;
+  ffat_available_flag = 0;
+  sd_available_flag = 0;
+
+  // Инициализация FFat
+  if(FFat.begin(FORMAT_FS_IF_FAILED)) {
+    ffat_available_flag = 1;
+    Storage = &FFat;
+    storage_type = STORAGE_TYPE_FFAT;
+    Serial.println("Storage type FFat present");
+  }
+
+  // Инициализация SD
+  sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+  if (SD.begin(SD_CS, sdSPI)) {
+    sd_available_flag = 1;
+    Storage = &SD;
+    storage_type = STORAGE_TYPE_SD;
+    Serial.println("Storage type SD present");
+  }
+
+  // Настройки
   // Яркость
   global_brightness = 255;
-  if(fs_present && read_file_to_buff("/Settings/Brightness", 79, buff)) {
-    sscanf(buff, "%d", &global_brightness);
-    set_brightness(global_brightness);
-  }
-
   // Инверсия
-  if(fs_present && read_file_to_buff("/Settings/Inversion", 79, buff)) {
-    sscanf(buff, "%d", &inversion);
-    tft.invertDisplay(inversion ? true : false);
-  }
-  else {
-    tft.invertDisplay(false);
-  }
-
+  inversion = 0;
   // Цветовая схема
   // Цвет фона и текста
   color_scheme_bg = colors[COLOR_INDEX_WHITE];
@@ -15843,8 +16023,35 @@ void setup() {
   color_scheme_inactive_fg = colors[COLOR_INDEX_LIGHTGREY];
   // Цвет ссылки
   color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
+  // Настройки звука
+  is_beep_enabled = 1;
 
-  if(fs_present) {
+  // Настройки клавиатуры
+  alt_keyboard_enabled_flag = 1;
+  keyboard_indent_left = 0;
+  keyboard_indent_right = 0;
+
+  // Необходимость калибровки
+  calibration_required = 1;
+
+  // Загрузка настроек
+  if(storage_type != STORAGE_TYPE_NONE) {
+    // Яркость
+    if(read_file_to_buff("/Settings/Brightness", 79, buff)) {
+      sscanf(buff, "%d", &global_brightness);
+      set_brightness(global_brightness);
+    }
+
+    // Инверсия
+    if(read_file_to_buff("/Settings/Inversion", 79, buff)) {
+      sscanf(buff, "%d", &inversion);
+      tft.invertDisplay(inversion ? true : false);
+    }
+    else {
+      tft.invertDisplay(false);
+    }
+
+    // Цветовая схема
     // Цвет фона и текста
     if(read_key_value_from_file("/Settings/Colors", "background", buff)) {
       sscanf(buff, "%d", &index);
@@ -15899,17 +16106,16 @@ void setup() {
       sscanf(buff, "%d", &index);
       color_scheme_link_fg = colors[index];
     }
-  }
 
-  // Калибровка сенсора, если нужно
-  calibration_required = 1;
-  if(fs_present && read_file_to_buff("/Settings/Calibration", 79, buff)) {
-    calibration_required = 0;
-    ax = 0;
-    sscanf(buff, "%f %f %f %f %f %f", &ax, &bx, &cx, &ay, &by, &cy);
-  }
-  if(touchPollTouchStatus()) {
-    calibration_required = 1;
+    // Калибровка сенсора, если нужно
+    if(read_file_to_buff("/Settings/Calibration", 79, buff)) {
+      calibration_required = 0;
+      ax = 0;
+      sscanf(buff, "%f %f %f %f %f %f", &ax, &bx, &cx, &ay, &by, &cy);
+    }
+    if(touchPollTouchStatus()) {
+      calibration_required = 1;
+    }
   }
 
   if(calibration_required) {
@@ -15917,63 +16123,70 @@ void setup() {
   }
 
   // Тут можно задавать вопросы - сенсор откалиброван
-#ifndef USE_SD_AS_STORAGE
-  if(!fs_present) {
+  if(ffat_available_flag && sd_available_flag) {
+    select_storage_app(APP_MODE_SPECIAL, NULL);
+  }
+
+  if(storage_type == STORAGE_TYPE_NONE) {
     drawError("FFat mount failed");
     if(drawConfirm("Format FFat?") == 0) {
-        FFat.format();
+      if(FFat.format()) {
+        ffat_available_flag = 1;
         FFat.begin(FORMAT_FS_IF_FAILED);
-        Storage.mkdir("/Settings");
-    }
-    touch_calibration_save();
-  }
-#endif
-
-  // Тут можно спросить пароль
-  if(read_file_to_buff("/Settings/Password", 79, buff)) {
-    password_present = 1;
-    for(offset = 0; offset < strlen(buff); offset++) {
-      if(buff[offset] && (buff[offset] < '0' || buff[offset] > '9')) {
-          password_present = 0;
+        Storage = &FFat;
+        storage_type = STORAGE_TYPE_FFAT;
+        Storage->mkdir("/Settings");
+        touch_calibration_save();
+      }
+      else {
+        drawError("FFat format failed");
       }
     }
-    if(password_present) {
-      checkPasswordUntilCorrect(buff);
+  }
+
+  if(storage_type != STORAGE_TYPE_NONE) {
+    // Тут можно спросить пароль
+    if(read_file_to_buff("/Settings/Password", 79, buff)) {
+      password_present = 1;
+      for(offset = 0; offset < strlen(buff); offset++) {
+        if(buff[offset] && (buff[offset] < '0' || buff[offset] > '9')) {
+            password_present = 0;
+        }
+      }
+      if(password_present) {
+        checkPasswordUntilCorrect(buff);
+      }
     }
-  }
 
-  if(read_file_to_buff("/Settings/Coordinates", 79, buff)) {
-    sscanf(buff, "%f %f", &global_lat, &global_lon);
-  }
+    if(read_file_to_buff("/Settings/Coordinates", 79, buff)) {
+      sscanf(buff, "%f %f", &global_lat, &global_lon);
+    }
 
-  // Настройки звука
-  is_beep_enabled = 1;
-  if(read_key_value_from_file("/Settings/Sound", "beep_enabled_flag", buff)) {
-    sscanf(buff, "%d", &is_beep_enabled);
-  }
+    // Настройки звука
+    if(read_key_value_from_file("/Settings/Sound", "beep_enabled_flag", buff)) {
+      sscanf(buff, "%d", &is_beep_enabled);
+    }
 
-  // Настройки клавиатуры
-  alt_keyboard_enabled_flag = 1;
-  if(read_key_value_from_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", buff)) {
-    sscanf(buff, "%d", &alt_keyboard_enabled_flag);
-  }
-  keyboard_indent_left = 0;
-  if(read_key_value_from_file("/Settings/Keyboard", "keyboard_indent_left", buff)) {
-    sscanf(buff, "%d", &keyboard_indent_left);
-  }
-  keyboard_indent_right = 0;
-  if(read_key_value_from_file("/Settings/Keyboard", "keyboard_indent_right", buff)) {
-    sscanf(buff, "%d", &keyboard_indent_right);
-  }
+    // Настройки клавиатуры
+    if(read_key_value_from_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", buff)) {
+      sscanf(buff, "%d", &alt_keyboard_enabled_flag);
+    }
+    if(read_key_value_from_file("/Settings/Keyboard", "keyboard_indent_left", buff)) {
+      sscanf(buff, "%d", &keyboard_indent_left);
+    }
+    if(read_key_value_from_file("/Settings/Keyboard", "keyboard_indent_right", buff)) {
+      sscanf(buff, "%d", &keyboard_indent_right);
+    }
 
-#ifdef IS_WIFI_ENABLED
-  WiFi.begin();
-  WiFi.onEvent(WiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
-#endif
+  #ifdef IS_WIFI_ENABLED
+    WiFi.begin();
+    WiFi.onEvent(WiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
+  #endif
 
-  // Получить текущее время из сохранённого в ФС
-  get_current_timestamp_fs();
-  get_current_timezone();
+    // Получить текущее время из сохранённого в ФС
+    get_current_timestamp_fs();
+    get_current_timezone();
+  }
 
   beep_if_enabled();
 
