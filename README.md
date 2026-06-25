@@ -48,6 +48,8 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 # Status bar symbols
 * W - connected to Wi-Fi
 * T - time synced with NTP
+* S - main storage is SD
+* F - main storage is FFat (internal storage)
 
 # Applications/Functions
 * File management (with viewing and editing support)
@@ -79,6 +81,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Backup via web interface (very slow, ~40 minutes for download, upload is pretty fast)
 * Select autorun app
 * Oscilloscope
+* Select data storage
 
 ## PIM apps
 * Calculator
