@@ -82,6 +82,8 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Select autorun app
 * Oscilloscope
 * Select data storage
+* View Screenshots
+* Backup FFat to SD and restore from SD to FFat
 
 ## PIM apps
 * Calculator
@@ -138,6 +140,10 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * ping {host} - ping specified host continiously, touch screen to stop
 * serial [speed] - connect to serial port with specified speed, default is 115200
 * telnet {host} [port] - connect via telnet to specified host and port
+* wget {url} [filename] - download file with http/https and show or store to file
+* sd_to_ffat {sd_path} {ffat_path} - copy file from SD to FFat
+* ffat_to_sd {ffat_path} {sd_path} - copy file from FFat to SD
+* utf8_to_cp1251 {from_file} {to_file} - convert file encoding from UTF-8 to CP1251
 * beep - beep sound
 * tone - start sound tone
 * notone - stop tone
