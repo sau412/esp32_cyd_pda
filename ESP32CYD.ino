@@ -71,6 +71,8 @@
 - Интернет-радио плеер
 - Осциллограф
 - Выбор хранилища при запуске
+- Бэкапы FFat на SD (и восстановление тоже)
+- Смена кодировки файла с utf8 на 1251
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -145,30 +147,26 @@
   осциллограф пинг до 8.8.8.8, рисование текущий цвет, gopher не мотать за конец файла, gopher дублирование строк,
   не отображается Exit в терминале, schedule не создаётся папка, schedule отметка если есть запись на день,
   наименования переменных в Files, наименования переменных в IRC
+2026-06-26 Отображение любых BMP, просмотр скриншотов, лаунчер увод стилуса, IRC подкрутить размеры буферов,
+  IRC вылет при выходе, wget http(s) в терминале, создание бэкапов FFat, восстановление из бэкапа FFat,
+  копирование между фс, копирование между фс в терминале, смена кодировки файла в терминале utf8->1251
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое:
+- (д) RSS чтение потока, декодирование на лету
+- (п) Просмотреть справку, может быть что-то добавить
+- (д) Редактирование: меньше мигания
+- (д) Меньше мигания в PIM
 - (д) Игра 2048
 - (д) Тетрис
 - (д) Арканоид
-- (д) Бэкапы FFat на SD
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор
-- (д) Редактирование: меньше мигания
-- (д) RSS чтение потока, декодирование на лету
-- (д) wget для терминала - http, https
-- (д) Перекодирование файлов для терминала
-- (д) IRC подкрутить размеры буферов
-- (д) Launcher увод стилуса
-- (д) Меньше мигания в PIM
-- (п) Просмотреть справку, может быть что-то добавить
-- (д) Просмотр любых BMP
-- (д) Просмотр скриншотов
 
 - (д) Вывести многострочный текст в указанное место (из файла, буфера, потока)
 - (д) Расписание: выводить планы на день по первому нажатию, редактирование по второму или двойному (требуется многострочный текст)
 
+- (д) Обратная смена кодировки для файла 1251->utf8 (не знаю зачем сейчас это нужно)
 - (и) Крутая калибровка
-- (и) IRC вылет при выходе
 - (н) Индикация работы сети (ожидания ответа от сети)
 - (н) drawProgress - рисовать прогресс операции
 - (н) Возможность выбрать звук для событий
@@ -667,9 +665,11 @@ void todo(char mode, char *io_buff);
 void expenses(char mode, char *io_buff);
 void schedule(char mode, char *io_buff);
 void passwords(char mode, char *io_buff);
+void screenshots(char mode, char *io_buff);
 void tunes(char mode, char *io_buff);
 void music(char mode, char *io_buff);
 void webradio(char mode, char *io_buff);
+void backups(char mode, char *io_buff);
 void life(char mode, char *io_buff);
 void i2c_scanner(char mode, char *io_buff);
 void dashboard(char mode, char *io_buff);
@@ -719,6 +719,7 @@ function_application_pointer all_apps[] = {
   flashcards,
   books,
   passwords,
+  screenshots,
   tunes,
   music,
   webradio,
@@ -786,6 +787,7 @@ function_application_pointer apps[40] = {
   expenses,
   flashcards,
   books,
+  screenshots,
   passwords,
   tunes,
   music,
@@ -866,6 +868,7 @@ function_application_pointer settings_apps[40] = {
   sound_control,
   autorun,
   select_storage_app,
+  backups,
   reboot,
   NULL
 };
@@ -875,6 +878,13 @@ void launcher(char mode, char *io_buff) {
   int touch_x;
   int touch_y;
   char redraw_flag;
+  int app_selected;
+  int app_selection;
+  int app_selected_row;
+  int app_selected_col;
+  int app_selected_fg;
+  int app_selected_bg;
+
   char app_my_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -938,29 +948,59 @@ void launcher(char mode, char *io_buff) {
     touchWaitRelease();
     touchWaitPress();
 
-    touch_x = global_touch_x;
-    touch_y = global_touch_y;
+    app_selected = -1;
+    app_selection = 0;
+    while(touchCheckNowait() == 1) {
+      touch_x = global_touch_x;
+      touch_y = global_touch_y;
 
-    row = (touch_y - 16) / 16;
-    col = touch_x / (tft.width() / 2);
+      row = (touch_y - 16) / 16;
+      col = touch_x / (tft.width() / 2);
 
-    if(row + col * 19 + 1 < apps_eol) {
-      apps[row + col * 19 + 1](APP_MODE_RETURN_NAME, app_name);
-      apps[row + col * 19 + 1](APP_MODE_RETURN_ICON, app_icon);
-      tft.fillRect(col * tft.width() / 2, (row + 1) * 16, tft.width() / 2, 16, color_scheme_selection_bg);
-      tft.setTextColor(color_scheme_selection_fg, color_scheme_selection_bg);
-      
-      tft.drawString(app_name, 19 + col * tft.width() / 2, (row + 1) * 16, FONT_DEFAULT);
-      image_from_bits(col * tft.width() / 2, (row + 1) * 16, app_icon, color_scheme_selection_fg, color_scheme_selection_bg);
-      delay(100);
-      touchWaitRelease();
+      if(row + col * 19 + 1 < apps_eol) {
+        // Приложение не было выделено - нужно выделить
+        if(app_selected == -1) {
+          app_selected = row + col * 19 + 1;
+          app_selected_row = row;
+          app_selected_col = col;
+        }
 
-      tft.fillRect(col * tft.width() / 2, (row + 1) * 16, tft.width() / 2, 16, color_scheme_bg);
-      tft.setTextColor(color_scheme_fg, color_scheme_bg);
-      tft.drawString(app_name, 19 + col * tft.width() / 2, (row + 1) * 16, FONT_DEFAULT);
-      image_from_bits(col * tft.width() / 2, (row + 1) * 16, app_icon, color_scheme_fg, color_scheme_bg);
+        if(app_selected_row == row && app_selected_col == col) {
+          if(app_selection == 0) {
+            apps[app_selected](APP_MODE_RETURN_NAME, app_name);
+            apps[app_selected](APP_MODE_RETURN_ICON, app_icon);
 
-      apps[row + col * 19 + 1](APP_MODE_LAUNCH, NULL);
+            app_selected_fg = color_scheme_selection_fg;
+            app_selected_bg = color_scheme_selection_bg;
+            app_selection = 1;
+
+            tft.fillRect(app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, tft.width() / 2, 16, app_selected_bg);
+            tft.setTextColor(app_selected_fg, app_selected_bg);
+            tft.drawString(app_name, 19 + app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, FONT_DEFAULT);
+            image_from_bits(app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, app_icon, app_selected_fg, app_selected_bg);
+          }
+        }
+        // Если курсор увели, выделение надо убрать
+        else {
+          if(app_selection == 1) {
+            apps[app_selected](APP_MODE_RETURN_NAME, app_name);
+            apps[app_selected](APP_MODE_RETURN_ICON, app_icon);
+
+            app_selected_fg = color_scheme_fg;
+            app_selected_bg = color_scheme_bg;
+            app_selection = 0;
+            redraw_flag = 1;
+            
+            tft.fillRect(app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, tft.width() / 2, 16, app_selected_bg);
+            tft.setTextColor(app_selected_fg, app_selected_bg);
+            tft.drawString(app_name, 19 + app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, FONT_DEFAULT);
+            image_from_bits(app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, app_icon, app_selected_fg, app_selected_bg);
+          }
+        }
+      }
+    }
+    if(app_selected != -1 && app_selection == 1) {
+      apps[app_selected](APP_MODE_LAUNCH, NULL);
       break;
     }
   }
@@ -1646,6 +1686,7 @@ void files(char mode, char *io_buff) {
   int file_selected = 0;
   int prev_file_selected = 0;
   int file_offset = 0;
+  int prev_file_offset = 0;
   int file_index = 0;
   char redraw_required = 0;
   char continue_flag = 0;
@@ -1775,6 +1816,7 @@ void files(char mode, char *io_buff) {
 
     // Сначала проверить нажатия, потом нарисовать, так нажатие сработает сразу
     prev_file_selected = file_selected;
+    prev_file_offset = file_offset;
     touchCheckList(0, 40, 240, 192, files, 12, &file_offset, &file_selected);
     drawList(0, 40, 240, 192, files, 12, &file_offset, &file_selected);
 
@@ -1783,7 +1825,7 @@ void files(char mode, char *io_buff) {
     touchWaitPress();
     current_op = -1;
     if(touchCheckList(0, 40, 240, 192, files, 12, &file_offset, &file_selected) != -1) {
-      if(prev_file_selected == file_selected) {
+      if(prev_file_selected == file_selected && prev_file_offset == file_offset) {
         current_op = 1; 
       }
     }
@@ -2101,6 +2143,8 @@ void terminal_execute(char *str) {
 // ====================================================
 void terminal_execute_single(char *str) {
   char buff[80];
+  char *arg1;
+  char *arg2;
   int i;
   int byte;
   int error;
@@ -2251,6 +2295,46 @@ void terminal_execute_single(char *str) {
       terminal_print("File not found\n\r");
     }
   }
+  // Копирование между ФС
+  else if(strcmp(str, "ffat_to_sd") == 0) {
+    terminal_print("Usage: ffat_to_sd {ffat_filename} {sd_filename}\n\r");
+  }
+  else if(memcmp(str, "ffat_to_sd ", 11) == 0) {
+    arg1 = strchr(str, ' ');
+    *arg1 = 0;
+    arg1++;
+    arg2 = strchr(arg1, ' ');
+    *arg2 = 0;
+    arg2++;
+
+    cp_between_storages(&FFat, arg1, &SD, arg2);
+  }
+  else if(strcmp(str, "sd_to_ffat") == 0) {
+    terminal_print("Usage: sd_to_ffat {sd_filename} {ffat_filename}\n\r");
+  }
+  else if(memcmp(str, "sd_to_ffat ", 11) == 0) {
+    arg1 = strchr(str, ' ');
+    *arg1 = 0;
+    arg1++;
+    arg2 = strchr(arg1, ' ');
+    *arg2 = 0;
+    arg2++;
+
+    cp_between_storages(&SD, arg1, &FFat, arg2);
+  }
+  else if(strcmp(str, "utf8_to_cp1251") == 0) {
+    terminal_print("Usage: utf8_to_cp1251 {input_filename} {output_filename}\n\r");
+  }
+  else if(memcmp(str, "utf8_to_cp1251 ", 15) == 0) {
+    arg1 = strchr(str, ' ');
+    *arg1 = 0;
+    arg1++;
+    arg2 = strchr(arg1, ' ');
+    *arg2 = 0;
+    arg2++;
+
+    file_utf8_to_cp1251(arg1, arg2);
+  }
   // I2C
   else if(strcmp(str, "i2c") == 0) {
     found = 0;
@@ -2322,6 +2406,9 @@ void terminal_execute_single(char *str) {
   }
   else if(memcmp(str, "telnet ", 7) == 0) {
     terminal_telnet(str + 7);
+  }
+  else if(memcmp(str, "wget ", 5) == 0) {
+    terminal_wget(str + 5);
   }
 #ifdef IS_SSH_ENABLED
   else if(strcmp(str, "ssh") == 0) {
@@ -2753,6 +2840,195 @@ int terminal_telnet(char *arg) {
         terminal_show_screen();
       }
     }
+  }
+}
+
+int terminal_wget(char *params) {
+  int httpResponseCode;
+  int byte;
+  char buff[80];
+  char *url = params;
+  char *filename = NULL;
+  fs::File file;
+  int offset;
+  int result;
+  WiFiClientSecure *client = new WiFiClientSecure;
+  WiFiClient *stream;
+  HTTPClient http;
+  long millis_last_byte;
+  long bytes_count = 0;
+  filename = strchr(params, ' ');
+  if(filename) {
+    *(filename) = 0;
+    filename++;
+  }
+
+  if(memcmp(url, "http", 4) != 0) {
+    terminal_print("Unknown url type\n\r");
+    return 0;
+  }
+
+  if(filename) {
+    file = Storage->open(filename, FILE_WRITE);
+    if(!file) {
+      terminal_print("Unable to open output file\n\r");
+      return 0;
+    }
+  }
+
+  if(client) {
+    client->setInsecure();
+    result = 0;
+    if(url[4] == 's') {
+      result = http.begin(*client, url);
+    }
+    else {
+      result = http.begin(url);
+    }
+    if(result) {
+      httpResponseCode = http.GET();
+      if (httpResponseCode > 0) {
+        if(filename) {
+          sprintf(buff, "Received code %d, contents length %d\n\r", httpResponseCode, http.getSize());
+          terminal_print(buff);
+        }
+        stream = http.getStreamPtr();
+        bytes_count = 0;
+        while(stream->available()) {
+          byte = stream->read();
+          bytes_count++;
+          millis_last_byte = millis();
+          if(filename) {
+            file.write(byte);
+          }
+          else {
+            terminal_print_char(byte);
+          }
+          if(http.getSize() != -1 && bytes_count == http.getSize()) {
+            terminal_print("OK\n\r");
+            break;
+          }
+          while(!stream->available()) {
+            sprintf(buff, "Downloaded %d of %d\n\r", bytes_count, http.getSize());
+            terminal_print(buff);
+            if(millis() - millis_last_byte > 30000) {
+              break;
+            }
+          }
+          if(millis() - millis_last_byte > 30000) {
+            terminal_print("Timeout\n\r");
+            break;
+          }
+        }
+        if(filename) {
+          file.close();
+        }
+      }
+      else {
+        sprintf(buff, "%s\n\r", http.errorToString(httpResponseCode));
+        terminal_print(buff);
+      }
+      http.end();
+      return httpResponseCode;
+    }
+    else {
+      terminal_print("Unable to open URL\n\r");
+    }
+  }
+  return 0;
+}
+
+void cp_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
+  char *buff;
+  int size;
+  fs::File file_from;
+  fs::File file_to;
+
+  Serial.printf("Copy from %s to %s\n", path_from, path_to);
+
+  buff = (char *)malloc(4096 * sizeof(char));
+  file_from = Storage_from->open(path_from);
+  file_to = Storage_to->open(path_to, FILE_WRITE);
+
+  while(file_from.available()) {
+    size = file_from.read((uint8_t *)buff, 4096);
+    file_to.write((const uint8_t *)buff, size);
+  }
+  
+  free(buff);
+  file_from.close();
+  file_to.close();
+}
+
+void cp_recursive_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
+  char path_next_from[80];
+  char path_next_to[80];
+  fs::File file_from;
+  fs::File file_to;
+
+  Serial.printf("Recursive from %s to %s\n", path_from, path_to);
+
+  file_from = Storage_from->open(path_from);
+  if(file_from) {
+    // Если это папка
+    if(file_from.isDirectory()) {
+      // Копировать содержимое
+      while(file_to = file_from.openNextFile()) {
+        // 
+        if(strcmp("/", path_from)) {
+          sprintf(path_next_from, "%s/%s", path_from, file_to.name());
+        }
+        else {
+          sprintf(path_next_from, "/%s", file_to.name());
+        }
+        if(strcmp("/", path_to)) {
+          sprintf(path_next_to, "%s/%s", path_to, file_to.name());
+        }
+        else {
+          sprintf(path_next_to, "/%s", file_to.name());
+        }
+        if(file_to.isDirectory()) {
+          Serial.printf("mkdir %s\n", path_next_to);
+          Storage_to->mkdir(path_next_to);
+        }
+        file_to.close();
+        cp_recursive_between_storages(Storage_from, path_next_from, Storage_to, path_next_to);
+      }
+    }
+    else {
+      file_from.close();
+      cp_between_storages(Storage_from, path_from, Storage_to, path_to);
+    }
+  }
+}
+
+void delete_recursive(fs::FS *Storage_from, char *path) {
+  char buff[80];
+  fs::File file;
+  fs::File current_dir;
+  current_dir = Storage_from->open(path);
+  if(current_dir.isDirectory()) {
+    while(file = current_dir.openNextFile()) {
+      sprintf(buff, "%s/%s", path, file.name());
+      if(file.isDirectory()) {
+        Serial.printf("rmdir %s\n", buff);
+        delete_recursive(Storage_from, buff);
+      }
+      else {
+        Serial.printf("rm %s\n", buff);
+        Storage_from->remove(buff);
+      }
+    }
+    current_dir.close();
+    // Удалить папку, но не корень
+    if(strcmp(path, "/")) {
+      Serial.printf("rmdir %s\n", path);
+      Storage_from->rmdir(path);
+    }
+  }
+  else {
+    Serial.printf("rm %s\n", path);
+    Storage_from->remove(path);
   }
 }
 
@@ -4343,6 +4619,97 @@ void books(char mode, char *io_buff) {
 }
 
 // ====================================================
+// Скриншоты
+// ====================================================
+
+#define SCREENSHOTS_PATH "/Screenshots"
+
+void screenshots_action(int action_index, char *filename) {
+  fs::File file;
+  char new_name[80];
+  char old_path_filename[80];
+  char new_path_filename[80];
+
+  if(action_index == 0) {
+    // Просмотр
+    clearScreen();
+    sprintf(old_path_filename, "%s/%s", SCREENSHOTS_PATH, filename);
+    bmp_show_image(old_path_filename, 0, 0);
+    touchWaitPress();
+    touchWaitRelease();
+  }
+  else if(action_index == 1) {
+    // Переименование
+    strcpy(new_name, filename);
+    if(drawPrompt("New screenshot name", new_name) == 0) {
+      // Если название не пустое
+      if(strcmp(new_name, "")) {
+        sprintf(old_path_filename, "%s/%s", SCREENSHOTS_PATH, filename);
+        sprintf(new_path_filename, "%s/%s", SCREENSHOTS_PATH, new_name);
+        Storage->rename(old_path_filename, new_path_filename);
+      }
+    }
+  }
+  else if(action_index == 2) {
+    if(drawConfirm("Delete this screenshot?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(old_path_filename, "%s/%s", SCREENSHOTS_PATH, filename);
+      Storage->remove(old_path_filename);
+    }
+  }
+}
+
+void screenshots_file_to_list(fs::File file, char *buff) {
+  char left[80];
+  char right[80];
+  char byte;
+  int offset;
+  if(file.size() > 4096) {
+    sprintf(buff, "%s\t%dk", file.name(), file.size() / 1024);
+  }
+  else {
+    sprintf(buff, "%s\t%d", file.name(), file.size());
+  }
+}
+
+void screenshots(char mode, char *io_buff) {
+  char *buttons[] = {
+    "View", "Rename", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01010010, B00000010,
+    B01000100, B00000010,
+    B01001000, B00000010,
+    B01010000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Screenshots");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  pim_app("Screenshots", SCREENSHOTS_PATH, screenshots_file_to_list, buttons, screenshots_action);
+}
+
+// ====================================================
 // Рисование
 // ====================================================
 
@@ -4474,39 +4841,7 @@ void draw_edit(char *title, char *filename) {
   drawAppTitle("Loading...");
 
   // Загрузка из файла (если он есть)
-  file = Storage->open(filename);
-  if(file) {
-    // Пропускаем заголовок BMP (у меня вышло 118 байт, но лучше ориентироваться на размер файла)
-    i = file.size() - tft.width() * (tft.height() - 32) / 2;
-    for(; i > 0; i--) {
-      file.read();
-    }
-    // Читаем данные изображения и выводим на экран
-    x = 0;
-    y = 288;
-    while(file.available()) {
-      //Половина размера экрана (120) должна быть кратна размеру буфера
-      file.read((unsigned char*)buff, 60);
-      for(i = 0; i < 60; i++) {
-        byte = buff[i];
-        color_index = byte >> 4;
-        color = colors[color_index];
-        tft.drawPixel(x, y + 16, color);
-        x++;
-        color_index = byte & B00001111;
-        color = colors[color_index];
-        tft.drawPixel(x, y + 16, color);
-        x++;
-      }
-      if(x >= tft.width()) {
-        x = 0;
-        y --;
-      }
-      if(y < 0) break;
-    }
-    file.close();
-  }
-  else {
+  if(!bmp_show_image(filename, 0, 16)) {
     tft.fillRect(0, 16, tft.width(), tft.height() - 16, TFT_WHITE);
   }
 
@@ -4603,6 +4938,103 @@ void draw_edit(char *title, char *filename) {
 }
 
 // ====================================================
+// Бэкапы
+// ====================================================
+
+#define BACKUPS_PATH "/Backups"
+
+void backups_action(int action_index, char *filename) {
+  fs::File file;
+  char buff[80];
+  if(action_index == 0) {
+    // Создать бэкап
+    if(drawConfirm("Backup FFat to SD?") == 0) {
+      sprintf(buff, "%s/%04d-%02d-%02d_%02d-%02d-%02d", BACKUPS_PATH, global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
+      SD.mkdir(buff);
+      cp_recursive_between_storages(&FFat, "/", &SD, buff);
+      drawInfo("Backup completed");
+    }
+  }
+  else if(action_index == 1) {
+    // Восстановить из бэкапа
+    //drawInfo("All FFat data will be erased");
+    if(drawConfirm("Restore FFat from backup?") == 0) {
+      sprintf(buff, "%s/%s", BACKUPS_PATH, filename);
+      if(drawConfirm("Erase FFat?") == 0) {
+        delete_recursive(&FFat, "/");
+      }
+      cp_recursive_between_storages(&SD, buff, &FFat, "/");
+      drawInfo("Restore completed");
+    }
+  }
+  else if(action_index == 2) {
+    // Удалить бэкап
+    if(drawConfirm("Delete this backup?") == 0) {
+      sprintf(buff, "%s/%s", BACKUPS_PATH, filename);
+      delete_recursive(&SD, buff);
+    }
+  }
+}
+
+void backups_file_to_list(fs::File file, char *buff) {
+  sprintf(buff, "%s", file.name());
+}
+
+void backups(char mode, char *io_buff) {
+  int storage_type_saved = storage_type;
+  char *buttons[] = {
+    "New", "Restore", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11110000,
+    B01010101, B01001000,
+    B01010101, B01000100,
+    B01010101, B01000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000001, B10000010,
+    B01000011, B11000010,
+    B01000111, B11100010,
+    B01001111, B11110010,
+    B01000011, B11000010,
+    B01000011, B11000010,
+    B01000011, B11000010,
+    B01111011, B11011110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Backups");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  if(!ffat_available_flag) {
+    drawError("FFat is unavailable");
+    return;
+  }
+  if(!sd_available_flag) {
+    drawError("SD is unavailable");
+    return;
+  }
+  storage_type = STORAGE_TYPE_SD;
+  Storage = &SD;
+
+  pim_app("Backups", BACKUPS_PATH, backups_file_to_list, buttons, backups_action);
+
+  if(storage_type_saved == STORAGE_TYPE_FFAT) {
+    storage_type = STORAGE_TYPE_FFAT;
+    Storage = &FFat;
+  }
+}
+
+// ====================================================
 // Общие PIM-функции
 // ====================================================
 
@@ -4674,7 +5106,7 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
       }
       while(file = current_dir.openNextFile()) {
         // Пропускаем папки
-        if(file.isDirectory()) continue;
+        //if(file.isDirectory()) continue;
         // Читаем файл
         // Первая строчка - Имя
         (*file_to_list_function)(file, buff);
@@ -9083,6 +9515,7 @@ char * http_get_error_text(int httpResponseCode, char *buff) {
 // Конвертировать два байта в cp1251
 char utf8_to_cp1251_byte(char byte1, char byte2) {
   char byte;
+  byte = byte1;
   if(byte1 == 0xD0) {
     if(byte2 == 0x81) {
       byte = 0xA8; // Ё
@@ -9243,6 +9676,28 @@ void cp1251_to_translit(char *in_buff, char *out_buff) {
     }
   }
   out_buff[write_offset] = 0;
+}
+
+void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
+  int byte1, byte2;
+  int byte_out;
+  fs::File file_from;
+  fs::File file_to;
+  file_from = Storage->open(from_filename);
+  file_to = Storage->open(to_filename, FILE_WRITE);
+  while(file_from.available()) {
+    byte1 = file_from.read();
+    if(byte1 < 0xC0) {
+      byte_out = byte1;
+    }
+    else {
+      byte2 = file_from.read();
+      byte_out = utf8_to_cp1251_byte(byte1, byte2);
+    }
+    file_to.write(byte_out);
+  }
+  file_to.close();
+  file_from.close();
 }
 
 // ====================================================
@@ -9631,9 +10086,9 @@ void irc_action(int action_index, char *filename) {
 #define IRC_HISTORY_LENGTH (TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS * 2)
 
 void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, char *ident, char *realname) {
-  char input_buff[400];
-  char message[300];
-  char out_message[500];
+  char *input_buff;
+  char *message;
+  char *out_message;
   int message_offset = 0;
   char buff[80];
   char buff2[80];
@@ -9671,6 +10126,10 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
     drawError("Connection error");
     return;
   }
+
+  input_buff = (char *)malloc(1000 * sizeof(char));
+  message = (char *)malloc(1000 * sizeof(char));
+  out_message = (char *)malloc(1000 * sizeof(char));
 
   for(i = 0; i < IRC_MAX_CHATS; i++) {
     chat_name[i] = (char*)malloc(80 * sizeof(char));
@@ -10050,6 +10509,9 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
       }
       touchWaitRelease();
       touchExitActionReset();
+      free(input_buff);
+      free(message);
+      free(out_message);
       for(i = 0; i < IRC_MAX_CHATS; i++) {
         if(chat_name[i]) free(chat_name[i]);
         if(chat_history[i]) free(chat_history[i]);
@@ -15928,6 +16390,227 @@ void decryptAES(uint8_t* input, int dataLen, uint8_t* output) {
   */
   // Truncate the string to restore original length
   //output[originalLen] = 0;
+}
+
+// Отобразить BMP в указанном месте
+int bmp_show_image(char *filename, int start_x, int start_y) {
+  int x, y;
+  long height, width;
+  long data_offset;
+  long current_offset;
+  int bpp;
+  int i;
+  int byte1, byte2, byte3, byte4;
+  long pixel;
+  int color_index;
+  int color;
+  int palette[256];
+  fs::File file;
+
+  file = Storage->open(filename);
+  if(file) {
+    // Файл не может быть меньше длины заголовка
+    if(file.size() < 118) {
+      file.close();
+      return 0;
+    }
+
+    // Нужно считать размеры картинки
+    for(i = 0; i < 10; i++) file.read();
+    // Смещение начала картинки
+    byte1 = file.read();
+    byte2 = file.read();
+    byte3 = file.read();
+    byte4 = file.read();
+    Serial.printf("Offset %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
+    data_offset = byte4 << 24 | byte3 << 16 | byte2 << 8 | byte1;
+    // Пропускаем 4 байта
+    file.read();
+    file.read();
+    file.read();
+    file.read();
+    // Width
+    byte1 = file.read();
+    byte2 = file.read();
+    byte3 = file.read();
+    byte4 = file.read();
+    Serial.printf("width %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
+    width = byte4 << 24 | byte3 << 16 | byte2 << 8 | byte1;
+    // Height
+    byte1 = file.read();
+    byte2 = file.read();
+    byte3 = file.read();
+    byte4 = file.read();
+    Serial.printf("Height %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
+    height = byte4 << 24 | byte3 << 16 | byte2 << 8 | byte1;
+    file.read();
+    file.read();
+    // BPP
+    byte1 = file.read();
+    byte2 = file.read();
+    Serial.printf("BPP %02X %02X\n", byte1, byte2, byte3, byte4);
+    bpp = byte2 << 8 | byte1;
+    // Текущее смещение
+    current_offset = 30;
+
+    // Отладочная информация
+    Serial.printf("Show BMP width=%d height=%d bpp=%d offset=%d\n", width, height, bpp, data_offset);
+    
+    // Палитра начинается по смещению 54
+    while(current_offset < 54) {
+      file.read();
+      current_offset++;
+      if(!file.available()) {
+        file.close();
+        return 0;
+      }
+    }
+    // Читаем палитру, актуально до 256 цветов
+
+    Serial.printf("%d Offset %d data_offset %d\n", __LINE__, current_offset, data_offset);
+    if(bpp <= 8) {
+      for(i = 0; i < pow(2, bpp); i++) {
+        byte1 = file.read();
+        current_offset++;
+        byte2 = file.read();
+        current_offset++;
+        byte3 = file.read();
+        current_offset++;
+        byte4 = file.read();
+        current_offset++;
+        palette[i] = (byte3 >> 3) << 11 | (byte2 >> 2) << 5 | byte1 >> 3;
+      }
+    }
+    Serial.printf("%d Offset %d data_offset %d\n", __LINE__, current_offset, data_offset);
+    while(current_offset < data_offset) {
+      file.read();
+      current_offset++;
+      if(!file.available()) {
+        file.close();
+        return 0;
+      }
+    }
+    Serial.printf("%d Offset %d data_offset %d\n", __LINE__, current_offset, data_offset);
+
+    // Выводим картинку с указанным числом битов на пиксель (максимум 32)
+    x = 0;
+    y = height - 1;
+    current_offset = 0;
+    if(bpp == 1) {
+      while(file.available()) {
+        byte1 = file.read();
+        current_offset++;
+        for(i = 0; i < 8; i++) {
+          color_index = byte1 >> (7 - i) & B00000001;
+          tft.drawPixel(start_x + x, start_y + y, color_index ? TFT_WHITE : TFT_BLACK);
+          x++;
+          if(x >= width) {
+            y--;
+            x = 0;
+            // Каждая строка выравнивается по 4 байтам
+            while(current_offset % 4 != 0) {
+              file.read();
+              current_offset++;
+            }
+            break;
+          }
+        }
+        if(y < 0) break;
+      }
+    }
+    else if(bpp == 4) {
+      while(file.available()) {
+        byte1 = file.read();
+        current_offset++;
+        // Первый полубайт это старшие 4 бита
+        color_index = byte1 >> 4;
+        color = colors[color_index];
+        tft.drawPixel(start_x + x, start_y + y, color);
+        x++;
+        if(x >= width) {
+          y--;
+          x = 0;
+          // Каждая строка выравнивается по 4 байтам
+          while(current_offset % 4 != 0) {
+            file.read();
+            current_offset++;
+          }
+          if(y < 0) break;
+          continue;
+        }
+
+        color_index = byte1 & B00001111;
+        color = colors[color_index];
+        tft.drawPixel(start_x + x, start_y + y, color);
+        x++;
+        if(x >= width) {
+          y--;
+          x = 0;
+          // Каждая строка выравнивается по 4 байтам
+          while(current_offset % 4 != 0) {
+            file.read();
+            current_offset++;
+          }
+          if(y < 0) break;
+        }
+      }
+    }
+    else if(bpp == 8) {
+      while(file.available()) {
+        byte1 = file.read();
+        current_offset++;
+        // Получаем цвет из палитры
+        color = palette[byte1];
+        tft.drawPixel(start_x + x, start_y + y, color);
+        x++;
+        if(x >= width) {
+          y--;
+          x = 0;
+          // Каждая строка выравнивается по 4 байтам
+          while(current_offset % 4 != 0) {
+            file.read();
+            current_offset++;
+          }
+          if(y < 0) break;
+        }
+      }
+    }
+    else if(bpp == 24) {
+      while(file.available()) {
+        // Три байта на пиксель
+        byte1 = file.read();
+        current_offset++;
+        byte2 = file.read();
+        current_offset++;
+        byte3 = file.read();
+        current_offset++;
+        // Формируем 16-битное значение 5-6-5
+        color = (byte3 >> 3) << 11 | (byte2 >> 2) << 5 | byte1 >> 3;
+        tft.drawPixel(start_x + x, start_y + y, color);
+        x++;
+        if(x >= width) {
+          y--;
+          x = 0;
+          // Каждая строка выравнивается по 4 байтам
+          while(current_offset % 4 != 0) {
+            file.read();
+            current_offset++;
+          }
+          if(y < 0) break;
+          continue;
+        }
+        if(y < 0) break;
+      }
+    }
+    file.close();
+    return 1;
+  }
+  return 0;
+}
+
+// Сохранить указанный участок экрана в BMP
+void bmp_save_image(char *filename, int start_x, int start_y, int width, int height, int bpp) {
+
 }
 
 // Вызывать в фоне каждую минуту
