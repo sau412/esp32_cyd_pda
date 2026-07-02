@@ -155,22 +155,21 @@
   IRC SSL (не работает правда), telnets (не тестировал)
 2026-06-29 drawProcessWindow, убирать заголовок в скриншотах, тестирование библиотеки ESP_SSLClient (не работает)
 2026-06-30 clearPopupWindow, clearPrompt, громкость, игра 2048
+2026-07-01 Фикс бага с отображением очков в 2048, фикс буквы У в моноширинном шрифте, меньше мигания в редактировании,
+  меньше мигания в PIM, заголовок при запросе пароля в паролях, команда для смены кодировки cp1251->utf8
+2026-07-02 Фикс бага с необновлением часов в приложениях с часами, баг с наложением текста в заголовке,
+  многострочный текст указанным шрифтом в указанное место, fseek для перемотки в книгах,
+  предпросмотр дня в расписании
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое:
 - (п) Просмотреть справку, может быть что-то добавить
-- (д) Редактирование: меньше мигания
-- (д) Меньше мигания в PIM
-- (д) Игра 2048
 - (д) Тетрис
 - (д) Арканоид
+- (д) Бегающий динозавр (как в Chrome)
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор
 
-- (д) Вывести многострочный текст в указанное место (из файла, буфера, потока)
-- (д) Расписание: выводить планы на день по первому нажатию, редактирование по второму или двойному (требуется многострочный текст)
-
-- (б) Прокрутка за конец файла в просмотре из файла
-- (д) Обратная смена кодировки для файла 1251->utf8 (не знаю зачем сейчас это нужно)
+- (н) Значок приложения в заголовке
 - (и) Крутая калибровка
 - (н) Возможность выбрать звук для событий
 - (н) Категории для PIM
@@ -199,9 +198,12 @@
 - (н) Функция меню - показать list в рамке, по нажатию выбирать пункт. Так можно сделать системное меню (меню в приложениях долго и сложно делать)
 - (н) Многозадачность или хотя бы некоторые задачи в фоне - музыка, вебсервер, чат, IRC
 - (н) Сохранение состояния приложения, хотя бы некоторых и хотя бы частичное
-- (н) Информация о том что процесс происходит - диалоговое окно без кнопок.
 - (н) Соединение через HTTP прокси
 - (о) RSS чтение потока, декодирование на лету (HTTPS плохо работает)
+- (н) Буфер обмена
+- (н) Выделение в просмотре, копирование
+- (н) Выделение в редактировании, копирование, вставка
+- (н) Буфер для перемотки назад в книгах
 
 */
 
@@ -1586,7 +1588,7 @@ void user_manual(char mode, char *io_buff) {
   "First line of the file is name, second is RSS URL. HTTP and HTTPS are supported.\n"
   "\n"
   "== IRC ==\n"
-  "First line of the file is name, other are server settings. Server host required. SSL not supported.\n"
+  "First line of the file is name, other are server settings. Server host required.\n"
   "Enter server commands to *> tab or use slash '/' before them.\n"
   "/join #channel - join to channel\n"
   "/part #channel - leave channel\n"
@@ -1630,6 +1632,11 @@ void user_manual(char mode, char *io_buff) {
   "host {host} - lookup DNS host\n"
   "ping {host} - ping host continiously\n"
   "telnet {host} [port] - connect to host and port via telnet\n"
+  "telnets {host} [port] - connect to host and port via telnet using SSL\n"
+  "wget {url} [path] - download file from HTTP/HTTPS to local file\n"
+  "sd_to_ffat {path_sd} {path_ffat} - copy file from SD to FFat\n"
+  "ffat_to_sd {path_ffat} {path_sd} - copy file from FFat to SD\n"
+  "utf8_to_cp1251 {input_file} {output_file} - change file encoding\n"
   "\n"
   "== Filesystem ==\n"
   "/Settings - settings folder\n"
@@ -2354,6 +2361,19 @@ void terminal_execute_single(char *str) {
     arg2++;
 
     file_utf8_to_cp1251(arg1, arg2);
+  }
+  else if(strcmp(str, "cp1251_to_utf8") == 0) {
+    terminal_print("Usage: cp1251_to_utf8 {input_filename} {output_filename}\n\r");
+  }
+  else if(memcmp(str, "cp1251_to_utf8 ", 15) == 0) {
+    arg1 = strchr(str, ' ');
+    *arg1 = 0;
+    arg1++;
+    arg2 = strchr(arg1, ' ');
+    *arg2 = 0;
+    arg2++;
+
+    file_cp1251_to_utf8(arg1, arg2);
   }
   // I2C
   else if(strcmp(str, "i2c") == 0) {
@@ -4244,6 +4264,9 @@ void passwords(char mode, char *io_buff) {
     return;
   }
 
+  clearScreen();
+  drawAppTitle("Passwords");
+
   buff[0] = 0;
   if(drawPrompt("Enter password:", buff) == 0) {
     // Пароль - первые 16 символов, дополненные нулями 
@@ -5107,6 +5130,10 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
   char **files_list = NULL;
   char **visible_list = NULL;
 
+  // Очищаем экран
+  clearScreen();
+  drawAppTitle(title);
+
   // Считаем число кнопок
   buttons_count = 0;
   while(buttons[buttons_count]) {
@@ -5125,9 +5152,14 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
   while(1) {
     // Обновляем список файлов если нужно
     if(update_list_flag) {
-      clearScreen();
+      // Перерисовываем экран
       drawAppTitle(title);
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+      // Тонкая полоска между заголовком и списком
+      tft.fillRect(0, 16, tft.width(), 4, color_scheme_bg);
+      // Кнопки
+      tft.fillRect(0, 276, tft.width(), tft.height() - 276, color_scheme_bg);
+    
+      //tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       offset = 0;
       // Освобождаем память
       for(i = 0; i < PIM_FILES_COUNT_MAX; i++) {
@@ -5166,13 +5198,14 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
 
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
-    touchCheckList(0, 32 -8, tft.width(), tft.height() - 72, visible_list, 15, &file_offset, &file_selected);
-    drawList(0, 32 - 8, tft.width(), tft.height() - 72, visible_list, 15, &file_offset, &file_selected);
+    touchCheckList(0, 16 + 4, tft.width(), 16 * 16, visible_list, 16, &file_offset, &file_selected);
+    drawList(0, 16 + 4, tft.width(), 16 * 16, visible_list, 16, &file_offset, &file_selected);
+
     drawButtonMatrix(0, 280, tft.width(), 40, buttons, buttons_count, 1);
 
     touchWaitPress();
 
-    touchCheckList(0, 32 - 8, tft.width(), tft.height() - 72, visible_list, 15, &file_offset, &file_selected);
+    touchCheckList(0, 16 + 4, tft.width(), 16 * 16, visible_list, 16, &file_offset, &file_selected);
     button_pressed = touchCheckMatrix(0, 280, tft.width(), 40, buttons, buttons_count, 1);
     if(button_pressed != -1) {
       (*action_function)(button_pressed, files_list[file_selected]);
@@ -5278,8 +5311,9 @@ void schedule(char mode, char *io_buff) {
   fs::File file;
   int wifi_status;
   char filename[80];
-  char buff[80];
-  char schedule_file_template[] = "8:00 \n9:00 \n10:00 \n11:00 \n12:00 \n13:00 \n14:00 \n15:00 \n16:00 \n17:00 \n18:00 \n";
+  char *buff;
+  //char schedule_file_template[] = "8:00 \n9:00 \n10:00 \n11:00 \n12:00 \n13:00 \n14:00 \n15:00 \n16:00 \n17:00 \n18:00 \n";
+  char schedule_file_template[] = "";
   int day_of_week;
   int year;
   int month;
@@ -5290,6 +5324,9 @@ void schedule(char mode, char *io_buff) {
   int cal_row;
   int cal_col;
   int selected_day;
+  int selected_day_x;
+  int selected_day_y;
+  int prev_selected_day;
   int button_pressed;
   char redraw_flag;
   char prev_month_dow;
@@ -5297,6 +5334,7 @@ void schedule(char mode, char *io_buff) {
   char is_lap_year;
   char touch_check_flag;
   char record_present = 0;
+  int cell_height = 24;
 
   char *day_of_week_name[] = {
     "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
@@ -5341,6 +5379,7 @@ void schedule(char mode, char *io_buff) {
     return;
   }
 
+  buff = (char *)malloc(2050 * sizeof(char));
   clearScreen();
   drawAppTitle("Schedule");
 
@@ -5356,6 +5395,8 @@ void schedule(char mode, char *io_buff) {
   year = global_year;
   month = global_month;
   day = 1;
+  selected_day = -1;
+  prev_selected_day = -1;
 
   while(1) {
     drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 2, 1);
@@ -5378,7 +5419,6 @@ void schedule(char mode, char *io_buff) {
       // Календарь на текущий месяц
       cal_day = 1;
       cal_dow = day_of_week;
-      selected_day = -1;
       is_lap_year = 0;
       if(year % 4 == 0 && (year % 100 == 0 || year % 400 != 0)) {
         is_lap_year = 1;
@@ -5421,43 +5461,68 @@ void schedule(char mode, char *io_buff) {
           if(global_touch_present_flag) {
             if(global_touch_x >= cal_col * tft.width() / 7 && global_touch_x < (cal_col + 1) * tft.width() / 7
               &&
-              global_touch_y >= 70 + cal_row * 32 - 8 && global_touch_y < 70 + (cal_row + 1) * 32 - 8
+              global_touch_y >= 70 + cal_row * cell_height - 8 && global_touch_y < 70 + (cal_row + 1) * cell_height - 8
             ) {
+              prev_selected_day = selected_day;
               selected_day = (cal_day - 1);
             }
           }
           if((global_day + 1) == cal_day && month == global_month && year == global_year) {
-            tft.fillRect(cal_col * tft.width() / 7, 70 + cal_row * 32 - 8, tft.width() / 7, 32, color_scheme_selection_bg);
+            tft.fillRect(cal_col * tft.width() / 7, 70 + cal_row * cell_height - 4, tft.width() / 7, cell_height, color_scheme_selection_bg);
             tft.setTextColor(color_scheme_selection_fg, color_scheme_selection_bg);
           }
           else {
+            tft.fillRect(cal_col * tft.width() / 7, 70 + cal_row * cell_height - 4, tft.width() / 7, cell_height, color_scheme_bg);
             tft.setTextColor(color_scheme_fg, color_scheme_bg);
           }
-          tft.drawCentreString(buff, (cal_col + 0.5) * tft.width() / 7, 70 + cal_row * 32, FONT_DEFAULT);
+          if(selected_day == (cal_day - 1)) {
+            selected_day_x = cal_col * tft.width() / 7;
+            selected_day_y = 70 + cal_row * cell_height - 4;
+          }
+          tft.drawCentreString(buff, (cal_col + 0.5) * tft.width() / 7, 70 + cal_row * cell_height, FONT_DEFAULT);
           if(record_present) {
-            tft.drawRightString("+", (cal_col + 1) * tft.width() / 7, 70 + cal_row * 32, FONT_MONOSPACE);
+            tft.drawRightString("+", (cal_col + 1) * tft.width() / 7 - 1, 70 + cal_row * cell_height, FONT_MONOSPACE);
           }
         }
       }
       redraw_flag = 0;
       touch_check_flag = 0;
+
+      if(selected_day > 0) {
+        tft.drawRect(selected_day_x, selected_day_y, tft.width() / 7, cell_height, color_scheme_selection_bg);
+      }
     }
     
-    if(selected_day != -1) {
+    if(selected_day > 0) {
+      //Serial.printf("selected_day = %d, prev_selected_day = %d\n", selected_day, prev_selected_day);
       sprintf(filename, "%s/%04d-%02d-%02d", SCHEDULE_PATH, year, month, selected_day);
       sprintf(buff, "%04d-%02d-%02d", year, month, selected_day);
-      // Если файла нет, то его нужно создать
-      file = Storage->open(filename);
-      if(file) {
-        file.close();
+      if(prev_selected_day == selected_day) {
+        // Если файла нет, то его нужно создать
+        file = Storage->open(filename);
+        if(file) {
+          file.close();
+        }
+        else {
+          file = Storage->open(filename, FILE_WRITE);
+          file.print(schedule_file_template);
+          file.close();
+        }
+        edit_file(buff, filename);
+        redraw_flag = 1;
+        prev_selected_day = -1;
       }
       else {
-        file = Storage->open(filename, FILE_WRITE);
-        file.print(schedule_file_template);
-        file.close();
+        // Предпросмотр дня
+        file = Storage->open(filename);
+        memset(buff, 0, 2048);
+        if(file) {
+          file.read((uint8_t *)buff, 2048);
+          buff[2048] = 0;
+          file.close();
+        }
+        draw_text_formatted(buff, 1, 70 + 6 * cell_height, tft.width() - 2, 4, FONT_DEFAULT, 1);
       }
-      edit_file(buff, filename);
-      redraw_flag = 1;
     }
 
     button_pressed = touchCheckMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 2, 1);
@@ -5514,6 +5579,7 @@ void schedule(char mode, char *io_buff) {
       drawAppTitle("Exit");
       touchWaitRelease();
       touchExitActionReset();
+      free(buff);
       return;
     }
     touchWaitRelease();
@@ -8698,6 +8764,7 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
           sprintf(address_to_go, "%s:%s/%c%s", server, port, line_type, path);
         }
         else {
+          Serial.printf("color_scheme_link_fg = %d\n", color_scheme_link_fg);
           tft.setTextColor(color_scheme_link_fg, color_scheme_bg);
         }
       }
@@ -8719,6 +8786,7 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
         tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
       }
       tft.drawString(buff, 1, 32 + screen_offset * 8, FONT_MONOSPACE);
+      Serial.println(buff);
       if(tft.textWidth(buff, FONT_MONOSPACE) < tft.width()) {
         tft.fillRect(
           tft.textWidth(buff, FONT_MONOSPACE),
@@ -9535,12 +9603,13 @@ int get_file_https(char *url, char *buff) {
   char byte;
   int offset;
   int i;
+  /*
   Serial.println(url);
   for(i = 0; i < strlen(url); i++) {
     Serial.printf("%02X ", url[i]);
   }
   Serial.println();
-
+  */
   if(client) {
     client->setInsecure();
     if (https.begin(*client, url)) {
@@ -9560,194 +9629,6 @@ char * http_get_error_text(int httpResponseCode, char *buff) {
   HTTPClient http;
   strcpy(buff, http.errorToString(httpResponseCode).c_str());
   return buff;
-}
-
-// Конвертировать два байта в cp1251
-char utf8_to_cp1251_byte(char byte1, char byte2) {
-  char byte;
-  byte = byte1;
-  if(byte1 == 0xD0) {
-    if(byte2 == 0x81) {
-      byte = 0xA8; // Ё
-    }
-    else if(byte2 < 0xA0) {
-      byte = 0xC0 + byte2 - 0x90; // А-П
-    }
-    else {
-      byte = 0xD0 + byte2 - 0xA0; // Р-Я а-п
-    }
-  }
-  else if(byte1 == 0xD1) {
-    if(byte2 == 0x91) {
-      byte = 0xB8; // ё
-    }
-    else {
-      byte = 0xF0 + byte2 - 0x80; // р-я
-    }
-  }
-
-  return byte;
-}
-
-void utf8_to_cp1251(char *buff) {
-  int read_offset = 0;
-  int write_offset = 0;
-  unsigned char byte;
-  int length = strlen(buff);
-  while(read_offset < length) {
-    byte = buff[read_offset];
-    read_offset++;
-    if(byte == 0xC2) {
-      // Кавычки-ёлочки
-      if(buff[read_offset] == 0xAB) {
-        byte = '"';
-      }
-      if(buff[read_offset] == 0xBB) {
-        byte = '"';
-      }
-      read_offset++;
-    }
-    else if(byte == 0xD0) {
-      //Serial.println("---");
-      //Serial.println((int)byte, HEX);
-      //Serial.println((int)buff[read_offset], HEX);
-      if(buff[read_offset] == 0x81) {
-        byte = 0xA8; // Ё
-      }
-      else if(buff[read_offset] < 0xA0) {
-        byte = 0xC0 + buff[read_offset] - 0x90; // А-П
-      }
-      else {
-        byte = 0xD0 + buff[read_offset] - 0xA0; // Р-Я а-п
-      }
-      //Serial.println((int)byte, HEX);
-      read_offset++;
-    }
-    else if(byte == 0xD1) {
-      if(buff[read_offset] == 0x91) {
-        byte = 0xB8; // ё
-      }
-      else {
-        byte = 0xF0 + buff[read_offset] - 0x80; // р-я
-      }
-      read_offset++;
-    }
-    
-    buff[write_offset] = byte;
-    write_offset++;
-  }
-  buff[write_offset] = 0;
-}
-
-void cp1251_to_utf8(char *in_buff, char *out_buff) {
-  int read_offset = 0;
-  int write_offset = 0;
-  unsigned char byte;
-  int length = strlen(in_buff);
-  while(read_offset < length) {
-    byte = in_buff[read_offset];
-    read_offset++;
-
-    if(byte <= 0x7F) {
-      out_buff[write_offset] = byte;
-      write_offset++;
-    }
-    else {
-      // Ё
-      if(byte == 0xA8) {
-        out_buff[write_offset] = 0xD0;
-        write_offset++;
-        out_buff[write_offset] = 0x81;
-        write_offset++;
-      }
-      // ё
-      if(byte == 0xB8) {
-        out_buff[write_offset] = 0xD1;
-        write_offset++;
-        out_buff[write_offset] = 0x91;
-        write_offset++;
-      }
-      // А-П
-      if(byte >= 0xC0 && byte <= 0xCF) {
-        out_buff[write_offset] = 0xD0;
-        write_offset++;
-        out_buff[write_offset] = 0x90 + byte - 0xC0;
-        write_offset++;
-      }
-      // Р-Я а-п
-      if(byte >= 0xD0 && byte <= 0xEF) {
-        out_buff[write_offset] = 0xD0;
-        write_offset++;
-        out_buff[write_offset] = 0xA0 + byte - 0xD0;
-        write_offset++;
-      }
-      // р-я
-      if(byte >= 0xF0 && byte <= 0xFF) {
-        out_buff[write_offset] = 0xD1;
-        write_offset++;
-        out_buff[write_offset] = 0x80 + byte - 0xF0;
-        write_offset++;
-      }
-    }
-  }
-  out_buff[write_offset] = 0;
-}
-
-void cp1251_to_translit(char *in_buff, char *out_buff) {
-  char *encoding = "ABVGDEJZIJKLMNOPRSTUFHC4WW'I'EUAabvgdejzijklmnoprstufhc4ww'i'eua";
-  int read_offset = 0;
-  int write_offset = 0;
-  unsigned char byte;
-  int length = strlen(in_buff);
-  while(read_offset < length) {
-    byte = in_buff[read_offset];
-    read_offset++;
-
-    if(byte <= 0x7F) {
-      out_buff[write_offset] = byte;
-      write_offset++;
-    }
-    else {
-      // Ё
-      if(byte == 0xA8) {
-        out_buff[write_offset] = 'E';
-        write_offset++;
-      }
-      // ё
-      if(byte == 0xB8) {
-        out_buff[write_offset] = 'e';
-        write_offset++;
-      }
-      // Остальные
-      if(byte >= 0xC0) {
-        out_buff[write_offset] = *(encoding + byte - 0xC0);
-        write_offset++;
-      }
-    }
-  }
-  out_buff[write_offset] = 0;
-}
-
-void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
-  int byte1, byte2;
-  int byte_out;
-  fs::File file_from;
-  fs::File file_to;
-  file_from = Storage->open(from_filename);
-  file_to = Storage->open(to_filename, FILE_WRITE);
-  while(file_from.available()) {
-    byte1 = file_from.read();
-    if(byte1 < 0xC0) {
-      byte_out = byte1;
-    }
-    else {
-      byte2 = file_from.read();
-      byte_out = utf8_to_cp1251_byte(byte1, byte2);
-    }
-    file_to.write(byte_out);
-  }
-  file_to.close();
-  file_from.close();
 }
 
 // ====================================================
@@ -10782,6 +10663,220 @@ void irc(char mode, char *io_buff) {
 
 #endif
 // IS_WIFI_ENABLED
+
+void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
+  int byte1, byte2;
+  int byte_out;
+  fs::File file_from;
+  fs::File file_to;
+  file_from = Storage->open(from_filename);
+  file_to = Storage->open(to_filename, FILE_WRITE);
+  while(file_from.available()) {
+    byte1 = file_from.read();
+    if(byte1 < 0xC0) {
+      byte_out = byte1;
+    }
+    else {
+      byte2 = file_from.read();
+      byte_out = utf8_to_cp1251_byte(byte1, byte2);
+    }
+    file_to.write(byte_out);
+  }
+  file_to.close();
+  file_from.close();
+}
+
+void file_cp1251_to_utf8(char *from_filename, char *to_filename) {
+  char in_buff[2];
+  char out_buff[3];
+  fs::File file_from;
+  fs::File file_to;
+
+  in_buff[0] = 0;
+  in_buff[1] = 0;
+
+  file_from = Storage->open(from_filename);
+  file_to = Storage->open(to_filename, FILE_WRITE);
+  while(file_from.available()) {
+    in_buff[0] = file_from.read();
+    cp1251_to_utf8(in_buff, out_buff);
+    if(strlen(out_buff) == 1) {
+      file_to.write(out_buff[0]);
+    }
+    else {
+      file_to.write(out_buff[0]);
+      file_to.write(out_buff[1]);
+    }
+  }
+  file_to.close();
+  file_from.close();
+}
+
+// Конвертировать два байта в cp1251
+char utf8_to_cp1251_byte(char byte1, char byte2) {
+  char byte;
+  byte = byte1;
+  if(byte1 == 0xD0) {
+    if(byte2 == 0x81) {
+      byte = 0xA8; // Ё
+    }
+    else if(byte2 < 0xA0) {
+      byte = 0xC0 + byte2 - 0x90; // А-П
+    }
+    else {
+      byte = 0xD0 + byte2 - 0xA0; // Р-Я а-п
+    }
+  }
+  else if(byte1 == 0xD1) {
+    if(byte2 == 0x91) {
+      byte = 0xB8; // ё
+    }
+    else {
+      byte = 0xF0 + byte2 - 0x80; // р-я
+    }
+  }
+
+  return byte;
+}
+
+void utf8_to_cp1251(char *buff) {
+  int read_offset = 0;
+  int write_offset = 0;
+  unsigned char byte;
+  int length = strlen(buff);
+  while(read_offset < length) {
+    byte = buff[read_offset];
+    read_offset++;
+    if(byte == 0xC2) {
+      // Кавычки-ёлочки
+      if(buff[read_offset] == 0xAB) {
+        byte = '"';
+      }
+      if(buff[read_offset] == 0xBB) {
+        byte = '"';
+      }
+      read_offset++;
+    }
+    else if(byte == 0xD0) {
+      //Serial.println("---");
+      //Serial.println((int)byte, HEX);
+      //Serial.println((int)buff[read_offset], HEX);
+      if(buff[read_offset] == 0x81) {
+        byte = 0xA8; // Ё
+      }
+      else if(buff[read_offset] < 0xA0) {
+        byte = 0xC0 + buff[read_offset] - 0x90; // А-П
+      }
+      else {
+        byte = 0xD0 + buff[read_offset] - 0xA0; // Р-Я а-п
+      }
+      //Serial.println((int)byte, HEX);
+      read_offset++;
+    }
+    else if(byte == 0xD1) {
+      if(buff[read_offset] == 0x91) {
+        byte = 0xB8; // ё
+      }
+      else {
+        byte = 0xF0 + buff[read_offset] - 0x80; // р-я
+      }
+      read_offset++;
+    }
+    
+    buff[write_offset] = byte;
+    write_offset++;
+  }
+  buff[write_offset] = 0;
+}
+
+void cp1251_to_utf8(char *in_buff, char *out_buff) {
+  int read_offset = 0;
+  int write_offset = 0;
+  unsigned char byte;
+  int length = strlen(in_buff);
+  while(read_offset < length) {
+    byte = in_buff[read_offset];
+    read_offset++;
+
+    if(byte <= 0x7F) {
+      out_buff[write_offset] = byte;
+      write_offset++;
+    }
+    else {
+      // Ё
+      if(byte == 0xA8) {
+        out_buff[write_offset] = 0xD0;
+        write_offset++;
+        out_buff[write_offset] = 0x81;
+        write_offset++;
+      }
+      // ё
+      if(byte == 0xB8) {
+        out_buff[write_offset] = 0xD1;
+        write_offset++;
+        out_buff[write_offset] = 0x91;
+        write_offset++;
+      }
+      // А-П
+      if(byte >= 0xC0 && byte <= 0xCF) {
+        out_buff[write_offset] = 0xD0;
+        write_offset++;
+        out_buff[write_offset] = 0x90 + byte - 0xC0;
+        write_offset++;
+      }
+      // Р-Я а-п
+      if(byte >= 0xD0 && byte <= 0xEF) {
+        out_buff[write_offset] = 0xD0;
+        write_offset++;
+        out_buff[write_offset] = 0xA0 + byte - 0xD0;
+        write_offset++;
+      }
+      // р-я
+      if(byte >= 0xF0 && byte <= 0xFF) {
+        out_buff[write_offset] = 0xD1;
+        write_offset++;
+        out_buff[write_offset] = 0x80 + byte - 0xF0;
+        write_offset++;
+      }
+    }
+  }
+  out_buff[write_offset] = 0;
+}
+
+void cp1251_to_translit(char *in_buff, char *out_buff) {
+  char *encoding = "ABVGDEJZIJKLMNOPRSTUFHC4WW'I'EUAabvgdejzijklmnoprstufhc4ww'i'eua";
+  int read_offset = 0;
+  int write_offset = 0;
+  unsigned char byte;
+  int length = strlen(in_buff);
+  while(read_offset < length) {
+    byte = in_buff[read_offset];
+    read_offset++;
+
+    if(byte <= 0x7F) {
+      out_buff[write_offset] = byte;
+      write_offset++;
+    }
+    else {
+      // Ё
+      if(byte == 0xA8) {
+        out_buff[write_offset] = 'E';
+        write_offset++;
+      }
+      // ё
+      if(byte == 0xB8) {
+        out_buff[write_offset] = 'e';
+        write_offset++;
+      }
+      // Остальные
+      if(byte >= 0xC0) {
+        out_buff[write_offset] = *(encoding + byte - 0xC0);
+        write_offset++;
+      }
+    }
+  }
+  out_buff[write_offset] = 0;
+}
 
 #define I2C_MAX_DEVICES 127
 
@@ -12167,6 +12262,7 @@ void save_current_timezone() {
 
 void screen_test(char mode, char *io_buff) {
   int i;
+  int j;
   int colors[] = {TFT_WHITE, TFT_RED, TFT_GREEN, TFT_BLUE, TFT_MAGENTA, TFT_CYAN, TFT_YELLOW, TFT_BLACK};
   char app_icon[] = {
     16, 16,
@@ -12233,33 +12329,188 @@ void screen_test(char mode, char *io_buff) {
   }
   touchWaitPress();
   touchWaitRelease();
+
+  tft.fillScreen(TFT_BLACK);
+  for(j = 0; j < 256; j++) {
+    for(i = 0; i < 256; i++) {
+      tft.drawPixel(i, j, i + j * 256);
+    }
+    //delay(1000);
+  }
+  touchWaitPress();
+  touchWaitRelease();
+
+  tft.fillScreen(TFT_BLACK);
+  for(j = 0; j < 256; j++) {
+    for(i = 0; i < 256; i++) {
+      tft.drawPixel(i, j, i + j * 256 & (B11111111 << 8 + B11011111));
+    }
+    //delay(1000);
+  }
+  touchWaitPress();
+  touchWaitRelease();
+}
+
+// Вывести одну страницу текста с переносом по словам
+// Возвращает число выведенных байтов
+// text - текст, который нужно выводить
+// start_x, start_y - левый верхний угол
+// width - ширина в пикселях
+// total_lines - число строк
+// font - шрифт
+// draw_flag - рисовать текст или только посчитать смещение
+int draw_text_formatted(char *text, int start_x, int start_y, int width, int total_lines, int font, int draw_flag) {
+  char current_line[80];
+  char current_word[80];
+  char new_line_flag_word = 0;
+  char new_line_flag_line = 0;
+  char byte;
+  int offset_bytes;
+  int word_offset = 0;
+  int line_index = 0;
+  int text_offset = 0;
+  int line_height;
+  int i;
+
+  //Serial.println("draw_text_formatted");
+
+  if(font == FONT_MONOSPACE) line_height = 8;
+  else if(font == FONT_DEFAULT) line_height = 16;
+  else line_height = 16;
+
+  strcpy(current_line, "");
+  strcpy(current_word, "");
+
+  while(line_index < total_lines) {
+    //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
+    // Считываем очередное слово в буфер current_word
+    while(text[text_offset] > 0) {
+      //Serial.println(__LINE__);
+      byte = text[text_offset];
+      //Serial.printf("%c %s\n", byte, current_word);
+      // Последовательности \n\r и \r\n это один перевод строки
+      if(byte == '\r' && text[text_offset + 1] == '\n') {
+        text_offset++;
+      }
+      if(byte == '\n' && text[text_offset + 1] == '\r') {
+        text_offset++;
+      }
+      if(byte == '\n' || byte == '\r' || byte == 0) {
+        if(byte > 0) text_offset++;
+        new_line_flag_word = 1;
+      }
+      if(new_line_flag_word) break;
+
+      // Добавляем текущий символ в строку
+      current_word[word_offset] = byte;
+      word_offset++;
+      current_word[word_offset] = 0;
+      text_offset++;
+
+      if(strlen(current_word) >= 40) break;
+      if(byte == ' ') break;
+    }
+
+    // Проверяем, влезет ли новое слово + строка на экран
+    //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
+    //delay(1000);
+    if(tft.textWidth(current_line, font) + tft.textWidth(current_word, font) < width) {
+      strcat(current_line, current_word);
+      strcpy(current_word, "");
+      word_offset = 0;
+      if(new_line_flag_word) {
+        new_line_flag_line = 1;
+        new_line_flag_word = 0;
+      }
+      //Serial.println(__LINE__);
+      if(!new_line_flag_line && text[text_offset] > 0) continue;
+    }
+
+
+    while(line_index < total_lines) {
+      //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
+      // Если строка сейчас пустая, а слово нет, значит слово целиком на экран не влезает, и нужно вывести часть слова (пока влезает)
+      if(strlen(current_line) == 0 && strlen(current_word) > 0 && tft.textWidth(current_word, font) >= width) {
+        // Копируем слово в строку, убираем символы пока не начнёт влезать в строку
+        strcpy(current_line, current_word);
+        while(tft.textWidth(current_line, font) >= width) {
+          current_line[strlen(current_line) - 1] = 0;
+        }
+        // Теперь из current_word нужно убрать столько символов, сколько добавили в строку
+        for(i = 0; i < strlen(current_word) - strlen(current_line); i++) {
+          current_word[i] = current_word[i + strlen(current_line)];
+        }
+        current_word[i] = 0;
+        word_offset = strlen(current_word);
+      }
+
+      // Выводим строку
+      //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
+      if(draw_flag) {
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
+        tft.drawString(current_line, start_x, start_y + line_height * line_index, font);
+        tft.fillRect(
+          start_x + tft.textWidth(current_line, font),
+          start_y + line_height * line_index,
+          width - start_x - tft.textWidth(current_line, font),
+          line_height,
+          color_scheme_bg
+        );
+      }
+      line_index++;
+      new_line_flag_line = 0;
+      strcpy(current_line, "");
+
+      // Если остаток слова ещё длиннее экрана - выводим (заходим на следующий цикл)
+      if(strlen(current_word) > 0 && tft.textWidth(current_word, font) >= width) {
+        continue;
+      }
+      else {
+        // Если остаток слова короче экрана, но после слова был перенос строки - переносим слово в строку, выводим
+        if(new_line_flag_word) {
+          strcpy(current_line, current_word);
+          strcpy(current_word, "");
+          word_offset = 0;
+          new_line_flag_word = 0;
+          new_line_flag_line = 1;
+          continue;
+        }
+      }
+      break;
+    }
+
+    if(byte == 0) {
+      if(line_index < total_lines) {
+        tft.fillRect(
+          start_x,
+          start_y + line_height * line_index,
+          width,
+          line_height * (total_lines - line_index),
+          color_scheme_bg
+        );
+      }
+      break;
+    }
+  }
+
+  // Возвращаем число выведенных байтов = число считанных - число невыведенных
+  return text_offset - strlen(current_word);
 }
 
 // Просмотр файла
 void view_file(char *title, char *filename) {
   fs::File file;
-  int word_offset;
-  int show_file_offset_lines = 0;
-  int skipped_lines = 0;
-  int skipped_pages = 0;
-  long start_page_offset_bytes = 0;
-  long show_file_offset_bytes = 0;
-  int show_file_offset_bytes_index = 0;
-  long show_file_offset_bytes_history[5];
-  int current_file_offset_lines = 0;
-  int current_line_on_screen = 0;
   int touch_x, touch_y;
-  int i;
-  char new_line_flag;
-  char byte;
-  char buff[80];
-  char current_string[80];
-  char current_word[80];
-  char rewind_required = 1;
+  long file_offset;
+  long visible_offset;
+  long prev_offset;
+  char *buff;
 
   clearScreen();
   drawAppTitle(title);
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+  buff = (char*)malloc(2050 * sizeof(char));
 
   file = Storage->open(filename);
   if(!file) {
@@ -12273,157 +12524,14 @@ void view_file(char *title, char *filename) {
 
   // Нет ли сохранённого смещения для файла?
   if(read_key_value_from_file("/Settings/View", filename, buff)) {
-    sscanf(buff, "%d", &show_file_offset_lines);
+    sscanf(buff, "%d", &file_offset);
   }
 
-  for(i = 0; i < 20; i++) {
-    show_file_offset_bytes_history[i] = 0;
-  }
-
-  rewind_required = 1;
   while(1) {
-    current_line_on_screen = 0;
-    tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
-
-    // Вывести текст по текущему смещению
-    if(rewind_required) {
-      // Начинаем с начала файла и читаем пока не попадём на отображаемую часть
-      file.seek(0);
-      start_page_offset_bytes = 0;
-      current_file_offset_lines = 0;
-      current_string[0] = 0;
-
-      word_offset = 0;
-      current_word[word_offset] = 0;
-
-      rewind_required = 0;
-      new_line_flag = 0;
-    }
-
-    while(file.available()) {
-      if(!new_line_flag) {
-        while(file.available()) {
-          byte = file.read();
-          current_word[word_offset] = byte;
-          word_offset++;
-          current_word[word_offset] = 0;
-          if(byte == '\n') {
-            if(file.peek() == '\r') file.read();
-          }
-          if(byte == '\r') {
-            if(file.peek() == '\n') file.read();
-          }
-          // Пробел, дефис, перевод строки завершают слово
-          if(byte == '\n' || byte == '\r') {
-            new_line_flag = 1;
-          }
-          if(byte == ' ' || byte == '\n' || byte == '\r') {
-            break;
-          }
-          // Кроме дефиса в начале слова
-          if(byte == '-' && word_offset > 0) {
-            break;
-          }
-          if(word_offset >= 60) {
-            break;
-          }
-        }
-      }
-
-      // Проверяем, помещается ли слово в текущую строку по ширине, байтам
-      if(tft.textWidth(current_string, FONT_DEFAULT) + tft.textWidth(current_word, FONT_DEFAULT) < (tft.width() - 2)
-        && strlen(current_string) + strlen(current_word) < 79) {
-        // Помещаем туда слово, повторяем
-        strcat(current_string, current_word);
-        word_offset = 0;
-        current_word[word_offset] = 0;
-
-        // Если ещё не перенос и файл не закончился - читаем следующее слово
-        if(new_line_flag == 0 && file.available()) {
-          continue;
-        }
-      }
-
-      // Если строка пустая, а слово не поместилось, то нужно вывести часть слова, остальное оставить на потом
-      if(strlen(current_string) == 0 && tft.textWidth(current_word, FONT_DEFAULT) >= (tft.width() - 2)) {
-        // Убавляем символы из строки пока не поместимся в экран
-        strcpy(current_string, current_word);
-        while(tft.textWidth(current_string, FONT_DEFAULT) >= (tft.width() - 2)) {
-          current_string[strlen(current_string) - 1] = 0;
-        }
-        // От текущего слова надо отрезать соответствующий кусок
-        for(i = 0; i <strlen(current_string); i++) {
-          current_word[i] = current_word[i + strlen(current_string)];
-        }
-        current_word[i] = 0;
-        word_offset = strlen(current_word);
-      }
-
-      // Пора выводить строку
-      // Пока не заполнен экран
-      while(current_line_on_screen <= 18) {
-        // Сохраняем смещения
-        skipped_lines++;
-        if(skipped_lines > 18) {
-          skipped_lines = 0;
-          skipped_pages++;
-          for(i = 1; i < 5; i++) {
-            show_file_offset_bytes_history[i - 1] = show_file_offset_bytes_history[i];
-          }
-          show_file_offset_bytes_index = 4;
-          show_file_offset_bytes_history[show_file_offset_bytes_index] = start_page_offset_bytes;
-          start_page_offset_bytes = file.position();
-        }
-
-        // Выводить строку только если достигнуто смещение в строках, иначе просто считать строки
-        if(current_file_offset_lines >= show_file_offset_lines) {
-            tft.setTextColor(color_scheme_fg, color_scheme_bg);
-            tft.drawString(current_string, 1, 16 + current_line_on_screen * 16, FONT_DEFAULT);
-            current_line_on_screen++;
-        }
-        current_file_offset_lines++;
-        current_string[0] = 0;
-        if(strlen(current_word) == 0) new_line_flag = 0;
-        if(current_line_on_screen > 18) break;
-
-        // Если файл закончился или есть остаток строки,
-        // а место на экране ещё есть, нужно вывести остаток из current_word
-        if(!file.available() || new_line_flag) {
-          // Если ничего не осталось - пора выходить
-          if(strlen(current_string) == 0 && strlen(current_word) == 0) {
-            break;
-          }
-          // Убавляем символы из строки пока не поместимся в экран
-          strcpy(current_string, current_word);
-          while(tft.textWidth(current_string, FONT_DEFAULT) >= (tft.width() - 2)) {
-            current_string[strlen(current_string) - 1] = 0;
-          }
-          // От текущего слова надо отрезать соответствующий кусок
-          for(i = 0; i < strlen(current_string); i++) {
-            current_word[i] = current_word[i + strlen(current_string)];
-          }
-          current_word[i] = 0;
-          word_offset = strlen(current_word);
-
-          new_line_flag = 0;
-        }
-        else {
-          break;
-        }
-      }
-      //current_string[0] = 0;
-
-      // Если экран заполнен - выходим
-      if(current_line_on_screen > 18) {
-        break;
-      }
-    }
-
-    for(i = 0; i < 5; i++) {
-      Serial.printf("%d ", show_file_offset_bytes_history[i]);
-    }
-    Serial.println();
-    Serial.println(show_file_offset_bytes_index);
+    file.seek(file_offset);
+    file.read((uint8_t *)buff, 2048);
+    buff[2048] = 0;
+    visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, 19, FONT_DEFAULT, 1);
 
     touchWaitPress();
     // Смотрим куда нажатие, двигаемся либо вперёд по файлу, либо назад
@@ -12432,31 +12540,25 @@ void view_file(char *title, char *filename) {
     if(touch_y > 16) {
       // Левая часть экрана - назад
       if(touch_x < tft.width() / 2) {
-          show_file_offset_lines -= 19;
-//          if(show_file_offset_bytes_index > 0) {
-          if(false) {
-            Serial.println("fseek");
-            show_file_offset_bytes_index--;
-            file.seek(show_file_offset_bytes_history[show_file_offset_bytes_index]);
-            show_file_offset_bytes_index--;
+        // Ищем страницу назад
+        prev_offset = 0;
+        visible_offset = 0;
+        while(prev_offset < file_offset) {
+          file.seek(prev_offset);
+          file.read((uint8_t *)buff, 2048);
+          buff[2048] = 0;
+          visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, 19, FONT_DEFAULT, 0);
+          if(prev_offset + visible_offset >= file_offset) {
+            file_offset = prev_offset;
+            break;
           }
-          else {
-            Serial.println("rewind_required");
-            rewind_required = 1;
-            if(show_file_offset_lines < 0) {
-              show_file_offset_lines = 0;
-            }
-          }
+          prev_offset += visible_offset;
+        }
       }
       // Правая - вперёд, если есть куда
       else if(touch_x > tft.width() / 2) {
-        //Serial.printf("current_word = %s\n", current_word);
-        if(file.available() || strlen(current_word) > 0) {
-          show_file_offset_lines += 19;
-        }
-        else {
-          // Если некуда перемещаться, то нужно отмотать назад, иначе пойдём читать дальше конца файла
-          rewind_required = 1;
+        if(file_offset + visible_offset < file.size()) {
+          file_offset += visible_offset;
         }
       }
     }
@@ -12466,8 +12568,9 @@ void view_file(char *title, char *filename) {
       drawAppTitle("Exit");
       touchWaitRelease();
       drawAppTitle(title);
-      sprintf(buff, "%d", show_file_offset_lines);
+      sprintf(buff, "%d", file_offset);
       write_key_value_to_file("/Settings/View", filename, buff);
+      free(buff);
       touchExitActionReset();
       return;
     }
@@ -12478,138 +12581,21 @@ void view_file(char *title, char *filename) {
 // Почти полная копия view_file, по не файл, а буфер
 // Совместить две функции сложно
 void view_text(char *title, char *data) {
-  int word_offset;
-  int show_file_offset_lines = 0;
-  int current_file_offset_lines = 0;
-  int current_line_on_screen = 0;
   int touch_x, touch_y;
-  int i;
   int data_offset = 0;
   int data_length = strlen(data);
-  char new_line_flag = 0;
-  char byte;
-  char buff[80];
-  char current_string[80];
-  char current_word[80];
+  long visible_offset;
+  long prev_offset;
 
   clearScreen();
   drawAppTitle(title);
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
+  data_offset = 0;
+
   while(1) {
     // Вывести текст по текущему смещению
-    // Начинаем с начала файла и читаем пока не попадём на отображаемую часть
-    data_offset = 0;
-    current_file_offset_lines = 0;
-    current_line_on_screen = 0;
-    current_string[0] = 0;
-    tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
-
-    word_offset = 0;
-    current_word[word_offset] = 0;
-    while(data_offset < data_length) {
-      // Читаем слово
-      new_line_flag = 0;
-      while(data_offset < data_length) {
-        byte = data[data_offset];
-        data_offset++;
-        current_word[word_offset] = byte;
-        word_offset++;
-        current_word[word_offset] = 0;
-        if(byte == '\n') {
-          if(data[data_offset + 1] == '\r') data_offset++;
-        }
-        if(byte == '\r') {
-          if(data[data_offset + 1] == '\n') data_offset++;
-        }
-        // Пробел, дефис, перевод строки завершают слово
-        if(byte == '\n' || byte == '\r') {
-          new_line_flag = 1;
-        }
-        if(byte == ' ' || byte == '\n' || byte == '\r') {
-          break;
-        }
-        // Кроме дефиса в начале слова
-        if(byte == '-' && word_offset > 0) {
-          break;
-        }
-        if(word_offset >= 60) {
-          break;
-        }
-      }
-
-      // Проверяем, помещается ли слово в текущую строку по ширине, байтам
-      if(tft.textWidth(current_string, FONT_DEFAULT) + tft.textWidth(current_word, FONT_DEFAULT) < (tft.width() - 2)
-        && strlen(current_string) + strlen(current_word) < 79) {
-        // Помещаем туда слово, повторяем
-        strcat(current_string, current_word);
-        word_offset = 0;
-        current_word[word_offset] = 0;
-
-        // Если ещё не перенос и файл не закончился - читаем следующее слово
-        if(new_line_flag == 0 && data_offset < data_length) {
-          continue;
-        }
-      }
-
-      // Если строка пустая, а слово не поместилось, то нужно вывести часть слова, остальное оставить на потом
-      if(strlen(current_string) == 0 && tft.textWidth(current_word, FONT_DEFAULT) >= (tft.width() - 2)) {
-        // Убавляем символы из строки пока не поместимся в экран
-        strcpy(current_string, current_word);
-        while(tft.textWidth(current_string, FONT_DEFAULT) >= (tft.width() - 2)) {
-          current_string[strlen(current_string) - 1] = 0;
-        }
-        // От текущего слова надо отрезать соответствующий кусок
-        for(i = 0; i < strlen(current_string); i++) {
-          current_word[i] = current_word[i + strlen(current_string)];
-        }
-        current_word[i] = 0;
-        word_offset = strlen(current_word);
-      }
-
-      // Пора выводить строку
-      // Пока не заполнен экран
-      while(current_line_on_screen <= 18) {
-        // Выводить строку только если достигнуто смещение в строках, иначе просто считать строки
-        if(current_file_offset_lines >= show_file_offset_lines) {
-          tft.setTextColor(color_scheme_fg, color_scheme_bg);
-          tft.drawString(current_string, 1, 16 + current_line_on_screen * 16, FONT_DEFAULT);
-          current_line_on_screen++;
-        }
-        current_file_offset_lines++;
-        
-        current_string[0] = 0;
-
-        // Если файл закончился или есть остаток строки,
-        // а место на экране ещё есть, нужно вывести остаток из current_word
-        if(data_offset >= data_length || new_line_flag) {
-          // Если ничего не осталось - пора выходить
-          if(strlen(current_string) == 0 && strlen(current_word) == 0) {
-            break;
-          }
-          // Убавляем символы из строки пока не поместимся в экран
-          strcpy(current_string, current_word);
-          while(tft.textWidth(current_string, FONT_DEFAULT) >= (tft.width() - 2)) {
-            current_string[strlen(current_string) - 1] = 0;
-          }
-          // От текущего слова надо отрезать соответствующий кусок
-          for(i = 0; i < strlen(current_string); i++) {
-            current_word[i] = current_word[i + strlen(current_string)];
-          }
-          current_word[i] = 0;
-          word_offset = strlen(current_word);
-        }
-        else {
-          break;
-        }
-      }
-      current_string[0] = 0;
-
-      // Если экран заполнен - выходим
-      if(current_line_on_screen > 18) {
-        break;
-      }
-    }
+    visible_offset = draw_text_formatted(data + data_offset, 1, 16, tft.width() - 2, 19, FONT_DEFAULT, 1);
 
     touchWaitPress();
     // Смотрим куда нажатие, двигаемся либо вперёд по файлу, либо назад
@@ -12618,15 +12604,20 @@ void view_text(char *title, char *data) {
     if(touch_y > 16) {
       // Левая часть экрана - назад
       if(touch_x < tft.width() / 2) {
-          show_file_offset_lines -= 19;
-          if(show_file_offset_lines < 0) {
-            show_file_offset_lines = 0;
+        prev_offset = 0;
+        while(prev_offset < data_offset) {
+          visible_offset = draw_text_formatted(data + prev_offset, 1, 16, tft.width() - 2, 19, FONT_DEFAULT, 0);
+          if(prev_offset + visible_offset >= data_offset) {
+            data_offset = prev_offset;
+            break;
           }
+          prev_offset += visible_offset;
+        }
       }
       // Правая - вперёд, если есть куда
       else if(touch_x > tft.width() / 2) {
-        if(data_offset < data_length || strlen(current_word) > 0) {
-          show_file_offset_lines += 19;
+        if(data_offset + visible_offset < data_length) {
+          data_offset += visible_offset;
         }
       }
     }
@@ -12715,7 +12706,7 @@ void edit_file(char *title, char *filename) {
     // Вывести текст по текущему смещению
     // Начинаем с начала файла и читаем пока не попадём на отображаемую часть
     current_string[0] = 0;
-    tft.fillRect(0, 16, tft.width(), 200 - 16, color_scheme_bg);
+    //tft.fillRect(0, 16, tft.width(), 200 - 16, color_scheme_bg);
 
     cursor_too_low = 0;
     cursor_too_high = 0;
@@ -12816,13 +12807,21 @@ void edit_file(char *title, char *filename) {
 
       // Пора показать строку
       tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      // Узкая полоска слева, иногда там бывают следы курсора
+      tft.fillRect(0, 16 + screen_line_number * 16, 1, 16, color_scheme_bg);
       tft.drawString(buff, 1, 16 + screen_line_number * 16, FONT_DEFAULT);
+      // Зачищаем остальную строку
+      tft.fillRect(1 + tft.textWidth(buff, FONT_DEFAULT), 16 + screen_line_number * 16, tft.width() - 1 - tft.textWidth(buff, FONT_DEFAULT), 16, color_scheme_bg);
       screen_line_number++;
 
       // Если экран заполнен - выходим
       if(screen_line_number > 10) {
         break;
       }
+    }
+    // Зачищаем остальной экран
+    if(screen_line_number <= 10) {
+      tft.fillRect(0, 16 + screen_line_number * 16, tft.width(), 200 - 16 - screen_line_number * 16, color_scheme_bg);
     }
 
     // Если курсор не был достигнут, нужно перезапустить вывод
@@ -14171,7 +14170,7 @@ void game2048(char mode, char *io_buff) {
 
     tiles_to_add = 0;
     if(direction) {
-      Serial.println(direction);
+      //Serial.println(direction);
       // Поворачиваем уровень
       if(direction == 'r') { game2048_rotate(current_level); }
       if(direction == 'd') { game2048_rotate(current_level); game2048_rotate(current_level); }
@@ -14218,6 +14217,8 @@ void game2048(char mode, char *io_buff) {
       if(direction == 'r') { game2048_rotate(current_level); game2048_rotate(current_level); game2048_rotate(current_level); }
       if(direction == 'd') { game2048_rotate(current_level); game2048_rotate(current_level); }
       if(direction == 'l') { game2048_rotate(current_level); }
+
+      direction = 0;
     }
 
     // Проверка проигрыша
@@ -14254,11 +14255,11 @@ void game2048(char mode, char *io_buff) {
     drawButtonMatrix(0, 44, tft.width(), tft.width(), current_level, 4, 4);
 
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    sprintf(buff, "Step: %d", step);
+    sprintf(buff, "Step: %d    ", step);
     tft.drawString(buff, 8, 20, FONT_DEFAULT);
     
     hiscore = max(hiscore, step);
-    sprintf(buff, "Hi-score: %d", hiscore);
+    sprintf(buff, "Hi-score: %d    ", hiscore);
     tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
 
     //drawButtonMatrix(0, 44, tft.width(), tft.width(), buttons_show, 5, 5);
@@ -14295,6 +14296,8 @@ void game2048(char mode, char *io_buff) {
   }
 }
 
+// Поворот поля на 90 градусов по часовой
+// Можно было бы сделать циклом, но я не соображу как
 void game2048_rotate(char **level) {
   char *tmp;
   tmp = level[0]; level[0] = level[3]; level[3] = level[15]; level[15] = level[12]; level[12] = tmp;
@@ -15634,7 +15637,7 @@ void drawAppTitle(char *name) {
 void drawAppTitleRight() {
   char buff[80];
   char wifi_connection_flag = 0;
-  int right_offset;
+  int right_offset = 0;
 
   if(!app_title_enabled) return;
   // Не обновлять слишком часто
@@ -15667,13 +15670,15 @@ void drawAppTitleRight() {
 
   // Рисуем название, правую часть
   strcpy(buff, current_app_title);
-  while(16 + tft.textWidth(buff, FONT_DEFAULT) + right_offset > tft.width()) {
+  //Serial.printf("tft.textWidth(%s) = %d, ro = %d\n", buff, tft.textWidth(buff, FONT_DEFAULT), right_offset);
+  // 16 в середине - доп интервал, чтобы не сливался текст
+  while(16 + tft.textWidth(buff, FONT_DEFAULT) + 16 + right_offset > tft.width()) {
     if(strlen(buff) == 0) break;
     buff[strlen(buff) - 1] = 0;
   }
   tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
   tft.fillRect(0, 0, 16, 16, color_scheme_title_bg);
-  tft.drawString(current_app_title, 16, 0, FONT_DEFAULT);
+  tft.drawString(buff, 16, 0, FONT_DEFAULT);
 
   // Заполняем серединку
   tft.fillRect(16 + tft.textWidth(buff, FONT_DEFAULT), 0, tft.width() - 16 - tft.textWidth(buff, FONT_DEFAULT) - right_offset, 16, color_scheme_title_bg);
@@ -15900,8 +15905,9 @@ void drawPopupWindow(char *title, char *message, char **buttons) {
   tft.drawString(title, 16, 121, FONT_DEFAULT);
   
   // Надпись
-  tft.setTextColor(color_scheme_fg, color_scheme_bg);
-  tft.drawString(message, 8, 121 + 16, FONT_DEFAULT);
+  draw_text_formatted(message, 8, 121 + 16, tft.width() - 8 * 12, 3, FONT_DEFAULT, 1);
+  //tft.setTextColor(color_scheme_fg, color_scheme_bg);
+  //tft.drawString(message, 8, 121 + 16, FONT_DEFAULT);
 
   // Кнопки в один ряд
   drawButtonMatrix(8, 240 - 40, tft.width() - 8 * 2, 32, buttons, 3, 1);
@@ -16408,6 +16414,7 @@ void touchWaitRelease() {
 
 char touchCheckNowait() {
   if(digitalRead(BOOT_BUTTON_PIN) == LOW) saveScreenshot();
+  drawAppTitleRight();
   // Проверить касание без блокировки
   if(touchPollTouchStatus()) {
     touchIsExitAction();
@@ -16957,11 +16964,11 @@ int bmp_show_image(char *filename, int start_x, int start_y) {
     else if(bpp == 24) {
       while(file.available()) {
         // Три байта на пиксель
-        byte1 = file.read();
+        byte1 = file.read(); // B
         current_offset++;
-        byte2 = file.read();
+        byte2 = file.read(); // G
         current_offset++;
-        byte3 = file.read();
+        byte3 = file.read(); // R
         current_offset++;
         // Формируем 16-битное значение 5-6-5
         color = (byte3 >> 3) << 11 | (byte2 >> 2) << 5 | byte1 >> 3;
