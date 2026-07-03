@@ -160,15 +160,17 @@
 2026-07-02 Фикс бага с необновлением часов в приложениях с часами, баг с наложением текста в заголовке,
   многострочный текст указанным шрифтом в указанное место, fseek для перемотки в книгах,
   предпросмотр дня в расписании
+2026-07-03 Улучшенный лаунчер, кастомные плитки в пятнашках, кастомные плитки в выключи свет, меньше мигания в три-в-ряд
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое:
 - (п) Просмотреть справку, может быть что-то добавить
+- (и) Выбирать категории и значки в лаунчере
+
+- (д) Не прокручивать при редактировании дальше конца файла
+- (д) Prompt - возможность переставлять курсор
 - (д) Тетрис
 - (д) Арканоид
 - (д) Бегающий динозавр (как в Chrome)
-- (д) Не прокручивать при редактировании дальше конца файла
-- (д) Prompt - возможность переставлять курсор
-
 - (н) Значок приложения в заголовке
 - (и) Крутая калибровка
 - (н) Возможность выбрать звук для событий
@@ -204,6 +206,7 @@
 - (н) Выделение в просмотре, копирование
 - (н) Выделение в редактировании, копирование, вставка
 - (н) Буфер для перемотки назад в книгах
+- (н) Разные варианты для Life
 
 */
 
@@ -792,6 +795,7 @@ function_application_pointer all_apps[] = {
   sound_control,
   autorun,
   select_storage_app,
+  backups,
   reboot,
   NULL
 };
@@ -897,15 +901,14 @@ function_application_pointer settings_apps[40] = {
 function_application_pointer main_apps[40];
 
 void launcher(char mode, char *io_buff) {
-  int touch_x;
-  int touch_y;
   char redraw_flag;
   int app_selected;
-  int app_selection;
   int app_selected_row;
   int app_selected_col;
-  int app_selected_fg;
-  int app_selected_bg;
+  int app_selected_prev_row;
+  int app_selected_prev_col;
+  int app_fg;
+  int app_bg;
 
   char app_my_icon[] = {
     16, 16,
@@ -928,9 +931,10 @@ void launcher(char mode, char *io_buff) {
   };
 
   int row, col;
+  int i;
   char app_name[80];
   char app_icon[80];
-  int apps_eol = 0;
+  int apps_max = 0;
   
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Launcher");
@@ -944,85 +948,79 @@ void launcher(char mode, char *io_buff) {
   clearScreen();
   drawAppTitle("Launcher");
 
+  apps_max = 0;
+  for(i = 0; i < 80; i++) {
+    if(all_apps[i] == 0) {
+      apps_max = i;
+      break;
+    }
+  }
+
   redraw_flag = 1;
+  touchCheckNowait();
   while(1) {
-    if(redraw_flag) {
-      for(col = 0; col < 2; col++) {
-        for(row = 0; row < 19; row++) {
-          if(!apps_eol) {
-            if(apps[row + col * 19 + 1]) {
-              apps[row + col * 19 + 1](APP_MODE_RETURN_NAME, app_name);
-              apps[row + col * 19 + 1](APP_MODE_RETURN_ICON, app_icon);
-              tft.setTextColor(color_scheme_fg, color_scheme_bg);
-              tft.drawString(app_name, 19 + col * tft.width() / 2, (row + 1) * 16, FONT_DEFAULT);
-              image_from_bits(col * tft.width() / 2, (row + 1) * 16, app_icon, color_scheme_fg, color_scheme_bg);
-            }
-            else {
-              apps_eol = row + col * 19 + 1;
-            }
-          }
-        }
-      }
-      redraw_flag = 0;
-    }
-
-    touchExitActionReset();
-    touchWaitRelease();
-    touchWaitPress();
-
     app_selected = -1;
-    app_selection = 0;
-    while(touchCheckNowait() == 1) {
-      touch_x = global_touch_x;
-      touch_y = global_touch_y;
+    app_selected_col = global_touch_x / (tft.width() / 8);
+    app_selected_row = (global_touch_y - 16) / (tft.height() / 10);
+    app_selected = app_selected_row * 8 + app_selected_col + 1;
 
-      row = (touch_y - 16) / 16;
-      col = touch_x / (tft.width() / 2);
+    if(global_touch_present_flag == 0) {
+      app_selected_row = -1;
+      app_selected_col = -1;
+      app_selected = -1;
+    }
+    
+    Serial.printf("touch_x=%d touch_y=%d app_selected_col=%d app_selected_row=%d app_selected=%d apps_max=%d\n",
+      global_touch_x, global_touch_y, app_selected_col, app_selected_row, app_selected, apps_max);
 
-      if(row + col * 19 + 1 < apps_eol) {
-        // Приложение не было выделено - нужно выделить
-        if(app_selected == -1) {
-          app_selected = row + col * 19 + 1;
-          app_selected_row = row;
-          app_selected_col = col;
+    for(row = 0; row != 10; row++) {
+      for(col = 0; col != 8; col++) {
+        if(row * 8 + col + 1 >= apps_max) {
+          break;
         }
 
-        if(app_selected_row == row && app_selected_col == col) {
-          if(app_selection == 0) {
-            apps[app_selected](APP_MODE_RETURN_NAME, app_name);
-            apps[app_selected](APP_MODE_RETURN_ICON, app_icon);
+        //Serial.printf("app=%d\n", row * 8 + col + 1);
 
-            app_selected_fg = color_scheme_selection_fg;
-            app_selected_bg = color_scheme_selection_bg;
-            app_selection = 1;
-
-            tft.fillRect(app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, tft.width() / 2, 16, app_selected_bg);
-            tft.setTextColor(app_selected_fg, app_selected_bg);
-            tft.drawString(app_name, 19 + app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, FONT_DEFAULT);
-            image_from_bits(app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, app_icon, app_selected_fg, app_selected_bg);
-          }
-        }
-        // Если курсор увели, выделение надо убрать
-        else {
-          if(app_selection == 1) {
-            apps[app_selected](APP_MODE_RETURN_NAME, app_name);
-            apps[app_selected](APP_MODE_RETURN_ICON, app_icon);
-
-            app_selected_fg = color_scheme_fg;
-            app_selected_bg = color_scheme_bg;
-            app_selection = 0;
+        redraw_flag = 0;
+        if(col == app_selected_col && row == app_selected_row) {
+          app_fg = color_scheme_selection_fg;
+          app_bg = color_scheme_selection_bg;
+          if(global_touch_present_flag) {
             redraw_flag = 1;
-            
-            tft.fillRect(app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, tft.width() / 2, 16, app_selected_bg);
-            tft.setTextColor(app_selected_fg, app_selected_bg);
-            tft.drawString(app_name, 19 + app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, FONT_DEFAULT);
-            image_from_bits(app_selected_col * tft.width() / 2, (app_selected_row + 1) * 16, app_icon, app_selected_fg, app_selected_bg);
           }
+        }
+        else {
+          app_fg = color_scheme_fg;
+          app_bg = color_scheme_bg;
+          if(!global_touch_present_flag) {
+            redraw_flag = 1;
+          }
+          if(row == app_selected_prev_row && col == app_selected_prev_col) {
+            redraw_flag = 1;
+          }
+        }
+        if(redraw_flag) {
+          all_apps[row * 8 + col + 1](APP_MODE_RETURN_NAME, app_name);
+          all_apps[row * 8 + col + 1](APP_MODE_RETURN_ICON, app_icon);
+          app_name[4] = 0;
+          tft.setTextColor(app_fg, app_bg);
+          tft.drawCentreString(app_name, col * tft.width() / 8 + 15, 4 + 16 + 16 + row * 32, FONT_MONOSPACE);
+          image_from_bits(7 + col * tft.width() / 8, 4 + 16 + row * 32, app_icon, app_fg, app_bg);
         }
       }
+      if(row * 8 + col + 1 >= apps_max) break;
     }
-    if(app_selected != -1 && app_selection == 1) {
-      apps[app_selected](APP_MODE_LAUNCH, NULL);
+    app_selected_prev_row = app_selected_row;
+    app_selected_prev_col = app_selected_col;
+
+    if(app_selected == -1) touchWaitPress();
+    if(touchCheckNowait() == 1) continue;
+
+    if(app_selected >= 0 && app_selected < apps_max) {
+      Serial.printf("Run app %d\n", app_selected);
+      touchExitActionReset();
+      all_apps[app_selected](APP_MODE_LAUNCH, NULL);
+      touchWaitRelease();
       break;
     }
   }
@@ -6182,20 +6180,20 @@ void timer(char mode, char *io_buff) {
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
-    B00111111, B11111100,
-    B00111111, B11111100,
-    B00010000, B00001000,
-    B00001000, B00010000,
-    B00000111, B11100000,
-    B00000011, B11000000,
-    B00000001, B10000000,
-    B00000001, B10000000,
-    B00000010, B01000000,
-    B00000100, B00100000,
-    B00001001, B10010000,
-    B00010011, B11001000,
-    B00111111, B11111100,
-    B00111111, B11111100,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01011111, B11111010,
+    B01010000, B00001010,
+    B01001101, B10110010,
+    B01000011, B11000010,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01000110, B01100010,
+    B01001001, B10010010,
+    B01010011, B11001010,
+    B01011111, B11111010,
+    B01000000, B00000010,
+    B01111111, B11111110,
     B00000000, B00000000
   };
 
@@ -13773,10 +13771,16 @@ void fifteen(char mode, char *io_buff) {
     sprintf(buff, "Steps: %d", steps);
     tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
 
-    drawButtonMatrix(0, 64, tft.width(), tft.width(), buttons, 4, 4);
+    fifteen_show_tiles(64, buttons);
+//    drawButtonMatrix(0, 64, tft.width(), tft.width(), buttons, 4, 4);
 
     touchWaitPress();
-    button_pressed = touchCheckMatrix(0, 64, tft.width(), tft.width(), buttons, 4, 4);
+    touchWaitReleaseOrExit();
+    button_pressed = -1;
+    if(global_touch_y >= 64 && global_touch_y < 64 + tft.width()) {
+      button_pressed = floor(global_touch_x / (tft.width() / 4)) + 4 * floor((global_touch_y - 64) / (tft.width() / 4));
+    }
+    //button_pressed = touchCheckMatrix(0, 64, tft.width(), tft.width(), buttons, 4, 4);
     if(button_pressed != -1) {
       valid_move_flag = 0;
       if(button_pressed / 4 == empty_tile / 4 && abs(button_pressed % 4 - empty_tile % 4) == 1) valid_move_flag = 1;
@@ -13812,6 +13816,24 @@ void fifteen(char mode, char *io_buff) {
       return;
     }
     touchWaitRelease();
+  }
+}
+
+void fifteen_show_tiles(int offset_y, char **tiles) {
+  int x, y;
+  tft.setTextColor(color_scheme_fg, TFT_LIGHTGREY);
+  for(y = 0; y < 4; y++) {
+    for(x = 0; x < 4; x++) {
+      if(strcmp(tiles[x + y * 4], " ") == 0) {
+        tft.fillRect(x * tft.width() / 4, offset_y + y * tft.width() / 4, tft.width() / 4, tft.width() / 4, TFT_WHITE);
+      }
+      else {
+        //tft.fillRect(x * tft.width() / 4, y * tft.width() / 4, tft.width() / 4, tft.width() / 4, TFT_WHITE);
+        tft.drawRect(x * tft.width() / 4 + 1, offset_y + y * tft.width() / 4 + 1, tft.width() / 4 - 2, tft.width() / 4 - 2, TFT_BLACK);
+        tft.fillRect(x * tft.width() / 4 + 2, offset_y + y * tft.width() / 4 + 2, tft.width() / 4 - 4, tft.width() / 4 - 4, TFT_LIGHTGREY);
+        tft.drawCentreString(tiles[x + y * 4], x * tft.width() / 4 + tft.width() / 8, offset_y + y * tft.width() / 4 + 18, FONT_BIG);
+      }
+    }
   }
 }
 
@@ -14867,6 +14889,7 @@ void match_three(char mode, char *io_buff) {
     moves = match_three_moves_available(field);
     if(moves == 0) {
       drawInfo("No more moves");
+      clearPopupWindow();
       restart_flag = 1;
       continue;
     }
@@ -14966,7 +14989,7 @@ void match_three_show_field(int *field, int col_selected, int row_selected) {
   int item_to_color[] = {TFT_DARKGREY, TFT_RED, TFT_GREEN, TFT_BLUE, TFT_OLIVE, TFT_MAGENTA};
   for(row = 0; row < MATCH_THREE_FIELD_HEIGHT; row++) {
     for(col = 0; col < MATCH_THREE_FIELD_WIDTH; col++) {
-      tft.fillRect(
+      tft.drawRect(
         col * tft.width() / MATCH_THREE_FIELD_WIDTH,
         40 + row * tft.width() / MATCH_THREE_FIELD_HEIGHT,
         tft.width() / MATCH_THREE_FIELD_WIDTH,
@@ -14977,12 +15000,21 @@ void match_three_show_field(int *field, int col_selected, int row_selected) {
       Serial.print(" ");
       if(field[col + row * MATCH_THREE_FIELD_WIDTH] != -1) {
         tft.setTextColor(item_to_color[field[col + row * MATCH_THREE_FIELD_WIDTH]], color_scheme_bg);
-        sprintf(buff, "%c", field[col + row * MATCH_THREE_FIELD_WIDTH] + 'A');
+        sprintf(buff, " %c ", field[col + row * MATCH_THREE_FIELD_WIDTH] + 'A');
         tft.drawCentreString(
           buff,
           col * tft.width() / MATCH_THREE_FIELD_WIDTH + tft.width() / (2 * MATCH_THREE_FIELD_WIDTH),
           34 + row * tft.width() / MATCH_THREE_FIELD_HEIGHT + tft.width() / (3 * MATCH_THREE_FIELD_WIDTH),
           FONT_BIG
+        );
+      }
+      else {
+        tft.fillRect(
+          col * tft.width() / MATCH_THREE_FIELD_WIDTH,
+          40 + row * tft.width() / MATCH_THREE_FIELD_HEIGHT,
+          tft.width() / MATCH_THREE_FIELD_WIDTH,
+          tft.width() / MATCH_THREE_FIELD_HEIGHT,
+          color_scheme_bg
         );
       }
       if(col == col_selected && row == row_selected) {
@@ -15180,10 +15212,18 @@ void lights_off(char mode, char *io_buff) {
     sprintf(buff, "Steps: %d", steps);
     tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
 
-    drawButtonMatrix(0, 64, tft.width(), tft.width(), buttons, 5, 5);
+    lights_off_show_tiles(64, buttons);
+    //drawButtonMatrix(0, 64, tft.width(), tft.width(), buttons, 5, 5);
 
     touchWaitPress();
-    button_pressed = touchCheckMatrix(0, 64, tft.width(), tft.width(), buttons, 5, 5);
+    touchWaitReleaseOrExit();
+    button_pressed = -1;
+    if(global_touch_y >= 64 && global_touch_y < 64 + tft.width()) {
+      button_pressed = floor(global_touch_x / (tft.width() / 5)) + 5 * floor((global_touch_y - 64) / (tft.width() / 5));
+      //Serial.println(button_pressed);
+    }
+
+//    button_pressed = touchCheckMatrix(0, 64, tft.width(), tft.width(), buttons, 5, 5);
     if(button_pressed != -1) {
       buttons[button_pressed] = buttons[button_pressed] == off ? on : off;
       if(button_pressed % 5 != 0) {
@@ -15200,7 +15240,9 @@ void lights_off(char mode, char *io_buff) {
       }
       steps++;
     }
-    drawButtonMatrix(0, 64, tft.width(), tft.width(), buttons, 5, 5);
+
+    lights_off_show_tiles(64, buttons);
+    //drawButtonMatrix(0, 64, tft.width(), tft.width(), buttons, 5, 5);
 
     // Проверка выигрыша
     won_flag = 1;
@@ -15225,6 +15267,23 @@ void lights_off(char mode, char *io_buff) {
       return;
     }
     touchWaitRelease();
+  }
+}
+
+void lights_off_show_tiles(int offset_y, char **tiles) {
+  int x, y;
+  tft.setTextColor(color_scheme_fg, TFT_LIGHTGREY);
+  for(y = 0; y < 5; y++) {
+    for(x = 0; x < 5; x++) {
+      if(strcmp(tiles[x + y * 5], "") == 0) {
+        tft.drawRect(x * tft.width() / 5 + 1, offset_y + y * tft.width() / 5 + 1, tft.width() / 5 - 2, tft.width() / 5 - 2, TFT_BLACK);
+        tft.fillRect(x * tft.width() / 5 + 2, offset_y + y * tft.width() / 5 + 2, tft.width() / 5 - 4, tft.width() / 5 - 4, TFT_BLUE);
+      }
+      else {
+        tft.drawRect(x * tft.width() / 5 + 1, offset_y + y * tft.width() / 5 + 1, tft.width() / 5 - 2, tft.width() / 5 - 2, TFT_BLACK);
+        tft.fillRect(x * tft.width() / 5 + 2, offset_y + y * tft.width() / 5 + 2, tft.width() / 5 - 4, tft.width() / 5 - 4, TFT_YELLOW);
+      }
+    }
   }
 }
 
