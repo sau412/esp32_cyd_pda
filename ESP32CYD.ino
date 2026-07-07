@@ -160,11 +160,17 @@
 2026-07-02 Фикс бага с необновлением часов в приложениях с часами, баг с наложением текста в заголовке,
   многострочный текст указанным шрифтом в указанное место, fseek для перемотки в книгах,
   предпросмотр дня в расписании
-2026-07-03 Улучшенный лаунчер, кастомные плитки в пятнашках, кастомные плитки в выключи свет, меньше мигания в три-в-ряд
+2026-07-03 Улучшенный лаунчер, кастомные плитки в пятнашках, кастомные плитки в выключи свет, меньше мигания в три-в-ряд,
+  другой значок таймера
+2026-07-04 Заголовок списка осциллографа, выбор правила в Life, WifiClientSecure в глобальную переменную (теперь работает RSS, IRC SSL),
+  возможность очистки FFat
+2026-07-06 Возможность не отображать файл для PIM, не показывать пароли если они не расшифровались этим паролем,
+  баг с использованием sscanf %d для char
+2026-07-07 Баг с отображением текста - лишний текст, утечка памяти при получении значков
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое:
 - (п) Просмотреть справку, может быть что-то добавить
-- (и) Выбирать категории и значки в лаунчере
+- (и) Убирать значки в лаунчере
 
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор
@@ -192,7 +198,6 @@
 - (н) Рисование, толщина инструмента
 - (н) Прокрутка терминала
 - (н) История ввода терминала (хотя бы небольшая)
-- (н) IRC поддержка SSL (через WiFiClientSecure) (не работает)
 - (н) IRC поддержка UTF-8 вкл-выкл
 - (н) Не отжимать кнопку если увод касания меньше 100 мс
 - (н) В книгах сохранять смещения для последних ста страниц для перемотки назад
@@ -201,12 +206,11 @@
 - (н) Многозадачность или хотя бы некоторые задачи в фоне - музыка, вебсервер, чат, IRC
 - (н) Сохранение состояния приложения, хотя бы некоторых и хотя бы частичное
 - (н) Соединение через HTTP прокси
-- (о) RSS чтение потока, декодирование на лету (HTTPS плохо работает)
+- (о) RSS чтение потока, декодирование на лету
 - (н) Буфер обмена
 - (н) Выделение в просмотре, копирование
 - (н) Выделение в редактировании, копирование, вставка
 - (н) Буфер для перемотки назад в книгах
-- (н) Разные варианты для Life
 
 */
 
@@ -243,11 +247,14 @@
 // HTTPS/SSL client
 #include <WiFiClientSecure.h>
 
+WiFiClientSecure *global_ssl_client = NULL;
+WiFiClient *global_client = NULL;
+
 // Работает не лучше WiFiClientSecure
 //#include <ESP_SSLClient.h>
 
-#define SSLCLIENT_INSECURE_ONLY
-#define SSLCLIENT_HALF_DUPLEX
+//#define SSLCLIENT_INSECURE_ONLY
+//#define SSLCLIENT_HALF_DUPLEX
 
 // Ping
 #include <ESPping.h>
@@ -330,6 +337,7 @@ XPT2046_Bitbang touchscreen(XPT2046_MOSI, XPT2046_MISO, XPT2046_CLK, XPT2046_CS)
 #define APP_MODE_RETURN_NAME 0
 #define APP_MODE_RETURN_ICON 2
 #define APP_MODE_SPECIAL 3
+#define APP_MODE_RETURN_NAME_SHORT 4
 
 #define EDIT_FILE_LENGTH_MAX 8192
 
@@ -393,10 +401,10 @@ int color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
 
 // Настройки клавиатуры
 // Альтернативная клавиатура
-char alt_keyboard_enabled_flag = 1;
+int alt_keyboard_enabled_flag = 1;
 // Отступы справа и слева
-char keyboard_indent_left = 0;
-char keyboard_indent_right = 0;
+int keyboard_indent_left = 0;
+int keyboard_indent_right = 0;
 #define KEYBOARD_INDENT_SIZE 24
 
 // Значки
@@ -623,7 +631,7 @@ float global_lon = 0;
 int global_brightness = 255;
 
 // Звук
-char global_is_beep_enabled = 1;
+int global_is_beep_enabled = 1;
 int global_volume = 100;
 
 // После подключения к вай-фаю можно узнать текущее время
@@ -727,7 +735,7 @@ void launcher_return_back(char mode, char *io_buff);
 
 typedef void (*function_application_pointer) (char mode, char *io_buff);
 typedef void (*function_action_pointer) (int action, char *filename);
-typedef void (*function_conversion_pointer) (fs::File file, char *buff);
+typedef int (*function_conversion_pointer) (fs::File file, char *buff);
 
 function_application_pointer all_apps[] = {
   launcher,
@@ -940,6 +948,10 @@ void launcher(char mode, char *io_buff) {
     strcpy(io_buff, "Launcher");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Lnch");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_my_icon, 34);
     return;
@@ -970,8 +982,8 @@ void launcher(char mode, char *io_buff) {
       app_selected = -1;
     }
     
-    Serial.printf("touch_x=%d touch_y=%d app_selected_col=%d app_selected_row=%d app_selected=%d apps_max=%d\n",
-      global_touch_x, global_touch_y, app_selected_col, app_selected_row, app_selected, apps_max);
+    //Serial.printf("touch_x=%d touch_y=%d app_selected_col=%d app_selected_row=%d app_selected=%d apps_max=%d\n",
+      //global_touch_x, global_touch_y, app_selected_col, app_selected_row, app_selected, apps_max);
 
     for(row = 0; row != 10; row++) {
       for(col = 0; col != 8; col++) {
@@ -1000,8 +1012,10 @@ void launcher(char mode, char *io_buff) {
           }
         }
         if(redraw_flag) {
-          all_apps[row * 8 + col + 1](APP_MODE_RETURN_NAME, app_name);
+          Serial.printf("Free heap before app: %d\n", ESP.getFreeHeap());
+          all_apps[row * 8 + col + 1](APP_MODE_RETURN_NAME_SHORT, app_name);
           all_apps[row * 8 + col + 1](APP_MODE_RETURN_ICON, app_icon);
+          Serial.printf("Free heap after app %s: %d\n", app_name, ESP.getFreeHeap());
           app_name[4] = 0;
           tft.setTextColor(app_fg, app_bg);
           tft.drawCentreString(app_name, col * tft.width() / 8 + 15, 4 + 16 + 16 + row * 32, FONT_MONOSPACE);
@@ -1017,7 +1031,7 @@ void launcher(char mode, char *io_buff) {
     if(touchCheckNowait() == 1) continue;
 
     if(app_selected >= 0 && app_selected < apps_max) {
-      Serial.printf("Run app %d\n", app_selected);
+      //Serial.printf("Run app %d\n", app_selected);
       touchExitActionReset();
       all_apps[app_selected](APP_MODE_LAUNCH, NULL);
       touchWaitRelease();
@@ -1050,6 +1064,10 @@ void time_and_date_group(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Time & Date");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "T&D");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -1088,6 +1106,10 @@ void games_group(char mode, char *io_buff) {
     strcpy(io_buff, "Games");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Gms");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -1124,6 +1146,10 @@ void settings_group(char mode, char *io_buff) {
     strcpy(io_buff, "Settings");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Sttn");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -1157,6 +1183,10 @@ void launcher_return_back(char mode, char *io_buff) {
   };
 
   if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Back");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
     strcpy(io_buff, "Back");
     return;
   }
@@ -1212,6 +1242,10 @@ void calculator(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Calculator");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Calc");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -1422,6 +1456,10 @@ void system_info(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "System Info");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Info");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -1694,6 +1732,10 @@ void user_manual(char mode, char *io_buff) {
     strcpy(io_buff, "User Manual");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Man");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -1753,6 +1795,10 @@ void files(char mode, char *io_buff) {
     strcpy(io_buff, "Files");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Fls");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -1786,6 +1832,7 @@ void files(char mode, char *io_buff) {
       if(!strcmp("/", path)) {
         if(storage_type == STORAGE_TYPE_FFAT) {
           if(drawConfirm("Format storage?") == 0) {
+            // Форматирование
             FFat.format();
             FFat.begin(FORMAT_FS_IF_FAILED);
             Storage->mkdir("/Settings");
@@ -2099,6 +2146,10 @@ void terminal(char mode, char *io_buff) {
     strcpy(io_buff, "Terminal");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Term");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -2234,6 +2285,9 @@ void terminal_execute_single(char *str) {
     }
     FFat.begin(true);
     Storage->mkdir("/Settings");
+  }
+  else if(strcmp(str, "erase ffat") == 0) {
+    ffat_erase_partition();
   }
   else if(strcmp(str, "ls") == 0) {
     terminal_print("Usage: ls {directory}\n\r");
@@ -2738,9 +2792,11 @@ int terminal_input_char() {
         return 0x08;
       }
       else if(button == 24) {
+        terminal_keyboard_redraw_flag = 1;
         caps_flag = !caps_flag;
       }
       else if(button == 36) {
+        terminal_keyboard_redraw_flag = 1;
         symbol_flag = !symbol_flag;
         if(!symbol_flag) {
           if(alt_keyboard_flag) {
@@ -2753,10 +2809,12 @@ int terminal_input_char() {
       }
       else {
         if(button == 35) {
+          terminal_keyboard_redraw_flag = 1;
           caps_flag = 0;
           return '\n';
         }
         else {
+          terminal_keyboard_redraw_flag = 1;
           caps_flag = 0;
           if(ctrl_flag) {
             return keyboard_current[button][0] & 0x1F;
@@ -2828,20 +2886,20 @@ int terminal_telnet(char *arg, char ssl_flag) {
   int port = 0;
   char host[80];
   WiFiClient *client;
-  WiFiClientSecure *ssl_client = new WiFiClientSecure;
+  //WiFiClientSecure *ssl_client = new WiFiClientSecure;
   //WiFiClient basic_client;
   //ESP_SSLClient ssl_client;
 
   if(ssl_flag) {
-    ssl_client->setInsecure();
+    global_ssl_client->setInsecure();
     //ssl_client.setClient(&basic_client);
     //ssl_client.setInsecure();
     //ssl_client.setBufferSizes(1024 /* rx */, 512 /* tx */);
     //ssl_client.setDebugLevel(1);
-    client = (WiFiClient*)&ssl_client;
+    client = (WiFiClient*)&global_ssl_client;
   }
   else {
-    client = new WiFiClient;
+    client = global_client;
   }
   sscanf(arg, "%s %d", host, &port);
   if(port == 0) {
@@ -2910,7 +2968,8 @@ int terminal_wget(char *params) {
   fs::File file;
   int offset;
   int result;
-  WiFiClientSecure *client = new WiFiClientSecure;
+  //WiFiClientSecure *client = new WiFiClientSecure;
+  WiFiClient *client;
   WiFiClient *stream;
   HTTPClient http;
   long millis_last_byte;
@@ -2934,8 +2993,15 @@ int terminal_wget(char *params) {
     }
   }
 
+  if(url[4] == 's') {
+    global_ssl_client->setInsecure();
+    client = (WiFiClient*)&global_ssl_client;
+  }
+  else {
+    client = global_client;
+  }
+
   if(client) {
-    client->setInsecure();
     result = 0;
     if(url[4] == 's') {
       result = http.begin(*client, url);
@@ -2992,6 +3058,9 @@ int terminal_wget(char *params) {
     else {
       terminal_print("Unable to open URL\n\r");
     }
+  }
+  else {
+    terminal_print("Client not initialized\n\r");
   }
   return 0;
 }
@@ -3326,8 +3395,9 @@ void notes_action(int action_index, char *filename) {
   }
 }
 
-void notes_file_to_list(fs::File file, char *buff) {
+int notes_file_to_list(fs::File file, char *buff) {
   stream_get_line_by_index(file, 0, buff);
+  return 1;
 }
 
 void notes(char mode, char *io_buff) {
@@ -3357,6 +3427,10 @@ void notes(char mode, char *io_buff) {
   
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Notes");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Nts");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -3501,8 +3575,9 @@ void flashcards_learn() {
   free(cards);
 }
 
-void flashcards_file_to_list(fs::File file, char *buff) {
+int flashcards_file_to_list(fs::File file, char *buff) {
   stream_get_line_by_index(file, 0, buff);
+  return 1;
 }
 
 void flashcards(char mode, char *io_buff) {
@@ -3532,6 +3607,10 @@ void flashcards(char mode, char *io_buff) {
   
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Flashcards");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "FlCd");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -3594,8 +3673,9 @@ void tunes_action(int action_index, char *filename) {
   }
 }
 
-void tunes_file_to_list(fs::File file, char *buff) {
+int tunes_file_to_list(fs::File file, char *buff) {
   stream_get_line_by_index(file, 0, buff);
+  return 1;
 }
 
 void tunes_play(char *filename) {
@@ -3776,6 +3856,10 @@ void tunes(char mode, char *io_buff) {
     strcpy(io_buff, "Tunes");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Tns");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -3821,8 +3905,9 @@ void music_action(int action_index, char *filename) {
   }
 }
 
-void music_file_to_list(fs::File file, char *buff) {
+int music_file_to_list(fs::File file, char *buff) {
   sprintf(buff, "%s", file.name());
+  return 1;
 }
 
 void music_play(char *filename) {
@@ -3875,6 +3960,10 @@ void music(char mode, char *io_buff) {
   
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Music");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Msc");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -3935,8 +4024,9 @@ void webradio_action(int action_index, char *filename) {
   }
 }
 
-void webradio_file_to_list(fs::File file, char *buff) {
+int webradio_file_to_list(fs::File file, char *buff) {
   stream_get_line_by_index(file, 0, buff);
+  return 1;
 }
 
 void webradio_play(char *filename) {
@@ -3995,6 +4085,10 @@ void webradio(char mode, char *io_buff) {
   
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Webradio");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "WebR");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -4182,10 +4276,11 @@ void passwords_file_decrypt(char *filename_with_path) {
   free(data_out);
 }
 
-void passwords_file_to_list(fs::File file, char *buff) {
+int passwords_file_to_list(fs::File file, char *buff) {
   char left[82];
   char right[80];
   char byte;
+  int is_binary = 0;
   int offset;
   // Левая колонка - первая строчка файла
   offset = 0;
@@ -4217,6 +4312,12 @@ void passwords_file_to_list(fs::File file, char *buff) {
 
   // Обрезать название до первого перевода строки
   for(offset = 0; offset < 64; offset++) {
+    if(right[offset] == 0) break;
+    // Если не расшифровалось корректно - пропускаем
+    if(right[offset] >= 0 && right[offset] <= 8 || right[offset] == 11 || right[offset] == 12 || right[offset] >= 14 && right[offset] <= 19) {
+      //Serial.printf("File %s offset %d symbol %d, skipping\n", file.name(), offset, (int)right[offset]);
+      return 0;
+    } 
     if(right[offset] == '\n') {
       right[offset] = 0;
       break;
@@ -4224,6 +4325,7 @@ void passwords_file_to_list(fs::File file, char *buff) {
   }
   right[offset] = 0;
   sprintf(buff, "%s", right);
+  return 1;
 }
 
 void passwords(char mode, char *io_buff) {
@@ -4255,6 +4357,10 @@ void passwords(char mode, char *io_buff) {
   
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Passwords");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Pass");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -4325,12 +4431,13 @@ void contacts_action(int action_index, char *filename) {
   }
 }
 
-void contacts_file_to_list(fs::File file, char *buff) {
+int contacts_file_to_list(fs::File file, char *buff) {
   char left[80];
   char right[80];
   stream_get_line_by_index(file, 0, left);
   stream_get_line_by_index(file, 0, right);
   sprintf(buff, "%s\t%s", left, right);
+  return 1;
 }
 
 void contacts(char mode, char *io_buff) {
@@ -4360,6 +4467,10 @@ void contacts(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Contacts");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Cnt");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -4433,7 +4544,7 @@ void todo_action(int action_index, char *filename) {
   }
 }
 
-void todo_file_to_list(fs::File file, char *buff) {
+int todo_file_to_list(fs::File file, char *buff) {
   char left[80];
   char right[80];
   char check = 0;
@@ -4444,6 +4555,7 @@ void todo_file_to_list(fs::File file, char *buff) {
   stream_get_line_by_index(file, 0, left);
   stream_get_line_by_index(file, 0, right);
   sprintf(buff, "[%c] %s\t%s", check ? 'X' : ' ', left, strlen(right) > 0 ? "+" : "");
+  return 1;
 }
 
 void todo(char mode, char *io_buff) {
@@ -4472,7 +4584,11 @@ void todo(char mode, char *io_buff) {
   };
 
   if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Todo");
+    strcpy(io_buff, "To Do");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "ToDo");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -4531,7 +4647,7 @@ void expenses_action(int action_index, char *filename) {
   }
 }
 
-void expenses_file_to_list(fs::File file, char *buff) {
+int expenses_file_to_list(fs::File file, char *buff) {
   char left[80];
   char right[80];
   char byte;
@@ -4553,6 +4669,7 @@ void expenses_file_to_list(fs::File file, char *buff) {
   }
 
   sprintf(buff, "%s\t%0.2f", left, summ);
+  return 1;
 }
 
 void expenses(char mode, char *io_buff) {
@@ -4582,6 +4699,10 @@ void expenses(char mode, char *io_buff) {
   
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Expenses");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Expn");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -4631,7 +4752,7 @@ void books_action(int action_index, char *filename) {
   }
 }
 
-void books_file_to_list(fs::File file, char *buff) {
+int books_file_to_list(fs::File file, char *buff) {
   char left[80];
   char right[80];
   char byte;
@@ -4642,6 +4763,7 @@ void books_file_to_list(fs::File file, char *buff) {
   else {
     sprintf(buff, "%s\t%d", file.name(), file.size());
   }
+  return 1;
 }
 
 void books(char mode, char *io_buff) {
@@ -4671,6 +4793,10 @@ void books(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Books");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Book");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -4724,7 +4850,7 @@ void screenshots_action(int action_index, char *filename) {
   }
 }
 
-void screenshots_file_to_list(fs::File file, char *buff) {
+int screenshots_file_to_list(fs::File file, char *buff) {
   char left[80];
   char right[80];
   char byte;
@@ -4735,6 +4861,7 @@ void screenshots_file_to_list(fs::File file, char *buff) {
   else {
     sprintf(buff, "%s\t%d", file.name(), file.size());
   }
+  return 1;
 }
 
 void screenshots(char mode, char *io_buff) {
@@ -4764,6 +4891,10 @@ void screenshots(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Screenshots");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "ScrS");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -4827,8 +4958,9 @@ void draw_action(int action_index, char *filename) {
   }
 }
 
-void draw_file_to_list(fs::File file, char *buff) {
+int draw_file_to_list(fs::File file, char *buff) {
   sprintf(buff, "%s", file.name());
+  return 1;
 }
 
 void draw(char mode, char *io_buff) {
@@ -4857,6 +4989,10 @@ void draw(char mode, char *io_buff) {
   };
   
   if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Draw");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
     strcpy(io_buff, "Draw");
     return;
   }
@@ -5041,8 +5177,9 @@ void backups_action(int action_index, char *filename) {
   }
 }
 
-void backups_file_to_list(fs::File file, char *buff) {
+int backups_file_to_list(fs::File file, char *buff) {
   sprintf(buff, "%s", file.name());
+  return 1;
 }
 
 void backups(char mode, char *io_buff) {
@@ -5073,6 +5210,10 @@ void backups(char mode, char *io_buff) {
   
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Backups");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Bckp");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -5183,13 +5324,14 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
         //if(file.isDirectory()) continue;
         // Читаем файл
         // Первая строчка - Имя
-        (*file_to_list_function)(file, buff);
-        files_list[offset] = (char *)malloc((strlen(file.name()) + 1) * sizeof(char));
-        visible_list[offset] = (char *)malloc((strlen(buff) + 1) * sizeof(char));
+        if((*file_to_list_function)(file, buff)) {
+          files_list[offset] = (char *)malloc((strlen(file.name()) + 1) * sizeof(char));
+          visible_list[offset] = (char *)malloc((strlen(buff) + 1) * sizeof(char));
 
-        strcpy(files_list[offset], file.name());
-        strcpy(visible_list[offset], buff);
-        offset++;
+          strcpy(files_list[offset], file.name());
+          strcpy(visible_list[offset], buff);
+          offset++;
+        }
       }
       update_list_flag = 0;
     }
@@ -5370,6 +5512,10 @@ void schedule(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Schedule");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Schd");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -5617,6 +5763,10 @@ void torch(char mode, char *io_buff) {
     strcpy(io_buff, "Torch");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Trch");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -5682,6 +5832,10 @@ void security(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Security");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Scrt");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -5805,6 +5959,10 @@ void counter(char mode, char *io_buff) {
     strcpy(io_buff, "Counter");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Cntr");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -5894,6 +6052,10 @@ void random_numbers(char mode, char *io_buff) {
   
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Random Numbers");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "RNG");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -6003,6 +6165,10 @@ void brightness_app(char mode, char *io_buff) {
     strcpy(io_buff, "Brightness");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Brig");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -6093,6 +6259,10 @@ void select_storage_app(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Select Storage");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Strg");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -6199,6 +6369,10 @@ void timer(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Timer");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Tmr");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -6433,19 +6607,23 @@ void stopwatch_app(char mode, char *io_buff) {
     B00000000, B00000000
   };
 
-  // 100 laps
-  stopwatch_laps = (char **)malloc(STOPWATCH_MAX_LAPS * sizeof(char *));
-  for(i = 0; i < STOPWATCH_MAX_LAPS; i++) {
-    stopwatch_laps[i] = NULL;
-  }
-
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Stopwatch");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "StpW");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
+  }
+
+  // 100 laps
+  stopwatch_laps = (char **)malloc(STOPWATCH_MAX_LAPS * sizeof(char *));
+  for(i = 0; i < STOPWATCH_MAX_LAPS; i++) {
+    stopwatch_laps[i] = NULL;
   }
 
   clearScreen();
@@ -6639,6 +6817,10 @@ void breathe(char mode, char *io_buff) {
     strcpy(io_buff, "Breathe");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Brth");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -6797,21 +6979,7 @@ void breathe(char mode, char *io_buff) {
 #define LIFE_FIELD_HEIGHT_CELLS ((tft.height() - 16 - 40) / LIFE_CELL_PIXELS)
 
 void life(char mode, char *io_buff) {
-  char life_run = 0;
   char *field = NULL;
-  char *field_next = NULL;
-  int button_pressed;
-  int x, y;
-  int touch_x, touch_y;
-  int cell_color;
-  int near_count;
-  char current_cell;
-  long prev_millis;
-  TouchPoint p;
-  char *buttons[] = {
-    "Start", "Step", "Stop", "Rnd", "Clr",
-    NULL
-  };
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -6832,10 +7000,32 @@ void life(char mode, char *io_buff) {
     B00000000, B00000000
   };
 
-  field = (char *)malloc(LIFE_FIELD_WIDTH_CELLS * LIFE_FIELD_HEIGHT_CELLS / 8 * sizeof(char));
-  field_next = (char *)malloc(LIFE_FIELD_WIDTH_CELLS * LIFE_FIELD_HEIGHT_CELLS / 8 * sizeof(char));
+  int source_offset, source_selected;
+  int button_pressed;
+  char *buttons[] = {
+    "Select",
+    NULL
+  };
+  char *rules_list[] = {
+    "B3/S23 - Classic Life",
+    "B36/S23 - HighLife",
+    "B357/S238 - Morley",
+    "B1/S12 - Fractal",
+    "B3/S2345678 - Inkspot",
+    "B3/S12345 - Maze",
+    "B3678/S34678 - Day & Night",
+    "B35678/S5678 - Diamoeba",
+    "B3/S45678 - Coral",
+    "B2/S - Seeds",
+    "Random rule",
+    NULL,
+  };
 
   if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Life");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
     strcpy(io_buff, "Life");
     return;
   }
@@ -6846,6 +7036,116 @@ void life(char mode, char *io_buff) {
 
   clearScreen();
   drawAppTitle("Life");
+
+  field = (char *)malloc(LIFE_FIELD_WIDTH_CELLS * LIFE_FIELD_HEIGHT_CELLS / 8 * sizeof(char));
+  
+  source_offset = 0;
+  source_selected = 0;
+  while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.drawString("Select rule:", 1, 16, FONT_DEFAULT);
+
+    touchCheckList(0, 32, tft.width(), tft.height() - 72, rules_list, 15, &source_offset, &source_selected);
+    drawList(0, 32, tft.width(), tft.height() - 72, rules_list, 15, &source_offset, &source_selected);
+
+    drawButtonMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+    
+    touchWaitPress();
+    touchCheckList(0, 32, tft.width(), tft.height() - 32 - 40, rules_list, 15, &source_offset, &source_selected);
+    
+    button_pressed = touchCheckMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+    if(button_pressed != -1) {
+      life_show(rules_list[source_selected], source_selected, field);
+
+      clearScreen();
+      drawAppTitle("Life");
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      if(field) free(field);
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void life_show(char *rule_name, int rule_index, char *field) {
+  int rule_b;
+  int rule_s;
+  char life_run = 0;
+  char *field_next = NULL;
+  int button_pressed;
+  int x, y;
+  int touch_x, touch_y;
+  int cell_color;
+  int near_count;
+  char current_cell;
+  long prev_millis;
+  char title[80];
+  TouchPoint p;
+  char *buttons[] = {
+    "Start", "Step", "Stop", "Rnd", "Clr",
+    NULL
+  };
+
+  strcpy(title, rule_name);
+  switch(rule_index) {
+    default:
+    // "B3/S23 - Classic Life"
+    case 0: rule_b = B00000100; rule_s = B00000110; break;
+    // "B36/S23 - HighLife",
+    case 1: rule_b = B00100100; rule_s = B00000110; break;
+    // "B357/S238 - Morley",
+    case 2: rule_b = B01010100; rule_s = B10000110; break;
+    // "B1/S12 - Fractal",
+    case 3: rule_b = B00000001; rule_s = B00000011; break;
+    // "B3/S2345678 - Inkspot",
+    case 4: rule_b = B00000100; rule_s = B11111110; break;
+    // "B3/S12345 - Maze",
+    case 5: rule_b = B00000100; rule_s = B00011111; break;
+    // "B3678/S34678 - Day & Night",
+    case 6: rule_b = B11100100; rule_s = B11101100; break;
+    // "B35678/S5678 - Diamoeba",
+    case 7: rule_b = B11110100; rule_s = B11110000; break;
+    // "B3/S45678 - Coral",
+    case 8: rule_b = B00000100; rule_s = B11111000; break;
+    // "B2/S - Seeds",
+    case 9: rule_b = B00000010; rule_s = B00000000; break;
+    // Random rule
+    case 10:
+      rule_b = random(0, 256);
+      rule_s = random(0, 256);
+      sprintf(
+        title,
+        "B%s%s%s%s%s%s%s%s/S%s%s%s%s%s%s%s%s",
+        (rule_b & 1 << 0 ? "1" : ""),
+        (rule_b & 1 << 1 ? "2" : ""),
+        (rule_b & 1 << 2 ? "3" : ""),
+        (rule_b & 1 << 3 ? "4" : ""),
+        (rule_b & 1 << 4 ? "5" : ""),
+        (rule_b & 1 << 5 ? "6" : ""),
+        (rule_b & 1 << 6 ? "7" : ""),
+        (rule_b & 1 << 7 ? "8" : ""),
+        (rule_s & 1 << 0 ? "1" : ""),
+        (rule_s & 1 << 1 ? "2" : ""),
+        (rule_s & 1 << 2 ? "3" : ""),
+        (rule_s & 1 << 3 ? "4" : ""),
+        (rule_s & 1 << 4 ? "5" : ""),
+        (rule_s & 1 << 5 ? "6" : ""),
+        (rule_s & 1 << 6 ? "7" : ""),
+        (rule_s & 1 << 7 ? "8" : "")
+      );
+    break;
+  }
+
+  field_next = (char *)malloc(LIFE_FIELD_WIDTH_CELLS * LIFE_FIELD_HEIGHT_CELLS / 8 * sizeof(char));
+
+  clearScreen();
+  drawAppTitle(title);
   
   while(1) {
     if(life_run) {
@@ -6863,11 +7163,11 @@ void life(char mode, char *io_buff) {
             if(life_get_cell(x + 1, y    , field)) near_count++;
             if(life_get_cell(x + 1, y + 1, field)) near_count++;
             if(current_cell) {
-              if(near_count < 2 || near_count > 3) life_set_cell(x, y, field_next, 0);
-              else life_set_cell(x, y, field_next, 1);
+              if(near_count && 1 << (near_count - 1) & rule_s) life_set_cell(x, y, field_next, 1);
+              else life_set_cell(x, y, field_next, 0);
             }
             else {
-              if(near_count == 3) life_set_cell(x, y, field_next, 1);
+              if(near_count && 1 << (near_count - 1) & rule_b) life_set_cell(x, y, field_next, 1);
               else life_set_cell(x, y, field_next, 0);
             }
           }
@@ -6957,7 +7257,6 @@ void life(char mode, char *io_buff) {
     if(global_exit_flag) {
       drawAppTitle("Exit");
       touchWaitRelease();
-      free(field);
       free(field_next);
       touchExitActionReset();
       return;
@@ -7043,11 +7342,12 @@ void snake(char mode, char *io_buff) {
     B00000000, B00000000
   };
 
-  field = (char *)malloc(SNAKE_FIELD_WIDTH_CELLS * SNAKE_FIELD_HEIGHT_CELLS / 8 * sizeof(char));
-  body = (char *)malloc(SNAKE_FIELD_WIDTH_CELLS * SNAKE_FIELD_HEIGHT_CELLS);
-  
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Snake");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Snk");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -7055,6 +7355,9 @@ void snake(char mode, char *io_buff) {
     return;
   }
 
+  field = (char *)malloc(SNAKE_FIELD_WIDTH_CELLS * SNAKE_FIELD_HEIGHT_CELLS / 8 * sizeof(char));
+  body = (char *)malloc(SNAKE_FIELD_WIDTH_CELLS * SNAKE_FIELD_HEIGHT_CELLS);
+  
   clearScreen();
   drawAppTitle("Snake");
   
@@ -7356,6 +7659,10 @@ void turkish_kerchief(char mode, char *io_buff) {
     strcpy(io_buff, "Turkish Kerchief");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "TrkK");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -7645,6 +7952,10 @@ void screensaver(char mode, char *io_buff) {
     strcpy(io_buff, "Screensaver");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "ScrS");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -7765,6 +8076,10 @@ void color_settings(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Color Settings");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Clr");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -8085,6 +8400,10 @@ void wifi(char mode, char *io_buff) {
     strcpy(io_buff, "Wi-Fi");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "WiFi");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -8348,6 +8667,12 @@ void WiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
   //drawAppTitleRight();
 
   get_current_timestamp_wifi_begin();
+  if(!global_ssl_client) {
+    global_ssl_client = new WiFiClientSecure;
+  }
+  if(!global_client) {
+    global_client = new WiFiClient;
+  }
 }
 
 void get_current_timestamp_wifi_begin() {
@@ -8415,6 +8740,10 @@ void gopher(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Gopher Browser");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Gphr");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -8551,11 +8880,13 @@ int gopher_get_page(char *address, char *buff_output, char *type) {
   char path_flag;
   char type_flag;
   
-  WiFiClient client;
+  WiFiClient *client = NULL;
   String line;
   long query_start_millis;
   int address_offset;
   int str_offset;
+
+  client = global_client;
 
   server_flag = 1;
   port_flag = 0;
@@ -8624,23 +8955,23 @@ int gopher_get_page(char *address, char *buff_output, char *type) {
   }
 
   strcpy(buff_output, "");
-  if (client.connect(server, port)) {
-    client.println(path);
+  if (client->connect(server, port)) {
+    client->println(path);
     query_start_millis = millis();
 
-    while (!client.available()) {
+    while (!client->available()) {
       if(millis() - query_start_millis > 10000) return 0;
     }
 
-    while (client.available()) {
-      line = client.readStringUntil('\r');
+    while (client->available()) {
+      line = client->readStringUntil('\r');
       if(strlen(buff_output) + strlen(line.c_str()) >= GOPHER_BYTES_MAX) {
         break;
       }
       strcat(buff_output, line.c_str());
-      if(!client.available()) delay(1000);
+      if(!client->available()) delay(1000);
     }
-    client.stop();
+    client->stop();
     return 1;
   }
   else {
@@ -8762,7 +9093,6 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
           sprintf(address_to_go, "%s:%s/%c%s", server, port, line_type, path);
         }
         else {
-          Serial.printf("color_scheme_link_fg = %d\n", color_scheme_link_fg);
           tft.setTextColor(color_scheme_link_fg, color_scheme_bg);
         }
       }
@@ -8935,6 +9265,10 @@ void weather(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Weather");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Wthr");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -9162,6 +9496,10 @@ void chat(char mode, char *io_buff) {
     strcpy(io_buff, "Chat");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Chat");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -9365,6 +9703,10 @@ void http_file_access(char mode, char *io_buff) {
     strcpy(io_buff, "File Server");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Srvr");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -9472,9 +9814,9 @@ void http_file_access_handle() {
         sprintf(buff, "Used: %d bytes of %d bytes (%d %%)", FFat.usedBytes(), FFat.totalBytes(), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
       }
       else if(storage_type == STORAGE_TYPE_SD) {
-        sprintf(buff, "Used: %d bytes of %d bytes (%d %%)", SD.usedBytes(), SD.totalBytes(), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+        sprintf(buff, "Used: %d Mbytes of %d Mbytes (%d %%)", SD.usedBytes() / (1024 * 1024), SD.totalBytes() / (1024 * 1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
       }
-      //strcat(contents, buff);
+      strcat(contents, buff);
       strcat(contents, " (<a href='/backup_and_restore'>backup and restore</a>)<br>\n");
       strcat(contents, "<b>Files:</b><br>\n<br>\n");
       http_file_access_show_dir(filename, contents);
@@ -9595,8 +9937,8 @@ int get_file_http(char *url, char *buff) {
 }
 
 int get_file_https(char *url, char *buff) {
-  WiFiClientSecure *client = new WiFiClientSecure;
   HTTPClient https;
+  WiFiClientSecure *client = NULL;
   int httpResponseCode;
   char byte;
   int offset;
@@ -9608,18 +9950,23 @@ int get_file_https(char *url, char *buff) {
   }
   Serial.println();
   */
+  client = global_ssl_client;
   if(client) {
     client->setInsecure();
     if (https.begin(*client, url)) {
       httpResponseCode = https.GET();
       if (httpResponseCode > 0) {
         strcpy(buff, https.getString().c_str());
+        Serial.println(strlen(https.getString().c_str()));
+        Serial.println(httpResponseCode);
+        Serial.println(https.getString().c_str());
         https.end();
       }
       https.end();
       return httpResponseCode;
     }
   }
+  Serial.println(buff);
   return 0;
 }
 
@@ -9704,7 +10051,7 @@ void rss_action(int action_index, char *filename) {
     //Serial.println(buff);
 
     // Резервируем память
-    data = (char*)malloc(20000 * sizeof(char));
+    data = (char*)malloc(50000 * sizeof(char));
     if(!data) {
       drawError("Unable to reserve memory");
       return;
@@ -9809,6 +10156,9 @@ void rss_convert_to_text(char *data) {
     }
     if(new_line_flag && byte == ' ') continue;
 
+    // Пропустить непечатаемые символы, код которых меньше кода пробела
+    if(byte < ' ') continue;
+
     if(inside_tag) {
       if(byte == '>') {
         inside_tag = 0;
@@ -9861,8 +10211,9 @@ void rss_convert_to_text(char *data) {
   data[write_offset] = 0;
 }
 
-void rss_file_to_list(fs::File file, char *buff) {
+int rss_file_to_list(fs::File file, char *buff) {
   stream_get_line_by_index(file, 0, buff);
+  return 1;
 }
 
 void rss(char mode, char *io_buff) {
@@ -9911,6 +10262,10 @@ void rss(char mode, char *io_buff) {
   };
 */  
   if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "RSS");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
     strcpy(io_buff, "RSS");
     return;
   }
@@ -10038,13 +10393,13 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
   int offset = 0;
   int byte;
   int port = 6667;
-  WiFiClientSecure *client;
+  WiFiClient *client = NULL;
   if(strcmp(ssl, "1") == 0) {
-    client = new WiFiClientSecure;
-    ((WiFiClientSecure*)client)->setInsecure();
+    global_ssl_client->setInsecure();
+    client = (WiFiClient*)&global_ssl_client;
   }
   else {
-    client = (WiFiClientSecure*)(new WiFiClient);
+    client = global_client;
   }
 
   clearScreen();
@@ -10618,8 +10973,9 @@ int irc_input_char() {
   }
 }
 
-void irc_file_to_list(fs::File file, char *buff) {
+int irc_file_to_list(fs::File file, char *buff) {
   stream_get_line_by_index(file, 0, buff);
+  return 1;
 }
 
 void irc(char mode, char *io_buff) {
@@ -10648,6 +11004,10 @@ void irc(char mode, char *io_buff) {
   };
   
   if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "IRC");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
     strcpy(io_buff, "IRC");
     return;
   }
@@ -10916,6 +11276,10 @@ void i2c_scanner(char mode, char *io_buff) {
     strcpy(io_buff, "I2C Scanner");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "I2C");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -11058,6 +11422,10 @@ void dashboard(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Dashboard");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Dshb");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -11240,6 +11608,10 @@ void fuzzy_clock(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Fuzzy Clock");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "FzzC");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -11507,6 +11879,10 @@ void set_clock(char mode, char *io_buff) {
     strcpy(io_buff, "Set Clock");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "SCl");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -11701,6 +12077,10 @@ void view_font(char mode, char *io_buff) {
     strcpy(io_buff, "View Font");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Font");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -11774,6 +12154,10 @@ void autorun(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Autorun");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Atrn");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -11881,6 +12265,10 @@ void reboot(char mode, char *io_buff) {
     strcpy(io_buff, "Reboot");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Rebt");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -11950,6 +12338,10 @@ void keyboard_control(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Keyboard");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Kbrd");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -12073,6 +12465,10 @@ void sound_control(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Sound");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Snd");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -12286,6 +12682,10 @@ void screen_test(char mode, char *io_buff) {
     strcpy(io_buff, "Screen Test");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "ScrT");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -12367,6 +12767,7 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
   int word_offset = 0;
   int line_index = 0;
   int text_offset = 0;
+  int newline_symbols;
   int line_height;
   int i;
 
@@ -12387,13 +12788,17 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
       byte = text[text_offset];
       //Serial.printf("%c %s\n", byte, current_word);
       // Последовательности \n\r и \r\n это один перевод строки
+      newline_symbols = 0;
       if(byte == '\r' && text[text_offset + 1] == '\n') {
         text_offset++;
+        newline_symbols++;
       }
       if(byte == '\n' && text[text_offset + 1] == '\r') {
         text_offset++;
+        newline_symbols++;
       }
       if(byte == '\n' || byte == '\r' || byte == 0) {
+        newline_symbols++;
         if(byte > 0) text_offset++;
         new_line_flag_word = 1;
       }
@@ -12447,10 +12852,12 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
       if(draw_flag) {
         tft.setTextColor(color_scheme_fg, color_scheme_bg);
         tft.drawString(current_line, start_x, start_y + line_height * line_index, font);
+        //delay(1000);
+        //Serial.println(current_line);
         tft.fillRect(
           start_x + tft.textWidth(current_line, font),
           start_y + line_height * line_index,
-          width - start_x - tft.textWidth(current_line, font),
+          width - tft.textWidth(current_line, font),
           line_height,
           color_scheme_bg
         );
@@ -12492,14 +12899,15 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
   }
 
   // Возвращаем число выведенных байтов = число считанных - число невыведенных
-  return text_offset - strlen(current_word);
+  Serial.printf("current_word = %s, current_line = %s\n", current_word, current_line);
+  return text_offset - strlen(current_word) - strlen(current_line) - newline_symbols;
 }
 
 // Просмотр файла
 void view_file(char *title, char *filename) {
   fs::File file;
   int touch_x, touch_y;
-  long file_offset;
+  long file_offset = 0;
   long visible_offset;
   long prev_offset;
   char *buff;
@@ -12526,7 +12934,9 @@ void view_file(char *title, char *filename) {
   }
 
   while(1) {
+    Serial.printf("file_offset = %d\n", file_offset);
     file.seek(file_offset);
+    memset(buff, 0, 2048);
     file.read((uint8_t *)buff, 2048);
     buff[2048] = 0;
     visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, 19, FONT_DEFAULT, 1);
@@ -13020,6 +13430,10 @@ void touch_calibration_test(char mode, char *io_buff) {
     strcpy(io_buff, "Calibration2");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Clb2");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -13114,6 +13528,10 @@ void touch_calibration(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Calibration");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Clbr");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -13314,6 +13732,10 @@ void oscilloscope(char mode, char *io_buff) {
     strcpy(io_buff, "Oscillosope");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Oscl");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -13325,6 +13747,9 @@ void oscilloscope(char mode, char *io_buff) {
   source_offset = 0;
   source_selected = 0;
   while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.drawString("Select source:", 1, 16, FONT_DEFAULT);
+
     touchCheckList(0, 32, tft.width(), tft.height() - 72, sources_list, 15, &source_offset, &source_selected);
     drawList(0, 32, tft.width(), tft.height() - 72, sources_list, 15, &source_offset, &source_selected);
 
@@ -13733,6 +14158,10 @@ void fifteen(char mode, char *io_buff) {
     strcpy(io_buff, "Fifteen");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Fift");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -13891,6 +14320,10 @@ void memory_match(char mode, char *io_buff) {
     strcpy(io_buff, "Memory Match");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "MemM");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -14024,6 +14457,10 @@ void simon(char mode, char *io_buff) {
     strcpy(io_buff, "Simon");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Smn");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -14142,6 +14579,10 @@ void game2048(char mode, char *io_buff) {
   };
 
   if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "2048");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
     strcpy(io_buff, "2048");
     return;
   }
@@ -14379,6 +14820,10 @@ void n_back(char mode, char *io_buff) {
     strcpy(io_buff, "N Back");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "NBck");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -14514,6 +14959,10 @@ void mental_math(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Mental Math");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "MMth");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -14655,6 +15104,10 @@ void hanoi_towers(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Hanoi Towers");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "HTwr");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -14835,6 +15288,10 @@ void match_three(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Match Three");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Mch3");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -15169,6 +15626,10 @@ void lights_off(char mode, char *io_buff) {
     strcpy(io_buff, "Lights Off");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "LOff");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -15328,6 +15789,10 @@ void piano(char mode, char *io_buff) {
     strcpy(io_buff, "Piano");
     return;
   }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Pian");
+    return;
+  }
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 34);
     return;
@@ -15455,6 +15920,10 @@ void metronome(char mode, char *io_buff) {
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Metronome");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Mtnm");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -15964,7 +16433,7 @@ void drawPopupWindow(char *title, char *message, char **buttons) {
   tft.drawString(title, 16, 121, FONT_DEFAULT);
   
   // Надпись
-  draw_text_formatted(message, 8, 121 + 16, tft.width() - 8 * 12, 3, FONT_DEFAULT, 1);
+  draw_text_formatted(message, 8, 121 + 16, tft.width() - 8 * 2, 3, FONT_DEFAULT, 1);
   //tft.setTextColor(color_scheme_fg, color_scheme_bg);
   //tft.drawString(message, 8, 121 + 16, FONT_DEFAULT);
 
@@ -17056,6 +17525,39 @@ int bmp_show_image(char *filename, int start_x, int start_y) {
 // Сохранить указанный участок экрана в BMP
 void bmp_save_image(char *filename, int start_x, int start_y, int width, int height, int bpp) {
 
+}
+
+// Стереть раздел FFat
+void ffat_erase_partition() {
+  const esp_partition_t* partition = esp_partition_find_first(
+    ESP_PARTITION_TYPE_DATA,         // Type (DATA or APP)
+    ESP_PARTITION_SUBTYPE_DATA_FAT,  // Subtype
+    NULL                             // Label name in your partition table
+  );
+  int offset = 0;
+  while(offset < partition->size) {
+    esp_partition_erase_range(partition, offset, 4096);
+    offset += 4096;
+  }
+}
+
+// Двоичный файл или текстовый
+// Если есть символы 0-8, 11-12, 14-19, то двочиный
+int file_is_binary(char *path) {
+  fs::File file;
+  int i;
+  int file_is_binary = 0;
+  int byte;
+  file = Storage->open(path);
+  for(i = 0; i < 256; i++) {
+    byte = file.read();
+    if(byte >= 0 && byte <= 8 || byte == 11 || byte == 12 || byte >= 14 && byte <= 19) {
+      file_is_binary = 1;
+      break;
+    }
+  }
+  file.close();
+  return file_is_binary;
 }
 
 // Вызывать в фоне каждую минуту
