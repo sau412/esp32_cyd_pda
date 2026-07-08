@@ -167,18 +167,22 @@
 2026-07-06 Возможность не отображать файл для PIM, не показывать пароли если они не расшифровались этим паролем,
   баг с использованием sscanf %d для char
 2026-07-07 Баг с отображением текста - лишний текст, утечка памяти при получении значков
+2026-07-08 Получение и парсинг RSS в одной функции, Wi-Fi индикация процесса соединения,
+  поддержка 1251 в RSS
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое:
 - (п) Просмотреть справку, может быть что-то добавить
-- (и) Убирать значки в лаунчере
+- (б) Возможность 1251 в RSS
+- (и) Куда девается память?
+- (и) Крутая калибровка
 
+- (и) Убирать значки в лаунчере
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор
 - (д) Тетрис
 - (д) Арканоид
 - (д) Бегающий динозавр (как в Chrome)
-- (н) Значок приложения в заголовке
-- (и) Крутая калибровка
+- (н) Значок приложения в заголовке (а что когда нет значка?)
 - (н) Возможность выбрать звук для событий
 - (н) Категории для PIM
 - (н) Автояркость - нужно определять вход резистора
@@ -206,7 +210,6 @@
 - (н) Многозадачность или хотя бы некоторые задачи в фоне - музыка, вебсервер, чат, IRC
 - (н) Сохранение состояния приложения, хотя бы некоторых и хотя бы частичное
 - (н) Соединение через HTTP прокси
-- (о) RSS чтение потока, декодирование на лету
 - (н) Буфер обмена
 - (н) Выделение в просмотре, копирование
 - (н) Выделение в редактировании, копирование, вставка
@@ -215,6 +218,8 @@
 */
 
 #define IS_WIFI_ENABLED
+
+#define PREFER_SD_IF_AVAILABLE
 //#define IS_SSH_ENABLED
 
 // CYD
@@ -249,12 +254,6 @@
 
 WiFiClientSecure *global_ssl_client = NULL;
 WiFiClient *global_client = NULL;
-
-// Работает не лучше WiFiClientSecure
-//#include <ESP_SSLClient.h>
-
-//#define SSLCLIENT_INSECURE_ONLY
-//#define SSLCLIENT_HALF_DUPLEX
 
 // Ping
 #include <ESPping.h>
@@ -1012,10 +1011,10 @@ void launcher(char mode, char *io_buff) {
           }
         }
         if(redraw_flag) {
-          Serial.printf("Free heap before app: %d\n", ESP.getFreeHeap());
+          //Serial.printf("Free heap before app: %d\n", ESP.getFreeHeap());
           all_apps[row * 8 + col + 1](APP_MODE_RETURN_NAME_SHORT, app_name);
           all_apps[row * 8 + col + 1](APP_MODE_RETURN_ICON, app_icon);
-          Serial.printf("Free heap after app %s: %d\n", app_name, ESP.getFreeHeap());
+          //Serial.printf("Free heap after app %s: %d\n", app_name, ESP.getFreeHeap());
           app_name[4] = 0;
           tft.setTextColor(app_fg, app_bg);
           tft.drawCentreString(app_name, col * tft.width() / 8 + 15, 4 + 16 + 16 + row * 32, FONT_MONOSPACE);
@@ -3357,6 +3356,9 @@ int terminal_ping(char *ip) {
 void notes_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
+
+  if(action_index && !filename) return;
+
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", NOTES_PATH, "__New");
@@ -3452,6 +3454,9 @@ void flashcards_action(int action_index, char *filename) {
   fs::File file;
   fs::File current_dir;
   char buff[80];
+
+  if(action_index && !filename) return;
+
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", FLASHCARDS_PATH, "__New");
@@ -3630,6 +3635,9 @@ void flashcards(char mode, char *io_buff) {
 void tunes_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
+
+  if(action_index && !filename) return;
+
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", TUNES_PATH, "__New");
@@ -3879,6 +3887,9 @@ void music_action(int action_index, char *filename) {
   char buff[80];
   char old_path_filename[80];
   char new_path_filename[80];
+
+  if(action_index && !filename) return;
+
   if(action_index == 0) {
     // Воспроизведение
     sprintf(buff, "%s/%s", MUSIC_PATH, filename);
@@ -3983,6 +3994,9 @@ void music(char mode, char *io_buff) {
 void webradio_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
+
+  if(action_index && !filename) return;
+
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", WEBRADIO_PATH, "__New");
@@ -4116,6 +4130,9 @@ void passwords_action(int action_index, char *filename) {
   char *data_out;
   int data_length;
   int index;
+
+  if(action_index && !filename) return;
+
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(filename_with_path_new, "%s/%s", PASSWORDS_PATH, "__New");
@@ -4392,6 +4409,9 @@ void passwords(char mode, char *io_buff) {
 void contacts_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
+
+  if(action_index && !filename) return;
+
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", CONTACTS_PATH, "__New");
@@ -4493,6 +4513,9 @@ void todo_action(int action_index, char *filename) {
   char new_filename[80];
   char old_path_filename[80];
   char new_path_filename[80];
+
+  if(action_index && !filename) return;
+
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", TODO_PATH, "__New");
@@ -4610,6 +4633,9 @@ void expenses_action(int action_index, char *filename) {
   char buff[80];
   char name[80];
   float item;
+
+  if(action_index && !filename) return;
+
   if(action_index == 0) {
     // Добавляем категорию
     if(drawPrompt("Category name", name) == 0) {
@@ -4726,6 +4752,8 @@ void books_action(int action_index, char *filename) {
   char old_path_filename[80];
   char new_path_filename[80];
 
+  if(action_index && !filename) return;
+
   if(action_index == 0) {
     // Чтение
     sprintf(buff, "%s/%s", BOOKS_PATH, filename);
@@ -4818,6 +4846,8 @@ void screenshots_action(int action_index, char *filename) {
   char new_name[80];
   char old_path_filename[80];
   char new_path_filename[80];
+
+  if(action_index && !filename) return;
 
   if(action_index == 0) {
     // Просмотр
@@ -4917,6 +4947,8 @@ void draw_action(int action_index, char *filename) {
   char old_path_filename[80];
   char new_path_filename[80];
   int index;
+
+  if(action_index && !filename) return;
 
   if(action_index == 0) {
     // Придумываем новое название
@@ -5147,6 +5179,9 @@ void draw_edit(char *title, char *filename) {
 void backups_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
+
+  if(action_index && !filename) return;
+
   if(action_index == 0) {
     // Создать бэкап
     if(drawConfirm("Backup FFat to SD?") == 0) {
@@ -8512,38 +8547,40 @@ void wifi_select_network() {
       if(button_pressed == 0) {
         strcpy(password, "");
         read_key_value_from_file("/Settings/Wifi", networks[network_selected], password);
-        drawPrompt("Enter password", password);
-        WiFi.begin(networks[network_selected], password);
-        millis_connecting_start = millis();
-        do {
-          touchCheckNowait();
-          wifi_status = WiFi.status();
-          if(millis() - millis_connecting_start >= 30000) break;
-        } while (wifi_status == WL_DISCONNECTED || wifi_status == WL_IDLE_STATUS);
-        
-        if(wifi_status == WL_CONNECTED) {
-          WiFi.setAutoReconnect(true);
-          write_key_value_to_file("/Settings/Wifi", networks[network_selected], password);
-          drawInfo("Connected");
-          return;
-        }
-        else if(wifi_status == WL_NO_SSID_AVAIL) {
-          drawError("SSID unavailable");
-        }
-        else if(wifi_status == WL_CONNECT_FAILED) {
-          drawError("Connect failed (wrong password?)");
-        }
-        else if(wifi_status == WL_DISCONNECTED) {
-          drawError("Wi-Fi disconnected");
-        }
-        else if(wifi_status == WL_IDLE_STATUS) {
-          drawError("Wi-Fi in idle status");
-        }
-        else if(wifi_status == WL_STOPPED) {
-          drawError("Wi-Fi stopped");
-        }
-        else {
-          drawError("Unknown status");
+        if(drawPrompt("Enter password", password) == 0) {
+          drawProcessWindow("Connecting...");
+          WiFi.begin(networks[network_selected], password);
+          millis_connecting_start = millis();
+          do {
+            touchCheckNowait();
+            wifi_status = WiFi.status();
+            if(millis() - millis_connecting_start >= 30000) break;
+          } while (wifi_status == WL_DISCONNECTED || wifi_status == WL_IDLE_STATUS);
+          
+          if(wifi_status == WL_CONNECTED) {
+            WiFi.setAutoReconnect(true);
+            write_key_value_to_file("/Settings/Wifi", networks[network_selected], password);
+            drawInfo("Connected");
+            return;
+          }
+          else if(wifi_status == WL_NO_SSID_AVAIL) {
+            drawError("SSID unavailable");
+          }
+          else if(wifi_status == WL_CONNECT_FAILED) {
+            drawError("Connect failed (wrong password?)");
+          }
+          else if(wifi_status == WL_DISCONNECTED) {
+            drawError("Wi-Fi disconnected");
+          }
+          else if(wifi_status == WL_IDLE_STATUS) {
+            drawError("Wi-Fi in idle status");
+          }
+          else if(wifi_status == WL_STOPPED) {
+            drawError("Wi-Fi stopped");
+          }
+          else {
+            drawError("Unknown status");
+          }
         }
       }
       else if(button_pressed == 1) {
@@ -9292,7 +9329,7 @@ void weather(char mode, char *io_buff) {
   while(1) {
     if(update_flag) {
       sprintf(url, "https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&current_weather=true&windspeed_unit=ms", global_lat, global_lon);
-      httpResponseCode = get_file_https(url, weather_json);
+      httpResponseCode = get_file_https(url, weather_json, 1000);
       if(httpResponseCode == 200) {
         strcpy(temp, "");
         strcpy(wind, "");
@@ -9544,7 +9581,7 @@ void chat(char mode, char *io_buff) {
   update_flag = 1;
   while(1) {
     if(update_flag) {
-      if(get_file_https("https://arikado.ru/cyd/chat_data.txt", messages) == 200) {
+      if(get_file_https("https://arikado.ru/cyd/chat_data.txt", messages, 2048) == 200) {
         // Если сообщения изменились - бибикнуть
         if(strlen(prev_messages) > 0 && strcmp(messages, prev_messages)) {
           beep_if_enabled();
@@ -9614,7 +9651,7 @@ void chat(char mode, char *io_buff) {
               strcat(query, buff);
             }
             Serial.println(query);
-            httpResponseCode = get_file_https(query, buff);
+            httpResponseCode = get_file_https(query, buff, 80);
             if(httpResponseCode == 200) {
               if(strcmp(buff, "ok")) {
                 drawError(buff);
@@ -9814,7 +9851,7 @@ void http_file_access_handle() {
         sprintf(buff, "Used: %d bytes of %d bytes (%d %%)", FFat.usedBytes(), FFat.totalBytes(), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
       }
       else if(storage_type == STORAGE_TYPE_SD) {
-        sprintf(buff, "Used: %d Mbytes of %d Mbytes (%d %%)", SD.usedBytes() / (1024 * 1024), SD.totalBytes() / (1024 * 1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+        sprintf(buff, "Used: %llu MiB of %llu MiB (%d %%)", SD.usedBytes() / (1024 * 1024), SD.totalBytes() / (1024 * 1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
       }
       strcat(contents, buff);
       strcat(contents, " (<a href='/backup_and_restore'>backup and restore</a>)<br>\n");
@@ -9922,13 +9959,28 @@ void http_file_upload_handle_done() {
   httpServer.send(301, "text/html", "");
 }
 
-int get_file_http(char *url, char *buff) {
+int get_file_http(char *url, char *buff, long max_length) {
   HTTPClient http;
   int httpResponseCode;
+  long offset;
+  int byte;
+  WiFiClient *stream = NULL;
+
   http.begin(url);
   httpResponseCode = http.GET();
   if(httpResponseCode > 0) {
-    strcpy(buff, http.getString().c_str());
+    offset = 0;
+    stream = http.getStreamPtr();
+    while(stream->available()) {
+      byte = stream->read();
+      buff[offset] = byte;
+      offset++;
+      if(offset >= max_length) {
+        buff[offset - 1] = 0;
+        break;
+      }
+    }
+    //strcpy(buff, http.getString().c_str());
     http.end();
     return httpResponseCode;
   }
@@ -9936,9 +9988,10 @@ int get_file_http(char *url, char *buff) {
   return 0;
 }
 
-int get_file_https(char *url, char *buff) {
+int get_file_https(char *url, char *buff, long max_length) {
   HTTPClient https;
   WiFiClientSecure *client = NULL;
+  WiFiClient *stream = NULL;
   int httpResponseCode;
   char byte;
   int offset;
@@ -9956,10 +10009,19 @@ int get_file_https(char *url, char *buff) {
     if (https.begin(*client, url)) {
       httpResponseCode = https.GET();
       if (httpResponseCode > 0) {
-        strcpy(buff, https.getString().c_str());
-        Serial.println(strlen(https.getString().c_str()));
+        stream = https.getStreamPtr();
+        offset = 0;
+        while(stream->available()) {
+          byte = stream->read();
+          buff[offset] = byte;
+          offset++;
+          if(offset >= max_length) {
+            buff[offset - 1] = 0;
+            break;
+          }
+        }
+        //strcpy(buff, https.getString().c_str());
         Serial.println(httpResponseCode);
-        Serial.println(https.getString().c_str());
         https.end();
       }
       https.end();
@@ -9981,17 +10043,23 @@ char * http_get_error_text(int httpResponseCode, char *buff) {
 // ====================================================
 
 #define RSS_PATH "/RSS"
+#define RSS_MAX_LENGTH 10000
 
 void rss_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
   char name[80];
+  char url[80];
   char *data;
   char name_line_flag;
   char byte;
   int offset;
   int http_code;
 
+Serial.printf("%d\n", __LINE__);
+  if(action_index && !filename) return;
+
+Serial.printf("%d\n", __LINE__);
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", RSS_PATH, "__New");
@@ -10017,95 +10085,12 @@ void rss_action(int action_index, char *filename) {
     // Чтение RSS
     // Получить ссылку
     sprintf(buff, "%s/%s", RSS_PATH, filename);
-    file = Storage->open(buff);
-    name_line_flag = 1;
-    offset = 0;
-    while(file.available()) {
-      byte = file.read();
-      if(byte == '\n') {
-        offset = 0;
-        if(name_line_flag) {
-          name_line_flag = 0;
-          continue;
-        }
-        else {
-          break;
-        }
-      }
-      if(name_line_flag) {
-        name[offset] = byte;
-        offset++;
-        name[offset] = 0;
-      }
-      else {
-        buff[offset] = byte;
-        offset++;
-        buff[offset] = 0;
-      }
-      if(offset > 79) {
-        break;
-      }
-    }
+//Serial.printf("%d\n", __LINE__);
+    file_get_line_by_index(buff, 0, name);
+    file_get_line_by_index(buff, 1, url);
+//Serial.printf("%d\n", __LINE__);
 
-    //Serial.println(name);
-    //Serial.println(buff);
-
-    // Резервируем память
-    data = (char*)malloc(50000 * sizeof(char));
-    if(!data) {
-      drawError("Unable to reserve memory");
-      return;
-    }
-
-    // Получить данные в XML
-    drawProcessWindow("Getting RSS feed...");
-    data[0] = 0;
-    if(buff[4] == 's') {
-      //Serial.println("Before https");
-      http_code = get_file_https(buff, data);
-      if(http_code != 200) {
-        if(http_code > 0) {
-          sprintf(buff, "HTTP code %s", http_code);
-        }
-        else {
-          http_get_error_text(http_code, buff);
-        }
-        drawError(buff);
-        free(data);
-        return;
-      }
-      //Serial.println("After https");
-    }
-    else {
-      //Serial.println("Before http");
-      http_code = get_file_http(buff, data);
-      if(http_code != 200) {
-        if(http_code > 0) {
-          sprintf(buff, "HTTP code %s", http_code);
-        }
-        else {
-          http_get_error_text(http_code, buff);
-        }
-        drawError(buff);
-        free(data);
-        return;
-      }
-      //Serial.println("After http");
-    }
-
-    // Нет данных
-    if(strcmp(data, "") == 0) {
-      drawError("No data");
-      free(data);
-      return;
-    }
-    // Убрать лишнее
-    utf8_to_cp1251(data);
-    rss_convert_to_text(data);
-
-    // Просмотр текста из памяти
-    view_text(name, data);
-    free(data);
+    rss_view_source(name, url);
   }
   else if(action_index == 2) {
     // Редактируем существующий файл
@@ -10124,91 +10109,204 @@ void rss_action(int action_index, char *filename) {
   }
 }
 
-// Преобразовать XML RSS в текст
-void rss_convert_to_text(char *data) {
-  char inside_tag = 0;
-  char inside_cdata = 0;
+void rss_view_source(char *source_name, char *source_url) {
+  char *data = NULL;
+  char buff[80];
+  int http_code;
+  HTTPClient http;
+  WiFiClient *stream = NULL;
+  int httpResponseCode;
+  int byte, byte2;
+  int offset = 0;
+  int buff_offset;
+  int shift_length = 0;
+  int i;
+  char is_inside_tag = 0;
   char new_line_flag = 0;
   char skip_tag_contents = 0;
-  char byte;
-  int read_offset = 0;
-  int write_offset = 0;
-  int length = strlen(data);
-  char tag_name[80];
+  char inside_cdata = 0;
+  char convert_from_utf8 = 1;
+  char is_header_tag = 1;
 
-  while(read_offset < length) {
-    byte = data[read_offset];
-    read_offset++;
+Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
 
-    if(byte == '\n') {
+  drawProcessWindow("Getting RSS feed...");
+  
+  if(source_url[4] == 's') {
+    global_ssl_client->setInsecure();
+    http.begin(*global_ssl_client, source_url);
+  }
+  else {
+    http.begin(source_url);
+  }
+
+  // Ошибки соединений
+  httpResponseCode = http.GET();
+  if(httpResponseCode <= 0) {
+    Serial.printf("httpResponseCode %d\n", httpResponseCode);
+    //strcpy(buff, http.errorToString(httpResponseCode).c_str());
+    //http_get_error_text(http_code, buff);
+    //Serial.printf("Text %s\n", buff);
+    drawError((char *)http.errorToString(httpResponseCode).c_str());
+    return;
+  }
+
+//Serial.printf("%d\n", __LINE__);
+  stream = http.getStreamPtr();
+
+  // Резервируем память
+//Serial.printf("%d\n", __LINE__);
+  data = (char*)malloc(RSS_MAX_LENGTH * sizeof(char));
+  if(!data) {
+    drawError("Unable to reserve memory");
+    return;
+  }
+//Serial.printf("%d\n", __LINE__);
+  memset(data, 0, RSS_MAX_LENGTH);
+
+  // Читаем поток, перекодируем, убираем лишнее
+//Serial.printf("%d\n", __LINE__);
+  memset(buff, 0, 80);
+
+//Serial.printf("%d\n", __LINE__);
+  buff_offset = 0;
+  shift_length = 0;
+  new_line_flag = 0;
+  // Пропустить мусор в начале потока, который там почему-то оказывается
+  is_inside_tag = 1;
+  // Первый тег, где может быть указана кодировка
+  is_header_tag = 1;
+  // По умолчанию считать utf-8
+  convert_from_utf8 = 1;
+  while(stream->available()) {
+    if(shift_length > 0) {
+      for(i = 0; i < 20; i++) {
+        buff[i] = buff[i + shift_length];
+      }
+      buff_offset -= shift_length;
+    }
+    // В буфере около 20 байт, достаточно чтобы смотреть вперёд
+    while(buff_offset < 20 && stream->available()) {
+      byte = stream->read();
+      //Serial.print((char)byte);
+
+      // Пропустить непечатаемые символы (код меньше пробела)
+      if(byte < ' ') continue;
+
+      // UTF-8 в CP1251
+      if(byte >= 0xC0 && convert_from_utf8) {
+        byte2 = stream->read();
+        byte = utf8_to_cp1251_byte(byte, byte2);
+      }
+      buff[buff_offset] = byte;
+      buff_offset++;
+      buff[buff_offset] = 0;
+    }
+
+    if(is_header_tag && memcmp(buff, "windows-1251", 12) == 0) {
+      Serial.println("Encoding is 1251");
+      convert_from_utf8 = 0;
+    }
+
+    //Serial.printf("Buff: %s\n", buff);
+
+    shift_length = 1;
+    if(buff[0] == '\n' || buff[0] == '\r') {
       new_line_flag = 1;
-      if(data[read_offset] == '\r') {
-        read_offset++;
-      }
+      //Serial.printf("New line flag\n");
       continue;
     }
-    if(byte == '\r') {
-      new_line_flag = 1;
-      if(data[read_offset] == '\n') {
-        read_offset++;
+    if(is_inside_tag) {
+      if(buff[0] == '>') {
+        is_inside_tag = 0;
+        is_header_tag = 0;
+        new_line_flag = 1;
       }
+      //Serial.printf("Inside tag\n");
       continue;
     }
-    if(new_line_flag && byte == ' ') continue;
-
-    // Пропустить непечатаемые символы, код которых меньше кода пробела
-    if(byte < ' ') continue;
-
-    if(inside_tag) {
-      if(byte == '>') {
-        inside_tag = 0;
-      }
-      continue;
-    }
-    if(byte == '<') {
-      if(memcmp(data + read_offset, "![CDATA[", 8) == 0) {
+    if(buff[0] == '<') {
+      if(memcmp(buff, "<![CDATA[", 9) == 0) {
+        //Serial.printf("Inside CDATA\n");
         inside_cdata = 1;
-        read_offset += 8;
+        shift_length = 9;
       }
       else {
-        if(memcmp(data + read_offset, "item>", 5) == 0) {
-          data[write_offset] = '\n';
-          write_offset++;
+        if(memcmp(buff, "<item>", 6) == 0) {
+          shift_length = 6;
+          data[offset] = '\n';
+          offset++;
+          data[offset] = 0;
         }
-        if(memcmp(data + read_offset, "guid", 4) == 0) {
+        if(memcmp(buff, "<guid", 5) == 0) {
           skip_tag_contents = 1;
+          shift_length = 5;
         }
-        if(memcmp(data + read_offset, "url>", 4) == 0) {
+        if(memcmp(buff, "<url>", 5) == 0) {
           skip_tag_contents = 1;
+          shift_length = 5;
         }
-        if(data[read_offset] == '/') {
+        if(buff[1] == '/') {
           skip_tag_contents = 0;
         }
-        inside_tag = 1;
+        //Serial.printf("Inside tag begin\n");
+        is_inside_tag = 1;
       }
       continue;
     }
-    if(byte == ']' && inside_cdata) {
-      if(memcmp(data + read_offset, "]>", 2) == 0) {
-        inside_cdata = 0;
-        read_offset += 2;
-        continue;
-      }
+
+    if(inside_cdata && memcmp(buff, "]]>", 3) == 0) {
+      //Serial.printf("End of CDATA\n");
+      inside_cdata = 0;
+      shift_length = 3;
+      continue;
     }
+
+    // Если этот тег пропускаем, то пропускаем
     if(skip_tag_contents) {
+      //Serial.printf("Skip tag contents\n");
       continue;
     }
+
+    if(new_line_flag && buff[0] == ' ') {
+      //Serial.printf("Skip newline on empty string\n");
+      continue;
+    }
+
+    // Если нужна новая строка - добавляем
     if(new_line_flag) {
-      if(write_offset != 0) {
-        data[write_offset] = '\n';
-        write_offset++;
+      if(offset != 0) {
+        data[offset] = '\n';
+        offset++;
       }
       new_line_flag = 0;
     }
-    data[write_offset] = byte;
-    write_offset++;
+
+    // Добавить байт
+    data[offset] = buff[0];
+    offset++;
+    data[offset] = 0;
+
+    if(offset >= RSS_MAX_LENGTH - 1) {
+      //Serial.printf("%d break %d\n", __LINE__, offset);
+      break;
+    }
   }
-  data[write_offset] = 0;
+  data[offset] = 0;
+
+//Serial.printf("%d %s\n", __LINE__, data);
+  http.end();
+
+//Serial.printf("%d\n", __LINE__);
+  if(strcmp(data, "") == 0) {
+    drawError("No data");
+  }
+  else {
+    view_text(source_name, data);
+  }
+
+//Serial.printf("%d\n", __LINE__);
+  free(data);
 }
 
 int rss_file_to_list(fs::File file, char *buff) {
@@ -10301,6 +10399,8 @@ void irc_action(int action_index, char *filename) {
   char byte;
   int offset;
   int http_code;
+
+  if(action_index && !filename) return;
 
   if(action_index == 0) {
     // Редактируем новый файл
@@ -11091,6 +11191,12 @@ char utf8_to_cp1251_byte(char byte1, char byte2) {
     }
     else {
       byte = 0xF0 + byte2 - 0x80; // р-я
+    }
+  }
+  else if(byte1 == 0xC2) {
+    // Кавычки-ёлочки
+    if(byte2 == 0xAB || byte2 == 0xBB) {
+      byte = '"';
     }
   }
 
@@ -12786,6 +12892,16 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
     while(text[text_offset] > 0) {
       //Serial.println(__LINE__);
       byte = text[text_offset];
+
+      // Tab - пробел
+      if(byte == 0x09) byte = ' ';
+      // Всё остальное неотображаемые до пробела, кроме переводов строк
+      if(byte < ' ' && byte != '\n' && byte != '\r') byte = '_';
+      // После 128 - кроме букв ё, Ё и №
+      if(byte >= 128 && byte <= 167) byte = '_';
+      if(byte >= 169 && byte <= 183) byte = '_';
+      if(byte >= 186 && byte <= 191) byte = '_';
+      
       //Serial.printf("%c %s\n", byte, current_word);
       // Последовательности \n\r и \r\n это один перевод строки
       newline_symbols = 0;
@@ -12899,7 +13015,7 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
   }
 
   // Возвращаем число выведенных байтов = число считанных - число невыведенных
-  Serial.printf("current_word = %s, current_line = %s\n", current_word, current_line);
+  //Serial.printf("current_word = %s, current_line = %s\n", current_word, current_line);
   return text_offset - strlen(current_word) - strlen(current_line) - newline_symbols;
 }
 
@@ -16671,10 +16787,15 @@ void drawList(int left_x, int top_y, int width, int height, char **str, int rows
     *offset = 0;
   }
 
+  // Тонкие полоски по краям
+  tft.fillRect(left_x, top_y, 1, height, color_scheme_bg);
+  tft.fillRect(left_x + width - 1, top_y, 1, height, color_scheme_bg);
+
   // Пустой список - показываем что тут мог быть список
   if(str[0] == NULL) {
     tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
     tft.drawString("<empty list>", left_x + 1, top_y, FONT_DEFAULT);
+    tft.fillRect(left_x, top_y + 16, width, height - 16, color_scheme_bg);
     return;
   }
 
@@ -17753,9 +17874,11 @@ void setup() {
   }
 
   // Тут можно задавать вопросы - сенсор откалиброван
+#ifndef PREFER_SD_IF_AVAILABLE
   if(ffat_available_flag && sd_available_flag) {
     select_storage_app(APP_MODE_SPECIAL, NULL);
   }
+#endif
 
   if(storage_type == STORAGE_TYPE_NONE) {
     drawError("FFat mount failed");
