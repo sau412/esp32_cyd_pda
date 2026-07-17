@@ -1,3 +1,5 @@
+#include <XPT2046_Bitbang.h>
+
 /*
 Что-то вроде КПК для ESP32 CYD (Cheap Yellow Display/Device)
 
@@ -168,13 +170,21 @@
   баг с использованием sscanf %d для char
 2026-07-07 Баг с отображением текста - лишний текст, утечка памяти при получении значков
 2026-07-08 Получение и парсинг RSS в одной функции, Wi-Fi индикация процесса соединения,
-  поддержка 1251 в RSS
+  поддержка 1251 в RSS, нечитаемые символы в просмотре текста
+2026-07-09 Кавычки, тире из UTF-8, неразрывные пробелы, &amp;nbsp; в RSS
+2026-07-10 Погода баг в интервале, единая функция декодирования UTF-8
+2026-07-11 Проверка наличия вай-фая для сервера
+2026-07-13 Возможность компиляции без Wi-Fi, возможность работы без хранилища
+? Информация о треке для веб-радио
+2026-07-16 Куда девается память?
+2026-07-17 Куда девается память - оптимизация (пару килобайт)
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое:
 - (п) Просмотреть справку, может быть что-то добавить
-- (б) Возможность 1251 в RSS
 - (и) Куда девается память?
 - (и) Крутая калибровка
+- (б) Просмотр текста перенос строки оказывается на следующей странице
+- (д) Проверять наличие ФС в приложениях
 
 - (и) Убирать значки в лаунчере
 - (д) Не прокручивать при редактировании дальше конца файла
@@ -214,12 +224,14 @@
 - (н) Выделение в просмотре, копирование
 - (н) Выделение в редактировании, копирование, вставка
 - (н) Буфер для перемотки назад в книгах
+- (и) Bluetooth музыка и радио - похоже не хватает на это памяти
 
 */
 
 #define IS_WIFI_ENABLED
 
 #define PREFER_SD_IF_AVAILABLE
+//#define IS_BLUETOOTH_ENABLED
 //#define IS_SSH_ENABLED
 
 // CYD
@@ -272,6 +284,13 @@ WiFiClient *global_client = NULL;
 #include <libssh/libssh.h>
 
 #endif
+
+#endif
+
+#ifdef IS_BLUETOOTH_ENABLED
+
+#include "BluetoothA2DPSource.h"
+#include "AudioOutput.h"
 
 #endif
 
@@ -510,16 +529,19 @@ private:
     int chunk_size = 4096;
     char *buff;
 
-    const esp_partition_t* partition = esp_partition_find_first(
-        ESP_PARTITION_TYPE_DATA,         // Type (DATA or APP)
-        ESP_PARTITION_SUBTYPE_DATA_FAT,  // Subtype
-        NULL                             // Label name in your partition table
-      );
+    esp_partition_t* partition;
 
 public:
     // Конструктор
     FFatContentsStream() {
+      partition = (esp_partition_t*)esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA,         // Type (DATA or APP)
+        ESP_PARTITION_SUBTYPE_DATA_FAT,  // Subtype
+        NULL                             // Label name in your partition table
+      );
+      if(!partition) return;
       buff = (char*)malloc(chunk_size * sizeof(char));
+      if(!buff) return;
       Serial.printf("Reading offset %d\n", offset);
       esp_partition_read(partition, offset, buff, chunk_size);
       Serial.printf("Done\n");
@@ -534,6 +556,8 @@ public:
 
     // Core Print implementation requirement
     size_t write(uint8_t data) override {
+      if(!buff) return 0;
+      if(!partition) return 0;
       //Serial.printf("o: %d\n", buff_offset);
       buff[buff_offset] = data;
       buff_offset++;
@@ -550,10 +574,14 @@ public:
     }
     // Core Stream implementation requirements
     int available() override {
+      if(!buff) return 0;
+      if(!partition) return 0;
       return offset < partition->size;
     }
 
     int read() override {
+      if(!buff) return 0;
+      if(!partition) return 0;
       int result = -1;
       if(buff_offset >= chunk_size) {
         Serial.printf("Reading offset %d\n", offset);
@@ -574,6 +602,8 @@ public:
 
     int peek() override {
       char c;
+      if(!buff) return -1;
+      if(!partition) return -1;
       if((offset + 1) < partition->size) {
         if(buff_offset > 0 && buff_offset < chunk_size - 1) {
           return buff[buff_offset + 1];
@@ -587,6 +617,8 @@ public:
     }
 
     void flush() override {
+      if(!buff) return;
+      if(!partition) return;
       esp_partition_erase_range(partition, offset, chunk_size);
       esp_partition_write(partition, offset, buff, chunk_size);
       offset += chunk_size;
@@ -594,6 +626,7 @@ public:
     }
 
     long size() {
+      if(!partition) return 0;
       return partition->size;
     }
 
@@ -640,8 +673,6 @@ char global_unixtime_synced = 0;
 long global_timezone = 0;
 
 // Переменные для человекочитаемых параметров времени
-Ticker secondTicker;
-Ticker minuteTicker;
 int global_year = 0;
 int global_month = 0;
 int global_day = 0;
@@ -651,6 +682,9 @@ int global_seconds = 0;
 int global_moon_day = 0;
 int global_day_of_week = 0;
 char global_is_lap_year = 0;
+
+Ticker secondTicker;
+Ticker minuteTicker;
 
 // Параметры приложений
 char current_app_title[80];
@@ -807,106 +841,6 @@ function_application_pointer all_apps[] = {
   NULL
 };
 
-function_application_pointer apps[40] = {
-  launcher,
-  calculator,
-  files,
-  terminal,
-  notes,
-  contacts,
-  todo,
-  schedule,
-  expenses,
-  flashcards,
-  books,
-  screenshots,
-  passwords,
-  tunes,
-  music,
-  webradio,
-  //system_info,
-  torch,
-  draw,
-#ifdef IS_WIFI_ENABLED
-  wifi,
-  gopher,
-  rss,
-  irc,
-  chat,
-  weather,
-  http_file_access,
-#endif
-  counter,
-  random_numbers,
-  piano,
-  metronome,
-  screensaver,
-  user_manual,
-  life,
-  i2c_scanner,
-  oscilloscope,
-  dashboard,
-  time_and_date_group,
-  games_group,
-  settings_group,
-  //touch_calibration_test,
-  NULL
-};
-function_application_pointer time_and_date_apps[40] = {
-  launcher,
-  launcher_return_back,
-  timer,
-  stopwatch_app,
-  breathe,
-  dashboard,
-  fuzzy_clock,
-  set_clock,
-  NULL
-};
-function_application_pointer games_apps[40] = {
-  launcher,
-  launcher_return_back,
-  fifteen,
-  lights_off,
-  snake,
-  turkish_kerchief,
-  memory_match,
-  hanoi_towers,
-  match_three,
-  simon,
-  n_back,
-  mental_math,
-  game2048,
-  NULL
-};
-function_application_pointer settings_apps[40] = {
-  launcher,
-  launcher_return_back,
-  files,
-  system_info,
-  torch,
-#ifdef IS_WIFI_ENABLED
-  wifi,
-  http_file_access,
-#endif
-  screen_test,
-  security,
-  brightness_app,
-  color_settings,
-  touch_calibration,
-  set_clock,
-  i2c_scanner,
-  view_font,
-  keyboard_control,
-  sound_control,
-  autorun,
-  select_storage_app,
-  backups,
-  reboot,
-  NULL
-};
-function_application_pointer main_apps[40];
-
 void launcher(char mode, char *io_buff) {
   char redraw_flag;
   int app_selected;
@@ -940,7 +874,7 @@ void launcher(char mode, char *io_buff) {
   int row, col;
   int i;
   char app_name[80];
-  char app_icon[80];
+  char app_icon[34];
   int apps_max = 0;
   
   if(mode == APP_MODE_RETURN_NAME) {
@@ -1038,167 +972,6 @@ void launcher(char mode, char *io_buff) {
     }
   }
 }
-
-void time_and_date_group(char mode, char *io_buff) {
-  int i;
-  char app_icon[] = {
-    16, 16,
-    B00000000, B00000000,
-    B00011111, B11111110,
-    B00010000, B00000010,
-    B01110000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01011111, B11111110,
-    B01000000, B00001000,
-    B01111111, B11111000,
-    B00000000, B00000000
-  };
-
-  if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Time & Date");
-    return;
-  }
-  if(mode == APP_MODE_RETURN_NAME_SHORT) {
-    strcpy(io_buff, "T&D");
-    return;
-  }
-  if(mode == APP_MODE_RETURN_ICON) {
-    memcpy(io_buff, app_icon, 34);
-    return;
-  }
-
-  for(i = 0; i < 40; i++) {
-    apps[i] = time_and_date_apps[i];
-  }
-}
-
-void games_group(char mode, char *io_buff) {
-  int i;
-  char app_icon[] = {
-    16, 16,
-    B00000000, B00000000,
-    B00011111, B11111110,
-    B00010000, B00000010,
-    B01110000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01011111, B11111110,
-    B01000000, B00001000,
-    B01111111, B11111000,
-    B00000000, B00000000
-  };
-
-  if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Games");
-    return;
-  }
-  if(mode == APP_MODE_RETURN_NAME_SHORT) {
-    strcpy(io_buff, "Gms");
-    return;
-  }
-  if(mode == APP_MODE_RETURN_ICON) {
-    memcpy(io_buff, app_icon, 34);
-    return;
-  }
-
-  for(i = 0; i < 40; i++) {
-    apps[i] = games_apps[i];
-  }
-}
-
-void settings_group(char mode, char *io_buff) {
-  int i;
-  char app_icon[] = {
-    16, 16,
-    B00000000, B00000000,
-    B00011111, B11111110,
-    B00010000, B00000010,
-    B01110000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01010000, B00000010,
-    B01011111, B11111110,
-    B01000000, B00001000,
-    B01111111, B11111000,
-    B00000000, B00000000
-  };
-
-  if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Settings");
-    return;
-  }
-  if(mode == APP_MODE_RETURN_NAME_SHORT) {
-    strcpy(io_buff, "Sttn");
-    return;
-  }
-  if(mode == APP_MODE_RETURN_ICON) {
-    memcpy(io_buff, app_icon, 34);
-    return;
-  }
-
-  for(i = 0; i < 40; i++) {
-    apps[i] = settings_apps[i];
-  }
-}
-
-void launcher_return_back(char mode, char *io_buff) {
-  int i;
-  char app_icon[] = {
-    16, 16,
-    B00000000, B00000000,
-    B01111111, B11111110,
-    B01000000, B00000010,
-    B01000000, B00000010,
-    B01001000, B00000010,
-    B00011000, B00000010,
-    B00111000, B00000010,
-    B01111111, B11110010,
-    B01111111, B11110010,
-    B00111000, B00000010,
-    B00011000, B00000010,
-    B01001000, B00000010,
-    B01000000, B00000010,
-    B01000000, B00000010,
-    B01111111, B11111110,
-    B00000000, B00000000
-  };
-
-  if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Back");
-    return;
-  }
-  if(mode == APP_MODE_RETURN_NAME_SHORT) {
-    strcpy(io_buff, "Back");
-    return;
-  }
-  if(mode == APP_MODE_RETURN_ICON) {
-    memcpy(io_buff, app_icon, 34);
-    return;
-  }
-
-  for(i = 0; i < 40; i++) {
-    apps[i] = main_apps[i];
-  }
-}
-
 
 void calculator(char mode, char *io_buff) {
   double a = 0;
@@ -1806,6 +1579,11 @@ void files(char mode, char *io_buff) {
   clearScreen();
   drawAppTitle("Files");
   
+  if(storage_type == STORAGE_TYPE_NONE || !Storage) {
+    drawError("No storage available");
+    return;
+  }
+
   redraw_required = 1;
   
   while(1) {
@@ -2631,7 +2409,6 @@ void terminal_clear_screen() {
 
 void terminal_input_string(char *input_buff) {
   char buff[80];
-  static char prev_buff[80];
   int byte;
   int offset;
   for(offset = 0; offset < TERMINAL_INPUT_MAX; offset++) {
@@ -2879,6 +2656,8 @@ int terminal_serial(char *arg) {
   }
 }
 
+#ifdef IS_WIFI_ENABLED
+
 int terminal_telnet(char *arg, char ssl_flag) {
   long speed;
   int byte;
@@ -3063,6 +2842,8 @@ int terminal_wget(char *params) {
   }
   return 0;
 }
+
+#endif
 
 void cp_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
   char *buff;
@@ -3929,12 +3710,17 @@ void music_play(char *filename) {
 
   file = new AudioFileSourceFS(*Storage, filename);
   id3 = new AudioFileSourceID3(file);
+
   out = new AudioOutputI2SNoDAC();
   out->SetGain((float)global_volume / 100);
   out->SetPinout(-1, -1, BUZZER_PIN);
+  drawProcessWindow("Playing...");
   mp3 = new AudioGeneratorMP3();
+
   mp3->begin(id3, out);
+
   while(mp3->isRunning()) {
+    Serial.println(millis());
     if(!mp3->loop()) {
       mp3->stop();
     }
@@ -3943,6 +3729,121 @@ void music_play(char *filename) {
     }
   }
 }
+
+#ifdef IS_BLUETOOTH_ENABLED
+
+class AudioOutputBT : public AudioOutput {
+  public:
+    BluetoothA2DPSource a2dp_source;
+    int16_t *buff = NULL;
+    int buff_pointer_write;
+    int buff_pointer_read;
+    int buff_len = 4096;
+    // Начало
+    bool begin() override {
+  Serial.println("AudioOutputBT::begin");
+      if(buff == NULL) {
+        buff = (int16_t *)malloc(buff_len * sizeof(int16_t));
+      }
+      buff_pointer_write = 0;
+      buff_pointer_read = 0;
+      a2dp_source.set_volume(30);
+      a2dp_source.set_data_callback_in_frames(get_data_frames);
+      a2dp_source.start("JBL GO 2");
+      delay(10000);
+      return true;
+    }
+    // Добавить в кольцевой буфер
+    bool consumeSample(int16_t sample[2]) {
+  Serial.println("AudioOutputBT::consumeSample");
+      buff[buff_pointer_write] = sample[0];
+      buff_pointer_write++;
+      if(buff_pointer_write >= buff_len) buff_pointer_write = 0;
+      buff[buff_pointer_write] = sample[1];
+      buff_pointer_write++;
+      if(buff_pointer_write >= buff_len) buff_pointer_write = 0;
+      return true;
+    }
+    int16_t get_from_buffer() {
+  Serial.println("AudioOutputBT::get_from_buffer");
+      int16_t result;
+      result = buff[buff_pointer_read];
+      buff_pointer_read++;
+      if(buff_pointer_read >= buff_len) buff_pointer_read = 0;
+      return result;
+    }
+};
+
+AudioOutputBT *out;
+
+// Прочитать из кольцевого буфера
+int32_t get_sound_data(Frame *frame, int32_t frame_count) {
+  Serial.println("get_sound_data");
+  for (int sample = 0; sample < frame_count; ++sample) {
+    frame[sample].channel1 = out->get_from_buffer();
+    frame[sample].channel2 = out->get_from_buffer();
+  }
+  // to prevent watchdog
+  delay(1);
+  return frame_count;
+}
+
+
+#define c3_frequency  220
+const float pi_2 = PI * 2.0;
+const float angular_frequency = pi_2 * c3_frequency;
+const float deltaAngle = angular_frequency / 44100.0;
+
+int32_t get_data_frames(Frame *frame, int32_t frame_count) {
+    static float m_angle = 0.0;
+    float m_amplitude = 10000.0;  // -32,768 to 32,767
+    float m_phase = 0.0;
+    // fill the channel data
+    for (int sample = 0; sample < frame_count; ++sample) {
+        frame[sample].channel1 = m_amplitude * sin(m_angle + m_phase);
+        frame[sample].channel2 = frame[sample].channel1;
+        m_angle += deltaAngle;
+        if (m_angle > pi_2) m_angle -= pi_2;
+    }
+    // to prevent watchdog
+    delay(1);
+
+    return frame_count;
+}
+
+void music_play_bt(char *filename) {
+  AudioGeneratorMP3 *mp3;
+  AudioFileSourceFS *file;
+  AudioFileSourceID3 *id3;
+
+Serial.println(__LINE__);
+  file = new AudioFileSourceFS(*Storage, filename);
+Serial.println(__LINE__);
+  id3 = new AudioFileSourceID3(file);
+Serial.println(__LINE__);
+
+  out = new AudioOutputBT();
+Serial.println(__LINE__);
+
+  drawProcessWindow("Playing...");
+Serial.println(__LINE__);
+  mp3 = new AudioGeneratorMP3();
+Serial.println(__LINE__);
+  mp3->begin(id3, out);
+Serial.println(__LINE__);
+
+  while(mp3->isRunning()) {
+    Serial.println(millis());
+    if(!mp3->loop()) {
+      mp3->stop();
+    }
+    if(touchCheckNowait() == 1) {
+      mp3->stop();
+    }
+  }
+}
+
+#endif
 
 void music(char mode, char *io_buff) {
   char *buttons[] = {
@@ -4054,22 +3955,41 @@ void webradio_play(char *filename) {
   file_get_line_by_index(filename, 1, url);
 Serial.println(url);
   file = new AudioFileSourceICYStream(url);
+  file->RegisterMetadataCB(webradio_MDCallback, NULL);
   buff = new AudioFileSourceBuffer(file, 2048);
   out = new AudioOutputI2SNoDAC();
   out->SetGain((float)global_volume / 100);
   out->SetPinout(-1, -1, BUZZER_PIN);
   mp3 = new AudioGeneratorMP3();
+  mp3->RegisterStatusCB(webradio_StatusCallback, (void*)"mp3");
   mp3->begin(buff, out);
+  drawProcessWindow("Playing...");
 
   while(mp3->isRunning()) {
     if(!mp3->loop()) {
       mp3->stop();
     }
+    Serial.println(millis());
     if(touchCheckNowait() == 1) {
       mp3->stop();
     }
   }
   Serial.println("Finished");
+}
+
+void webradio_MDCallback(void *cbData, const char *type, bool isUnicode, const char *string) {
+  drawProcessWindow((char *)string);
+  Serial.printf("Metadata: %s\n", string);
+}
+
+void webradio_StatusCallback(void *cbData, int code, const char *string) {
+  const char *ptr = reinterpret_cast<const char *>(cbData);
+  // Note that the string may be in PROGMEM, so copy it to RAM for printf
+  char s1[64];
+  strncpy_P(s1, string, sizeof(s1));
+  s1[sizeof(s1) - 1] = 0;
+  Serial.printf("STATUS(%s) '%d' = '%s'\n", ptr, code, s1);
+  Serial.flush();
 }
 
 void webradio(char mode, char *io_buff) {
@@ -4387,6 +4307,11 @@ void passwords(char mode, char *io_buff) {
 
   clearScreen();
   drawAppTitle("Passwords");
+
+  if(storage_type == STORAGE_TYPE_NONE || !Storage) {
+    drawError("No storage available");
+    return;
+  }
 
   buff[0] = 0;
   if(drawPrompt("Enter password:", buff) == 0) {
@@ -5308,6 +5233,11 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
   clearScreen();
   drawAppTitle(title);
 
+  if(storage_type == STORAGE_TYPE_NONE || !Storage) {
+    drawError("No storage available");
+    return;
+  }
+
   // Считаем число кнопок
   buttons_count = 0;
   while(buttons[buttons_count]) {
@@ -5561,6 +5491,11 @@ void schedule(char mode, char *io_buff) {
   buff = (char *)malloc(2050 * sizeof(char));
   clearScreen();
   drawAppTitle("Schedule");
+
+  if(storage_type == STORAGE_TYPE_NONE || !Storage) {
+    drawError("No storage available");
+    return;
+  }
 
   redraw_flag = 1;
   //set_local_time_from_unix_timestamp();
@@ -5880,7 +5815,12 @@ void security(char mode, char *io_buff) {
 
   clearScreen();
   drawAppTitle("Security");
-  
+
+  if(storage_type == STORAGE_TYPE_NONE || !Storage) {
+    drawError("No storage available");
+    return;
+  }
+
   while(1) {
     read_file_to_buff("/Settings/Owner", 79, owner_info);
     read_file_to_buff("/Settings/Password", 79, correct_password);
@@ -6315,15 +6255,27 @@ void select_storage_app(char mode, char *io_buff) {
     button_pressed = touchCheckMatrix(0, 50, tft.width(), tft.height() - 50, buttons, 1, 3);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
+        Storage = NULL;
+        storage_type = STORAGE_TYPE_NONE;
+        if(mode == APP_MODE_SPECIAL) return;
+        else {
+          drawInfo("Null storage selected");
+          clearPopupWindow();
+        }
       }
       else if(button_pressed == 1) {
         if(ffat_available_flag) {
           Storage = &FFat;
           storage_type = STORAGE_TYPE_FFAT;
           if(mode == APP_MODE_SPECIAL) return;
+          else {
+            drawInfo("FFat selected");
+            clearPopupWindow();
+          }
         }
         else {
           drawError("FFat is not available");
+          clearPopupWindow();
         }
       }
       else if(button_pressed == 2) {
@@ -6331,9 +6283,14 @@ void select_storage_app(char mode, char *io_buff) {
           Storage = &SD;
           storage_type = STORAGE_TYPE_SD;
           if(mode == APP_MODE_SPECIAL) return;
+          else {
+            drawInfo("SD selected");
+            clearPopupWindow();
+          }
         }
         else {
           drawError("SD is not available");
+          clearPopupWindow();
         }
       }
     }
@@ -8288,7 +8245,7 @@ void color_settings(char mode, char *io_buff) {
           color_scheme_fg = colors[COLOR_INDEX_LIGHTGREY];
           // Цвет заголовка и текста
           color_scheme_title_bg = colors[COLOR_INDEX_NAVY];
-          color_scheme_title_fg = colors[COLOR_INDEX_BLUE];
+          color_scheme_title_fg = colors[COLOR_INDEX_CYAN];
           // Цвет выделения и текста
           color_scheme_selection_bg = colors[COLOR_INDEX_NAVY];
           color_scheme_selection_fg = colors[COLOR_INDEX_WHITE];
@@ -8798,10 +8755,11 @@ void gopher(char mode, char *io_buff) {
   drawAppTitle("Gopher Browser");
 
   wifi_status = WiFi.status();
-  if(wifi_status != WL_CONNECTED && global_unixtime_retrieved == 0) {
+  if(wifi_status != WL_CONNECTED) {
     drawError("Wi-Fi connection required");
     return;
   }
+
   reload_page = 1;
   ask_address = 0;
   
@@ -9328,13 +9286,14 @@ void weather(char mode, char *io_buff) {
   prev_update_data_millis = millis();
   while(1) {
     if(update_flag) {
+      prev_update_data_millis = millis();
       sprintf(url, "https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&current_weather=true&windspeed_unit=ms", global_lat, global_lon);
       httpResponseCode = get_file_https(url, weather_json, 1000);
+      Serial.printf("httpResponseCode %d\n", httpResponseCode);
       if(httpResponseCode == 200) {
         strcpy(temp, "");
         strcpy(wind, "");
         strcpy(weather_code, "");
-        prev_update_data_millis = millis();
         // Пропускаем начало
         tmp = strchr(weather_json, '}');
         // Теперь ищем значения
@@ -9412,8 +9371,8 @@ void weather(char mode, char *io_buff) {
 
         tft.drawCentreString(wind, tft.width() / 2, 100, FONT_BIG);
         tft.drawCentreString(weather_text, tft.width() / 2, 150, FONT_DEFAULT);
-        update_flag = 0;
       }
+      update_flag = 0;
     }
 
     drawButtonMatrix(0, tft.height() - 96, tft.width() / 2, 96, buttons, 1, 3);
@@ -9436,7 +9395,7 @@ void weather(char mode, char *io_buff) {
         tft.drawCentreString(buff, tft.width() / 2, tft.height() - 128, FONT_DEFAULT);
       }
       if(millis() - prev_update_data_millis > WEATHER_AUTO_UPDATE_INTERVAL) {
-        update_flag = 0;
+        update_flag = 1;
         break;
       }
     }
@@ -9546,7 +9505,7 @@ void chat(char mode, char *io_buff) {
   drawAppTitle("Chat");
 
   wifi_status = WiFi.status();
-  if(wifi_status != WL_CONNECTED && global_unixtime_retrieved == 0) {
+  if(wifi_status != WL_CONNECTED) {
     drawError("Wi-Fi connection required");
     return;
   }
@@ -9753,8 +9712,13 @@ void http_file_access(char mode, char *io_buff) {
   drawAppTitle("File Server");
 
   wifi_status = WiFi.status();
-  if(wifi_status != WL_CONNECTED && global_unixtime_retrieved == 0) {
+  if(wifi_status != WL_CONNECTED) {
     drawError("Wi-Fi connection required");
+    return;
+  }
+
+  if(storage_type == STORAGE_TYPE_NONE || !Storage) {
+    drawError("No storage available");
     return;
   }
 
@@ -9802,22 +9766,26 @@ void http_fs_backup_handle() {
 }
 
 fs::File uploadFile;
-FFatContentsStream ffat_restore_stream;
+FFatContentsStream *ffat_restore_stream = NULL;
 
 void http_fs_restore_handle() {
   int i;
   HTTPUpload& upload = httpServer.upload();
+
+  if(ffat_restore_stream == NULL) {
+    ffat_restore_stream = new FFatContentsStream();
+  }
 
   if (upload.status == UPLOAD_FILE_START) {
   } 
   else if (upload.status == UPLOAD_FILE_WRITE) {
     //Serial.printf("Uploaded chunk size %d\n", upload.currentSize);
     for(i = 0; i < upload.currentSize; i++) {
-      ffat_restore_stream.write(upload.buf[i]);
+      ffat_restore_stream->write(upload.buf[i]);
     }
   } 
   else if (upload.status == UPLOAD_FILE_END) {
-    ffat_restore_stream.flush();
+    ffat_restore_stream->flush();
     // Обновляем ФС
     if(FFat.begin(FORMAT_FS_IF_FAILED)) {
       Serial.println("FFat mount ok");
@@ -9996,8 +9964,8 @@ int get_file_https(char *url, char *buff, long max_length) {
   char byte;
   int offset;
   int i;
+  Serial.printf("get_file_https %s max_length %d\n", url, max_length);
   /*
-  Serial.println(url);
   for(i = 0; i < strlen(url); i++) {
     Serial.printf("%02X ", url[i]);
   }
@@ -10116,7 +10084,7 @@ void rss_view_source(char *source_name, char *source_url) {
   HTTPClient http;
   WiFiClient *stream = NULL;
   int httpResponseCode;
-  int byte, byte2;
+  int byte, byte2, byte3;
   int offset = 0;
   int buff_offset;
   int shift_length = 0;
@@ -10127,6 +10095,13 @@ void rss_view_source(char *source_name, char *source_url) {
   char inside_cdata = 0;
   char convert_from_utf8 = 1;
   char is_header_tag = 1;
+  int wifi_status;
+
+  wifi_status = WiFi.status();
+  if(wifi_status != WL_CONNECTED) {
+    drawError("Wi-Fi connection required");
+    return;
+  }
 
 Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
 
@@ -10196,7 +10171,18 @@ Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
       // UTF-8 в CP1251
       if(byte >= 0xC0 && convert_from_utf8) {
         byte2 = stream->read();
-        byte = utf8_to_cp1251_byte(byte, byte2);
+        // Трёхбайтовые символы
+        if(byte == 0xE2 && byte2 == 0x80) {
+          byte3 = stream->read();
+          if(byte3 == 0x93) byte = '-';
+          if(byte3 == 0x94) byte = '-';
+          if(byte3 == 0x9C) byte = '"';
+          if(byte3 == 0x9D) byte = '"';
+          if(byte3 == 0x9E) byte = '"';
+        }
+        else {
+          byte = utf8_to_cp1251_byte(byte, byte2);
+        }
       }
       buff[buff_offset] = byte;
       buff_offset++;
@@ -10280,6 +10266,12 @@ Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
         offset++;
       }
       new_line_flag = 0;
+    }
+
+    // Неразрывный пробел это пробел
+    if(memcmp(buff, "&amp;nbsp;", 10) == 0) {
+      buff[0] = ' ';
+      shift_length = 10;
     }
 
     // Добавить байт
@@ -10393,7 +10385,8 @@ void irc_action(int action_index, char *filename) {
   char realname[20];
   char ssl[10];
   char join[20];
-  char *irc_template = "Server name\nhost=\nport=\npass=\nnick=\nident=\nrealname=\nssl=0\njoin=\n---";
+  char utf8_decode[10];
+  char *irc_template = "Server name\nhost=\nport=\npass=\nnick=\nident=\nrealname=\nssl=0\njoin=\nutf8_decode=1\n---";
   char *data;
   char name_line_flag;
   char byte;
@@ -10450,8 +10443,9 @@ void irc_action(int action_index, char *filename) {
     read_key_value_from_file(buff, "realname", realname);
     read_key_value_from_file(buff, "ssl", ssl);
     read_key_value_from_file(buff, "join", join);
+    read_key_value_from_file(buff, "utf8_decode", utf8_decode);
 
-    irc_chat(name, host, port, pass, nick, ident, realname, ssl, join);
+    irc_chat(name, host, port, pass, nick, ident, realname, ssl, join, utf8_decode);
   }
   else if(action_index == 2) {
     // Редактируем существующий файл
@@ -10473,7 +10467,7 @@ void irc_action(int action_index, char *filename) {
 #define IRC_MAX_CHATS 20
 #define IRC_HISTORY_LENGTH (TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS * 2)
 
-void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, char *ident, char *realname, char *ssl, char *join) {
+void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, char *ident, char *realname, char *ssl, char *join, char *utf8_decode) {
   char *input_buff;
   char *message;
   char *out_message;
@@ -10493,7 +10487,16 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
   int offset = 0;
   int byte;
   int port = 6667;
+  char is_convert_from_utf8 = 1;
   WiFiClient *client = NULL;
+  int wifi_status;
+
+  wifi_status = WiFi.status();
+  if(wifi_status != WL_CONNECTED) {
+    drawError("Wi-Fi connection required");
+    return;
+  }
+
   if(strcmp(ssl, "1") == 0) {
     global_ssl_client->setInsecure();
     client = (WiFiClient*)&global_ssl_client;
@@ -10558,6 +10561,13 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
     client->print(buff);
   }
 
+  if(strcmp(utf8_decode, "1") == 0) {
+    is_convert_from_utf8 = 1;
+  }
+  else {
+    is_convert_from_utf8 = 0;
+  }
+
   offset = 0;
   input_buff[offset] = 0;
 
@@ -10576,7 +10586,9 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
         Serial.println();
         Serial.println(input_buff);
         Serial.println(strlen(input_buff));
-        utf8_to_cp1251(input_buff);
+        if(is_convert_from_utf8) {
+          utf8_to_cp1251(input_buff);
+        }
         if(memcmp(input_buff, "PING :", 6) == 0) {
           sprintf(buff, "PONG :%s\r\n", input_buff + 6);
           client->print(buff);
@@ -10871,7 +10883,12 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
         }
         // Если есть что отправлять - отправляем
         if(strcmp(buff, "")) {
-          cp1251_to_utf8(buff, out_message);
+          if(is_convert_from_utf8) {
+            cp1251_to_utf8(buff, out_message);
+          }
+          else {
+            strcpy(out_message, buff);
+          }
           client->print(out_message);
           // Копируем сообщение как есть в серверный чат
           irc_chat_history_add(chat_history[0], buff);
@@ -11198,6 +11215,9 @@ char utf8_to_cp1251_byte(char byte1, char byte2) {
     if(byte2 == 0xAB || byte2 == 0xBB) {
       byte = '"';
     }
+    if(byte2 == 0xA0) {
+      byte = ' ';
+    }
   }
 
   return byte;
@@ -11211,39 +11231,8 @@ void utf8_to_cp1251(char *buff) {
   while(read_offset < length) {
     byte = buff[read_offset];
     read_offset++;
-    if(byte == 0xC2) {
-      // Кавычки-ёлочки
-      if(buff[read_offset] == 0xAB) {
-        byte = '"';
-      }
-      if(buff[read_offset] == 0xBB) {
-        byte = '"';
-      }
-      read_offset++;
-    }
-    else if(byte == 0xD0) {
-      //Serial.println("---");
-      //Serial.println((int)byte, HEX);
-      //Serial.println((int)buff[read_offset], HEX);
-      if(buff[read_offset] == 0x81) {
-        byte = 0xA8; // Ё
-      }
-      else if(buff[read_offset] < 0xA0) {
-        byte = 0xC0 + buff[read_offset] - 0x90; // А-П
-      }
-      else {
-        byte = 0xD0 + buff[read_offset] - 0xA0; // Р-Я а-п
-      }
-      //Serial.println((int)byte, HEX);
-      read_offset++;
-    }
-    else if(byte == 0xD1) {
-      if(buff[read_offset] == 0x91) {
-        byte = 0xB8; // ё
-      }
-      else {
-        byte = 0xF0 + buff[read_offset] - 0x80; // р-я
-      }
+    if(byte >= 0xC0) {
+      byte = utf8_to_cp1251_byte(byte, buff[read_offset]);
       read_offset++;
     }
     
@@ -11541,14 +11530,6 @@ void dashboard(char mode, char *io_buff) {
 
   clearScreen();
   drawAppTitle("Dashboard");
-
-#ifdef IS_WIFI_ENABLED
-  wifi_status = WiFi.status();
-  if(wifi_status != WL_CONNECTED && global_unixtime_retrieved == 0) {
-    drawError("Wi-Fi connection required");
-    return;
-  }
-#endif
 
   strcpy(weather, "");
   strcpy(rates, "");
@@ -12274,6 +12255,11 @@ void autorun(char mode, char *io_buff) {
   clearScreen();
   drawAppTitle("Autorun");
 
+  if(storage_type == STORAGE_TYPE_NONE || !Storage) {
+    drawError("No storage available");
+    return;
+  }
+
   app_list = (char**)malloc(AUTORUN_MAX_APPS * sizeof(char *));
   for(app_index = 0; app_index < AUTORUN_MAX_APPS; app_index++) {
     app_list[app_index] = NULL;
@@ -12622,7 +12608,7 @@ void sound_control(char mode, char *io_buff) {
       drawAppTitle("Exit");
       touchWaitRelease();
 
-      if(drawConfirm("Save changes?") == 0) {
+      if(Storage && drawConfirm("Save changes?") == 0) {
         write_key_value_to_file("/Settings/Sound", "beep_enabled_flag", (char*)(global_is_beep_enabled ? "1" : "0"));
         sprintf(buff, "%d", global_volume);
         write_key_value_to_file("/Settings/Sound", "volume", buff);
@@ -13754,6 +13740,8 @@ void touch_calibration(char mode, char *io_buff) {
 void touch_calibration_save() {
   fs::File file;
   char buff[80];
+  if(storage_type == STORAGE_TYPE_NONE) return;
+  
   file = Storage->open("/Settings/Calibration", FILE_WRITE);
   if(file) {
     sprintf(buff, "%f %f %f %f %f %f", ax, bx, cx, ay, by, cy);
@@ -14051,10 +14039,11 @@ void oscilloscope_draw_values(int *values, int interval_millis) {
   int ystep;
   int value_last;
   char buff[80];
-  static int old_values[240];
+  static int *old_values = NULL;
   static char first_run_flag = 1;
 
   if(first_run_flag) {
+    old_values = (int *)malloc(240 * sizeof(int));
     for(i = 0; i < 240; i ++) {
       old_values[i] = 16 + tft.width() / 2;
     }
@@ -14167,10 +14156,11 @@ void oscilloscope_draw_values(int *values, int interval_millis) {
 
 int oscilloscope_get_value(int input_index) {
   static char first_run_flag = 1;
-  static int value;
+  static int value = 0;
   int byte;
-  static char buff[80];
+  static char *buff = NULL;
   if(first_run_flag) {
+    buff = (char *)malloc(20 * sizeof(char));
     buff[0] = 0;
   }
 
@@ -14180,6 +14170,7 @@ int oscilloscope_get_value(int input_index) {
   else if(input_index == 1) {
     return  analogRead(LIGHT_SENSOR_PIN);
   }
+#ifdef IS_WIFI_ENABLED
   else if(input_index == 2) {
     return WiFi.RSSI();
   }
@@ -14191,6 +14182,7 @@ int oscilloscope_get_value(int input_index) {
     Ping.ping("8.8.8.8", 1);
     return Ping.averageTime();
   }
+#endif
   else if(input_index == 5) {
     return analogRead(21);
   }
@@ -14213,6 +14205,7 @@ int oscilloscope_get_value(int input_index) {
         }
         buff[strlen(buff) + 1] = 0;
         buff[strlen(buff)] = byte;
+        if(strlen(buff) >= 18) break;
       }
     }
     sscanf(buff, "%d", &value);
@@ -17126,6 +17119,9 @@ char read_file_to_buff(char *filename, int limit, char *buff) {
   fs::File file;
   char byte;
   int offset;
+  
+  if(!Storage) return 0;
+
   file = Storage->open(filename);
   offset = 0;
   buff[offset] = 0;
@@ -17146,6 +17142,9 @@ char read_file_to_buff(char *filename, int limit, char *buff) {
 int write_file_from_buff(char *filename, char *buff) {
   fs::File file;
   int offset = 0;
+
+  if(!Storage) return 0;
+
   file = Storage->open(filename, FILE_WRITE);
   if(file) {
     while(buff[offset]) {
@@ -17164,6 +17163,9 @@ int read_key_value_from_file(char *filename, char *key, char *value) {
   int offset = 0;
   char str[80];
   char byte;
+
+  if(!Storage) return 0;
+
   file = Storage->open(filename);
   strcpy(value, "");
   if(file) {
@@ -17199,6 +17201,9 @@ int write_key_value_to_file(char *filename, char *key, char *value) {
   char str[80];
   char old_filename[80];
   char byte;
+
+  if(!Storage) return 0;
+
   sprintf(old_filename, "%s_old", filename);
   Storage->rename(filename, old_filename);
   new_file = Storage->open(filename, FILE_WRITE);
@@ -17237,6 +17242,9 @@ int write_key_value_to_file(char *filename, char *key, char *value) {
 int file_get_line_by_index(char *filename, int index, char *buff) {
   fs::File file;
   int result = 0;
+
+  if(!Storage) return 0;
+
   file = Storage->open(filename);
   if(file) {
     result = stream_get_line_by_index(file, index, buff);
@@ -17691,16 +17699,15 @@ void secondly() {
 }
 
 void setup() {
-  fs::File file;
-  char byte;
   char buff[80];
   char autorun_app_name[80];
-  int offset;
   int i;
   int inversion;
   int index;
   char calibration_required = 0;
   char password_present;
+
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
 
   Serial.begin(115200);
 
@@ -17716,7 +17723,12 @@ void setup() {
   // Start the SPI for the touchscreen and init the touchscreen
   //touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
   //touchscreen.begin(touchscreenSPI);
+
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+
   touchscreen.begin();
+
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
 
   // Инициализация экрана, 
   tft.init();
@@ -17732,6 +17744,8 @@ void setup() {
   ffat_available_flag = 0;
   sd_available_flag = 0;
 
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+
   // Инициализация FFat
   if(FFat.begin(FORMAT_FS_IF_FAILED)) {
     ffat_available_flag = 1;
@@ -17739,6 +17753,8 @@ void setup() {
     storage_type = STORAGE_TYPE_FFAT;
     Serial.println("Storage type FFat present");
   }
+
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
 
   // Инициализация SD
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
@@ -17748,6 +17764,8 @@ void setup() {
     storage_type = STORAGE_TYPE_SD;
     Serial.println("Storage type SD present");
   }
+
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
 
   // Настройки
   // Яркость
@@ -17897,12 +17915,14 @@ void setup() {
     }
   }
 
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+
   if(storage_type != STORAGE_TYPE_NONE) {
     // Тут можно спросить пароль
     if(read_file_to_buff("/Settings/Password", 79, buff)) {
       password_present = 1;
-      for(offset = 0; offset < strlen(buff); offset++) {
-        if(buff[offset] && (buff[offset] < '0' || buff[offset] > '9')) {
+      for(i = 0; i < strlen(buff); i++) {
+        if(buff[i] && (buff[i] < '0' || buff[i] > '9')) {
             password_present = 0;
         }
       }
@@ -17934,28 +17954,29 @@ void setup() {
       sscanf(buff, "%d", &keyboard_indent_right);
     }
 
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
   #ifdef IS_WIFI_ENABLED
     WiFi.begin();
     WiFi.onEvent(WiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
   #endif
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
 
     // Получить текущее время из сохранённого в ФС
     get_current_timestamp_fs();
     get_current_timezone();
   }
 
-  beep_if_enabled();
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
 
-  // Копируем ссылки на приложения
-  for(i = 0; i < 40; i++) {
-    main_apps[i] = apps[i];
-  }
+  beep_if_enabled();
 
   // Функция тикер
   // Каждую минуту
   minuteTicker.attach(60, minutely);
   // Каждую секунду
   secondTicker.attach(1.0, secondly); 
+
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
 
   // Читаем информацию об автозапуске
   autorun_app_name[0] = 0;
@@ -17972,8 +17993,12 @@ void setup() {
       }
     }
   }
+
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
 }
 
 void loop() {
-  apps[0](APP_MODE_LAUNCH, NULL);
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  all_apps[0](APP_MODE_LAUNCH, NULL);
+  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
 }
