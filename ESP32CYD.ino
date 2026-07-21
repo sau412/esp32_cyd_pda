@@ -1,5 +1,3 @@
-#include <XPT2046_Bitbang.h>
-
 /*
 Что-то вроде КПК для ESP32 CYD (Cheap Yellow Display/Device)
 
@@ -7,6 +5,9 @@
 - Ориентация экрана вертикальная
 - ФС FFat/SD
 - Папка настроек /Settings
+- Wi-Fi и работа с сетью
+- Без Bluetooth
+- Без SSH
 
 Функции:
 - Лаунчер
@@ -76,6 +77,12 @@
 - Бэкапы FFat на SD (и восстановление тоже)
 - Смена кодировки файла с utf8 на 1251
 - Игра 2048
+- Настройки экрана
+- Заставка цветные квадратики
+- Заставка аттрактор Лоренца
+- Заставка помехи
+- Заставка матрица
+- Настройки звука/будильника
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -178,14 +185,40 @@
 ? Информация о треке для веб-радио
 2026-07-16 Куда девается память?
 2026-07-17 Куда девается память - оптимизация (пару килобайт)
+2026-07-18 Баг с двойной синхронизацией времени, дашборд без обратного отсчёта, вебрадио - индикация попытки соединения,
+  баг с названием хранилища в информации о системе, монитировать FFat по необходимости при использовании SD, отмонтировать после
+2026-07-20 Исправлен баг с недогрузкой RSS, баг с выводом текста и символами перевода строк, разные кисти в рисовании,
+  баг с сохранением в рисовании, проверка на корректную строку utf-8, звук нажатия клавиши, звук нового часа,
+  есть ли дополнительные цвета на экране, приложение настройки экрана (частично)
+2026-07-21 Многострочный текст в owner info, сканирование BLE, приложение настройки экрана, проверка двочиных файлов, проверка папок, проверка BMP, проверка MP3,
+  баг с ответом сервера в чате, больше информации в заголовке, статус будильника в заголовке, заставка цветные квадратики, заставка матрица, заставка шум,
+  заставка аттрактор Лоренца, возможность отключить звук часа, возможность отключить звук клавиш, будильник
 
-Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое:
+Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
+- (д) Переводчик
+- (д) Вольтметр
+
+- (д) Восход и закат
+- (д) Чат - просмотр с прокруткой
+- (д) Таймер/секундомер в фоне
+- (д) Авторан - показывать текущее приложение
+
 - (п) Просмотреть справку, может быть что-то добавить
-- (и) Куда девается память?
 - (и) Крутая калибровка
-- (б) Просмотр текста перенос строки оказывается на следующей странице
-- (д) Проверять наличие ФС в приложениях
+- (н) Brainfuck интерпретатор
+- (н) Basic интерпретатор
+- (н) Пакетные файлы
+- (н) История ввода терминала (хотя бы прошлая команда)
+- (н) Буфер обмена
+- (н) Выделение в просмотре, копирование
+- (н) Выделение в редактировании, копирование, вставка
+- (д) Настройка "не синхронизировать через ntp"
+- (д) Настройка "не показывать время без синхр" чтобы не видеть левое время
+- (д) Автоопределение кодировки файла при просмотре
+- (д) Полноцветные скриншоты (24 бита) если нужно либо настройки скриншотов
 
+- (д) Настройка: не показывать значки статуса
+- (д) Настройка: не показывать время
 - (и) Убирать значки в лаунчере
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор
@@ -202,17 +235,9 @@
 - (и) ssh - Debug exception reason: BREAK instr
 - (д) Гофер браузер - специальная домашняя страница для CYD с объяснениями
 - (д) Гофер браузер - менять домашнюю страницу
-- (н) Brainfuck интерпретатор
-- (н) Basic интерпретатор
-- (н) Пакетные файлы
-- (н) Вольтметр
 - (н) Триггерные кнопки (не ясно как использовать) или чекбоксы
-- (н) Квадратные значки в лаунчере
 - (н) Выбирать SD или FFat для каждого приложения отдельно
-- (н) Рисование, толщина инструмента
 - (н) Прокрутка терминала
-- (н) История ввода терминала (хотя бы небольшая)
-- (н) IRC поддержка UTF-8 вкл-выкл
 - (н) Не отжимать кнопку если увод касания меньше 100 мс
 - (н) В книгах сохранять смещения для последних ста страниц для перемотки назад
 - (н) Переделать мп3-плеер в сторону мп3, а не просто пим
@@ -220,17 +245,21 @@
 - (н) Многозадачность или хотя бы некоторые задачи в фоне - музыка, вебсервер, чат, IRC
 - (н) Сохранение состояния приложения, хотя бы некоторых и хотя бы частичное
 - (н) Соединение через HTTP прокси
-- (н) Буфер обмена
-- (н) Выделение в просмотре, копирование
-- (н) Выделение в редактировании, копирование, вставка
-- (н) Буфер для перемотки назад в книгах
 - (и) Bluetooth музыка и радио - похоже не хватает на это памяти
+- (н) Использовать NVS для настроек, привязанных к устройству - инверсия, калибровка, предпочитаемое хранилище - но это дополнительная сущность
+- (и) Другое погодное апи или выбор из нескольких
+- (д) Просмотр картинок через JPEGDEC/PNGDec
+- (д) В файлах просмотр бмп, слушать мп3
+- (и) Дашборд - если есть соединение показывать пинг до шлюза, или писать что соединения нет, Время юникс, Синхронизировано ли время, Текущая фс, Аптайм в дашборд
+- (д) Заставка двойной маятник (сложно)
+- (д) Запуск приложений из командной строки - не расчитано приложение на это
 
 */
 
 #define IS_WIFI_ENABLED
 
 #define PREFER_SD_IF_AVAILABLE
+//#define IS_BLE_ENABLED
 //#define IS_BLUETOOTH_ENABLED
 //#define IS_SSH_ENABLED
 
@@ -294,6 +323,15 @@ WiFiClient *global_client = NULL;
 
 #endif
 
+#ifdef IS_BLE_ENABLED
+
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
+
+#endif
+
 // Encryption library for password storage
 #include "mbedtls/aes.h"
 
@@ -305,7 +343,7 @@ WiFiClient *global_client = NULL;
 #include "AudioFileSourceICYStream.h"
 #include "AudioFileSourceBuffer.h"
 
-#define FORMAT_FS_IF_FAILED false
+#define IS_FORMAT_FFAT_IF_FAILED false
 
 TFT_eSPI tft = TFT_eSPI();
 
@@ -660,17 +698,27 @@ unsigned long global_exit_flag_touch_length;
 
 float global_lat = 0;
 float global_lon = 0;
+
 int global_brightness = 255;
+int global_inversion = 0;
+int global_rotation = 0;
+int global_view_font_small = 0;
 
 // Звук
 int global_is_beep_enabled = 1;
+int global_is_beep_hour_enabled = 1;
+int global_is_beep_tap_enabled = 1;
 int global_volume = 100;
 
 // После подключения к вай-фаю можно узнать текущее время
 time_t global_unixtime_retrieved = 0;
 time_t global_unixtime_retrieved_millis = 0;
 char global_unixtime_synced = 0;
+char global_unixtime_sync_initialized = 0;
 long global_timezone = 0;
+char global_alarm_set = 0;
+int global_alarm_hour = 0;
+int global_alarm_minute = 0;
 
 // Переменные для человекочитаемых параметров времени
 int global_year = 0;
@@ -707,6 +755,9 @@ void irc(char mode, char *io_buff);
 void chat(char mode, char *io_buff);
 void weather(char mode, char *io_buff);
 void http_file_access(char mode, char *io_buff);
+#endif
+#ifdef IS_BLE_ENABLED
+void ble(char mode, char *io_buff);
 #endif
 void screen_test(char mode, char *io_buff);
 void screensaver(char mode, char *io_buff);
@@ -747,6 +798,7 @@ void piano(char mode, char *io_buff);
 void metronome(char mode, char *io_buff);
 void user_manual(char mode, char *io_buff);
 void color_settings(char mode, char *io_buff);
+void screen_settings(char mode, char *io_buff);
 void reboot(char mode, char *io_buff);
 void keyboard_control(char mode, char *io_buff);
 void sound_control(char mode, char *io_buff);
@@ -760,6 +812,7 @@ void flashcards(char mode, char *io_buff);
 void oscilloscope(char mode, char *io_buff);
 void select_storage_app(char mode, char *io_buff);
 void game2048(char mode, char *io_buff);
+void clock_control(char mode, char *io_buff);
 
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
@@ -799,6 +852,9 @@ function_application_pointer all_apps[] = {
   weather,
   http_file_access,
 #endif
+#ifdef IS_BLE_ENABLED
+  ble,
+#endif
   counter,
   random_numbers,
   timer,
@@ -806,7 +862,7 @@ function_application_pointer all_apps[] = {
   breathe,
   piano,
   metronome,
-  screen_test,
+  //screen_test,
   screensaver,
   user_manual,
   security,
@@ -818,7 +874,7 @@ function_application_pointer all_apps[] = {
   i2c_scanner,
   dashboard,
   fuzzy_clock,
-  set_clock,
+  //set_clock,
   view_font,
   fifteen,
   lights_off,
@@ -831,9 +887,11 @@ function_application_pointer all_apps[] = {
   n_back,
   mental_math,
   game2048,
-  color_settings,
+  //color_settings,
+  screen_settings,
   keyboard_control,
   sound_control,
+  clock_control,
   autorun,
   select_storage_app,
   backups,
@@ -1325,25 +1383,25 @@ void system_info(char mode, char *io_buff) {
     }
     else if(storage_type == STORAGE_TYPE_SD) {
       if(SD.totalBytes() > 4096 * 1024) {
-        sprintf(buff, "FFat Total: %d MiB ", SD.totalBytes() / (1024 * 1024));
+        sprintf(buff, "SD Total: %d MiB ", SD.totalBytes() / (1024 * 1024));
       }
       else if(SD.totalBytes() > 1024) {
-        sprintf(buff, "FFat Total: %d kiB ", SD.totalBytes() / (1024));
+        sprintf(buff, "SD Total: %d kiB ", SD.totalBytes() / (1024));
       }
       else {
-        sprintf(buff, "FFat Total: %d bytes ", SD.totalBytes());
+        sprintf(buff, "SD Total: %d bytes ", SD.totalBytes());
       }
       tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
       i++;
 
       if(SD.usedBytes() > 4096 * 1024) {
-        sprintf(buff, "FFat Used: %d MiB (%d%%) ", SD.usedBytes() / (1024 * 1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+        sprintf(buff, "SD Used: %d MiB (%d%%) ", SD.usedBytes() / (1024 * 1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
       }
       else if(SD.usedBytes() > 4096) {
-        sprintf(buff, "FFat Used: %d kiB (%d%%) ", SD.usedBytes() / (1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+        sprintf(buff, "SD Used: %d kiB (%d%%) ", SD.usedBytes() / (1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
       }
       else {
-        sprintf(buff, "FFat Used: %d bytes (%d%%) ", SD.usedBytes(), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+        sprintf(buff, "SD Used: %d bytes (%d%%) ", SD.usedBytes(), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
       }
       tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
       i++;
@@ -1459,6 +1517,8 @@ void user_manual(char mode, char *io_buff) {
   "/Settings/Wifi - Wi-Fi passwords\n"
   "/Settings/Autorun - auto start app after reset\n"
   "/Settings/Inversion - inversion state\n"
+  "/Settings/Rotation - rotation state\n"
+  "/Settings/Font - use small font for view\n"
   "/Settings/Colors - color settings\n"
   "/Settings/Coordinates - latitude and longitude for weather\n"
   "/Settings/Keyboard - keyboard settings\n"
@@ -1611,7 +1671,7 @@ void files(char mode, char *io_buff) {
           if(drawConfirm("Format storage?") == 0) {
             // Форматирование
             FFat.format();
-            FFat.begin(FORMAT_FS_IF_FAILED);
+            FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
             Storage->mkdir("/Settings");
           }
         }
@@ -2163,7 +2223,15 @@ void terminal_execute_single(char *str) {
     *arg2 = 0;
     arg2++;
 
+    if(storage_type == STORAGE_TYPE_SD) {
+      FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
+    }
+
     cp_between_storages(&FFat, arg1, &SD, arg2);
+
+    if(storage_type == STORAGE_TYPE_SD) {
+      FFat.end();
+    }
   }
   else if(strcmp(str, "sd_to_ffat") == 0) {
     terminal_print("Usage: sd_to_ffat {sd_filename} {ffat_filename}\n\r");
@@ -2176,7 +2244,15 @@ void terminal_execute_single(char *str) {
     *arg2 = 0;
     arg2++;
 
+    if(storage_type == STORAGE_TYPE_SD) {
+      FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
+    }
+
     cp_between_storages(&SD, arg1, &FFat, arg2);
+
+    if(storage_type == STORAGE_TYPE_SD) {
+      FFat.end();
+    }
   }
   else if(strcmp(str, "utf8_to_cp1251") == 0) {
     terminal_print("Usage: utf8_to_cp1251 {input_filename} {output_filename}\n\r");
@@ -2951,6 +3027,10 @@ int terminal_ssh(char *arg) {
   char ssh_pass[80] = "password";
   char buff[80];
   int rc;
+
+  if(strcmp(arg, "") != 0) {
+    strcpy(host, arg);
+  }
   ssh_channel channel;
 Serial.println(__LINE__); delay(1000);
   ssh_session my_session = ssh_new();
@@ -3952,6 +4032,7 @@ void webradio_play(char *filename) {
   AudioFileSourceID3 *id3;
   AudioFileSourceBuffer *buff;
 
+  drawProcessWindow("Connecting...");
   file_get_line_by_index(filename, 1, url);
 Serial.println(url);
   file = new AudioFileSourceICYStream(url);
@@ -4981,6 +5062,7 @@ void draw_edit(char *title, char *filename) {
   
   int color = TFT_BLACK;
   int color_index = 0;
+  int brush_width = 3;
   
   int touch_x;
   int touch_y;
@@ -5009,7 +5091,7 @@ void draw_edit(char *title, char *filename) {
     tft.fillRect(color_index * tft.width() / 16, 304, tft.width() / 16, 16, colors[color_index]);
   }
   color_index = 0;
-  tft.fillRect(color_index * tft.width() / 16 + 6, 304 + 6, tft.width() / 16 - 12, 16 - 12, colors[15 - color_index]);
+  tft.fillRect(color_index * tft.width() / 16 + 7 - brush_width / 2, 304 + 7 - brush_width / 2, brush_width, brush_width, colors[15 - color_index]);
 
   color = TFT_BLACK;
   while(1) {
@@ -5023,11 +5105,15 @@ void draw_edit(char *title, char *filename) {
         // Нужно для избегания рывков линии при подъёме стилуса
         if(touch_started) {
           if(abs(touch_x - prev_touch_x) + abs(touch_y - prev_touch_y) < 20) {
-            tft.drawLine(prev_touch_x, prev_touch_y, touch_x, touch_y, colors[color_index]);
+            for(i = 0; i < brush_width; i++) {
+              tft.drawLine(prev_touch_x, prev_touch_y, touch_x, touch_y, colors[color_index]);
+              tft.drawLine(prev_touch_x + i, prev_touch_y, touch_x + i, touch_y, colors[color_index]);
+              tft.drawLine(prev_touch_x, prev_touch_y + i, touch_x, touch_y + i, colors[color_index]);
+            }
           }
         }
         else {
-          tft.drawPixel(touch_x, touch_y, colors[color_index]);
+          tft.fillRect(touch_x, touch_y, brush_width, brush_width, colors[color_index]);
           touch_started = 1;
           modified = 1;
         }
@@ -5039,9 +5125,20 @@ void draw_edit(char *title, char *filename) {
       prev_touch_y = touch_y;
       if(touch_x >= 0 && touch_x < tft.width() && touch_y >= 304 && touch_y < tft.height()) {
         tft.fillRect(color_index * tft.width() / 16, 304, tft.width() / 16, 16, colors[color_index]);
+        if(color_index != floor(touch_x * 16 / tft.width())) {
+          brush_width = 3;
+        }
+        else {
+          brush_width += 2;
+          if(brush_width >= 7) {
+            brush_width = 1;
+          }
+        }
         color_index = floor(touch_x * 16 / tft.width());
         tft.fillRect(color_index * tft.width() / 16, 304, tft.width() / 16, 16, colors[color_index]);
-        tft.fillRect(color_index * tft.width() / 16 + 6, 304 + 6, tft.width() / 16 - 12, 16 - 12, colors[15 - color_index]);
+        tft.fillRect(color_index * tft.width() / 16 + 7 - brush_width / 2, 304 + 7 - brush_width / 2, brush_width, brush_width, colors[15 - color_index]);
+
+        touchWaitRelease();
       }
 
       touchCheckNowait();
@@ -5059,13 +5156,13 @@ void draw_edit(char *title, char *filename) {
             // Половина ширины картинки (120) должна без остатка делиться на размер буфера
             for(i = 0; i < 60; i++) {
               byte = 0;
-              pixel_color = tft.readPixel(x, y + 16);
+              pixel_color = tft.readPixel(x, y + 16 - 1);
               for(color_index = 0; color_index < 16; color_index++) {
                 if(pixel_color == colors[color_index]) break;
               }
               byte |= color_index << 4;
               x++;
-              pixel_color = tft.readPixel(x, y + 16);
+              pixel_color = tft.readPixel(x, y + 16 - 1);
               for(color_index = 0; color_index < 16; color_index++) {
                 if(pixel_color == colors[color_index]) break;
               }
@@ -5107,6 +5204,10 @@ void backups_action(int action_index, char *filename) {
 
   if(action_index && !filename) return;
 
+  if(storage_type == STORAGE_TYPE_SD) {
+    FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
+  }
+
   if(action_index == 0) {
     // Создать бэкап
     if(drawConfirm("Backup FFat to SD?") == 0) {
@@ -5134,6 +5235,10 @@ void backups_action(int action_index, char *filename) {
       sprintf(buff, "%s/%s", BACKUPS_PATH, filename);
       delete_recursive(&SD, buff);
     }
+  }
+
+  if(storage_type == STORAGE_TYPE_SD) {
+    FFat.end();
   }
 }
 
@@ -5772,7 +5877,7 @@ void security(char mode, char *io_buff) {
   int button_pressed;
   char correct_password[80] = "";
   char user_input[80] = "";
-  char owner_info[80] = "";
+  char owner_info[160] = "";
   char password_correct_flag;
   char *buttons[] = {
     "Set owner info",
@@ -5828,19 +5933,20 @@ void security(char mode, char *io_buff) {
     tft.fillRect(0, 16, tft.width(), 100, color_scheme_bg);
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.drawString("Owner info:", 8, 20, FONT_DEFAULT);
-    tft.drawString(owner_info, 8, 20 + 16, FONT_DEFAULT);
+    draw_text_formatted(owner_info, 8, 36, tft.width() - 2 * 8, 3, FONT_DEFAULT, 1);
+    //tft.drawString(owner_info, 8, 20 + 16, FONT_DEFAULT);
     
     if(strlen(correct_password) > 0) {
-      tft.drawString("Password is set", 8, 20 + 16 + 16 + 8, FONT_DEFAULT);
+      tft.drawString("Password is set", 8, 20 + 16 * 4 + 8, FONT_DEFAULT);
     }
     else {
-      tft.drawString("Password is not set", 8, 20 + 16 + 16 + 8, FONT_DEFAULT);
+      tft.drawString("Password is not set", 8, 20 + 16 * 4 + 8, FONT_DEFAULT);
     }
 
-    drawButtonMatrix(8, 100, tft.width() - 8 * 2, 100, buttons, 1, 3);
+    drawButtonMatrix(8, 120, tft.width() - 8 * 2, 100, buttons, 1, 3);
 
     touchWaitPress();
-    button_pressed = touchCheckMatrix(8, 100, tft.width() - 8 * 2, 100, buttons, 1, 3);
+    button_pressed = touchCheckMatrix(8, 120, tft.width() - 8 * 2, 100, buttons, 1, 3);
     if(button_pressed != -1) {
       // Проверяем пароль если он задан
       password_correct_flag = 0;
@@ -6835,7 +6941,7 @@ void breathe(char mode, char *io_buff) {
           else strcat(buff, "_ ");
         }
         if(this_step_seconds > inhale) {
-          beep_if_enabled();
+          beep_tap_if_enabled();
           tft.fillRect(0, 16, tft.width(), 132, color_scheme_bg);
           step_start_millis = millis();
           step++;
@@ -6849,7 +6955,7 @@ void breathe(char mode, char *io_buff) {
           else strcat(buff, "_ ");
         }
         if(this_step_seconds > inhale_hold) {
-          beep_if_enabled();
+          beep_tap_if_enabled();
           tft.fillRect(0, 16, tft.width(), 132, color_scheme_bg);
           step_start_millis = millis();
           step++;
@@ -6864,7 +6970,7 @@ void breathe(char mode, char *io_buff) {
         }
 
         if(this_step_seconds > exhale) {
-          beep_if_enabled();
+          beep_tap_if_enabled();
           tft.fillRect(0, 16, tft.width(), 132, color_scheme_bg);
           step_start_millis = millis();
           step++;
@@ -6879,7 +6985,7 @@ void breathe(char mode, char *io_buff) {
         }
 
         if(this_step_seconds > exhale_hold) {
-          beep_if_enabled();
+          beep_tap_if_enabled();
           tft.fillRect(0, 16, tft.width(), 132, color_scheme_bg);
           step_start_millis = millis();
           step = 0;
@@ -7408,7 +7514,7 @@ void snake(char mode, char *io_buff) {
       if(head_x == bait_x && head_y == bait_y) {
         length++;
         if(length > hiscore) hiscore = length;
-        beep_if_enabled();
+        beep_tap_if_enabled();
         bait_flag = 1;
       }
       else if(snake_get_cell(head_x, head_y, field)) {
@@ -7914,12 +8020,16 @@ void turkish_kerchief(char mode, char *io_buff) {
   }
 }
 
-#define STAR_COUNT 40
-
 void screensaver(char mode, char *io_buff) {
-  int stars_x[STAR_COUNT];
-  int stars_y[STAR_COUNT];
-  int i;
+  int button_pressed;
+  char *buttons[] = {
+    "Star sky",
+    "Color squares",
+    "Lorenz Attractor",
+    "Noise",
+    "Matrix",
+    NULL
+  };
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -7941,7 +8051,7 @@ void screensaver(char mode, char *io_buff) {
   };
 
   if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Screensaver");
+    strcpy(io_buff, "Screensavers");
     return;
   }
   if(mode == APP_MODE_RETURN_NAME_SHORT) {
@@ -7952,6 +8062,58 @@ void screensaver(char mode, char *io_buff) {
     memcpy(io_buff, app_icon, 34);
     return;
   }
+
+  clearScreen();
+  drawAppTitle("Screensavers");
+  
+  while(1) {
+    drawButtonMatrix(0, 20, tft.width(), 300, buttons, 1, 5);
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, 20, tft.width(), 300, buttons, 1, 5);
+    if(button_pressed != -1) {
+      // Sky
+      if(button_pressed == 0) {
+        screensaver_sky();
+      }
+      // Double pendulum
+      if(button_pressed == 1) {
+        screensaver_squares();
+      }
+      // Lorenz
+      if(button_pressed == 2) {
+        screensaver_lorenz();
+      }
+      // Noise
+      if(button_pressed == 3) {
+        screensaver_noise();
+      }
+      // Matrix
+      if(button_pressed == 4) {
+        screensaver_matrix();
+      }
+      clearScreen();
+      drawAppTitle("Screensavers");
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+
+}
+
+#define STAR_COUNT 40
+
+void screensaver_sky() {
+  int stars_x[STAR_COUNT];
+  int stars_y[STAR_COUNT];
+  int i;
 
   disableAppTitle();
 
@@ -8019,11 +8181,165 @@ void screensaver(char mode, char *io_buff) {
   }
 }
 
+void screensaver_pendulum() {
+  disableAppTitle();
+  while(1) {
+    tft.drawPixel(random(0, tft.width()), random(0, tft.height()), random(0, 2) ? TFT_BLACK : TFT_WHITE);
+    delayOrTouchWait(2);
+    if(touchCheckNowait()) {
+      touchWaitRelease();
+      return;
+    }
+  }
+}
+
+#define LORENZ_COUNT 80
+
+void screensaver_lorenz() {
+  float x[LORENZ_COUNT];
+  float y[LORENZ_COUNT];
+  float z[LORENZ_COUNT];
+  float dx;
+  float dy;
+  float dz;
+  float sigma = 10;
+  float r = 28;
+  float b = 8 / 3;
+  int i;
+
+  for(i = 0; i < LORENZ_COUNT; i++) {
+    x[i] = (float)random(0, 100) - 50;
+    y[i] = (float)random(0, 100) - 50;
+    z[i] = (float)random(0, 100) - 50;
+  }
+
+  disableAppTitle();
+  tft.fillScreen(TFT_BLACK);
+
+  while(1) {
+    for(i = 0; i < LORENZ_COUNT; i++) {
+      tft.drawPixel(tft.width() / 2 + x[i] * 6 - z[i] * 0, tft.height() / 2 - (z[i] * 3), TFT_BLACK);
+      dx = sigma * (y[i] - x[i]);
+      dy = x[i] * (r - z[i]) - y[i];
+      dz = x[i] * y[i] - b * z[i];
+      x[i] += dx / 1000;
+      y[i] += dy / 1000;
+      z[i] += dz / 1000;
+      tft.drawPixel(tft.width() / 2 + x[i] * 6 - z[i] * 0, tft.height() / 2 - (z[i] * 3), TFT_WHITE);
+      //Serial.printf("x = %f, y = %f, z = %f\n", x[i], y[i], z[i]);
+      //delay(1000);
+    }
+    //delayOrTouchWait(2);
+    if(touchCheckNowait()) {
+      touchWaitRelease();
+      return;
+    }
+  }
+}
+
+void screensaver_squares() {
+  int x, y, height, width;
+  disableAppTitle();
+  tft.fillScreen(TFT_BLACK);
+  while(1) {
+    x = random(0, tft.width() - 20);
+    y = random(0, tft.height() - 20);
+    height = random(5, 20) + 1;
+    width = random(5, 20) + 1;
+    tft.drawRect(x, y, width, height, TFT_BLACK);
+    tft.fillRect(x + 1, y + 1, width - 2, height - 2, colors[random(0, 16)]);
+    delayOrTouchWait(100);
+    if(touchCheckNowait()) {
+      touchWaitRelease();
+      return;
+    }
+  }
+}
+
+void screensaver_noise() {
+  char buff[8];
+  int i;
+  disableAppTitle();
+  while(1) {
+    for(i = 0; i < 8; i++) {
+      buff[i] = random(0, 256);
+    }
+    tft.drawBitmap(random(0, tft.width() / 8) * 8, random(0, tft.height() / 8) * 8, (const uint8_t *)buff, 8, 8, TFT_WHITE, TFT_BLACK);
+    //tft.drawPixel(random(0, tft.width()), random(0, tft.height()), random(0, 2) ? TFT_BLACK : TFT_WHITE);
+    if(touchCheckNowait()) {
+      touchWaitRelease();
+      return;
+    }
+  }
+}
+
+#define MARTIX_LINES 20
+
+void screensaver_matrix() {
+  int x[MARTIX_LINES];
+  int y[MARTIX_LINES];
+  int i;
+  char buff[10];
+  buff[1] = 0;
+  disableAppTitle();
+  tft.fillScreen(TFT_BLACK);
+
+  for(i = 0; i < MARTIX_LINES; i++) {
+    x[i] = random(0, tft.width() / 6);
+    y[i] = random(0, tft.height() / 8);
+  }
+  while(1) {
+    // Random chars
+    if(random(0, 5) != 0) {
+      buff[0] = ' ';
+    }
+    else {
+      buff[0] = ' ' + random(0, 127 - 32);
+    }
+    tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    tft.drawString(buff, random(0, tft.width() / 6) * 6, random(0, tft.height() / 8) * 8, FONT_MONOSPACE);
+
+    // Lines
+    for(i = 0; i < MARTIX_LINES; i++) {
+      // Стираем символ на 10 позиций выше
+      tft.setTextColor(TFT_GREEN, TFT_BLACK);
+      tft.drawString(" ", x[i] * 6, y[i] * 8 - 10 * 8, FONT_MONOSPACE);
+
+      // Тёмный символ на 5 позиций выше
+      tft.setTextColor(TFT_DARKGREEN, TFT_BLACK);
+      buff[0] = ' ' + random(0, 127 - 32);
+      tft.drawString(buff, x[i] * 6, y[i] * 8 - 5 * 8, FONT_MONOSPACE);
+      
+      // Рисуем новый символ
+      buff[0] = ' ' + random(0, 127 - 32);
+      tft.setTextColor(TFT_GREEN, TFT_BLACK);
+      tft.drawString(buff, x[i] * 6, y[i] * 8 - 1 * 8, FONT_MONOSPACE);
+
+      // Рисуем новый символ
+      buff[0] = ' ' + random(0, 127 - 32);
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      tft.drawString(buff, x[i] * 6, y[i] * 8, FONT_MONOSPACE);
+
+      y[i]++;
+
+      if(y[i] > 50) {
+        x[i] = random(0, tft.width() / 6);
+        y[i] = random(0, tft.height() / 8) - 40;
+      }
+    }
+
+    delayOrTouchWait(100);
+    if(touchCheckNowait()) {
+      touchWaitRelease();
+      return;
+    }
+  }
+}
+
 void color_settings(char mode, char *io_buff) {
   int scheme_offset = 0;
   int scheme_selected = 0;
   int i;
-  int inversion;
   int button_pressed;
   char redraw_flag;
   char buff[80];
@@ -8079,11 +8395,6 @@ void color_settings(char mode, char *io_buff) {
     return;
   }
 
-  if(read_file_to_buff("/Settings/Inversion", 79, buff)) {
-    sscanf(buff, "%d", &inversion);
-    tft.invertDisplay(inversion ? true : false);
-  }
-
   redraw_flag = 1;
   while(1) {
     if(redraw_flag) {
@@ -8096,7 +8407,7 @@ void color_settings(char mode, char *io_buff) {
     drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons_apply, 1, 1);
 
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    if(inversion) {
+    if(global_inversion) {
       tft.drawCentreString(" on ", 3 * tft.width() / 4, 40, FONT_DEFAULT);
     }
     else {
@@ -8114,13 +8425,13 @@ void color_settings(char mode, char *io_buff) {
     button_pressed = touchCheckMatrix(0, 32, tft.width() / 2, 32, buttons_inversion, 1, 1);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
-        if(inversion) {
-          inversion = 0;
+        if(global_inversion) {
+          global_inversion = 0;
         }
         else {
-          inversion = 1;
+          global_inversion = 1;
         }
-        tft.invertDisplay(inversion ? true : false);
+        tft.invertDisplay(global_inversion ? true : false);
       }
       redraw_flag = 1;
     }
@@ -8314,7 +8625,7 @@ void color_settings(char mode, char *io_buff) {
       touchWaitRelease();
 
       if(drawConfirm("Save settings?") == 0) {
-        sprintf(buff, "%d", inversion);
+        sprintf(buff, "%d", global_inversion);
         write_file_from_buff("/Settings/Inversion", buff);
 
         scheme_text = (char*)malloc(2000);
@@ -8345,6 +8656,163 @@ void color_settings(char mode, char *io_buff) {
         strcat(scheme_text, buff);
         write_file_from_buff("/Settings/Colors", scheme_text);
         free(scheme_text);
+      }
+      touchExitActionReset();
+      return;
+    }
+
+    touchWaitRelease();
+  }
+}
+
+void screen_settings(char mode, char *io_buff) {
+  int i;
+  int button_pressed;
+  char redraw_flag;
+  char buff[80];
+  char *buttons_settings[] = {
+    "Inversion",
+    "Rotation",
+    "Brightness",
+    "Test screen",
+    "Calibration",
+    "Color scheme",
+    "View font",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000110,
+    B01000000, B00001110,
+    B01000000, B00011110,
+    B01000000, B00111110,
+    B01000000, B01111110,
+    B01000000, B11111110,
+    B01000001, B11111110,
+    B01000011, B11111110,
+    B01000111, B11111110,
+    B01001111, B11111110,
+    B01011111, B11111110,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Screen Settings");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Scr");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  redraw_flag = 1;
+  while(1) {
+    if(redraw_flag) {
+      clearScreen();
+      drawAppTitle("Screen Settings");
+      redraw_flag = 0;
+    }
+
+    drawButtonMatrix(0, 32, tft.width() / 2, 32 * 7, buttons_settings, 1, 7);
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    if(global_inversion) {
+      strcpy(buff, " on ");
+    }
+    else {
+      strcpy(buff, " off ");
+    }
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 40 + 32 * 0, FONT_DEFAULT);
+    
+    if(global_rotation) {
+      strcpy(buff, " on ");
+    }
+    else {
+      strcpy(buff, " off ");
+    }
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 40 + 32 * 1, FONT_DEFAULT);
+
+    sprintf(buff, "  %d  ", global_brightness);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 40 + 32 * 2, FONT_DEFAULT);
+
+    if(global_view_font_small) {
+      strcpy(buff, " small ");
+    }
+    else {
+      strcpy(buff, " normal ");
+    }
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 40 + 32 * 6, FONT_DEFAULT);
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, 32, tft.width() / 2, 32 * 7, buttons_settings, 1, 7);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        if(global_inversion) {
+          global_inversion = 0;
+        }
+        else {
+          global_inversion = 1;
+        }
+        tft.invertDisplay(global_inversion ? true : false);
+      }
+      if(button_pressed == 1) {
+        if(global_rotation) {
+          global_rotation = 0;
+        }
+        else {
+          global_rotation = 1;
+        }
+        tft.setRotation(global_rotation ? 0 : 2);
+      }
+      // Brightness
+      if(button_pressed == 2) {
+        brightness_app(APP_MODE_LAUNCH, NULL);
+      }
+      // Test screen
+      if(button_pressed == 3) {
+        screen_test(APP_MODE_LAUNCH, NULL);
+      }
+      // Calibration
+      if(button_pressed == 4) {
+        touch_calibration(APP_MODE_LAUNCH, NULL);
+      }
+      // Color Scheme
+      if(button_pressed == 5) {
+        color_settings(APP_MODE_LAUNCH, NULL);
+      }
+      if(button_pressed == 6) {
+        if(global_view_font_small) {
+          global_view_font_small = 0;
+        }
+        else {
+          global_view_font_small = 1;
+        }
+      }
+      redraw_flag = 1;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+
+      if(drawConfirm("Save settings?") == 0) {
+        sprintf(buff, "%d", global_inversion);
+        write_file_from_buff("/Settings/Inversion", buff);
+
+        sprintf(buff, "%d", global_rotation);
+        write_file_from_buff("/Settings/Rotation", buff);
+
+        sprintf(buff, "%d", global_view_font_small);
+        write_file_from_buff("/Settings/Font", buff);
       }
       touchExitActionReset();
       return;
@@ -8671,8 +9139,11 @@ void WiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
 
 void get_current_timestamp_wifi_begin() {
   const char* ntpServer = "pool.ntp.org";
-  sntp_set_time_sync_notification_cb(timeSyncCallback);
-  configTime(0, 0, ntpServer);
+  if(!global_unixtime_sync_initialized) {
+    sntp_set_time_sync_notification_cb(timeSyncCallback);
+    configTime(0, 0, ntpServer);
+    global_unixtime_sync_initialized = 1;
+  }
 }
 
 void timeSyncCallback(struct timeval *tv) {
@@ -9573,9 +10044,9 @@ void chat(char mode, char *io_buff) {
           buff_offset++;
           //buff[buff_offset] = 0;
         }
-        update_flag = 0;
       }
       prev_update_data_millis = millis();
+      update_flag = 0;
     }
 
     drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 1, 1);
@@ -9612,12 +10083,7 @@ void chat(char mode, char *io_buff) {
             Serial.println(query);
             httpResponseCode = get_file_https(query, buff, 80);
             if(httpResponseCode == 200) {
-              if(strcmp(buff, "ok")) {
-                drawError(buff);
-              }
-              else {
-                strcpy(message, "");
-              }
+              strcpy(message, "");
             }
             else {
               if(httpResponseCode > 0) {
@@ -9787,7 +10253,7 @@ void http_fs_restore_handle() {
   else if (upload.status == UPLOAD_FILE_END) {
     ffat_restore_stream->flush();
     // Обновляем ФС
-    if(FFat.begin(FORMAT_FS_IF_FAILED)) {
+    if(FFat.begin(IS_FORMAT_FFAT_IF_FAILED)) {
       Serial.println("FFat mount ok");
     }
     else {
@@ -10011,7 +10477,7 @@ char * http_get_error_text(int httpResponseCode, char *buff) {
 // ====================================================
 
 #define RSS_PATH "/RSS"
-#define RSS_MAX_LENGTH 10000
+#define RSS_MAX_LENGTH 50000
 
 void rss_action(int action_index, char *filename) {
   fs::File file;
@@ -10096,6 +10562,8 @@ void rss_view_source(char *source_name, char *source_url) {
   char convert_from_utf8 = 1;
   char is_header_tag = 1;
   int wifi_status;
+  unsigned long millis_start_wait;
+  unsigned long millis_start_query;
 
   wifi_status = WiFi.status();
   if(wifi_status != WL_CONNECTED) {
@@ -10106,7 +10574,8 @@ void rss_view_source(char *source_name, char *source_url) {
 Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
 
   drawProcessWindow("Getting RSS feed...");
-  
+
+  millis_start_query = millis();  
   if(source_url[4] == 's') {
     global_ssl_client->setInsecure();
     http.begin(*global_ssl_client, source_url);
@@ -10280,8 +10749,45 @@ Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
     data[offset] = 0;
 
     if(offset >= RSS_MAX_LENGTH - 1) {
-      //Serial.printf("%d break %d\n", __LINE__, offset);
+      Serial.printf("RSS size limit reached\n");
       break;
+    }
+
+    // Тайм-аут
+    if(millis() - millis_start_query > 10000) {
+      break;
+    }
+
+    // Если в потоке пусто, а размер содержимого ещё не подошёл ждём ещё
+    if(!stream->available()) {
+      if(http.getSize() > 0 && strlen(data) < http.getSize()) {
+        Serial.printf("Steam empty, but %d < %d, waiting...\n", strlen(data), http.getSize());
+        millis_start_wait = millis();
+        while(millis() - millis_start_wait < 10000) {
+          if(stream->available()) break;
+        }
+        if(stream->available()) {
+          Serial.printf("Steam available\n");
+        }
+        else {
+          Serial.printf("Steam empty\n");
+        }
+      }
+      else {
+        Serial.printf("Steam empty, size unknown...\n");
+        delay(1000);
+        millis_start_wait = millis();
+        while(millis() - millis_start_wait < 10000) {
+          if(stream->available()) break;
+        }
+        if(stream->available()) {
+          Serial.printf("Steam available\n");
+        }
+        else {
+          Serial.printf("Steam empty\n");
+          break;
+        }
+      }
     }
   }
   data[offset] = 0;
@@ -11139,6 +11645,139 @@ void irc(char mode, char *io_buff) {
 #endif
 // IS_WIFI_ENABLED
 
+#ifdef IS_BLE_ENABLED
+
+void ble(char mode, char *io_buff) {
+  char **networks;
+  int button_pressed;
+  int networks_found;
+  int networks_unique;
+  int network_index;
+  int network_offset = 0;
+  int network_selected = 0;
+  int i;
+  int wifi_status;
+  long millis_connecting_start;
+  char network_listed;
+  char rescan_flag;
+  char password[80];
+  char *buttons[] = {
+    "Connect", "Rescan",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000001, B10000010,
+    B01000001, B01000010,
+    B01000101, B00100010,
+    B01000011, B01000010,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01000011, B01000010,
+    B01000101, B00100010,
+    B01000001, B01000010,
+    B01000001, B10000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  BLEScan* pBLEScan;
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "BLE");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "BLE");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  networks = (char**)malloc(WIFI_MAX_NETWORKS * sizeof(char *));
+  for(network_index = 0; network_index < WIFI_MAX_NETWORKS; network_index++) {
+    networks[network_index] = NULL;
+  }
+
+  clearScreen();
+  drawAppTitle("BLE");
+
+  rescan_flag = 1;
+  while(1) {
+    tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+    if(rescan_flag) {
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      tft.drawString("Scanning...      ", 1, 16, FONT_DEFAULT);
+      for(network_index = 0; network_index < WIFI_MAX_NETWORKS; network_index++) {
+        if(networks[network_index]) {
+          free(networks[network_index]);
+        }
+        networks[network_index] = NULL;
+      }
+
+      BLEDevice::init("");
+      pBLEScan = BLEDevice::getScan(); 
+      pBLEScan->setActiveScan(true); 
+      pBLEScan->setInterval(100);
+      pBLEScan->setWindow(99);
+      BLEScanResults *foundDevices = pBLEScan->start(5, false);
+
+      networks_unique = 0;
+      networks_found = foundDevices->getCount();
+      for (i = 0; i < networks_found; i++) {
+        BLEAdvertisedDevice device = foundDevices->getDevice(i);
+        networks[networks_unique] = (char *)malloc(80 * sizeof(char));
+        if(strcmp(device.getName().c_str(), "") != 0) {
+          strcpy(networks[networks_unique], device.getName().c_str());
+        }
+        else {
+          strcpy(networks[networks_unique], device.getAddress().toString().c_str());
+        }
+        networks_unique++;
+      }
+      pBLEScan->clearResults();
+      rescan_flag = 0;
+    }
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.drawString("Select device:", 1, 16, FONT_DEFAULT);
+
+    touchCheckList(0, 32, tft.width(), tft.height() - 72, networks, 15, &network_offset, &network_selected);
+    drawList(0, 32, tft.width(), tft.height() - 72, networks, 15, &network_offset, &network_selected);
+
+    drawButtonMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 2, 1);
+    
+    touchWaitPress();
+    touchCheckList(0, 32, tft.width(), tft.height() - 32 - 40, networks, 15, &network_offset, &network_selected);
+
+    button_pressed = touchCheckMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 2, 1);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+      }
+      else if(button_pressed == 1) {
+        rescan_flag = 1;
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      // Флаг не сбрасываем, так как не основное приложение
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+#endif
+// IS_BLE_ENABLED
+
 void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
   int byte1, byte2;
   int byte_out;
@@ -11329,6 +11968,107 @@ void cp1251_to_translit(char *in_buff, char *out_buff) {
     }
   }
   out_buff[write_offset] = 0;
+}
+
+// Проверка, является ли корректной строкой UTF-8
+int is_correct_utf8_string(char *str) {
+  int offset = 0;
+  while(offset <= strlen(str)) {
+    if(str[offset] <= 0x7F) offset++;
+    else if(str[offset] <= 0xDF) {
+      // Первый байт из диапазона 0xC2 - 0xDF - маска B110xxxxx
+      if(str[offset] < 0xC2) return 0;
+      // Второй байт из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      offset += 2;
+    }
+    else if(str[offset] <= 0xDF) {
+      // Первый байт из диапазона 0xC2 - 0xDF - маска B110xxxxx
+      if(str[offset] < 0xC2) return 0;
+      // Второй байт из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      offset += 2;
+    }
+    else if(str[offset] <= 0xEF) {
+      // Первый байт из диапазона 0xE0 - 0xEF - маска B1110xxxx
+      // Второй и третий байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      if(str[offset + 2] < 0x80 || str[offset + 2] > 0xBF) return 0;
+      offset += 3;
+    }
+    else if(str[offset] <= 0xF4) {
+      // Первый байт из диапазона 0xF0 - 0xF4 - маска B11110xxx
+      // Второй и даольше байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      if(str[offset + 2] < 0x80 || str[offset + 2] > 0xBF) return 0;
+      if(str[offset + 3] < 0x80 || str[offset + 3] > 0xBF) return 0;
+      offset += 4;
+    }
+    else {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+// Двоичный файл или нет (содержит нули)
+char is_binary_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 0;
+  file = Storage->open(filename);
+  while(file.available()) {
+    if(file.read() == 0) {
+      result = 1;
+      break;
+    }
+    bytes++;
+    if(bytes >= 1024) break;
+  }
+  file.close();
+  return 0;
+}
+
+// Папка или нет
+char is_directory(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 0;
+  file = Storage->open(filename);
+  result = file.isDirectory();
+  file.close();
+  return result;
+}
+
+// BMP или нет
+char is_bmp_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 54 байта
+  if(file.size() < 54) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 'B') result = 0;
+  if(file.read() != 'M') result = 0;
+  file.close();
+  return result;
+}
+
+// MP3 или нет
+char is_mp3_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 417 байт
+  if(file.size() < 417) result = 0;
+  // Файл начинается буквами ID3
+  if(file.read() != 'I') result = 0;
+  if(file.read() != 'D') result = 0;
+  if(file.read() != '3') result = 0;
+  file.close();
+  return result;
 }
 
 #define I2C_MAX_DEVICES 127
@@ -11612,12 +12352,14 @@ void dashboard(char mode, char *io_buff) {
       tft.drawCentreString(rates, tft.width() / 2, 274, FONT_DEFAULT);
 
       // До следующего обновления данных
+      /*
       tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
       sprintf(buff, "  Next update in %d min %d sec  ",
         (prev_update_data_millis + CLOCK_UPDATE_DATA_INTERVAL - millis()) / 60000,
         ((prev_update_data_millis + CLOCK_UPDATE_DATA_INTERVAL - millis()) / 1000) % 60
       );
       tft.drawCentreString(buff, tft.width() / 2, tft.height() - 16, FONT_DEFAULT);
+      */
     }
     
     if(!touchCheckNowait()) continue;
@@ -12216,7 +12958,8 @@ void autorun(char mode, char *io_buff) {
   char buff[80];
   int button_pressed;
   char *buttons[] = {
-    "Run this app after reboot",
+    "Set",
+    "Reboot",
     NULL
   };
   char app_icon[] = {
@@ -12291,16 +13034,19 @@ void autorun(char mode, char *io_buff) {
     touchCheckList(0, 32, tft.width(), tft.height() - 72, app_list, 15, &app_offset, &app_selected);
     drawList(0, 32, tft.width(), tft.height() - 72, app_list, 15, &app_offset, &app_selected);
 
-    drawButtonMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+    drawButtonMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 2, 1);
     
     touchWaitPress();
     touchCheckList(0, 32, tft.width(), tft.height() - 32 - 40, app_list, 15, &app_offset, &app_selected);
 
-    button_pressed = touchCheckMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+    button_pressed = touchCheckMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 2, 1);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
         write_file_from_buff("/Settings/Autorun", app_list[app_selected]);
         drawInfo("Autorun app set");
+      }
+      if(button_pressed == 1) {
+        ESP.restart();
       }
       tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
     }
@@ -12372,11 +13118,11 @@ void reboot(char mode, char *io_buff) {
   while(1) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
-    drawButtonMatrix(0, 20, tft.width(), 32, buttons, 1, 1);
+    drawButtonMatrix(0, 100, tft.width(), 32, buttons, 1, 1);
 
     touchWaitPress();
 
-    button_pressed = touchCheckMatrix(0, 20, tft.width(), 32, buttons, 1, 1);
+    button_pressed = touchCheckMatrix(0, 100, tft.width(), 32, buttons, 1, 1);
     if(button_pressed != -1) {
       ESP.restart();
     }
@@ -12450,11 +13196,11 @@ void keyboard_control(char mode, char *io_buff) {
     drawButtonMatrix(0, 20, tft.width() / 2, 32 * 3, buttons, 1, 3);
 
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    sprintf(buff, "  %s  ", alt_keyboard_enabled_flag ? "ON" : "OFF");
+    sprintf(buff, "  %s  ", alt_keyboard_enabled_flag ? "on" : "off");
     tft.drawCentreString(buff, 3 * tft.width() / 4, 28, FONT_DEFAULT);
-    sprintf(buff, "  %s  ", keyboard_indent_left ? "ON" : "OFF");
+    sprintf(buff, "  %s  ", keyboard_indent_left ? "on" : "off");
     tft.drawCentreString(buff, 3 * tft.width() / 4, 32 + 28, FONT_DEFAULT);
-    sprintf(buff, "  %s  ", keyboard_indent_right ? "ON" : "OFF");
+    sprintf(buff, "  %s  ", keyboard_indent_right ? "on" : "off");
     tft.drawCentreString(buff, 3 * tft.width() / 4, 32 + 32 + 28, FONT_DEFAULT);
 
     touchWaitPress();
@@ -12532,6 +13278,8 @@ void sound_control(char mode, char *io_buff) {
   char buff[80];
   char *buttons[] = {
     "Beep on events",
+    "Beep on keys",
+    "Beep on hour",
     "Music volume",
     NULL
   };
@@ -12574,17 +13322,21 @@ void sound_control(char mode, char *io_buff) {
   while(1) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
-    drawButtonMatrix(0, 20, tft.width() / 2, 64, buttons, 1, 2);
+    drawButtonMatrix(0, 20, tft.width() / 2, 32 * 4, buttons, 1, 4);
 
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    sprintf(buff, "  %s  ", global_is_beep_enabled ? "ON" : "OFF");
-    tft.drawCentreString(buff, 3 * tft.width() / 4, 28, FONT_DEFAULT);
+    sprintf(buff, "  %s  ", global_is_beep_enabled ? "on" : "off");
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 0, FONT_DEFAULT);
+    sprintf(buff, "  %s  ", global_is_beep_tap_enabled ? "on" : "off");
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 1, FONT_DEFAULT);
+    sprintf(buff, "  %s  ", global_is_beep_hour_enabled ? "on" : "off");
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 2, FONT_DEFAULT);
     sprintf(buff, "  %d  ", global_volume);
-    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32, FONT_DEFAULT);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 3, FONT_DEFAULT);
 
     touchWaitPress();
 
-    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 64, buttons, 1, 2);
+    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32 * 4, buttons, 1, 4);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
         if(global_is_beep_enabled) {
@@ -12595,6 +13347,22 @@ void sound_control(char mode, char *io_buff) {
         }
       }
       else if(button_pressed == 1) {
+        if(global_is_beep_tap_enabled) {
+          global_is_beep_tap_enabled = 0;
+        }
+        else {
+          global_is_beep_tap_enabled = 1;
+        }
+      }
+      else if(button_pressed == 2) {
+        if(global_is_beep_hour_enabled) {
+          global_is_beep_hour_enabled = 0;
+        }
+        else {
+          global_is_beep_hour_enabled = 1;
+        }
+      }
+      else if(button_pressed == 3) {
         buff[0] = 0;
         if(drawPrompt("Volume level (0-100)", buff) == 0) {
           sscanf(buff, "%d", &global_volume);
@@ -12610,8 +13378,142 @@ void sound_control(char mode, char *io_buff) {
 
       if(Storage && drawConfirm("Save changes?") == 0) {
         write_key_value_to_file("/Settings/Sound", "beep_enabled_flag", (char*)(global_is_beep_enabled ? "1" : "0"));
+        write_key_value_to_file("/Settings/Sound", "beep_tap_enabled_flag", (char*)(global_is_beep_tap_enabled ? "1" : "0"));
+        write_key_value_to_file("/Settings/Sound", "beep_hour_enabled_flag", (char*)(global_is_beep_hour_enabled ? "1" : "0"));
         sprintf(buff, "%d", global_volume);
         write_key_value_to_file("/Settings/Sound", "volume", buff);
+      }
+
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// ====================================================
+// Управление часами / будильником
+// ====================================================
+
+void clock_control(char mode, char *io_buff) {
+  int i;
+  unsigned char byte;
+  int button_pressed;
+  char buff[80];
+  char *buttons[] = {
+    "Alarm",
+    "Alarm hour",
+    "Alarm minute",
+    "Beep on hour",
+    "Set clock",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B00011111, B11111000,
+    B00100000, B00000100,
+    B01000001, B00000010,
+    B01000001, B00000010,
+    B01000001, B00000010,
+    B01000001, B00000010,
+    B01000001, B00000010,
+    B01000001, B11110010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B00100000, B00000100,
+    B00011111, B11111000,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Clock Settings");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "ClkC");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Clock Settings");
+
+  while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+    drawButtonMatrix(0, 20, tft.width() / 2, 32 * 5, buttons, 1, 5);
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "  %s  ", global_alarm_set ? "on" : "off");
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 0, FONT_DEFAULT);
+
+    sprintf(buff, "  %d  ", global_alarm_hour);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 1, FONT_DEFAULT);
+    sprintf(buff, "  %d  ", global_alarm_minute);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 2, FONT_DEFAULT);
+
+    sprintf(buff, "  %s  ", global_is_beep_hour_enabled ? "on" : "off");
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 3, FONT_DEFAULT);
+
+    touchWaitPress();
+
+    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32 * 5, buttons, 1, 5);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        if(global_alarm_set) {
+          global_alarm_set = 0;
+        }
+        else {
+          global_alarm_set = 1;
+        }
+      }
+      else if(button_pressed == 1) {
+        sprintf(buff, "%d", global_alarm_hour);
+        if(drawPrompt("Alarm hour", buff) == 0) {
+          sscanf(buff, "%d", &global_alarm_hour);
+        }
+      }
+      else if(button_pressed == 2) {
+        sprintf(buff, "%d", global_alarm_minute);
+        if(drawPrompt("Alarm minute", buff) == 0) {
+          sscanf(buff, "%d", &global_alarm_minute);
+        }
+      }
+      else if(button_pressed == 3) {
+        if(global_is_beep_hour_enabled) {
+          global_is_beep_hour_enabled = 0;
+        }
+        else {
+          global_is_beep_hour_enabled = 1;
+        }
+      }
+      else if(button_pressed == 4) {
+        set_clock(APP_MODE_LAUNCH, NULL);
+      }
+      
+      clearScreen();
+      drawAppTitle("Clock Settings");
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+
+      if(Storage && drawConfirm("Save changes?") == 0) {
+        sprintf(buff, "%d", global_alarm_set);
+        write_key_value_to_file("/Settings/Alarm", "enabled", buff);
+        sprintf(buff, "%d", global_alarm_hour);
+        write_key_value_to_file("/Settings/Alarm", "hour", buff);
+        sprintf(buff, "%d", global_alarm_minute);
+        write_key_value_to_file("/Settings/Alarm", "minute", buff);
+        write_key_value_to_file("/Settings/Sound", "beep_hour_enabled_flag", (char*)(global_is_beep_hour_enabled ? "1" : "0"));
       }
 
       touchExitActionReset();
@@ -12632,6 +13534,8 @@ void set_local_time_from_unix_timestamp() {
   int year;
   int month;
   int day;
+  int hour;
+  int minute;
   char is_lap_year;
   char retry_retrieve = 0;
   int prev_day;
@@ -12706,8 +13610,19 @@ void set_local_time_from_unix_timestamp() {
   global_day = day;
   global_is_lap_year = is_lap_year;
 
-  global_hours = ((unix_timestamp + global_timezone) / 3600) % 24;
-  global_minutes = ((unix_timestamp + global_timezone) / 60) % 60;
+  hour = ((unix_timestamp + global_timezone) / 3600) % 24;
+  minute = ((unix_timestamp + global_timezone) / 60) % 60;
+  // Если есть будильник, час и минута совпадают, и минуты измениилсь
+  if(global_alarm_set && hour == global_alarm_hour && minute != global_minutes && minute == global_alarm_minute) {
+    beep_alarm();
+  }
+  // Смена часа и переход минут с 59 на 00 (иначе при настройке времени срабатывает)
+  else if(global_hours + 1 == hour && minute == 0 && global_minutes == 59) {
+    beep_hour();
+  }
+  
+  global_hours = hour;
+  global_minutes = minute;
   global_seconds = (unix_timestamp + global_timezone) % 60;
 
   global_moon_day = fmod(25 + days_since_epoch, 29.53059);
@@ -12825,17 +13740,6 @@ void screen_test(char mode, char *io_buff) {
     for(i = 0; i < 256; i++) {
       tft.drawPixel(i, j, i + j * 256);
     }
-    //delay(1000);
-  }
-  touchWaitPress();
-  touchWaitRelease();
-
-  tft.fillScreen(TFT_BLACK);
-  for(j = 0; j < 256; j++) {
-    for(i = 0; i < 256; i++) {
-      tft.drawPixel(i, j, i + j * 256 & (B11111111 << 8 + B11011111));
-    }
-    //delay(1000);
   }
   touchWaitPress();
   touchWaitRelease();
@@ -13000,8 +13904,9 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
     }
   }
 
-  // Возвращаем число выведенных байтов = число считанных - число невыведенных
-  //Serial.printf("current_word = %s, current_line = %s\n", current_word, current_line);
+  // Возвращаем число выведенных байтов = число считанных - число невыведенных - переводы строки
+  Serial.printf("text_offset = %d, current_word = '%s', current_line = '%s', newline_symbols = %d\n", text_offset, current_word, current_line, newline_symbols);
+  if(strlen(current_word) + strlen(current_line) == 0) newline_symbols = 0;
   return text_offset - strlen(current_word) - strlen(current_line) - newline_symbols;
 }
 
@@ -13041,7 +13946,14 @@ void view_file(char *title, char *filename) {
     memset(buff, 0, 2048);
     file.read((uint8_t *)buff, 2048);
     buff[2048] = 0;
-    visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, 19, FONT_DEFAULT, 1);
+
+    if(global_view_font_small) {
+      visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, (tft.height() / 8) - 2, FONT_MONOSPACE, 1);
+    }
+    else {
+      visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, (tft.height() / 16) - 1, FONT_DEFAULT, 1);
+    }
+    //
 
     touchWaitPress();
     // Смотрим куда нажатие, двигаемся либо вперёд по файлу, либо назад
@@ -13057,7 +13969,13 @@ void view_file(char *title, char *filename) {
           file.seek(prev_offset);
           file.read((uint8_t *)buff, 2048);
           buff[2048] = 0;
-          visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, 19, FONT_DEFAULT, 0);
+          if(global_view_font_small) {
+            visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, (tft.height() / 8) - 2, FONT_MONOSPACE, 0);
+          }
+          else {
+            visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, (tft.height() / 16) - 1, FONT_DEFAULT, 0);
+          }
+          
           if(prev_offset + visible_offset >= file_offset) {
             file_offset = prev_offset;
             break;
@@ -16050,12 +16968,7 @@ void metronome(char mode, char *io_buff) {
       interval = 60000 / tempo;
       if(millis() - prev_beep_millis > interval) {
         prev_beep_millis = millis();
-        if(interval >= 200) {
-          tone(BUZZER_PIN, 1000, 100);
-        }
-        else {
-          tone(BUZZER_PIN, 1000, 10);
-        }
+        tone(BUZZER_PIN, 8000, 12);
       }
     }
 
@@ -16174,6 +17087,7 @@ void saveScreenshot() {
   char buff[80];
   char filename[80];
   char byte;
+  int color_bits = 4;
   int pixel_color;
   unsigned char bmp_header[118] = {
     0x42, 0x4D, 0x76, 0x96, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x00,
@@ -16214,6 +17128,10 @@ void saveScreenshot() {
     }
     i++;
   }
+
+  // Проверяем число цветов на экране
+  // Потом можно сделать чтобы сохранять полноцветные скриншоты по необходимости
+  color_bits = is_screen_has_only_16_colors() ? 4 : 24;
 
   // Сохраняем скриншот
   file = Storage->open(filename, FILE_WRITE);
@@ -16288,11 +17206,11 @@ void drawAppTitleRight() {
 #endif
 
   // Рисуем правую часть
-  tft.fillRect(tft.width() - 16, 0, 16, 16, color_scheme_title_bg);
-  right_offset += 16;
+  tft.fillRect(tft.width() - 8, 0, 8, 16, color_scheme_title_bg);
+  right_offset += 8;
 
   sprintf(buff, "%s%s%s%s%s %d:%02d",
-    global_io_flag ? "N" : "",
+    global_alarm_set ? "A" : "",
     storage_type == STORAGE_TYPE_SD? "S" : "",
     storage_type == STORAGE_TYPE_FFAT? "F" : "",
     wifi_connection_flag ? "W" : "",
@@ -16308,17 +17226,17 @@ void drawAppTitleRight() {
   // Рисуем название, правую часть
   strcpy(buff, current_app_title);
   //Serial.printf("tft.textWidth(%s) = %d, ro = %d\n", buff, tft.textWidth(buff, FONT_DEFAULT), right_offset);
-  // 16 в середине - доп интервал, чтобы не сливался текст
-  while(16 + tft.textWidth(buff, FONT_DEFAULT) + 16 + right_offset > tft.width()) {
+  // 8 в середине - доп интервал, чтобы не сливался текст
+  while(8 + tft.textWidth(buff, FONT_DEFAULT) + 8 + right_offset > tft.width()) {
     if(strlen(buff) == 0) break;
     buff[strlen(buff) - 1] = 0;
   }
   tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
-  tft.fillRect(0, 0, 16, 16, color_scheme_title_bg);
-  tft.drawString(buff, 16, 0, FONT_DEFAULT);
+  tft.fillRect(0, 0, 8, 16, color_scheme_title_bg);
+  tft.drawString(buff, 8, 0, FONT_DEFAULT);
 
   // Заполняем серединку
-  tft.fillRect(16 + tft.textWidth(buff, FONT_DEFAULT), 0, tft.width() - 16 - tft.textWidth(buff, FONT_DEFAULT) - right_offset, 16, color_scheme_title_bg);
+  tft.fillRect(8 + tft.textWidth(buff, FONT_DEFAULT), 0, tft.width() - 8 - tft.textWidth(buff, FONT_DEFAULT) - right_offset, 16, color_scheme_title_bg);
 }
 
 void disableAppTitle() {
@@ -16461,6 +17379,7 @@ int drawPrompt(char *message, char *user_input) {
     }
     //touchWaitPress();
     button = touchCheckMatrix(indent_left, PROMPT_OFFSET_Y + 40, tft.width() - indent_width, 120, keyboard_current, 12, 4);
+    
     if(button != -1) {
       if(button == 11) {
         if(strlen(input) > 0) {
@@ -16556,7 +17475,7 @@ void checkPasswordUntilCorrect(char *correct_password) {
   int button;
   int button1, button2;
   char user_input[80] = "";
-  char owner_info[80] = "";
+  char owner_info[160] = "";
   int offset = 0;
   char *tmp;
   char *buttons[] = {
@@ -16599,20 +17518,22 @@ void checkPasswordUntilCorrect(char *correct_password) {
     // Нарисовать звёздочки по числу символов
     tft.fillRect(0, 16, tft.width(), 60, color_scheme_bg);
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.drawString("Owner info:", 8, 20, FONT_DEFAULT);
+    draw_text_formatted(owner_info, 8, 36, tft.width() - 2 * 8, 3, FONT_DEFAULT, 1);
+    //tft.drawString(owner_info, 8, 36, FONT_DEFAULT);
+
     for(i = 0; i < strlen(user_input); i++) {
-      if(8 + i * tft.textWidth("*", FONT_BIG) < tft.width()) {
+      if(8 + i * tft.textWidth("*", FONT_DEFAULT) < tft.width()) {
         tft.setTextColor(color_scheme_fg, color_scheme_bg);
-        tft.drawString("*", 8 + i * tft.textWidth("*", FONT_BIG), 58, FONT_BIG);
+        tft.drawString("*", 8 + i * tft.textWidth("*", FONT_DEFAULT), 36 + 16 * 3, FONT_DEFAULT);
       }
     }
-    tft.drawString("Owner info:", 8, 20, FONT_DEFAULT);
-    tft.drawString(owner_info, 8, 36, FONT_DEFAULT);
 
     // Нарисовать кнопки
-    drawButtonMatrix(8, 100 - 8, tft.width() - 8 * 2, 220, buttons, 3, 4);
+    drawButtonMatrix(0, 108, tft.width(), tft.height() - 108, buttons, 3, 4);
 
     touchWaitPress();
-    button = touchCheckMatrix(8, 100 - 8, tft.width() - 8 * 2, 220, buttons, 3, 4);
+    button = touchCheckMatrix(0, 108, tft.width(), tft.height() - 108, buttons, 3, 4);
     if(button != -1) {
       if(!strcmp(buttons[button], "OK")) {
         if(!strcmp(correct_password, user_input)) {
@@ -16743,6 +17664,7 @@ int touchCheckMatrix(int left_x, int top_y, int width, int height, char **str, i
               delay(50);
               if(!is_touch) {
                 if(is_inside) {
+                  beep_tap_if_enabled();
                   return x + y * cols;
                 }
                 else {
@@ -16956,6 +17878,7 @@ int touchMapX(int x_raw, int y_raw) {
   int x = ax * x_raw + bx * y_raw + cx;
   if(x < 0) x = 0;
   if(x >= tft.width()) x = tft.width() - 1;
+  if(global_rotation) x = tft.width() - x;
   return x;
 }
 
@@ -16963,6 +17886,7 @@ int touchMapY(int x_raw, int y_raw) {
   int y = ay * x_raw + by * y_raw + cy;
   if(y < 0) y = 0;
   if(y >= tft.height()) y = tft.height() - 1;
+  if(global_rotation) y = tft.height() - y;
   return y;
 }
 
@@ -17023,6 +17947,12 @@ void touchExitActionReset() {
 void touchWaitPress() {
   //Serial.println("touchWaitPress begin");
   while(!touchPollTouchStatus()) {
+    // Light sleep
+    //esp_sleep_enable_timer_wakeup(1000);
+    //rtc_wdt_disable();
+    //esp_light_sleep_start();
+    //rtc_wdt_enable();
+
     drawAppTitleRight();
     global_exit_flag_touch_begin = 0;
     if(global_exit_flag) return;
@@ -17319,6 +18249,41 @@ void beep_if_enabled() {
   if(global_is_beep_enabled) {
     tone(BUZZER_PIN, 1000, 100);
   }
+}
+
+void beep_tap_if_enabled() {
+  if(global_is_beep_tap_enabled) {
+    tone(BUZZER_PIN, 8000, 12);
+  }
+}
+
+void beep_hour() {
+  int i;
+  if(global_is_beep_hour_enabled) {
+    for(i = 0; i < 4; i++) {
+      tone(BUZZER_PIN, 1500, 50);
+      delay(50);
+      noTone(BUZZER_PIN);
+      delay(50);
+    }
+  }
+}
+
+// Будильник, работает до касания или до минуты
+void beep_alarm() {
+  int i;
+  long millis_start = millis();
+  global_alarm_set = 0;
+  for(i = 0; i < 60; i++) {
+    tone(BUZZER_PIN, 2000, 100);
+    delay(100);
+    tone(BUZZER_PIN, 3000, 300);
+    delay(100);
+    noTone(BUZZER_PIN);
+    delay(300);
+    if(touchCheckNowait()) break;
+  }
+  global_alarm_set = 1;
 }
 
 // Функции ширования и расшифровки - минное поле
@@ -17656,6 +18621,29 @@ void bmp_save_image(char *filename, int start_x, int start_y, int width, int hei
 
 }
 
+// На экране только стандартные 16 цветов или нет
+char is_screen_has_only_16_colors() {
+  int x, y;
+  int pixel;
+  int color_index;
+  int pixel_color;
+  char found_flag;
+  for(y = 0; y < tft.height(); y++) {
+    for(x = 0; x < tft.width(); x++) {
+      pixel_color = tft.readPixel(x, y);
+      found_flag = 0;
+      for(color_index = 0; color_index < 16; color_index++) {
+        if(pixel_color == colors[color_index]) {
+          found_flag = 1;
+          break;
+        }
+      }
+      if(!found_flag) return 0;
+    }
+  }
+  return 1;
+}
+
 // Стереть раздел FFat
 void ffat_erase_partition() {
   const esp_partition_t* partition = esp_partition_find_first(
@@ -17691,23 +18679,24 @@ int file_is_binary(char *path) {
 
 // Вызывать в фоне каждую минуту
 void minutely() {
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 }
 
 // Вызывать в фоне каждую секунду
 void secondly() {
   set_local_time_from_unix_timestamp();
+  //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 }
 
 void setup() {
   char buff[80];
   char autorun_app_name[80];
   int i;
-  int inversion;
   int index;
   char calibration_required = 0;
   char password_present;
 
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   Serial.begin(115200);
 
@@ -17724,11 +18713,11 @@ void setup() {
   //touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
   //touchscreen.begin(touchscreenSPI);
 
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   touchscreen.begin();
 
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   // Инициализация экрана, 
   tft.init();
@@ -17744,34 +18733,44 @@ void setup() {
   ffat_available_flag = 0;
   sd_available_flag = 0;
 
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
-  // Инициализация FFat
-  if(FFat.begin(FORMAT_FS_IF_FAILED)) {
+  // Проверка доступности FFat
+  if(FFat.begin(IS_FORMAT_FFAT_IF_FAILED)) {
     ffat_available_flag = 1;
     Storage = &FFat;
     storage_type = STORAGE_TYPE_FFAT;
     Serial.println("Storage type FFat present");
+    FFat.end();
   }
 
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   // Инициализация SD
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   if (SD.begin(SD_CS, sdSPI)) {
     sd_available_flag = 1;
     Storage = &SD;
     storage_type = STORAGE_TYPE_SD;
     Serial.println("Storage type SD present");
   }
+  else {
+    if(ffat_available_flag) {
+      FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
+    }
+  }
 
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   // Настройки
   // Яркость
   global_brightness = 255;
   // Инверсия
-  inversion = 0;
+  global_inversion = 0;
+  // Поворот
+  global_rotation = 0;
+
   // Цветовая схема
   // Цвет фона и текста
   color_scheme_bg = colors[COLOR_INDEX_WHITE];
@@ -17794,7 +18793,9 @@ void setup() {
   color_scheme_link_fg = colors[COLOR_INDEX_BLUE];
   // Настройки звука
   global_is_beep_enabled = 1;
-
+  global_is_beep_tap_enabled = 1;
+  global_is_beep_hour_enabled = 1;
+  
   // Настройки клавиатуры
   alt_keyboard_enabled_flag = 1;
   keyboard_indent_left = 0;
@@ -17813,11 +18814,28 @@ void setup() {
 
     // Инверсия
     if(read_file_to_buff("/Settings/Inversion", 79, buff)) {
-      sscanf(buff, "%d", &inversion);
-      tft.invertDisplay(inversion ? true : false);
+      sscanf(buff, "%d", &global_inversion);
+      tft.invertDisplay(global_inversion ? true : false);
     }
     else {
       tft.invertDisplay(false);
+    }
+
+    // Поворот экрана
+    if(read_file_to_buff("/Settings/Rotation", 79, buff)) {
+      sscanf(buff, "%d", &global_rotation);
+      tft.setRotation(global_rotation ? 0 : 2);
+    }
+    else {
+      tft.setRotation(2);
+    }
+
+    // Мелкий шрифт
+    if(read_file_to_buff("/Settings/Font", 79, buff)) {
+      sscanf(buff, "%d", &global_view_font_small);
+    }
+    else {
+      global_view_font_small = 0;
     }
 
     // Цветовая схема
@@ -17896,6 +18914,8 @@ void setup() {
   if(ffat_available_flag && sd_available_flag) {
     select_storage_app(APP_MODE_SPECIAL, NULL);
   }
+#else
+  FFat.end();
 #endif
 
   if(storage_type == STORAGE_TYPE_NONE) {
@@ -17903,7 +18923,7 @@ void setup() {
     if(drawConfirm("Format FFat?") == 0) {
       if(FFat.format()) {
         ffat_available_flag = 1;
-        FFat.begin(FORMAT_FS_IF_FAILED);
+        FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
         Storage = &FFat;
         storage_type = STORAGE_TYPE_FFAT;
         Storage->mkdir("/Settings");
@@ -17915,7 +18935,7 @@ void setup() {
     }
   }
 
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   if(storage_type != STORAGE_TYPE_NONE) {
     // Тут можно спросить пароль
@@ -17939,6 +18959,12 @@ void setup() {
     if(read_key_value_from_file("/Settings/Sound", "beep_enabled_flag", buff)) {
       sscanf(buff, "%d", &global_is_beep_enabled);
     }
+    if(read_key_value_from_file("/Settings/Sound", "beep_tap_enabled_flag", buff)) {
+      sscanf(buff, "%d", &global_is_beep_tap_enabled);
+    }
+    if(read_key_value_from_file("/Settings/Sound", "beep_hour_enabled_flag", buff)) {
+      sscanf(buff, "%d", &global_is_beep_hour_enabled);
+    }
     if(read_key_value_from_file("/Settings/Sound", "volume", buff)) {
       sscanf(buff, "%d", &global_volume);
     }
@@ -17954,19 +18980,30 @@ void setup() {
       sscanf(buff, "%d", &keyboard_indent_right);
     }
 
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+    // Настройки будильника
+    if(read_key_value_from_file("/Settings/Alarm", "enabled", buff)) {
+      sscanf(buff, "%d", &global_alarm_set);
+    }
+    if(read_key_value_from_file("/Settings/Alarm", "hour", buff)) {
+      sscanf(buff, "%d", &global_alarm_hour);
+    }
+    if(read_key_value_from_file("/Settings/Alarm", "minute", buff)) {
+      sscanf(buff, "%d", &global_alarm_minute);
+    }
+
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   #ifdef IS_WIFI_ENABLED
     WiFi.begin();
     WiFi.onEvent(WiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
   #endif
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
     // Получить текущее время из сохранённого в ФС
     get_current_timestamp_fs();
     get_current_timezone();
   }
 
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   beep_if_enabled();
 
@@ -17976,7 +19013,7 @@ void setup() {
   // Каждую секунду
   secondTicker.attach(1.0, secondly); 
 
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   // Читаем информацию об автозапуске
   autorun_app_name[0] = 0;
@@ -17994,11 +19031,11 @@ void setup() {
     }
   }
 
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 }
 
 void loop() {
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   all_apps[0](APP_MODE_LAUNCH, NULL);
-  Serial.printf("Free heap line %d: %d\n", __LINE__, ESP.getFreeHeap());
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 }
