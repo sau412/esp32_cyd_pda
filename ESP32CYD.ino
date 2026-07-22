@@ -83,6 +83,8 @@
 - Заставка помехи
 - Заставка матрица
 - Настройки звука/будильника
+- Переводчик
+- Вольтметр
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -193,15 +195,12 @@
 2026-07-21 Многострочный текст в owner info, сканирование BLE, приложение настройки экрана, проверка двочиных файлов, проверка папок, проверка BMP, проверка MP3,
   баг с ответом сервера в чате, больше информации в заголовке, статус будильника в заголовке, заставка цветные квадратики, заставка матрица, заставка шум,
   заставка аттрактор Лоренца, возможность отключить звук часа, возможность отключить звук клавиш, будильник
+2026-07-22 Переводчик, вольтметр, возможность отключить NTP, autorun текущее приложение, фикс бага wget
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
-- (д) Переводчик
-- (д) Вольтметр
-
 - (д) Восход и закат
 - (д) Чат - просмотр с прокруткой
 - (д) Таймер/секундомер в фоне
-- (д) Авторан - показывать текущее приложение
 
 - (п) Просмотреть справку, может быть что-то добавить
 - (и) Крутая калибровка
@@ -212,7 +211,6 @@
 - (н) Буфер обмена
 - (н) Выделение в просмотре, копирование
 - (н) Выделение в редактировании, копирование, вставка
-- (д) Настройка "не синхронизировать через ntp"
 - (д) Настройка "не показывать время без синхр" чтобы не видеть левое время
 - (д) Автоопределение кодировки файла при просмотре
 - (д) Полноцветные скриншоты (24 бита) если нужно либо настройки скриншотов
@@ -716,7 +714,8 @@ time_t global_unixtime_retrieved_millis = 0;
 char global_unixtime_synced = 0;
 char global_unixtime_sync_initialized = 0;
 long global_timezone = 0;
-char global_alarm_set = 0;
+int global_ntp_enabled = 0;
+int global_alarm_set = 0;
 int global_alarm_hour = 0;
 int global_alarm_minute = 0;
 
@@ -813,6 +812,8 @@ void oscilloscope(char mode, char *io_buff);
 void select_storage_app(char mode, char *io_buff);
 void game2048(char mode, char *io_buff);
 void clock_control(char mode, char *io_buff);
+void translate(char mode, char *io_buff);
+void voltmeter(char mode, char *io_buff);
 
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
@@ -851,6 +852,7 @@ function_application_pointer all_apps[] = {
   chat,
   weather,
   http_file_access,
+  translate,
 #endif
 #ifdef IS_BLE_ENABLED
   ble,
@@ -870,6 +872,7 @@ function_application_pointer all_apps[] = {
   touch_calibration,
   //touch_calibration_test,
   oscilloscope,
+  voltmeter,
   life,
   i2c_scanner,
   dashboard,
@@ -1304,7 +1307,7 @@ void system_info(char mode, char *io_buff) {
 
     i = 0;
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    sprintf(buff, "ESP32 CYD PDA v1.2 by sau412");
+    sprintf(buff, "ESP32 CYD PDA v1.3 by sau412");
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
@@ -1523,6 +1526,7 @@ void user_manual(char mode, char *io_buff) {
   "/Settings/Coordinates - latitude and longitude for weather\n"
   "/Settings/Keyboard - keyboard settings\n"
   "/Settings/Sound - sound settings\n"
+  "/Settings/NTP - NTP settings\n"
   "/Notes - notes folder\n"
   "/Images - draw folder\n"
   "/Expenses - expenses folder\n"
@@ -2361,6 +2365,12 @@ void terminal_execute_single(char *str) {
   else if(memcmp(str, "wget ", 5) == 0) {
     terminal_wget(str + 5);
   }
+  else if(strcmp(str, "ipinfo") == 0) {
+    terminal_print("Usage: ipinfo {ip}");
+  }
+  else if(memcmp(str, "ipinfo ", 7) == 0) {
+    terminal_ipinfo(str + 7);
+  }
 #ifdef IS_SSH_ENABLED
   else if(strcmp(str, "ssh") == 0) {
     terminal_print("Usage: ssh {host} {port}");
@@ -2858,7 +2868,7 @@ int terminal_wget(char *params) {
   if(client) {
     result = 0;
     if(url[4] == 's') {
-      result = http.begin(*client, url);
+      result = http.begin(*global_ssl_client, url);
     }
     else {
       result = http.begin(url);
@@ -2917,6 +2927,56 @@ int terminal_wget(char *params) {
     terminal_print("Client not initialized\n\r");
   }
   return 0;
+}
+
+int terminal_ipinfo(char *param) {
+  char query[80];
+  char result[500];
+  char buff[80];
+  int i;
+  int httpResponseCode;
+  char begin = 0;
+  char skip_spaces = 0;
+  int return_value = 0;
+  sprintf(query, "https://ipinfo.io/%s/geo", param);
+  httpResponseCode = get_file_https(query, result, 500);
+  if(httpResponseCode == 200) {
+    for(i = 0; i < strlen(result); i++) {
+      if(begin == 0) {
+        if(result[i] == '"') begin = 1;
+        continue;
+      }
+      if(result[i] == ' ' && skip_spaces == 1) {
+        continue;
+      }
+      skip_spaces = 0;
+      if(result[i] == '"') continue;
+      if(result[i] == '\n') {
+        terminal_print("\r\n");
+        skip_spaces = 1;
+        continue;
+      }
+      if(result[i] == '}') {
+        break;
+      }
+      terminal_print_char(result[i]);
+    }
+    return_value = 0;
+  }
+  else {
+    if(httpResponseCode > 0) {
+      sprintf(result, "Return code %d\n\r", httpResponseCode);
+      terminal_print(result);
+      return_value = httpResponseCode;
+    }
+    else {
+      http_get_error_text(httpResponseCode, buff);
+      sprintf(result, "%s\n\r", buff);
+      terminal_print(result);
+      return_value = 2;
+    }
+  }
+  return return_value;
 }
 
 #endif
@@ -9139,7 +9199,7 @@ void WiFiConnected(WiFiEvent_t event, WiFiEventInfo_t info) {
 
 void get_current_timestamp_wifi_begin() {
   const char* ntpServer = "pool.ntp.org";
-  if(!global_unixtime_sync_initialized) {
+  if(!global_unixtime_sync_initialized && global_ntp_enabled == 1) {
     sntp_set_time_sync_notification_cb(timeSyncCallback);
     configTime(0, 0, ntpServer);
     global_unixtime_sync_initialized = 1;
@@ -10430,13 +10490,9 @@ int get_file_https(char *url, char *buff, long max_length) {
   char byte;
   int offset;
   int i;
+  offset = 0;
+  buff[offset] = 0;
   Serial.printf("get_file_https %s max_length %d\n", url, max_length);
-  /*
-  for(i = 0; i < strlen(url); i++) {
-    Serial.printf("%02X ", url[i]);
-  }
-  Serial.println();
-  */
   client = global_ssl_client;
   if(client) {
     client->setInsecure();
@@ -10449,6 +10505,7 @@ int get_file_https(char *url, char *buff, long max_length) {
           byte = stream->read();
           buff[offset] = byte;
           offset++;
+          buff[offset] = 0;
           if(offset >= max_length) {
             buff[offset - 1] = 0;
             break;
@@ -10456,7 +10513,7 @@ int get_file_https(char *url, char *buff, long max_length) {
         }
         //strcpy(buff, https.getString().c_str());
         Serial.println(httpResponseCode);
-        https.end();
+        Serial.println(buff);
       }
       https.end();
       return httpResponseCode;
@@ -11640,6 +11697,153 @@ void irc(char mode, char *io_buff) {
   }
 
   pim_app("IRC", IRC_PATH, irc_file_to_list, buttons, irc_action);
+}
+
+// ====================================================
+// Переводчик
+// ====================================================
+
+void translate(char mode, char *io_buff) {
+  int i;
+  unsigned char byte;
+  int button_pressed;
+  char buff[80];
+  char from_lang[80];
+  char to_lang[80];
+  char translation[300];
+  char query[80];
+  char query_utf8[160];
+  char url[300];
+  int httpResponseCode;
+  char *buttons[] = {
+    "From language",
+    "To language",
+    "Query",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01001111, B00000010,
+    B01010001, B00000010,
+    B01001111, B00000010,
+    B01001001, B00000010,
+    B01010001, B00000010,
+    B01000000, B11111010,
+    B01000000, B00010010,
+    B01000000, B00100010,
+    B01000000, B01000010,
+    B01000000, B11111010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Translate");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Trsl");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Translate");
+
+  strcpy(from_lang, "auto");
+  strcpy(to_lang, "en");
+  strcpy(translation, "");
+  strcpy(query, "");
+
+  while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+    drawButtonMatrix(0, 20, tft.width() / 2, 32 * 3, buttons, 1, 3);
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "  %s  ", from_lang);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 0, FONT_DEFAULT);
+    sprintf(buff, "  %s  ", to_lang);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 1, FONT_DEFAULT);
+
+    draw_text_formatted(translation, 1, 28 + 32 * 3, tft.width() - 2, 12, FONT_DEFAULT, 1);
+
+    touchWaitPress();
+
+    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32 * 3, buttons, 1, 3);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        strcpy(buff, from_lang);
+        if(drawPrompt("From language code", buff) == 0) {
+          strcpy(from_lang, buff);
+        }
+        clearPrompt();
+      }
+      else if(button_pressed == 1) {
+        strcpy(buff, to_lang);
+        if(drawPrompt("To language code", buff) == 0) {
+          strcpy(to_lang, buff);
+        }
+        clearPrompt();
+      }
+      else if(button_pressed == 2) {
+        // Магия перевода здесь
+        strcpy(buff, query);
+        if(drawPrompt("Query", buff) == 0) {
+          drawProcessWindow("Translating...");
+          strcpy(query, buff);
+          strcpy(translation, "");
+          strcat(translation, "Query:\n");
+          strcat(translation, query);
+          strcat(translation, "\n\nTranslation:\n");
+
+          sprintf(url, "https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=%s&tl=%s&q=", from_lang, to_lang);
+          cp1251_to_utf8(query, query_utf8);
+          
+          for(i = 0; i < strlen(query_utf8); i++) {
+            sprintf(buff, "%%%02X", query_utf8[i]);
+            strcat(url, buff);
+          }
+          Serial.println(url);
+          httpResponseCode = get_file_https(url, buff, 80);
+          if(httpResponseCode == 200) {
+            utf8_to_cp1251(buff);
+            // Текст перевода расположен от " до ,
+            if(strchr(buff, ',') != NULL) {
+              *(strchr(buff, ',') - 1) = 0;
+            }
+            if(strchr(buff, '"') != NULL) {
+              strcat(translation, strchr(buff, '"') + 1);
+            }
+            else {
+              strcat(translation, buff);
+            }
+            strcpy(query, "");
+          }
+          else {
+            strcat(translation, "Translation query error");
+          }
+        }
+        clearPrompt();
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
 }
 
 #endif
@@ -12956,6 +13160,7 @@ void autorun(char mode, char *io_buff) {
   char app_found = 0;
   int i;
   char buff[80];
+  char autorun_app_name[80];
   int button_pressed;
   char *buttons[] = {
     "Set",
@@ -13028,16 +13233,23 @@ void autorun(char mode, char *io_buff) {
   }
   
   while(1) {
+    if(!read_file_to_buff("/Settings/Autorun", 79, autorun_app_name)) {
+      strcpy(autorun_app_name, "None");
+    }
+  
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    tft.drawString("Select app:", 1, 16, FONT_DEFAULT);
+    sprintf(buff, "Current app: %s", autorun_app_name);
+    tft.drawString(buff, 1, 16, FONT_DEFAULT);
 
-    touchCheckList(0, 32, tft.width(), tft.height() - 72, app_list, 15, &app_offset, &app_selected);
-    drawList(0, 32, tft.width(), tft.height() - 72, app_list, 15, &app_offset, &app_selected);
+    tft.drawString("Select app:", 1, 16 + 16, FONT_DEFAULT);
+
+    touchCheckList(0, 48, tft.width(), tft.height() - 88, app_list, 15, &app_offset, &app_selected);
+    drawList(0, 48, tft.width(), tft.height() - 88, app_list, 15, &app_offset, &app_selected);
 
     drawButtonMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 2, 1);
     
     touchWaitPress();
-    touchCheckList(0, 32, tft.width(), tft.height() - 32 - 40, app_list, 15, &app_offset, &app_selected);
+    touchCheckList(0, 48, tft.width(), tft.height() - 48 - 40, app_list, 15, &app_offset, &app_selected);
 
     button_pressed = touchCheckMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 2, 1);
     if(button_pressed != -1) {
@@ -13406,6 +13618,7 @@ void clock_control(char mode, char *io_buff) {
     "Alarm minute",
     "Beep on hour",
     "Set clock",
+    "NTP sync",
     NULL
   };
   char app_icon[] = {
@@ -13447,7 +13660,7 @@ void clock_control(char mode, char *io_buff) {
   while(1) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
-    drawButtonMatrix(0, 20, tft.width() / 2, 32 * 5, buttons, 1, 5);
+    drawButtonMatrix(0, 20, tft.width() / 2, 32 * 6, buttons, 1, 6);
 
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "  %s  ", global_alarm_set ? "on" : "off");
@@ -13461,9 +13674,12 @@ void clock_control(char mode, char *io_buff) {
     sprintf(buff, "  %s  ", global_is_beep_hour_enabled ? "on" : "off");
     tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 3, FONT_DEFAULT);
 
+    sprintf(buff, "  %s  ", global_ntp_enabled ? "on" : "off");
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 5, FONT_DEFAULT);
+
     touchWaitPress();
 
-    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32 * 5, buttons, 1, 5);
+    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32 * 6, buttons, 1, 6);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
         if(global_alarm_set) {
@@ -13496,6 +13712,14 @@ void clock_control(char mode, char *io_buff) {
       else if(button_pressed == 4) {
         set_clock(APP_MODE_LAUNCH, NULL);
       }
+      else if(button_pressed == 5) {
+        if(global_ntp_enabled) {
+          global_ntp_enabled = 0;
+        }
+        else {
+          global_ntp_enabled = 1;
+        }
+      }
       
       clearScreen();
       drawAppTitle("Clock Settings");
@@ -13514,6 +13738,9 @@ void clock_control(char mode, char *io_buff) {
         sprintf(buff, "%d", global_alarm_minute);
         write_key_value_to_file("/Settings/Alarm", "minute", buff);
         write_key_value_to_file("/Settings/Sound", "beep_hour_enabled_flag", (char*)(global_is_beep_hour_enabled ? "1" : "0"));
+
+        sprintf(buff, "%d", global_ntp_enabled);
+        write_file_from_buff("/Settings/NTP", buff);
       }
 
       touchExitActionReset();
@@ -15130,6 +15357,108 @@ int oscilloscope_get_value(int input_index) {
     return value;
   }
   return 0;
+}
+
+void voltmeter(char mode, char *io_buff) {
+  int button_pressed;
+  char buff[80];
+  float multiplier = 1.0 / 1000;
+  float voltage = 0;
+  int value;
+  int input = 35;
+  char update_flag;
+  char *buttons[] = {
+    "Multiplier",
+    "Input",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01001000, B00010010,
+    B01001000, B00010010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01000010, B01000010,
+    B01000010, B01000010,
+    B01000001, B10000010,
+    B01000001, B10000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Voltmeter");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Vltm");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Voltmeter");
+
+  pinMode(input, INPUT_PULLUP);
+  while(1) {
+    value = analogReadMilliVolts(input);
+    voltage = (float)value * multiplier;
+    sprintf(buff, "   %0.3f   ", voltage);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.drawCentreString(buff, tft.width() / 2, 35, FONT_BIGGER);
+
+    drawButtonMatrix(0, tft.height() - 64, tft.width() / 2, 64, buttons, 1, 2);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "   %f   ", multiplier);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 64 + 32 * 0 + 8, FONT_DEFAULT);
+    sprintf(buff, "   %d   ", input);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 64 + 32 * 1 + 8, FONT_DEFAULT);
+
+
+    if(!touchCheckNowait()) {
+      delayOrTouchWait(100);
+      continue;
+    }
+    
+    touchWaitPress();
+
+    button_pressed = touchCheckMatrix(0, tft.height() - 64, tft.width() / 2, 64, buttons, 1, 2);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        sprintf(buff, "%f", multiplier);
+        if(drawPrompt("Multiplier value", buff) == 0) {
+          sscanf(buff, "%f", &multiplier);
+        }
+        clearPrompt();
+      }
+      else if(button_pressed == 1) {
+        sprintf(buff, "%d", input);
+        if(drawPrompt("Input", buff) == 0) {
+          sscanf(buff, "%d", &input);
+          pinMode(input, INPUT_PULLUP);
+        }
+        clearPrompt();
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
 }
 
 void fifteen(char mode, char *io_buff) {
@@ -18804,6 +19133,9 @@ void setup() {
   // Необходимость калибровки
   calibration_required = 1;
 
+  // Синхронизация времени - отключена, но если вай-фай разрешён, то позднее будет включена
+  global_ntp_enabled = 0;
+
   // Загрузка настроек
   if(storage_type != STORAGE_TYPE_NONE) {
     // Яркость
@@ -18995,6 +19327,13 @@ void setup() {
   #ifdef IS_WIFI_ENABLED
     WiFi.begin();
     WiFi.onEvent(WiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
+
+    // NTP
+    global_ntp_enabled = 1;
+    if(read_file_to_buff("/Settings/NTP", 79, buff)) {
+      sscanf(buff, "%d", &global_ntp_enabled);
+    }
+
   #endif
   Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
