@@ -47,6 +47,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * You can set password in Security app. Password asked when power on. Password stored in a plaintext, no encryption
 
 # Status bar symbols
+* A - alarm enabled
 * W - connected to Wi-Fi
 * T - time synced with NTP
 * S - main storage is SD
@@ -60,7 +61,6 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * System info
 * Password
 * LED control
-* Screensaver
 * Stopwatch
 * Timer
 * Breathing timer
@@ -85,6 +85,10 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Select data storage
 * View Screenshots
 * Backup FFat to SD and restore from SD to FFat
+* Voltmeter
+* Translate (via google translate unofficial API)
+* Clock settings
+* Screen settings
 
 ## PIM apps
 * Calculator
@@ -110,6 +114,13 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * N back - see https://en.wikipedia.org/wiki/N-back for details
 * Mental Math - see https://en.wikipedia.org/wiki/Mental_calculation for details :)
 * 2048 - see https://en.wikipedia.org/wiki/2048_(video_game) for details
+
+## Screensavers
+* Stars
+* Color squares
+* Lorenz attractor
+* Noise
+* Matrix
 
 ## Wi-Fi
 * Wi-Fi connection
@@ -144,6 +155,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * telnet {host} [port] - connect via telnet to specified host and port
 * telnets {host} [port] - connect via telnet to specified host and port using SSL
 * wget {url} [filename] - download file with http/https and show or store to file
+* ipinfo {ip} - show IP information (via ipinfo.io)
 * sd_to_ffat {sd_path} {ffat_path} - copy file from SD to FFat
 * ffat_to_sd {ffat_path} {sd_path} - copy file from FFat to SD
 * utf8_to_cp1251 {from_file} {to_file} - convert file encoding from UTF-8 to CP1251
