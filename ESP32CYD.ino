@@ -11707,7 +11707,7 @@ void translate(char mode, char *io_buff) {
   int i;
   unsigned char byte;
   int button_pressed;
-  char buff[80];
+  char buff[300];
   char from_lang[80];
   char to_lang[80];
   char translation[300];
