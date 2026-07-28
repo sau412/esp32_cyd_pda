@@ -196,12 +196,15 @@
   баг с ответом сервера в чате, больше информации в заголовке, статус будильника в заголовке, заставка цветные квадратики, заставка матрица, заставка шум,
   заставка аттрактор Лоренца, возможность отключить звук часа, возможность отключить звук клавиш, будильник
 2026-07-22 Переводчик, вольтметр, возможность отключить NTP, autorun текущее приложение, фикс бага wget
+2026-07-23 Автоопределение и коррекция бага со считыванием цветов (readPixel), больше тестов экрана
+2026-07-28 Доработка русского моноширинного шрифта, взаимодействие с telnet
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (д) Восход и закат
 - (д) Чат - просмотр с прокруткой
 - (д) Таймер/секундомер в фоне
-
+- (д) Терминал: коды для смены цвета
+- (д) Терминал: коды для управления курсором
 - (п) Просмотреть справку, может быть что-то добавить
 - (и) Крутая калибровка
 - (н) Brainfuck интерпретатор
@@ -211,7 +214,6 @@
 - (н) Буфер обмена
 - (н) Выделение в просмотре, копирование
 - (н) Выделение в редактировании, копирование, вставка
-- (д) Настройка "не показывать время без синхр" чтобы не видеть левое время
 - (д) Автоопределение кодировки файла при просмотре
 - (д) Полноцветные скриншоты (24 бита) если нужно либо настройки скриншотов
 
@@ -251,12 +253,43 @@
 - (и) Дашборд - если есть соединение показывать пинг до шлюза, или писать что соединения нет, Время юникс, Синхронизировано ли время, Текущая фс, Аптайм в дашборд
 - (д) Заставка двойной маятник (сложно)
 - (д) Запуск приложений из командной строки - не расчитано приложение на это
+- (н) Просмотр статей Wikipedia через API
+- (н) Fun Fact / Random Useless Facts
+- (н) Информация по валютам и криптовалютам (курсы)
+- (н) Информация по криптовалютам (блокчейн)
+- (н) Кодирование-декодирование b64 из терминала
+- (н) Шифрование-расшифрование AES в терминале
+- (н) Терминал переменные окружения
+- (н) Разбор командной строки
+- (н) Поддержка команд для курсора
+- (д) Причина перезагрузки
+- (д) Просмотр hex
+- (д) Просмотр hex в терминале
+- (д) more в терминале
+- (д) Дашборд - выбрать какую ещё информацию: соединение, пинг до шлюза, время юникс, синхронизация времени, дела на день, текущая фс, аптайм
+- (д) Не показывать время до синхронизации
+- (д) Не показывать время вообще
+- (д) Не показывать флаги
+- (д) Кастомные значки в заголовке
+- (д) Картинки для три-в-ряд
+- (д) Заставка двойной маятник
+- (д) Просмотр BMP/MP3 в файлах
+- (д) Возможность менять яркость, звук из приложения
+- (д) Возможность запуска приложений из терминала
+- (д) Ланучер-список
+- (д) Лаунчер с более крупными значками
+- (д) Выбор вида лаунчера
 
 */
+
+#define ESP32_CYD_PDA
 
 #define IS_WIFI_ENABLED
 
 #define PREFER_SD_IF_AVAILABLE
+
+// У некоторых CYD младший бит зелёного слишком яркий, для вывода 24-битной картинки можно его игнорировать чтобы не искажались цвета
+#define BMP_USE_555
 //#define IS_BLE_ENABLED
 //#define IS_BLUETOOTH_ENABLED
 //#define IS_SSH_ENABLED
@@ -406,6 +439,8 @@ int cursor_col;
 int current_color;
 char cursor_visible_flag = 1;
 char terminal_keyboard_redraw_flag = 0;
+char terminal_esc_sequence[20];
+char terminal_esc_sequence_flag = 0;
 
 // Цвета
 #define COLOR_INDEX_BLACK 0
@@ -701,6 +736,7 @@ int global_brightness = 255;
 int global_inversion = 0;
 int global_rotation = 0;
 int global_view_font_small = 0;
+char global_screen_color_read_extra_byte = 0;
 
 // Звук
 int global_is_beep_enabled = 1;
@@ -2395,41 +2431,136 @@ void terminal_print(char *string) {
 }
 
 void terminal_print_char(char c) {
-  // 0x00 Ignored
-  if(c == 0x00) {
+  int val;
+  int i;
+  // ESC - последовательность
+  if(terminal_esc_sequence_flag) {
+    terminal_esc_sequence[strlen(terminal_esc_sequence) + 1] = 0;
+    terminal_esc_sequence[strlen(terminal_esc_sequence)] = c;
+    if(c >= 0x40 && c <=0x7E && c != '[') {
+      if(c == 'A') {
+        cursor_row--;
+      }
+      else if(c == 'B') {
+        cursor_row++;
+      }
+      else if(c == 'C') {
+        cursor_col++;
+      }
+      else if(c == 'D') {
+        cursor_col--;
+      }
+      else if(c == 'H') {
+        sscanf(terminal_esc_sequence, "[%d;%d", &cursor_row, &cursor_col);
+        cursor_row--;
+        cursor_col--;
+      }
+      else if(c == 'J') {
+        terminal_clear_screen();
+      }
+      else if(c == 'K') {
+        if(strcmp(terminal_esc_sequence, "[K") == 0
+          ||
+          strcmp(terminal_esc_sequence, "[0K") == 0) {
+          for(i = cursor_col; i < TERMINAL_WIDTH_CHARS; i++) {
+            terminal_screen[i + cursor_row * TERMINAL_WIDTH_CHARS] = 0;
+            terminal_colors[i + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
+          }
+        }
+      }
+      else if(c == 'h') {
+        cursor_visible_flag = 1;
+      }
+      else if(c == 'l') {
+        cursor_visible_flag = 0;
+      }
+      else if(c == 'm') {
+        if(strcmp(terminal_esc_sequence, "(B") == 0) {
+          current_color = 0x07;
+        }
+        else if(strcmp(terminal_esc_sequence, "[m") == 0) {
+          current_color = 0x07;
+        }
+        else if(strcmp(terminal_esc_sequence, "[0m") == 0) {
+          current_color = 0x07;
+        }
+        else if(strcmp(terminal_esc_sequence, "[1m") == 0) {
+          current_color = 0x0F;
+        }
+        else if(strcmp(terminal_esc_sequence, "[4m") == 0) {
+          // подчёркивание, ничего не делаем
+        }
+        else if(strcmp(terminal_esc_sequence, "[7m") == 0) {
+          current_color = ((current_color & 0x0F) << 4) | ((current_color & 0xF0) >> 4);
+        }
+        else if(strcmp(terminal_esc_sequence, "[22m") == 0) {
+          current_color = 0x07;
+        }
+        else if(strcmp(terminal_esc_sequence, "[24m") == 0) {
+          // без подчёркивания, ничего не делаем
+        }
+        else if(strcmp(terminal_esc_sequence, "[27m") == 0) {
+          // Отмена инверсии
+          current_color = 0x07;
+        }
+        else if(strcmp(terminal_esc_sequence, "[39;49m") == 0) {
+          current_color = 0x07;
+        }
+        else {
+          Serial.printf("Unknown ESC color sequence: %s\n", terminal_esc_sequence);
+        }
+      }
+      else if(c == 'n') {
+        // Запрос позиции курсора. Нужно выдать ответ, но как?
+      }
+      else {
+        Serial.printf("Unknown ESC sequence: %s\n", terminal_esc_sequence);
+      }
+      //Serial.printf("ESC sequence: %s\n", terminal_esc_sequence);
+      terminal_esc_sequence_flag = 0;
+    }
   }
-  else if(c == 0x07) {
-    beep_if_enabled();
-  }
-  else if(c == 0x08) {
-    if(cursor_col > 0) cursor_col--;
-  }
-  else if(c == 0x09) {
-    cursor_col = (cursor_col / 8 + 1) * 8;
-  }
-  else if(c == 0x0A) {
-    cursor_row++;
-  }
-  else if(c == 0x0B) {
-    cursor_row++;
-  }
-  else if(c == 0x0C) {
-    terminal_clear_screen();
-  }
-  else if(c == 0x0D) {
-    cursor_col = 0;
-  }
-  else if(c == 0x7F) {
-    if(cursor_col > 0) cursor_col--;
-    terminal_screen[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = 0;
-    terminal_colors[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
-  }
+  // Обычный символ
   else {
-    terminal_screen[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = c;
-    terminal_colors[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
-    cursor_col++;
+    // 0x00 Ignored
+    if(c == 0x00) {
+    }
+    else if(c == 0x07) {
+      beep_if_enabled();
+    }
+    else if(c == 0x08) {
+      if(cursor_col > 0) cursor_col--;
+    }
+    else if(c == 0x09) {
+      cursor_col = (cursor_col / 8 + 1) * 8;
+    }
+    else if(c == 0x0A) {
+      cursor_row++;
+    }
+    else if(c == 0x0B) {
+      cursor_row++;
+    }
+    else if(c == 0x0C) {
+      terminal_clear_screen();
+    }
+    else if(c == 0x0D) {
+      cursor_col = 0;
+    }
+    else if(c == 0x1B) {
+      terminal_esc_sequence_flag = 1;
+      strcpy(terminal_esc_sequence, "");
+    }
+    else if(c == 0x7F) {
+      if(cursor_col > 0) cursor_col--;
+      terminal_screen[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = 0;
+      terminal_colors[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
+    }
+    else {
+      terminal_screen[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = c;
+      terminal_colors[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
+      cursor_col++;
+    }
   }
-
   if(cursor_col >= TERMINAL_WIDTH_CHARS) {
     cursor_col = 0;
     cursor_row++;
@@ -2489,6 +2620,7 @@ void terminal_clear_screen() {
   cursor_row = 0;
   cursor_col = 0;
   cursor_visible_flag = 1;
+  terminal_esc_sequence_flag = 0;
 }
 
 #define TERMINAL_INPUT_MAX 80
@@ -2748,7 +2880,9 @@ int terminal_telnet(char *arg, char ssl_flag) {
   long speed;
   int byte;
   int port = 0;
+  char do_echo = 1;
   char host[80];
+  long prev_terminal_update = 0;
   WiFiClient *client;
   //WiFiClientSecure *ssl_client = new WiFiClientSecure;
   //WiFiClient basic_client;
@@ -2782,25 +2916,113 @@ int terminal_telnet(char *arg, char ssl_flag) {
   }
 
   while(1) {
-    while(client->available()) {
+    if(client->available()) {
       byte = client->read();
-      if(byte == '\n') {
+      Serial.printf("Read %02X %c\n", byte, byte);
+      // Команды телнета
+      if(byte == 0xFF) {
+        byte = client->read();
+        Serial.printf("Read %02X %c\n", byte, byte);
+        if(byte == 0xF0) {
+          byte = client->read();
+          client->write(0xF0);
+          client->write(0xFE);
+          client->write((char)byte);
+          client->flush();
+          continue;
+        }
+        else if(byte == 0xFA) {
+          byte = client->read();
+          Serial.printf("Read %02X %c\n", byte, byte);
+          if(byte == 0x01) {
+            client->write(0xFF);
+            client->write(0xFE);
+            client->write((char)do_echo);
+          }
+          else {
+            client->write(0xFF);
+            client->write(0xFE);
+            client->write((char)byte);
+          }
+          client->flush();
+          continue;
+        }
+        else if(byte == 0xFB) {
+          byte = client->read();
+          Serial.printf("Read %02X %c\n", byte, byte);
+          if(byte == 0x01) {
+            do_echo = 0;
+            client->write(0xFF);
+            client->write(0xFE);
+            client->write((char)byte);
+          }
+          else {
+            client->write(0xFF);
+            client->write(0xFE);
+            client->write((char)byte);
+          }
+          client->flush();
+          continue;
+        }
+        else if(byte == 0xFD) {
+          byte = client->read();
+          Serial.printf("Read %02X %c\n", byte, byte);
+          // IAC DO TERMINAL-TYPE
+          if(byte == 0x18) {
+            // DO
+            client->write(0xff);
+            client->write(0xfb);
+            client->write(0x18);
+            // Идентификатор терминала
+            client->write(0xff);
+            client->write(0xfa);
+            client->write(0x18);
+            client->write((char)0x00);
+            client->write('X');
+            client->write('T');
+            client->write('E');
+            client->write('R');
+            client->write('M');
+            client->write(0xff);
+            client->write(0xf0);
+          }
+          else {
+            client->write(0xFF);
+            client->write(0xFC);
+            client->write((char)byte);
+          }
+          client->flush();
+          continue;
+        }
+      }
+      else if(byte == '\n') {
         //client.print('\r');
-        terminal_print_char('\r');
+        if(client->peek() == '\r') {
+          client->read();
+          terminal_print_char('\r');
+        }
       }
       else if(byte == '\r') {
         //client.print('\n');
-        terminal_print_char('\n');
+        if(client->peek() == '\n') {
+          client->read();
+          terminal_print_char('\n');
+        }
       }
       //client.print((char)byte);
       terminal_print_char(byte);
-      terminal_show_screen();
+      if(!client->available() || millis() - prev_terminal_update > 1000) {
+        prev_terminal_update = millis();
+        terminal_show_screen();
+      }
     }
+
     if(!client->connected()) {
       terminal_print("Disconnected\n\r");
       terminal_show_screen();
       return 0;
     }
+
     byte = terminal_input_char();
     if(byte != -1) {
       // Esc
@@ -2811,13 +3033,19 @@ int terminal_telnet(char *arg, char ssl_flag) {
       else if(byte == '\n') {
         client->print('\r');
         client->print('\n');
-        terminal_print_char('\r');
-        terminal_print_char('\n');
+        client->flush();
+        if(do_echo) {
+          terminal_print_char('\r');
+          terminal_print_char('\n');
+        }
       }
       else {
         client->print((char)byte);
-        terminal_print_char((char)byte);
-        terminal_show_screen();
+        client->flush();
+        if(do_echo) {
+          terminal_print_char((char)byte);
+          terminal_show_screen();
+        }
       }
     }
   }
@@ -13963,6 +14191,33 @@ void screen_test(char mode, char *io_buff) {
   touchWaitRelease();
 
   tft.fillScreen(TFT_BLACK);
+  for(j = 0; j < tft.height(); j++) {
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 0, j, i);
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 1, j, i << 6);
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 2, j, i << 11);
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 3, j, (i << 6) + (i << 11));
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 4, j, i + (i << 11));
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 5, j, i + (i << 6));
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 6, j, i + (i << 6) + (i << 11));
+    }
+  }
+  touchWaitPress();
+  touchWaitRelease();
+
+  tft.fillScreen(TFT_BLACK);
   for(j = 0; j < 256; j++) {
     for(i = 0; i < 256; i++) {
       tft.drawPixel(i, j, i + j * 256);
@@ -18921,8 +19176,13 @@ int bmp_show_image(char *filename, int start_x, int start_y) {
         current_offset++;
         byte3 = file.read(); // R
         current_offset++;
+        #ifdef BMP_USE_555
+        // Формируем 16-битное значение 5-5-5
+        color = (byte3 >> 3) << 11 | (byte2 >> 3) << 6 | byte1 >> 3;
+        #else
         // Формируем 16-битное значение 5-6-5
         color = (byte3 >> 3) << 11 | (byte2 >> 2) << 5 | byte1 >> 3;
+        #endif
         tft.drawPixel(start_x + x, start_y + y, color);
         x++;
         if(x >= width) {
@@ -19054,6 +19314,15 @@ void setup() {
   tft.setRotation(2);
   // Очистка
   clearScreen();
+
+  // Выясняем, есть ли баг со считыванием цветов
+  global_screen_color_read_extra_byte = 0;
+  tft.drawPixel(0, 0, TFT_WHITE);
+  if(tft.readPixel(0, 0) != TFT_WHITE && tft.readPixel(0, 0) == 0x07FF) {
+    Serial.println("Read pixel bug found, appying correction");
+    global_screen_color_read_extra_byte = 1;
+    tft.setReadExtraByte(global_screen_color_read_extra_byte);
+  }
 
   global_io_flag = 0;
 
