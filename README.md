@@ -114,6 +114,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * N back - see https://en.wikipedia.org/wiki/N-back for details
 * Mental Math - see https://en.wikipedia.org/wiki/Mental_calculation for details :)
 * 2048 - see https://en.wikipedia.org/wiki/2048_(video_game) for details
+* CHIP-8 emulator
 
 ## Screensavers
 * Stars
