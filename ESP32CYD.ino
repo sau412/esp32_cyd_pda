@@ -85,6 +85,7 @@
 - Настройки звука/будильника
 - Переводчик
 - Вольтметр
+- CHIP-8 emulator
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -198,27 +199,87 @@
 2026-07-22 Переводчик, вольтметр, возможность отключить NTP, autorun текущее приложение, фикс бага wget
 2026-07-23 Автоопределение и коррекция бага со считыванием цветов (readPixel), больше тестов экрана
 2026-07-28 Доработка русского моноширинного шрифта, взаимодействие с telnet
+2026-07-29 Показывать причину перезагрузки, не инициализировать Wi-Fi при причине перезагрузки brownout
+2026-07-30 Баг с повторной синхронизацией времени
+2026-07-31 Парсер командной строки, запуск приложений из терминала, больше ESC-последовательностей
+2026-08-01 Telnet исправление багов, terminal_println, bc, more, terminal_scroll_up, больше ESC-последовательностей
+2026-08-02 Telnet выход только когда уже нечего читать если соединение закрыто, справка по терминалу, зачищать пиксель вокруг кнопок
+2026-08-03 CHIP-8 эмулятор
+2026-08-04 CHIP-8 исправление багов, hexdump, uuidgen, uptime
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
+- (д) CHIP-8 ускорение работы вывода спрайта
+- (д) CHIP-8 рисовать только изменённые части экрана
+
+- (д) Терминал операции со строками ESC-кодами
+- (д) tftp
+- (д) CSV просмотр и редактирование
+- (д) tar
+- (д) управление через веб
+- (д) Конвертер валют, единиц измерения
+- (д) I2C чтение распространённых датчиков
+- (д) Разархиватор zip
+- (д) Мировое время
+- (д) Функции для кодов ANSI управления терминалом
+- (д) random
+- (д) translate
+- (д) append
+- (д) caesar
+- (д) deltree (rm -r)
+- (д) weather
+- (д) chat
+- (д) cal
+- (д) uname, version
+- (д) hostname
+- (д) free, memory
+- (д) df
+- (д) lscpu
+- (д) file - получить тип файла
+- (д) wc
+- (д) head
+- (д) tail
+- (д) echo
+- (д) seq
+- (д) dd
+- (д) crc
+- (д) lsmem
+- (д) lshw
+- (д) lsblk
+- (д) passwd
+- (д) shasum
+- (д) Список разделов флеша
+- (д) Установка даты-времени из терминала
+- (б) Баг со скриншотами всё ещё есть
+- (д) Возможность отмонтировать всё и подготовить устройство к отключению питания
 - (д) Восход и закат
 - (д) Чат - просмотр с прокруткой
-- (д) Таймер/секундомер в фоне
-- (д) Терминал: коды для смены цвета
-- (д) Терминал: коды для управления курсором
+- (д) Секундомер в фоне
 - (п) Просмотреть справку, может быть что-то добавить
+- (д) Таймер в фоне
 - (и) Крутая калибровка
-- (н) Brainfuck интерпретатор
+- (н) Brainfuck интерпретатор (в терминале)
 - (н) Basic интерпретатор
 - (н) Пакетные файлы
 - (н) История ввода терминала (хотя бы прошлая команда)
+- (н) Текущий путь в терминале
 - (н) Буфер обмена
 - (н) Выделение в просмотре, копирование
 - (н) Выделение в редактировании, копирование, вставка
 - (д) Автоопределение кодировки файла при просмотре
 - (д) Полноцветные скриншоты (24 бита) если нужно либо настройки скриншотов
-
-- (д) Настройка: не показывать значки статуса
+- (б) Баг выхода из терминала
+- (б) Баг выхода из IRC
+- (д) Музыка в фоне
+- (д) Поддержка WAV
+- (д) Генератор сигналов
+- (д) Судоку
+- (д) Сапёр
+- (д) Сокобан
+- (д) Шахматы (задачи)
+- (д) Шахматы (игра)
+- (д) Настройка: не показывать значки статуса AFSWT
 - (д) Настройка: не показывать время
+- (д) Настройка: не показывать время пока оно не синхронизировано
 - (и) Убирать значки в лаунчере
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор
@@ -260,22 +321,10 @@
 - (н) Кодирование-декодирование b64 из терминала
 - (н) Шифрование-расшифрование AES в терминале
 - (н) Терминал переменные окружения
-- (н) Разбор командной строки
-- (н) Поддержка команд для курсора
-- (д) Причина перезагрузки
-- (д) Просмотр hex
-- (д) Просмотр hex в терминале
-- (д) more в терминале
 - (д) Дашборд - выбрать какую ещё информацию: соединение, пинг до шлюза, время юникс, синхронизация времени, дела на день, текущая фс, аптайм
-- (д) Не показывать время до синхронизации
-- (д) Не показывать время вообще
-- (д) Не показывать флаги
-- (д) Кастомные значки в заголовке
+- (д) Кастомные значки в заголовке вместо букв AFSWT
 - (д) Картинки для три-в-ряд
-- (д) Заставка двойной маятник
-- (д) Просмотр BMP/MP3 в файлах
 - (д) Возможность менять яркость, звук из приложения
-- (д) Возможность запуска приложений из терминала
 - (д) Ланучер-список
 - (д) Лаунчер с более крупными значками
 - (д) Выбор вида лаунчера
@@ -432,15 +481,44 @@ XPT2046_Bitbang touchscreen(XPT2046_MOSI, XPT2046_MISO, XPT2046_CLK, XPT2046_CS)
 #define TERMINAL_WIDTH_CHARS 40
 #define TERMINAL_HEIGHT_CHARS 20
 
-char terminal_screen[TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS];
-char terminal_colors[TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS];
+// Основной экран
+char terminal_primary_screen[TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS];
+char terminal_primary_colors[TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS];
+char terminal_primary_attributes[TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS];
+// Альтернативный экран
+char terminal_alt_screen[TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS];
+char terminal_alt_colors[TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS];
+char terminal_alt_attributes[TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS];
+// Текущий экран
+char *terminal_screen = terminal_primary_screen;
+char *terminal_colors = terminal_primary_colors;
+char *terminal_attributes = terminal_primary_attributes;
+
+char terminal_output[80];
+
+#define ATTRIBUTE_BOLD 1
+#define ATTRIBUTE_UNDERLINED 2
+#define ATTRIBUTE_STRIKEOUT 4
+#define ATTRIBUTE_INVERSION 8
+
 int cursor_row;
 int cursor_col;
-int current_color;
+int current_color = 0x07;
+int current_attribute = 0x00;
+
+int cursor_saved_row;
+int cursor_saved_col;
+int cursor_saved_color = 0x07;
+int cursor_saved_attribute = 0x00;
+
 char cursor_visible_flag = 1;
+char terminal_autowrap = 1;
 char terminal_keyboard_redraw_flag = 0;
 char terminal_esc_sequence[20];
 char terminal_esc_sequence_flag = 0;
+char terminal_use_alt_screen_flag = 0;
+int terminal_scroll_line_begin = 0;
+int terminal_scroll_line_end = 19;
 
 // Цвета
 #define COLOR_INDEX_BLACK 0
@@ -774,6 +852,7 @@ char current_app_title[80];
 char app_title_enabled = 0;
 long app_title_updated_millis = 0;
 char global_io_flag = 0;
+char low_power_flag = 0;
 
 void launcher(char mode, char *io_buff);
 void calculator(char mode, char *io_buff);
@@ -847,6 +926,7 @@ void flashcards(char mode, char *io_buff);
 void oscilloscope(char mode, char *io_buff);
 void select_storage_app(char mode, char *io_buff);
 void game2048(char mode, char *io_buff);
+void chip8(char mode, char *io_buff);
 void clock_control(char mode, char *io_buff);
 void translate(char mode, char *io_buff);
 void voltmeter(char mode, char *io_buff);
@@ -926,6 +1006,7 @@ function_application_pointer all_apps[] = {
   n_back,
   mental_math,
   game2048,
+  chip8,
   //color_settings,
   screen_settings,
   keyboard_control,
@@ -1343,7 +1424,7 @@ void system_info(char mode, char *io_buff) {
 
     i = 0;
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    sprintf(buff, "ESP32 CYD PDA v1.3 by sau412");
+    sprintf(buff, "ESP32 CYD PDA v1.4 by sau412");
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
@@ -1512,36 +1593,7 @@ void user_manual(char mode, char *io_buff) {
   "Connect I2C bus to IO2 socket (3V3, IO22, IO27, GND) and press scan to scan.\n"
   "\n"
   "== Terminal ==\n"
-  "Commands available:\n"
-  "millis - milliseconds since boot\n"
-  "micros - microseconds since boot\n"
-  "clear - clear terminal\n"
-  "reset - clear terminal\n"
-  "reboot - reboot device\n"
-  "exit - exit terminal\n"
-  "date - current date\n"
-  "sleep {seconds} - delay specified amount of seconds\n"
-  "delay {milliseconds} - delay specified amount of milliseconds\n"
-  "format ffat - erase all in FFat storage\n"
-  "ls {full_path} - show directory listing\n"
-  "mkdir {full_path} - create new directory\n"
-  "rmdir {full_path} - remove empty directory\n"
-  "cat {full_path} - show file contents\n"
-  "rm {full_path} - remove file\n"
-  "touch {full_path} - create file\n"
-  "i2c - scan I2C devices\n"
-  "beep - beep as system event\n"
-  "tone {frequency} - make sound tone\n"
-  "notone - stop sound tone\n"
-  "serial [speed] - connect to serial port\n"
-  "host {host} - lookup DNS host\n"
-  "ping {host} - ping host continiously\n"
-  "telnet {host} [port] - connect to host and port via telnet\n"
-  "telnets {host} [port] - connect to host and port via telnet using SSL\n"
-  "wget {url} [path] - download file from HTTP/HTTPS to local file\n"
-  "sd_to_ffat {path_sd} {path_ffat} - copy file from SD to FFat\n"
-  "ffat_to_sd {path_ffat} {path_sd} - copy file from FFat to SD\n"
-  "utf8_to_cp1251 {input_file} {output_file} - change file encoding\n"
+  "Type \"help\" in terminal to see terminal help\n"
   "\n"
   "== Filesystem ==\n"
   "/Settings - settings folder\n"
@@ -1578,7 +1630,6 @@ void user_manual(char mode, char *io_buff) {
   "/IRC - IRC settings folder\n"
   "\n"
   ;
-  int i = 0;
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -1614,6 +1665,111 @@ void user_manual(char mode, char *io_buff) {
   }
 
   view_text("User Manual", help);
+}
+
+void terminal_manual() {
+  char help[] =
+  "== Terminal help ==\n"
+  "Commands available:\n"
+  "help - this help\n"
+  "bc - simple console calculator\n"
+  "millis - milliseconds since boot\n"
+  "micros - microseconds since boot\n"
+  "clear - clear terminal\n"
+  "reset - clear terminal\n"
+  "reboot - reboot device\n"
+  "exit - exit terminal\n"
+  "date - current date\n"
+  "sleep {seconds} - delay specified amount of seconds\n"
+  "delay {milliseconds} - delay specified amount of milliseconds\n"
+  "format ffat - erase all in FFat storage\n"
+  "ls {full_path} - show directory listing\n"
+  "mkdir {full_path} - create new directory\n"
+  "rmdir {full_path} - remove empty directory\n"
+  "cat {full_path} - show file contents\n"
+  "rm {full_path} - remove file\n"
+  "touch {full_path} - create file\n"
+  "i2c - scan I2C devices\n"
+  "beep - beep as system event\n"
+  "tone {frequency} - make sound tone\n"
+  "notone - stop sound tone\n"
+  "serial [speed] - connect to serial port\n"
+  "host {host} - lookup DNS host\n"
+  "ping {host} - ping host continiously\n"
+  "telnet {host} [port] - connect to host and port via telnet\n"
+  "telnets {host} [port] - connect to host and port via telnet using SSL\n"
+  "wget {url} [path] - download file from HTTP/HTTPS to local file\n"
+  "sd_to_ffat {path_sd} {path_ffat} - copy file from SD to FFat\n"
+  "ffat_to_sd {path_ffat} {path_sd} - copy file from FFat to SD\n"
+  "utf8_to_cp1251 {input_file} {output_file} - change file encoding\n"
+  "\n"
+  "== Running apps from termminal ==\n"
+  "Type app name to launch:\n"
+  "calculator - Calculator app\n"
+  "files - File app\n"
+  "notes - Notes app\n"
+  "contacts - Contacts app\n"
+  "todo - To Do app\n"
+  "schedule - Schedule app\n"
+  "expenses - Expenses app\n"
+  "flashcards - Flashcards app\n"
+  "books - Books app\n"
+  "passwords - Passwords app\n"
+  "screenshots - Screenshots app\n"
+  "tunes - Tunes app\n"
+  "music - Music app\n"
+  "webradio - Webradio app\n"
+  "system_info - System Info app\n"
+  "torch - Torch app\n"
+  "draw - Draw app\n"
+  "wifi - Wi-Fi connection app\n"
+  "gopher - Gopher Browser app\n"
+  "rss - RSS reader app\n"
+  "irc - IRC client app\n"
+  "chat - Chat app\n"
+  "weather - Weather app\n"
+  "file_server - File Server app\n"
+  "translate - Translate app\n"
+  "counter - Counter app\n"
+  "random_numbers - Random Numbers app\n"
+  "timer - Timer app\n"
+  "stopwatch - Stopwatch app\n"
+  "breathe - Breathe app\n"
+  "piano - Piano app\n"
+  "metronome - Metronome app\n"
+  "screensaver - Screensavers app\n"
+  "user_manual - User Manual app\n"
+  "security - Security app\n"
+  "brightness - Brightness app\n"
+  "touch_calibration - Touch Calibration app\n"
+  "oscilloscope - Oscilloscope app\n"
+  "voltmeter - Voltmeter app\n"
+  "life - Life app\n"
+  "dashboard - Dashboard app\n"
+  "fuzzy_clock - Fuzzy Clock app\n"
+  "view_font - View Font app\n"
+  "fifteen - Fifteen game\n"
+  "lights_off - Lights Off game\n"
+  "snake - Snake game\n"
+  "turkish_kerchief - Turkish Kerchief solitaire\n"
+  "memory_match - Memory Match game\n"
+  "hanoi_towers - Hanoi Towers game\n"
+  "match_three - Match Three game\n"
+  "simon - Simon game\n"
+  "n_back - N Back game\n"
+  "mental_math - Mantal Math game\n"
+  "game2048 - 2048 game\n"
+  "screen_settings - Screen Settings app\n"
+  "keyboard_control - Keyboard Control app\n"
+  "sound_control - Sound Control app\n"
+  "set_clock - Set Clock app\n"
+  "autorun - Autorun app\n"
+  "select_storage - Select Storage app\n"
+  "backups - Backups app\n"
+  "\n"
+  ;
+
+  view_text("Terminal Manual", help);
 }
 
 #define FILES_COUNT_MAX 1024
@@ -2035,9 +2191,13 @@ void terminal(char mode, char *io_buff) {
   clearScreen();
   drawAppTitle("Terminal");
 
+  terminal_output[0] = 0;
   terminal_clear_screen();
 
   while(1) {
+    // Название может быть перезаписано, исправляем
+    drawAppTitle("Terminal");
+
     terminal_print(">");
     terminal_show_screen();
 
@@ -2045,17 +2205,13 @@ void terminal(char mode, char *io_buff) {
     terminal_input_string(buff);
     terminal_show_screen();
 
+    if(global_exit_flag) {
+      touchExitActionReset();
+      return;
+    }
+
     terminal_execute(buff);
-
-    if(global_exit_flag) {
-      touchExitActionReset();
-      return;
-    }
-
-    if(global_exit_flag) {
-      touchExitActionReset();
-      return;
-    }
+    strcpy(buff, "");
   }
 }
 
@@ -2103,225 +2259,265 @@ void terminal_execute_single(char *str) {
   int error;
   int freq;
   char found = 0;
+  int arg_count;
+  long l;
+  char *cmdline_params[20];
 
   IPAddress ip;
   fs::File file;
   fs::File current_dir;
 
-  if(strcmp(str, "millis") == 0) {
+  terminal_parse_cmdline(str, &arg_count, cmdline_params);
+  if(arg_count == 0 || !cmdline_params[0]) {
+    return;
+  }
+
+  if(strcmp(cmdline_params[0], "millis") == 0) {
     sprintf(buff, "%d\n\r", millis());
     terminal_print(buff);
   }
-  else if(strcmp(str, "micros") == 0) {
+  else if(strcmp(cmdline_params[0], "micros") == 0) {
     sprintf(buff, "%d\n\r", micros());
     terminal_print(buff);
   }
-  else if(strcmp(str, "clear") == 0) {
+  else if(strcmp(cmdline_params[0], "clear") == 0) {
     terminal_clear_screen();
   }
-  else if(strcmp(str, "reset") == 0) {
+  else if(strcmp(cmdline_params[0], "reset") == 0) {
     terminal_clear_screen();
   }
-  else if(strcmp(str, "reboot") == 0) {
+  else if(strcmp(cmdline_params[0], "reboot") == 0) {
     ESP.restart();
   }
-  else if(strcmp(str, "exit") == 0) {
+  else if(strcmp(cmdline_params[0], "exit") == 0) {
     global_exit_flag = 1;
   }
-  else if(strcmp(str, "date") == 0) {
-    //set_local_time_from_unix_timestamp();
-    sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d\n\r", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
+  else if(strcmp(cmdline_params[0], "date") == 0) {
+    sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
+    terminal_println(buff);
+  }
+  else if(strcmp(cmdline_params[0], "uptime") == 0) {
+    l = millis() / 1000;
+    if(l >= 86400) {
+      sprintf(buff, "%d d ", l / 86400);
+      terminal_print(buff);
+      l %= 86400;
+    }
+    if(l >= 3600) {
+      sprintf(buff, "%d h ", l / 3600);
+      terminal_print(buff);
+      l %= 3600;
+    }
+    if(l >= 60) {
+      sprintf(buff, "%d m ", l / 60);
+      terminal_print(buff);
+      l %= 60;
+    }
+    sprintf(buff, "%d s\n\r", l);
     terminal_print(buff);
   }
-  else if(strcmp(str, "sleep") == 0) {
-    terminal_print("Usage: sleep {seconds}\n\r");
+  else if(strcmp(cmdline_params[0], "uuidgen") == 0) {
+    char n_to_hex[17] = "0123456789abcdef";
+    for(i = 0; i < 8; i++) terminal_print_char(n_to_hex[random(0, 16)]);
+    terminal_print_char('-');
+    for(i = 0; i < 4; i++) terminal_print_char(n_to_hex[random(0, 16)]);
+    terminal_print_char('-');
+    for(i = 0; i < 4; i++) terminal_print_char(n_to_hex[random(0, 16)]);
+    terminal_print_char('-');
+    for(i = 0; i < 4; i++) terminal_print_char(n_to_hex[random(0, 16)]);
+    terminal_print_char('-');
+    for(i = 0; i < 12; i++) terminal_print_char(n_to_hex[random(0, 16)]);
+    terminal_println("");
   }
-  else if(memcmp(str, "sleep ", 6) == 0) {
-    sscanf(str + 6, "%d", &i);
-    delay(1000 * i);
-  }
-  else if(strcmp(str, "delay") == 0) {
-    terminal_print("Usage: delay {milliseconds}\n\r");
-  }
-  else if(memcmp(str, "delay ", 6) == 0) {
-    sscanf(str + 6, "%d", &i);
-    delay(i);
-  }
-  else if(strcmp(str, "serial") == 0) {
-    terminal_serial("");
-  }
-  else if(memcmp(str, "serial ", 7) == 0) {
-    terminal_serial(str + 7);
-  }
-  else if(strcmp(str, "format ffat") == 0) {
-    if(FFat.format() == true) {
-      terminal_print("Format FFat completed\n\r");
+  else if(strcmp(cmdline_params[0], "sleep") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: sleep {seconds}");
     }
     else {
-      terminal_print("Format FFat failed\n\r");
+      sscanf(cmdline_params[1], "%d", &i);
+      delay(1000 * i);
     }
-    FFat.begin(true);
-    Storage->mkdir("/Settings");
   }
-  else if(strcmp(str, "erase ffat") == 0) {
-    ffat_erase_partition();
+  else if(strcmp(cmdline_params[0], "delay") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: delay {milliseconds}");
+    }
+    else {
+      sscanf(cmdline_params[1], "%d", &i);
+      delay(i);
+    }
   }
-  else if(strcmp(str, "ls") == 0) {
-    terminal_print("Usage: ls {directory}\n\r");
+  else if(strcmp(cmdline_params[0], "serial") == 0) {
+    terminal_serial(arg_count, cmdline_params);
   }
-  else if(memcmp(str, "ls ", 3) == 0) {
-    current_dir = Storage->open(str + 3);
-    if(current_dir && current_dir.isDirectory()) {
-      while(file = current_dir.openNextFile()) {
-        terminal_print((char *)file.name());
-        terminal_print("\n\r");
+  else if(strcmp(cmdline_params[0], "format") == 0) {
+    if(strcmp(cmdline_params[1], "ffat") == 0) {
+      if(FFat.format() == true) {
+        terminal_println("Format FFat completed");
       }
+      else {
+        terminal_println("Format FFat failed");
+      }
+      FFat.begin(true);
+      FFat.mkdir("/Settings");
     }
     else {
-      terminal_print("Unable to open directory\n\r");
+      terminal_println("Usage: format {ffat}");
     }
   }
-  else if(strcmp(str, "mkdir") == 0) {
-    terminal_print("Usage: mkdir {directory}\n\r");
-  }
-  else if(memcmp(str, "mkdir ", 6) == 0) {
-    if(Storage->mkdir(str + 6)) {
-      terminal_print("OK\n\r");
+  else if(strcmp(cmdline_params[0], "erase") == 0) {
+    if(strcmp(cmdline_params[1], "ffat") == 0) {
+      ffat_erase_partition();
     }
     else {
-      terminal_print("Unable to create directory\n\r");
+      terminal_println("Usage: erase {ffat}");
     }
   }
-  else if(strcmp(str, "rmdir") == 0) {
-    terminal_print("Usage: rmdir {directory}\n\r");
-  }
-  else if(memcmp(str, "rmdir ", 6) == 0) {
-    if(Storage->rmdir(str + 6)) {
-      terminal_print("OK\n\r");
+  else if(strcmp(cmdline_params[0], "ls") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: ls {directory}");
     }
     else {
-      terminal_print("Unable to remove directory\n\r");
-    }
-  }
-  else if(strcmp(str, "cat") == 0) {
-    terminal_print("Usage: cat {file}\n\r");
-  }
-  else if(memcmp(str, "cat ", 4) == 0) {
-    file = Storage->open(str + 4);
-    if(file) {
-      while(file.available()) {
-        byte = file.read();
-        if(byte == '\n' && file.peek() == '\r') file.read();
-        if(byte == '\r' && file.peek() == '\n') file.read();
-        if(byte == '\n' || byte == '\r') {
-          terminal_print_char('\n');
-          terminal_print_char('\r');
-        }
-        else {
-          terminal_print_char(byte);
+      current_dir = Storage->open(cmdline_params[1]);
+      if(current_dir && current_dir.isDirectory()) {
+        while(file = current_dir.openNextFile()) {
+          terminal_println((char *)file.name());
         }
       }
-      file.close();
+      else {
+        terminal_println("Unable to open directory");
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "mkdir") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: mkdir {directory}");
     }
     else {
-      terminal_print("File not found\n\r");
+      if(Storage->mkdir(cmdline_params[1])) {
+        terminal_println("OK");
+      }
+      else {
+        terminal_println("Unable to create directory");
+      }
     }
   }
-  else if(strcmp(str, "touch") == 0) {
-    terminal_print("Usage: touch {filename}\n\r");
-  }
-  else if(memcmp(str, "touch ", 6) == 0) {
-    file = Storage->open(str + 6, FILE_APPEND);
-    if(file) {
-      file.close();
-      terminal_print("OK\n\r");
-    }
-    else {
-      terminal_print("File not found\n\r");
-    }
-  }
-  else if(strcmp(str, "rm") == 0) {
-    terminal_print("Usage: rm {filename}\n\r");
-  }
-  else if(memcmp(str, "rm ", 3) == 0) {
-    if(Storage->remove(str + 3)) {
-      terminal_print("OK\n\r");
+  else if(strcmp(cmdline_params[0], "rmdir") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: rmdir {directory}");
     }
     else {
-      terminal_print("File not found\n\r");
+      if(Storage->rmdir(cmdline_params[1])) {
+        terminal_println("OK");
+      }
+      else {
+        terminal_println("Unable to remove directory");
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "cat") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: cat {file}\r");
+    }
+    else {
+      terminal_cat(cmdline_params[1]);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "more") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: more {file}\r");
+    }
+    else {
+      terminal_more(cmdline_params[1]);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "hexdump") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: hexdump {file}\r");
+    }
+    else {
+      terminal_hexdump(cmdline_params[1]);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "touch") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: touch {filename}");
+    }
+    else {
+      file = Storage->open(cmdline_params[1], FILE_APPEND);
+      if(file) {
+        file.close();
+        terminal_println("OK");
+      }
+      else {
+        terminal_println("File not found");
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "rm") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: rm {filename}");
+    }
+    else {
+      if(Storage->remove(cmdline_params[1])) {
+        terminal_println("OK");
+      }
+      else {
+        terminal_println("File not found");
+      }
     }
   }
   // Копирование между ФС
-  else if(strcmp(str, "ffat_to_sd") == 0) {
-    terminal_print("Usage: ffat_to_sd {ffat_filename} {sd_filename}\n\r");
-  }
-  else if(memcmp(str, "ffat_to_sd ", 11) == 0) {
-    arg1 = strchr(str, ' ');
-    *arg1 = 0;
-    arg1++;
-    arg2 = strchr(arg1, ' ');
-    *arg2 = 0;
-    arg2++;
-
-    if(storage_type == STORAGE_TYPE_SD) {
-      FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
+  else if(strcmp(cmdline_params[0], "ffat_to_sd") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: ffat_to_sd {ffat_filename} {sd_filename}");
     }
+    else {
+      if(storage_type == STORAGE_TYPE_SD) {
+        FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
+      }
 
-    cp_between_storages(&FFat, arg1, &SD, arg2);
+      cp_between_storages(&FFat, cmdline_params[1], &SD, cmdline_params[2]);
 
-    if(storage_type == STORAGE_TYPE_SD) {
-      FFat.end();
+      if(storage_type == STORAGE_TYPE_SD) {
+        FFat.end();
+      }
     }
   }
-  else if(strcmp(str, "sd_to_ffat") == 0) {
-    terminal_print("Usage: sd_to_ffat {sd_filename} {ffat_filename}\n\r");
-  }
-  else if(memcmp(str, "sd_to_ffat ", 11) == 0) {
-    arg1 = strchr(str, ' ');
-    *arg1 = 0;
-    arg1++;
-    arg2 = strchr(arg1, ' ');
-    *arg2 = 0;
-    arg2++;
-
-    if(storage_type == STORAGE_TYPE_SD) {
-      FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
+  else if(strcmp(cmdline_params[0], "sd_to_ffat") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: sd_to_ffat {sd_filename} {ffat_filename}");
     }
+    else {
+      if(storage_type == STORAGE_TYPE_SD) {
+        FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
+      }
 
-    cp_between_storages(&SD, arg1, &FFat, arg2);
+      cp_between_storages(&SD, cmdline_params[1], &FFat, cmdline_params[2]);
 
-    if(storage_type == STORAGE_TYPE_SD) {
-      FFat.end();
+      if(storage_type == STORAGE_TYPE_SD) {
+        FFat.end();
+      }
     }
   }
-  else if(strcmp(str, "utf8_to_cp1251") == 0) {
-    terminal_print("Usage: utf8_to_cp1251 {input_filename} {output_filename}\n\r");
+  else if(strcmp(cmdline_params[0], "utf8_to_cp1251") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: utf8_to_cp1251 {input_filename} {output_filename}");
+    }
+    else {
+      file_utf8_to_cp1251(cmdline_params[1], cmdline_params[2]);
+    }
   }
-  else if(memcmp(str, "utf8_to_cp1251 ", 15) == 0) {
-    arg1 = strchr(str, ' ');
-    *arg1 = 0;
-    arg1++;
-    arg2 = strchr(arg1, ' ');
-    *arg2 = 0;
-    arg2++;
-
-    file_utf8_to_cp1251(arg1, arg2);
-  }
-  else if(strcmp(str, "cp1251_to_utf8") == 0) {
-    terminal_print("Usage: cp1251_to_utf8 {input_filename} {output_filename}\n\r");
-  }
-  else if(memcmp(str, "cp1251_to_utf8 ", 15) == 0) {
-    arg1 = strchr(str, ' ');
-    *arg1 = 0;
-    arg1++;
-    arg2 = strchr(arg1, ' ');
-    *arg2 = 0;
-    arg2++;
-
-    file_cp1251_to_utf8(arg1, arg2);
+  else if(strcmp(cmdline_params[0], "cp1251_to_utf8") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: cp1251_to_utf8 {input_filename} {output_filename}");
+    }
+    else {
+      file_cp1251_to_utf8(cmdline_params[1], cmdline_params[2]);
+    }
   }
   // I2C
-  else if(strcmp(str, "i2c") == 0) {
+  else if(strcmp(cmdline_params[0], "i2c") == 0) {
     found = 0;
     Wire.begin(I2C_SDA, I2C_SCL);
     for(i = 1; i < 127; i++) {
@@ -2334,91 +2530,328 @@ void terminal_execute_single(char *str) {
       }
     }
     if(!found) {
-      terminal_print("No I2C devices found\n\r");
+      terminal_println("No I2C devices found");
     }
   }
   // Звуки
-  else if(strcmp(str, "beep") == 0) {
+  else if(strcmp(cmdline_params[0], "beep") == 0) {
     beep_if_enabled();
   }
-  else if(strcmp(str, "notone") == 0) {
+  else if(strcmp(cmdline_params[0], "notone") == 0) {
     noTone(BUZZER_PIN);
   }
-  else if(strcmp(str, "tone") == 0) {
-    terminal_print("Usage: tone {freq}\n\r");
+  else if(strcmp(cmdline_params[0], "tone") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: tone {freq}");
+    }
+    else {
+      sscanf(cmdline_params[1], "%d", &freq);
+      tone(BUZZER_PIN, freq);
+    }
   }
-  else if(memcmp(str, "tone ", 5) == 0) {
-    sscanf(str + 5, "%d", &freq);
-    tone(BUZZER_PIN, freq);
+  else if(strcmp(cmdline_params[0], "bc") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: bc {expression}");
+    }
+    else {
+      float a, b;
+      char op;
+      sscanf(cmdline_params[1], "%f%c%f", &a, &op, &b);
+      switch(op) {
+        case '+': sprintf(buff, "%g", a + b); break;
+        case '-': sprintf(buff, "%g", a - b); break;
+        case '*': sprintf(buff, "%g", a * b); break;
+        case 'x': sprintf(buff, "%g", a * b); break;
+        case '/': sprintf(buff, "%g", a / b); break;
+        default: sprintf(buff, "Unknown operation"); break;
+      }
+      terminal_println(buff);
+    }
   }
 #ifdef IS_WIFI_ENABLED
-  else if(strcmp(str, "ip") == 0) {
+  else if(strcmp(cmdline_params[0], "ipconfig") == 0 || strcmp(cmdline_params[0], "ifconfig") == 0) {
+    sprintf(buff, "Local IP: %s\n\r", WiFi.localIP().toString().c_str());
+    terminal_print(buff);
+    sprintf(buff, "Subnet mask: %s\n\r", WiFi.subnetMask().toString().c_str());
+    terminal_print(buff);
+    sprintf(buff, "Gateway IP: %s\n\r", WiFi.gatewayIP().toString().c_str());
+    terminal_print(buff);
+    sprintf(buff, "DNS IP: %s\n\r", WiFi.dnsIP().toString().c_str());
+    terminal_print(buff);
+    sprintf(buff, "RSSI: %d\n\r", WiFi.RSSI());
+    terminal_print(buff);
+  }
+  else if(strcmp(cmdline_params[0], "ip") == 0) {
     sprintf(buff, "%s\n\r", WiFi.localIP().toString().c_str());
     terminal_print(buff);
   }
-  else if(strcmp(str, "netmask") == 0) {
+  else if(strcmp(cmdline_params[0], "netmask") == 0) {
     sprintf(buff, "%s\n\r", WiFi.subnetMask().toString().c_str());
     terminal_print(buff);
   }
-  else if(strcmp(str, "gateway") == 0) {
+  else if(strcmp(cmdline_params[0], "gateway") == 0) {
     sprintf(buff, "%s\n\r", WiFi.gatewayIP().toString().c_str());
     terminal_print(buff);
   }
-  else if(strcmp(str, "dns") == 0) {
+  else if(strcmp(cmdline_params[0], "dns") == 0) {
     sprintf(buff, "%s\n\r", WiFi.dnsIP().toString().c_str());
     terminal_print(buff);
   }
-  else if(strcmp(str, "rssi") == 0) {
+  else if(strcmp(cmdline_params[0], "rssi") == 0) {
     sprintf(buff, "%d\n\r", WiFi.RSSI());
     terminal_print(buff);
   }
-  else if(strcmp(str, "host") == 0) {
-    terminal_print("Usage: host {hostname}\n\r");
+  else if(strcmp(cmdline_params[0], "host") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: host {hostname}");
+    }
+    else {
+      WiFi.hostByName(cmdline_params[1], ip);
+      sprintf(buff, "%s\n\r", ip.toString().c_str());
+      terminal_print(buff);
+    }
   }
-  else if(memcmp(str, "host ", 5) == 0) {
-    WiFi.hostByName(str + 5, ip);
-    sprintf(buff, "%s\n\r", ip.toString().c_str());
-    terminal_print(buff);
+  else if(strcmp(cmdline_params[0], "ping") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: ping {hostname}");
+    }
+    else {
+      terminal_ping(cmdline_params[1]);
+    }
   }
-  else if(strcmp(str, "ping") == 0) {
-    terminal_print("Usage: ping {hostname}\n\r");
+  else if(strcmp(cmdline_params[0], "telnet") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: telnet {host} [port]");
+    }
+    else {
+      terminal_telnet(arg_count, cmdline_params, 0);
+    }
   }
-  else if(memcmp(str, "ping ", 5) == 0) {
-    terminal_ping(str + 5);
+  else if(strcmp(cmdline_params[0], "telnets") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: telnets {host} {port}");
+    }
+    else {
+      terminal_telnet(arg_count, cmdline_params, 1);
+    }
   }
-  else if(strcmp(str, "telnet") == 0) {
-    terminal_print("Usage: telnet {host} {port}");
+  else if(memcmp(cmdline_params[0], "wget ", 5) == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: wget {URL}");
+    }
+    else {
+      terminal_wget(cmdline_params[1]);
+    }
   }
-  else if(memcmp(str, "telnet ", 7) == 0) {
-    terminal_telnet(str + 7, 0);
-  }
-  else if(strcmp(str, "telnets") == 0) {
-    terminal_print("Usage: telnets {host} {port}");
-  }
-  else if(memcmp(str, "telnets ", 8) == 0) {
-    terminal_telnet(str + 8, 1);
-  }
-  else if(memcmp(str, "wget ", 5) == 0) {
-    terminal_wget(str + 5);
-  }
-  else if(strcmp(str, "ipinfo") == 0) {
-    terminal_print("Usage: ipinfo {ip}");
-  }
-  else if(memcmp(str, "ipinfo ", 7) == 0) {
-    terminal_ipinfo(str + 7);
+  else if(strcmp(cmdline_params[0], "ipinfo") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: ipinfo {ip}");
+    }
+    else {
+      terminal_ipinfo(cmdline_params[1]);
+    }
   }
 #ifdef IS_SSH_ENABLED
-  else if(strcmp(str, "ssh") == 0) {
-    terminal_print("Usage: ssh {host} {port}");
-  }
-  else if(memcmp(str, "ssh ", 4) == 0) {
-    terminal_ssh(str + 4);
+  else if(strcmp(cmdline_params[0], "ssh") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: ssh {host} [port]");
+    }
+    else {
+      terminal_ssh(cmdline_params[0] + 4);
+    }
   }
 #endif
 #endif
+  // Обычные приложения
+  else if(strcmp(cmdline_params[0], "calculator") == 0) {
+    calculator(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "files") == 0) {
+    files(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "notes") == 0) {
+    notes(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "contacts") == 0) {
+    contacts(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "todo") == 0) {
+    todo(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "schedule") == 0) {
+    schedule(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "expenses") == 0) {
+    expenses(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "flashcards") == 0) {
+    flashcards(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "books") == 0) {
+    books(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "passwords") == 0) {
+    passwords(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "screenshots") == 0) {
+    screenshots(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "tunes") == 0) {
+    tunes(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "music") == 0) {
+    music(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "webradio") == 0) {
+    webradio(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "system_info") == 0) {
+    system_info(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "torch") == 0) {
+    torch(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "draw") == 0) {
+    draw(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "wifi") == 0) {
+    wifi(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "gopher") == 0) {
+    gopher(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "rss") == 0) {
+    rss(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "irc") == 0) {
+    irc(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "chat") == 0) {
+    chat(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "weather") == 0) {
+    weather(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "file_server") == 0) {
+    http_file_access(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "translate") == 0) {
+    translate(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "counter") == 0) {
+    counter(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "random_numbers") == 0) {
+    random_numbers(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "timer") == 0) {
+    timer(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "stopwatch") == 0) {
+    stopwatch_app(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "breathe") == 0) {
+    breathe(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "piano") == 0) {
+    piano(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "metronome") == 0) {
+    metronome(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "screensaver") == 0) {
+    screensaver(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "user_manual") == 0) {
+    user_manual(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "security") == 0) {
+    security(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "brightness") == 0) {
+    brightness_app(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "touch_calibration") == 0) {
+    touch_calibration(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "oscilloscope") == 0) {
+    oscilloscope(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "voltmeter") == 0) {
+    voltmeter(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "life") == 0) {
+    life(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "dashboard") == 0) {
+    dashboard(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "fuzzy_clock") == 0) {
+    fuzzy_clock(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "view_font") == 0) {
+    view_font(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "fifteen") == 0) {
+    fifteen(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "lights_off") == 0) {
+    lights_off(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "snake") == 0) {
+    snake(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "turkish_kerchief") == 0) {
+    turkish_kerchief(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "memory_match") == 0) {
+    memory_match(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "hanoi_towers") == 0) {
+    hanoi_towers(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "match_three") == 0) {
+    match_three(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "simon") == 0) {
+    simon(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "n_back") == 0) {
+    n_back(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "mental_math") == 0) {
+    mental_math(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "game2048") == 0) {
+    game2048(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "screen_settings") == 0) {
+    screen_settings(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "keyboard_control") == 0) {
+    keyboard_control(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "sound_control") == 0) {
+    sound_control(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "set_clock") == 0) {
+    set_clock(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "autorun") == 0) {
+    autorun(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "select_storage") == 0) {
+    select_storage_app(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "backups") == 0) {
+    backups(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "help") == 0) {
+    terminal_manual();
+  }
   else {
-    if(strcmp(str, "")) {
-      terminal_print("Unknown command\n\r");
+    if(strcmp(cmdline_params[0], "")) {
+      terminal_println("Unknown command");
     }
   }
 }
@@ -2430,14 +2863,52 @@ void terminal_print(char *string) {
   }
 }
 
+void terminal_println(char *string) {
+  terminal_print(string);
+  terminal_print("\r\n");
+}
+
 void terminal_print_char(char c) {
-  int val;
+  int val, val2;
   int i;
+  char buff[20];
   // ESC - последовательность
   if(terminal_esc_sequence_flag) {
     terminal_esc_sequence[strlen(terminal_esc_sequence) + 1] = 0;
     terminal_esc_sequence[strlen(terminal_esc_sequence)] = c;
-    if(c >= 0x40 && c <=0x7E && c != '[') {
+    // C1 последовательности
+    if((c >= 0x40 && c <= 0x7E || c == '7' || c == '8' || c == '>' || c == '=') && terminal_esc_sequence[0] != '[') {
+      if(c == '7') {
+        cursor_saved_col = cursor_col;
+        cursor_saved_row = cursor_row;
+      }
+      if(c == '8') {
+        cursor_col = cursor_saved_col;
+        cursor_row = cursor_saved_row;
+      }
+      if(c == 'D') {
+        cursor_row++;
+      }
+      else if(c == 'E') {
+        cursor_row++;
+        cursor_col = 0;        
+      }
+      else if(c == 'M') {
+        cursor_row--;
+      }
+      terminal_esc_sequence_flag = 0;
+    }
+    // ESC ( последовательности
+    else if(c >= 0x40 && c <=0x7E && terminal_esc_sequence[0] == '(' && c != '(') {
+      if(c == '0') {
+        // Режим рисования псевдографики
+      }
+      if(c == 'B') {
+        // Режим обычного текста
+      }
+    }
+    // ESC [ последовательности
+    else if(c >= 0x40 && c <=0x7E && terminal_esc_sequence[0] == '[' && c != '[') {
       if(c == 'A') {
         cursor_row--;
       }
@@ -2450,10 +2921,25 @@ void terminal_print_char(char c) {
       else if(c == 'D') {
         cursor_col--;
       }
+      else if(c == 'G') {
+        if(strcmp(terminal_esc_sequence, "[G") == 0) {
+          cursor_col = 0;
+        }
+        else {
+          sscanf(terminal_esc_sequence, "[%d", &cursor_col);
+          cursor_col--;
+        }
+      }
       else if(c == 'H') {
-        sscanf(terminal_esc_sequence, "[%d;%d", &cursor_row, &cursor_col);
-        cursor_row--;
-        cursor_col--;
+        if(strcmp(terminal_esc_sequence, "[H") == 0) {
+          cursor_row = 0;
+          cursor_col = 0;
+        }
+        else {
+          sscanf(terminal_esc_sequence, "[%d;%d", &cursor_row, &cursor_col);
+          cursor_row--;
+          cursor_col--;
+        }
       }
       else if(c == 'J') {
         terminal_clear_screen();
@@ -2465,53 +2951,223 @@ void terminal_print_char(char c) {
           for(i = cursor_col; i < TERMINAL_WIDTH_CHARS; i++) {
             terminal_screen[i + cursor_row * TERMINAL_WIDTH_CHARS] = 0;
             terminal_colors[i + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
+            terminal_attributes[i + cursor_row * TERMINAL_WIDTH_CHARS] = current_attribute;
           }
         }
       }
+      else if(c == 'K') {
+        terminal_scroll_up();
+      }
+      else if(c == 'T') {
+        terminal_scroll_down();
+      }
+      else if(c == 'c') {
+        // Запрос типа терминала
+        strcat(terminal_output, "\x1B[?6c");
+      }
+      else if(c == 'd') {
+        if(strcmp(terminal_esc_sequence, "[d") == 0) {
+          cursor_row = 0;
+        }
+        else {
+          sscanf(terminal_esc_sequence, "[%d", &cursor_row);
+          cursor_row--;
+        }
+      }
+      else if(c == 'f') {
+        if(strcmp(terminal_esc_sequence, "[f") == 0) {
+          cursor_row = 0;
+          cursor_col = 0;
+        }
+        else {
+          sscanf(terminal_esc_sequence, "[%d;%d", &cursor_row, &cursor_col);
+          cursor_row--;
+          cursor_col--;
+        }
+      }
       else if(c == 'h') {
-        cursor_visible_flag = 1;
+        if(strcmp(terminal_esc_sequence, "[?7h") == 0) {
+          Serial.println(terminal_esc_sequence);
+          terminal_autowrap = 1;
+        }
+        if(strcmp(terminal_esc_sequence, "[?25h") == 0) {
+          cursor_visible_flag = 1;
+        }
+        if(strcmp(terminal_esc_sequence, "[?1049h") == 0) {
+          Serial.println(terminal_esc_sequence);
+          terminal_use_alt_screen_flag = 1;
+          terminal_screen = terminal_alt_screen;
+          terminal_colors = terminal_alt_colors;
+          terminal_attributes = terminal_alt_attributes;
+          cursor_saved_row = cursor_row;
+          cursor_saved_col = cursor_col;
+          cursor_saved_color = current_color;
+          cursor_saved_attribute = current_attribute;
+          terminal_clear_screen();
+        }
       }
       else if(c == 'l') {
-        cursor_visible_flag = 0;
+        if(strcmp(terminal_esc_sequence, "[?7l") == 0) {
+          Serial.println(terminal_esc_sequence);
+          terminal_autowrap = 0;
+        }
+        if(strcmp(terminal_esc_sequence, "[?25l") == 0) {
+          cursor_visible_flag = 0;
+        }
+        if(strcmp(terminal_esc_sequence, "[?1049l") == 0) {
+          Serial.println(terminal_esc_sequence);
+          terminal_use_alt_screen_flag = 0;
+          terminal_screen = terminal_primary_screen;
+          terminal_colors = terminal_primary_colors;
+          terminal_attributes = terminal_primary_attributes;
+          cursor_row = cursor_saved_row;
+          cursor_col = cursor_saved_col;
+          current_color = cursor_saved_color;
+          current_attribute = cursor_saved_attribute;
+        }
       }
       else if(c == 'm') {
-        if(strcmp(terminal_esc_sequence, "(B") == 0) {
+        if(strcmp(terminal_esc_sequence, "[m") == 0) {
           current_color = 0x07;
-        }
-        else if(strcmp(terminal_esc_sequence, "[m") == 0) {
-          current_color = 0x07;
+          current_attribute = 0x00;
         }
         else if(strcmp(terminal_esc_sequence, "[0m") == 0) {
           current_color = 0x07;
+          current_attribute = 0x00;
+        }
+        else if(strcmp(terminal_esc_sequence, "[0;1m") == 0) {
+          current_color = 0x07;
+          current_attribute = 0x00;
+          current_attribute |= ATTRIBUTE_BOLD;
+        }
+        else if(strcmp(terminal_esc_sequence, "[0;4m") == 0) {
+          current_color = 0x07;
+          current_attribute = 0x00;
+          current_attribute |= ATTRIBUTE_UNDERLINED;
+        }
+        else if(strcmp(terminal_esc_sequence, "[0;7m") == 0) {
+          current_color = 0x07;
+          current_attribute = 0x00;
+          current_attribute |= ATTRIBUTE_INVERSION;
+        }
+        else if(strcmp(terminal_esc_sequence, "[0;9m") == 0) {
+          current_color = 0x07;
+          current_attribute = 0x00;
+          current_attribute |= ATTRIBUTE_STRIKEOUT;
         }
         else if(strcmp(terminal_esc_sequence, "[1m") == 0) {
-          current_color = 0x0F;
+          current_attribute |= ATTRIBUTE_BOLD;
         }
         else if(strcmp(terminal_esc_sequence, "[4m") == 0) {
-          // подчёркивание, ничего не делаем
+          current_attribute |= ATTRIBUTE_UNDERLINED;
         }
         else if(strcmp(terminal_esc_sequence, "[7m") == 0) {
-          current_color = ((current_color & 0x0F) << 4) | ((current_color & 0xF0) >> 4);
+          current_attribute |= ATTRIBUTE_INVERSION;
+        }
+        else if(strcmp(terminal_esc_sequence, "[9m") == 0) {
+          current_attribute |= ATTRIBUTE_STRIKEOUT;
         }
         else if(strcmp(terminal_esc_sequence, "[22m") == 0) {
-          current_color = 0x07;
+          current_attribute &= ~ATTRIBUTE_BOLD;
         }
         else if(strcmp(terminal_esc_sequence, "[24m") == 0) {
-          // без подчёркивания, ничего не делаем
+          current_attribute &= ~ATTRIBUTE_UNDERLINED;
         }
         else if(strcmp(terminal_esc_sequence, "[27m") == 0) {
-          // Отмена инверсии
-          current_color = 0x07;
+          current_attribute &= ~ATTRIBUTE_INVERSION;
+        }
+        else if(strcmp(terminal_esc_sequence, "[27m") == 0) {
+          current_attribute &= ~ATTRIBUTE_STRIKEOUT;
+        }
+        else if(strcmp(terminal_esc_sequence, "[39m") == 0) {
+          current_color &= 0xF0;
+          current_color |= 0x07;
         }
         else if(strcmp(terminal_esc_sequence, "[39;49m") == 0) {
           current_color = 0x07;
         }
+        else if(strcmp(terminal_esc_sequence, "[49m") == 0) {
+          current_color &= 0x0F;
+        }
         else {
-          Serial.printf("Unknown ESC color sequence: %s\n", terminal_esc_sequence);
+          if(strchr(terminal_esc_sequence, ';')) {
+            sscanf(terminal_esc_sequence, "[%d;%d", &val, &val2);
+            if(val >= 30 && val <= 37) {
+              current_color = val - 30;
+            }
+            else if(val >= 90 && val <= 97) {
+              current_color = val - 90 + 8;
+            }
+            if(val2 >= 40 && val <= 47) {
+              current_color = (val - 40) << 4;
+            }
+            else if(val >= 100 && val <= 107) {
+              current_color = (val - 100 + 8) << 4;
+            }
+            else {
+              Serial.printf("Unknown ESC color sequence: %s\n", terminal_esc_sequence);
+            }
+          }
+          else {
+            sscanf(terminal_esc_sequence, "[%d", &val);
+            if(val >= 30 && val <= 37) {
+              current_color &= 0xF0;
+              current_color |= val - 30;
+            }
+            else if(val >= 40 && val <= 47) {
+              current_color &= 0x0F;
+              current_color |= (val - 40) << 4;
+            }
+            else if(val >= 90 && val <= 97) {
+              current_color &= 0xF0;
+              current_color |= val - 90 + 8;
+            }
+            else if(val >= 100 && val <= 107) {
+              current_color &= 0x0F;
+              current_color |= (val - 100 + 8) << 4;
+            }
+            else {
+              Serial.printf("Unknown ESC color sequence: %s\n", terminal_esc_sequence);
+            }
+          }
         }
       }
       else if(c == 'n') {
-        // Запрос позиции курсора. Нужно выдать ответ, но как?
+        if(strcmp(terminal_esc_sequence, "[6n") == 0) {
+          // Запрос позиции курсора
+          sprintf(buff, "%c[%d;%dR", 0x1B, cursor_row + 1, cursor_col + 1);
+          strcat(terminal_output, buff);
+        }
+        else {
+          Serial.printf("Unknown ESC n sequence: %s\n", terminal_esc_sequence);
+        }
+      }
+      else if(c == 'p') {
+        if(strcmp(terminal_esc_sequence, "[!p") == 0) {
+          terminal_clear_screen();
+          current_color = 0x07;
+          current_attribute = 0x00;
+          terminal_autowrap = 1;
+        }
+      }
+      else if(c == 'r') {
+        if(strcmp(terminal_esc_sequence, "[r") == 0) {
+          terminal_scroll_line_begin = 0;
+          terminal_scroll_line_end = 19;
+        }
+        else {
+          sscanf(terminal_esc_sequence, "[%d;%d", &val, &val2);
+          terminal_scroll_line_begin = val - 1;
+          terminal_scroll_line_end = val2 - 1;
+        }
+      }
+      else if(c == 's') {
+        cursor_saved_row = cursor_row;
+        cursor_saved_col = cursor_col;
+      }
+      else if(c == 'u') {
+        cursor_row = cursor_saved_row;
+        cursor_col = cursor_saved_col;
       }
       else {
         Serial.printf("Unknown ESC sequence: %s\n", terminal_esc_sequence);
@@ -2554,16 +3210,22 @@ void terminal_print_char(char c) {
       if(cursor_col > 0) cursor_col--;
       terminal_screen[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = 0;
       terminal_colors[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
+      terminal_attributes[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_attribute;
     }
     else {
-      terminal_screen[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = c;
-      terminal_colors[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
-      cursor_col++;
+      if(cursor_col < TERMINAL_WIDTH_CHARS) {
+        terminal_screen[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = c;
+        terminal_colors[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
+        terminal_attributes[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_attribute;
+        cursor_col++;
+      }
     }
   }
   if(cursor_col >= TERMINAL_WIDTH_CHARS) {
-    cursor_col = 0;
-    cursor_row++;
+    if(terminal_autowrap) {
+      cursor_col = 0;
+      cursor_row++;
+    }
   }
   if(cursor_row >= TERMINAL_HEIGHT_CHARS) {
     terminal_scroll_down();
@@ -2575,6 +3237,10 @@ void terminal_show_screen() {
   int row, col;
   int color_fg;
   int color_bg;
+  int attribute;
+  int tmp;
+  char underline = 0;
+  char striked = 0;
   char buff[10];
   for(row = 0; row < TERMINAL_HEIGHT_CHARS; row++) {
     for(col = 0; col < TERMINAL_WIDTH_CHARS; col++) {
@@ -2586,41 +3252,89 @@ void terminal_show_screen() {
       }
       color_fg = terminal_colors[col + row * TERMINAL_WIDTH_CHARS] & 0x0F;
       color_bg = terminal_colors[col + row * TERMINAL_WIDTH_CHARS] >> 4;
+      attribute = terminal_attributes[col + row * TERMINAL_WIDTH_CHARS];
+      if(attribute & ATTRIBUTE_BOLD) {
+        color_fg |= 0x08;
+      }
+      underline = 0;
+      if(attribute & ATTRIBUTE_UNDERLINED) {
+        underline = 1;
+      }
+      striked = 0;
+      if(attribute & ATTRIBUTE_STRIKEOUT) {
+        striked = 1;
+      }
+      if(attribute & ATTRIBUTE_INVERSION) {
+        tmp = color_fg;
+        color_fg = color_bg;
+        color_bg = tmp;
+      }
       if(row == cursor_row && col == cursor_col) {
         color_bg = COLOR_INDEX_GREEN;
       }
       tft.setTextColor(colors[color_fg], colors[color_bg]);
       tft.drawString(buff, col * 6, 16 + row * 8, FONT_MONOSPACE);
+      if(striked) {
+        tft.drawLine(col * 6, 16 + row * 8 + 4, col * 6 + 6, 16 + row * 8 + 4, colors[color_fg]);
+      }
+      if(underline) {
+        tft.drawLine(col * 6, 16 + row * 8 + 7, col * 6 + 6, 16 + row * 8 + 7, colors[color_fg]);
+      }
     }
   }
 }
 
 void terminal_scroll_down() {
   int row, col;
-  for(row = 1; row < TERMINAL_HEIGHT_CHARS; row++) {
+  for(row = terminal_scroll_line_begin + 1; row <= terminal_scroll_line_end; row++) {
     for(col = 0; col < TERMINAL_WIDTH_CHARS; col++) {
       terminal_screen[col + (row - 1) * TERMINAL_WIDTH_CHARS] = terminal_screen[col + row * TERMINAL_WIDTH_CHARS];
       terminal_colors[col + (row - 1) * TERMINAL_WIDTH_CHARS] = terminal_colors[col + row * TERMINAL_WIDTH_CHARS];
+      terminal_attributes[col + (row - 1) * TERMINAL_WIDTH_CHARS] = terminal_attributes[col + row * TERMINAL_WIDTH_CHARS];
     }
   }
-  row = TERMINAL_HEIGHT_CHARS - 1;
+  // Зачищаем строку
+  row = terminal_scroll_line_end;
   for(col = 0; col < TERMINAL_WIDTH_CHARS; col++) {
     terminal_screen[col + row * TERMINAL_WIDTH_CHARS] = 0;
     terminal_colors[col + row * TERMINAL_WIDTH_CHARS] = current_color;
+    terminal_attributes[col + row * TERMINAL_WIDTH_CHARS] = current_attribute;
+  }
+}
+
+void terminal_scroll_up() {
+  int row, col;
+  for(row = terminal_scroll_line_end; row < terminal_scroll_line_begin; row--) {
+    for(col = 0; col < TERMINAL_WIDTH_CHARS; col++) {
+      terminal_screen[col + row * TERMINAL_WIDTH_CHARS] = terminal_screen[col + (row - 1) * TERMINAL_WIDTH_CHARS];
+      terminal_colors[col + row * TERMINAL_WIDTH_CHARS] = terminal_colors[col + (row - 1) * TERMINAL_WIDTH_CHARS];
+      terminal_attributes[col + row * TERMINAL_WIDTH_CHARS] = terminal_attributes[col + (row - 1) * TERMINAL_WIDTH_CHARS];
+    }
+  }
+  // Зачищаем строку
+  row = terminal_scroll_line_begin;
+  for(col = 0; col < TERMINAL_WIDTH_CHARS; col++) {
+    terminal_screen[col + row * TERMINAL_WIDTH_CHARS] = 0;
+    terminal_colors[col + row * TERMINAL_WIDTH_CHARS] = current_color;
+    terminal_attributes[col + row * TERMINAL_WIDTH_CHARS] = current_attribute;
   }
 }
 
 void terminal_clear_screen() {
   int i;
   current_color = 0x07;
+  current_attribute = 0;
   for(i = 0; i < TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS; i++) {
     terminal_screen[i] = 0;
     terminal_colors[i] = current_color;
+    terminal_attributes[i] = current_attribute;
   }
   cursor_row = 0;
   cursor_col = 0;
   cursor_visible_flag = 1;
-  terminal_esc_sequence_flag = 0;
+
+  terminal_scroll_line_begin = 0;
+  terminal_scroll_line_end = 19;
 }
 
 #define TERMINAL_INPUT_MAX 80
@@ -2830,53 +3544,285 @@ int terminal_input_char() {
   }
 }
 
-int terminal_serial(char *arg) {
-  long speed;
+// Парсер командной строки
+// Портит cmdline
+// То что в кавычках считается одним аргументом
+// Повторные пробелы вне кавычек убираются
+// Эскейп-последовательности для кавычек и пробелов
+// Считает аргументы
+// Вместо неэкранированных и незакавыченных пробелов ставит нули
+// В аргументах возвращает число аргументов и указатель на строки (начало текста аргументов)
+void terminal_parse_cmdline(char *cmdline, int *arg_count, char **parsed_cmdline) {
+  char quote_type = 0;
+  char escape = 0;
+  char space_flag = 1;
+  int arg_index = 0;
+  int arg_symbol = 0;
+  int write_index = 0;
+  int read_index = 0;
+  int cmdlen = strlen(cmdline);
+
+  // Заменяем пробелы, разделяющие аргументы, на нули
+  for(read_index = 0; read_index < cmdlen; read_index++) {
+    // Эскейпинг
+    if(!escape && cmdline[read_index] == '\\') {
+      escape = 1;
+      space_flag = 0;
+      continue;
+    }
+
+    // Кавычинг
+    if(escape == 0) {
+      if(cmdline[read_index] != ' ') {
+        space_flag = 0;
+      }
+      if(quote_type != 0 && cmdline[read_index] == quote_type) {
+        quote_type = 0;
+        continue;
+      }
+      else if(quote_type == 0) {
+        if(cmdline[read_index] == '"') {
+          quote_type = cmdline[read_index];
+          continue;
+        }
+        else if(cmdline[read_index] == '\'') {
+          quote_type = cmdline[read_index];
+          continue;
+        }
+        else if(cmdline[read_index] == ' ') {
+          if(space_flag) {
+            continue;
+          }
+          else {
+            space_flag = 1;
+          }
+        }
+      }
+    }
+    if(space_flag) {
+      cmdline[write_index] = 0;
+    }
+    else {
+      cmdline[write_index] = cmdline[read_index];
+    }
+    write_index++;
+    escape = 0;
+  }
+  for(;write_index < cmdlen; write_index++) {
+    cmdline[write_index] = 0;
+  }
+  Serial.printf("%s\n", cmdline);
+  // Выбираем аргументы
+  space_flag = 1;
+  arg_index = 0;
+  for(read_index = 0; read_index < cmdlen; read_index++) {
+    if(space_flag && cmdline[read_index] != 0) {
+      parsed_cmdline[arg_index] = cmdline + read_index;
+      Serial.printf("Arg %d: %s\n", arg_index, cmdline + read_index);
+      *(arg_count) = arg_index + 1;
+      arg_index++;
+      space_flag = 0;
+    }
+    else if(cmdline[read_index] == 0) {
+      space_flag = 1;
+    }
+  }
+}
+
+int terminal_serial(int arg_count, char **args) {
+  long speed = 115200;
   int byte;
+  int rx_pin = 22;
+  int tx_pin = 27;
+  int i;
+  for(i = 1; i < arg_count; i++) {
+    if(strcmp(args[i], "-tx") == 0 && i + 1 < arg_count) {
+      sscanf(args[i + 1], "%d", &tx_pin);
+      i++;
+      continue;
+    }
+    if(strcmp(args[i], "-rx") == 0 && i + 1 < arg_count) {
+      sscanf(args[i + 1], "%d", &rx_pin);
+      i++;
+      continue;
+    }
+    sscanf(args[i], "%d", &speed);
+  }
+  Serial.printf("Starting serial speed %d tx %d rx %d\n", speed, tx_pin, rx_pin);
+  Serial2.begin(speed, SERIAL_8N1, rx_pin, tx_pin); 
+
+  terminal_output[0] = 0;
 
   while(1) {
-    while(Serial.available()) {
-      byte = Serial.read();
+    if(Serial2.available()) {
+      byte = Serial2.read();
       if(byte == '\n') {
-        Serial.print('\r');
+        Serial2.print('\r');
         terminal_print_char('\r');
       }
       else if(byte == '\r') {
-        Serial.print('\n');
+        Serial2.print('\n');
         terminal_print_char('\n');
       }
-      Serial.print((char)byte);
+      Serial2.print((char)byte);
       terminal_print_char(byte);
       terminal_show_screen();
     }
+
+    // Terminal_output - возможность терминалу ответить на ESC-последовательность
+    if(strlen(terminal_output) > 0) {
+      Serial2.print(terminal_output);
+      terminal_output[0] = 0;
+    }
+
     byte = terminal_input_char();
     if(byte != -1) {
       // Ctrl + C
       if(byte == 0x03) {
-        return 0;
+        break;
       }
       // Ctrl + D
       if(byte == 0x04) {
-        return 0;
+        break;
       }
       // Esc
       if(byte == 0x1B) {
-        return 0;
+        break;
       }
       else if(byte == '\n') {
-        Serial.print('\r');
+        Serial2.print('\r');
         terminal_print_char('\r');
       }
-      Serial.print((char)byte);
+      Serial2.print((char)byte);
       terminal_print_char((char)byte);
       terminal_show_screen();
     }
+  }
+  Serial2.end();
+  return 0;
+}
+
+void terminal_cat(char *filename) {
+  fs::File file;
+  int byte;
+  file = Storage->open(filename);
+  if(file) {
+    while(file.available()) {
+      byte = file.read();
+      if(byte == '\n' && file.peek() == '\r') file.read();
+      if(byte == '\r' && file.peek() == '\n') file.read();
+      if(byte == '\n' || byte == '\r') {
+        terminal_print_char('\n');
+        terminal_print_char('\r');
+      }
+      else {
+        terminal_print_char(byte);
+      }
+    }
+    file.close();
+  }
+  else {
+    terminal_println("File not found");
+  }
+}
+
+void terminal_more(char *filename) {
+  fs::File file;
+  int lines = 0;
+  int chars = 0;
+  int byte;
+  file = Storage->open(filename);
+  if(file) {
+    while(file.available()) {
+      byte = file.read();
+      if(byte == '\n' && file.peek() == '\r') file.read();
+      if(byte == '\r' && file.peek() == '\n') file.read();
+      if(byte == '\n' || byte == '\r') {
+        terminal_print_char('\n');
+        terminal_print_char('\r');
+        lines++;
+        chars = 0;
+      }
+      else {
+        terminal_print_char(byte);
+        chars++;
+        if(chars == TERMINAL_WIDTH_CHARS) {
+          lines++;
+          chars = 0;
+        }
+      }
+      if(lines == TERMINAL_HEIGHT_CHARS - 1) {
+        terminal_show_screen();
+        do {
+          byte = terminal_input_char();
+        } while(byte == -1);
+        if(byte == 0x03) break;
+        lines = 0;
+        chars = 0;
+      }
+    }
+    file.close();
+    if(chars != 0) {
+      terminal_println("");
+    }
+  }
+  else {
+    terminal_println("File not found");
+  }
+}
+
+void terminal_hexdump(char *filename) {
+  fs::File file;
+  int lines = 0;
+  int byte;
+  int i;
+  long offset;
+  char buff[80];
+  char chars[9];
+  file = Storage->open(filename);
+  if(file) {
+    offset = 0;
+    while(file.available()) {
+      if(offset % 8 == 0) {
+        sprintf(buff, "%07X|", offset);
+        terminal_print(buff);
+      }
+      for(i = 0; i < 8; i++) {
+        if(file.available()) {
+          byte = file.read();
+          sprintf(buff, "%02X%c", byte, i < 7 ? ' ' : '|');
+          chars[i] = byte >= 0x20 ? byte : ' ';
+        }
+        else {
+          sprintf(buff, "  %c", i < 7 ? ' ' : '|');
+          chars[i] = ' ';
+        }
+        chars[i + 1] = ' ';
+        offset++;
+        terminal_print(buff);
+      }
+      chars[8] = 0;
+      terminal_print(chars);
+      lines++;
+      if(lines == TERMINAL_HEIGHT_CHARS - 1) {
+        terminal_show_screen();
+        do {
+          byte = terminal_input_char();
+        } while(byte == -1);
+        if(byte == 0x03) break;
+        lines = 0;
+      }
+    }
+    file.close();
+  }
+  else {
+    terminal_println("File not found");
   }
 }
 
 #ifdef IS_WIFI_ENABLED
 
-int terminal_telnet(char *arg, char ssl_flag) {
+int terminal_telnet(int arg_count, char **args, char ssl_flag) {
   long speed;
   int byte;
   int port = 0;
@@ -2884,33 +3830,37 @@ int terminal_telnet(char *arg, char ssl_flag) {
   char host[80];
   long prev_terminal_update = 0;
   WiFiClient *client;
-  //WiFiClientSecure *ssl_client = new WiFiClientSecure;
-  //WiFiClient basic_client;
-  //ESP_SSLClient ssl_client;
+
+  terminal_output[0] = 0;
 
   if(ssl_flag) {
     global_ssl_client->setInsecure();
-    //ssl_client.setClient(&basic_client);
-    //ssl_client.setInsecure();
-    //ssl_client.setBufferSizes(1024 /* rx */, 512 /* tx */);
-    //ssl_client.setDebugLevel(1);
     client = (WiFiClient*)&global_ssl_client;
   }
   else {
     client = global_client;
   }
-  sscanf(arg, "%s %d", host, &port);
+
+  if(arg_count >= 2) {
+    strcpy(host, args[1]);
+  }
+  if(arg_count == 3) {
+    sscanf(args[2], "%d", &port);
+  }
+
   if(port == 0) {
     port = 23;
   }
 
+
+  Serial.printf("Connecting %s port %d\n", host, port);
   client->connect(host, port);
   if (client->connected()) {
-    terminal_print("Connected\n\r");
+    terminal_println("Connected");
     terminal_show_screen();
   }
   else {
-    terminal_print("Not connected\n\r");
+    terminal_println("Not connected");
     terminal_show_screen();
     return 0;
   }
@@ -2918,33 +3868,20 @@ int terminal_telnet(char *arg, char ssl_flag) {
   while(1) {
     if(client->available()) {
       byte = client->read();
-      Serial.printf("Read %02X %c\n", byte, byte);
       // Команды телнета
       if(byte == 0xFF) {
+        Serial.printf("Read %02X %c\n", byte, byte);
         byte = client->read();
         Serial.printf("Read %02X %c\n", byte, byte);
-        if(byte == 0xF0) {
-          byte = client->read();
-          client->write(0xF0);
-          client->write(0xFE);
-          client->write((char)byte);
-          client->flush();
-          continue;
-        }
-        else if(byte == 0xFA) {
+        if(byte == 0xFA) {
+          Serial.println("FF FA sequence");
+          while(byte != 0xFF && client->peek() != 0xF0) {
+            byte = client->read();
+            Serial.printf("Read %02X %c\n", byte, byte);
+          }
           byte = client->read();
           Serial.printf("Read %02X %c\n", byte, byte);
-          if(byte == 0x01) {
-            client->write(0xFF);
-            client->write(0xFE);
-            client->write((char)do_echo);
-          }
-          else {
-            client->write(0xFF);
-            client->write(0xFE);
-            client->write((char)byte);
-          }
-          client->flush();
+          Serial.println("FF F0 sequence end");
           continue;
         }
         else if(byte == 0xFB) {
@@ -2953,13 +3890,34 @@ int terminal_telnet(char *arg, char ssl_flag) {
           if(byte == 0x01) {
             do_echo = 0;
             client->write(0xFF);
-            client->write(0xFE);
+            client->write(0xFD);
             client->write((char)byte);
+            Serial.println("FF FB 01 Sent accept");
           }
           else {
             client->write(0xFF);
             client->write(0xFE);
             client->write((char)byte);
+            Serial.println("FF FB Sent refuse");
+          }
+          client->flush();
+          continue;
+        }
+        else if(byte == 0xFC) {
+          byte = client->read();
+          Serial.printf("Read %02X %c\n", byte, byte);
+          if(byte == 0x01) {
+            do_echo = 1;
+            client->write(0xFF);
+            client->write(0xFE);
+            client->write((char)byte);
+            Serial.println("FF FC 01 Sent accept");
+          }
+          else {
+            client->write(0xFF);
+            client->write(0xFE);
+            client->write((char)byte);
+            Serial.println("FF FC Sent refuse");
           }
           client->flush();
           continue;
@@ -2967,8 +3925,15 @@ int terminal_telnet(char *arg, char ssl_flag) {
         else if(byte == 0xFD) {
           byte = client->read();
           Serial.printf("Read %02X %c\n", byte, byte);
+          if(byte == 0x01) {
+            do_echo = 1;
+            client->write(0xFF);
+            client->write(0xFB);
+            client->write((char)byte);
+            Serial.println("FF FD 01 Sent accept");
+          }
           // IAC DO TERMINAL-TYPE
-          if(byte == 0x18) {
+          else if(byte == 0x18) {
             // DO
             client->write(0xff);
             client->write(0xfb);
@@ -2985,22 +3950,64 @@ int terminal_telnet(char *arg, char ssl_flag) {
             client->write('M');
             client->write(0xff);
             client->write(0xf0);
+            Serial.println("FF FD 18 Sent accept (term)");
+          }
+          // Negotiate window size
+          else if(byte == 0x1F) {
+            client->write(0xFF);
+            client->write(0xFB);
+            client->write(0x1F);
+            // 40x20
+            client->write(0xFF);
+            client->write(0xFA);
+            client->write(0x1F);
+            client->write((char)0x00);
+            client->write(0x28);
+            client->write((char)0x00);
+            client->write(0x14);
+            client->write(0xFF);
+            client->write(0xF0);
+            Serial.println("FF FD 1F Sent accept (window)");
           }
           else {
             client->write(0xFF);
             client->write(0xFC);
             client->write((char)byte);
+            Serial.println("FF FD Sent refuse");
           }
           client->flush();
           continue;
         }
+        else if(byte == 0xFE) {
+          byte = client->read();
+          Serial.printf("Read %02X %c\n", byte, byte);
+          if(byte == 0x01) {
+            do_echo = 0;
+            client->write(0xFF);
+            client->write(0xFC);
+            client->write((char)byte);
+            Serial.println("FF FE 01 Sent accept");
+          }
+          else {
+            client->write(0xFF);
+            client->write(0xFC);
+            client->write((char)byte);
+            Serial.println("FF FE Sent refuse");
+          }
+          client->flush();
+          continue;
+        }
+        else {
+          Serial.println("FF unknown sequence");
+        }
       }
       else if(byte == '\n') {
         //client.print('\r');
-        if(client->peek() == '\r') {
-          client->read();
+        //if(client->peek() == '\r') {
+        //  client->read();
+        // После \n передаём \r
           terminal_print_char('\r');
-        }
+        //}
       }
       else if(byte == '\r') {
         //client.print('\n');
@@ -3010,6 +4017,22 @@ int terminal_telnet(char *arg, char ssl_flag) {
         }
       }
       //client.print((char)byte);
+      if(byte >= 0xC0) {
+        // E2 80 90 is hyphen
+        if(byte == 0xE2 && client->available() && client->peek() == 0x80) {
+          client->read();
+          if(client->read() == 0x90) {
+            byte = '-';
+          }
+          else {
+            byte = ' ';
+          }
+        }
+        else if(client->available()) {
+          byte = utf8_to_cp1251_byte(byte, client->read());
+        }
+      }
+      //Serial.println("Visible symbol: ");
       terminal_print_char(byte);
       if(!client->available() || millis() - prev_terminal_update > 1000) {
         prev_terminal_update = millis();
@@ -3017,18 +4040,47 @@ int terminal_telnet(char *arg, char ssl_flag) {
       }
     }
 
-    if(!client->connected()) {
-      terminal_print("Disconnected\n\r");
+    // Terminal output - ответ термнала на ESC-запрос
+    if(strlen(terminal_output) > 0) {
+      client->print(terminal_output);
+      terminal_output[0] = 0;
+    }
+
+    if(!client->available() || millis() - prev_terminal_update > 1000) {
+      prev_terminal_update = millis();
+      terminal_show_screen();
+    }
+
+    if(!client->available() && !client->connected()) {
+      terminal_println("Disconnected");
       terminal_show_screen();
       return 0;
     }
 
-    byte = terminal_input_char();
+    if(Serial.available()) {
+      byte = Serial.read();
+      if(byte >= 0xC0) {
+        if(Serial.available()) {
+          byte = utf8_to_cp1251_byte(byte, Serial.read());
+        }
+      }
+    }
+    else {
+      byte = terminal_input_char();
+    }
+
     if(byte != -1) {
       // Esc
       if(byte == 0x1B) {
         client->stop();
         return 0;
+      }
+      else if(byte == 0x08) {
+        client->print((char)0x7F);
+        client->flush();
+        if(do_echo) {
+          terminal_print_char(0x7F);
+        }
       }
       else if(byte == '\n') {
         client->print('\r');
@@ -3073,14 +4125,14 @@ int terminal_wget(char *params) {
   }
 
   if(memcmp(url, "http", 4) != 0) {
-    terminal_print("Unknown url type\n\r");
+    terminal_println("Unknown url type");
     return 0;
   }
 
   if(filename) {
     file = Storage->open(filename, FILE_WRITE);
     if(!file) {
-      terminal_print("Unable to open output file\n\r");
+      terminal_println("Unable to open output file");
       return 0;
     }
   }
@@ -3121,7 +4173,7 @@ int terminal_wget(char *params) {
             terminal_print_char(byte);
           }
           if(http.getSize() != -1 && bytes_count == http.getSize()) {
-            terminal_print("OK\n\r");
+            terminal_println("OK");
             break;
           }
           while(!stream->available()) {
@@ -3132,7 +4184,7 @@ int terminal_wget(char *params) {
             }
           }
           if(millis() - millis_last_byte > 30000) {
-            terminal_print("Timeout\n\r");
+            terminal_println("Timeout");
             break;
           }
         }
@@ -3148,11 +4200,11 @@ int terminal_wget(char *params) {
       return httpResponseCode;
     }
     else {
-      terminal_print("Unable to open URL\n\r");
+      terminal_println("Unable to open URL");
     }
   }
   else {
-    terminal_print("Client not initialized\n\r");
+    terminal_println("Client not initialized");
   }
   return 0;
 }
@@ -3305,7 +4357,7 @@ void delete_recursive(fs::FS *Storage_from, char *path) {
 
 #ifdef IS_SSH_ENABLED
 
-int terminal_ssh(char *arg) {
+void terminal_ssh(char *arg) {
   long speed;
   int byte;
   int port = 22;
@@ -3334,9 +4386,8 @@ Serial.println(__LINE__); delay(1000);
   rc = ssh_connect(my_session);
 Serial.println(__LINE__); delay(1000);
   if (rc != SSH_OK) {
-    terminal_print("Error connecting to server\n\r");
-    terminal_print((char *)ssh_get_error(my_session));
-    terminal_print("\n\r");
+    terminal_println("Error connecting to server");
+    terminal_println((char *)ssh_get_error(my_session));
     terminal_show_screen();
     ssh_free(my_session);
     return 0;
@@ -3346,9 +4397,8 @@ Serial.println(__LINE__); delay(100);
   rc = ssh_userauth_password(my_session, NULL, ssh_pass);
 Serial.println(__LINE__); delay(100);
   if (rc != SSH_AUTH_SUCCESS) {
-    terminal_print("Error authenticating\n\r");
-    terminal_print((char *)ssh_get_error(my_session));
-    terminal_print("\n\r");
+    terminal_println("Error authenticating");
+    terminal_println((char *)ssh_get_error(my_session));
     terminal_show_screen();
     ssh_disconnect(my_session);
     ssh_free(my_session);
@@ -3360,7 +4410,7 @@ Serial.println(__LINE__); delay(100);
   channel = ssh_channel_new(my_session);
 Serial.println(__LINE__); delay(100);
   if (channel == NULL) {
-    terminal_print("Unable to open channel\n\r");
+    terminal_println("Unable to open channel");
     terminal_show_screen();
     return 0;
   }
@@ -3370,7 +4420,7 @@ Serial.println(__LINE__); delay(100);
   rc = ssh_channel_open_session(channel);
 Serial.println(__LINE__); delay(100);
   if (rc != SSH_OK) {
-    terminal_print("Unable to open session\n\r");
+    terminal_println("Unable to open session");
     terminal_show_screen();
     ssh_channel_free(channel);
     return 0;
@@ -3379,7 +4429,7 @@ Serial.println(__LINE__); delay(100);
   // Request PTY
 Serial.println(__LINE__); delay(100);
   if (ssh_channel_request_pty(channel) != SSH_OK) {
-      terminal_print("Unable to request PTY\n\r");
+      terminal_println("Unable to request PTY");
       terminal_show_screen();
       ssh_channel_close(channel);
       ssh_channel_free(channel);
@@ -3389,7 +4439,7 @@ Serial.println(__LINE__); delay(100);
   // Request shell
 Serial.println(__LINE__); delay(100);
   if (ssh_channel_request_shell(channel) != SSH_OK) {
-      terminal_print("Unable to request shell\n\r");
+      terminal_println("Unable to request shell");
       terminal_show_screen();
       ssh_channel_close(channel);
       ssh_channel_free(channel);
@@ -4400,6 +5450,520 @@ void webradio(char mode, char *io_buff) {
   }
 
   pim_app("Webradio", WEBRADIO_PATH, webradio_file_to_list, buttons, webradio_action);
+}
+
+// ====================================================
+// Эмулятор CHIP-8
+// ====================================================
+
+#define CHIP8_PATH "/Chip8"
+
+void chip8_action(int action_index, char *filename) {
+  fs::File file;
+  char buff[80];
+  char old_path_filename[80];
+  char new_path_filename[80];
+
+  if(action_index && !filename) return;
+
+  if(action_index == 0) {
+    // Воспроизведение
+    sprintf(buff, "%s/%s", CHIP8_PATH, filename);
+    chip8_run(buff);
+  }
+  else if(action_index == 1) {
+    // Переименование
+    strcpy(buff, filename);
+    if(drawPrompt("New rom name", buff) == 0) {
+      // Если название не пустое
+      if(strcmp(buff, "")) {
+        sprintf(old_path_filename, "%s/%s", CHIP8_PATH, filename);
+        sprintf(new_path_filename, "%s/%s", CHIP8_PATH, buff);
+        Storage->rename(old_path_filename, new_path_filename);
+      }
+    }
+  }
+  else if(action_index == 2) {
+    if(drawConfirm("Delete this rom?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(buff, "%s/%s", CHIP8_PATH, filename);
+      Storage->remove(buff);
+    }
+  }
+}
+
+int chip8_file_to_list(fs::File file, char *buff) {
+  strcpy(buff, file.name());
+  return 1;
+}
+
+#define CHIP8_WIDTH 64
+#define CHIP8_HEIGHT 32
+#define CHIP8_SCREEN_LEFT (tft.width() - CHIP8_WIDTH * CHIP8_SCREEN_SCALE) / 2
+#define CHIP8_SCREEN_TOP 20
+#define CHIP8_SCREEN_SCALE 3
+
+void chip8_run(char *filename) {
+  fs::File file;
+  long cycle_millis = 0;
+  long timer_millis = 0;
+  int i, x, y;
+  int pc = 512;
+  int sp = 4094 - 256 - 96;
+  char ia, ib, ic, id;
+  int byte_offset;
+  int bit_offset;
+  // 16 8-bit registers
+  unsigned char v[16];
+  unsigned char keymap[16] = {1, 2, 3, 12, 4, 5, 6, 13, 7, 8, 9, 14, 10, 0, 11, 15};
+  int vi;
+  char carry;
+  char screen_changed = 0;
+  // 2 8-bit timers
+  char dt; // delay timer
+  char st; // sound timer
+  // 4096 bytes of memory
+  char *mem;
+  char *videomem;
+  char memory_bit;
+  char sprite_bit;
+  // Keyboard
+  char *keyboard[] = {
+    "1", "2", "3", "C",
+    "4", "5", "6", "D",
+    "7", "8", "9", "E",
+    "A", "0", "B", "F",
+    NULL
+  };
+  int key;
+  char fontset[80] = {
+      0xF0, 0x90, 0x90, 0x90, 0xF0, //0
+      0x20, 0x60, 0x20, 0x20, 0x70, //1
+      0xF0, 0x10, 0xF0, 0x80, 0xF0, //2
+      0xF0, 0x10, 0xF0, 0x10, 0xF0, //3
+      0x90, 0x90, 0xF0, 0x10, 0x10, //4
+      0xF0, 0x80, 0xF0, 0x10, 0xF0, //5
+      0xF0, 0x80, 0xF0, 0x90, 0xF0, //6
+      0xF0, 0x10, 0x20, 0x40, 0x40, //7
+      0xF0, 0x90, 0xF0, 0x90, 0xF0, //8
+      0xF0, 0x90, 0xF0, 0x10, 0xF0, //9
+      0xF0, 0x90, 0xF0, 0x90, 0x90, //A
+      0xE0, 0x90, 0xE0, 0x90, 0xE0, //B
+      0xF0, 0x80, 0x80, 0x80, 0xF0, //C
+      0xE0, 0x90, 0x90, 0x90, 0xE0, //D
+      0xF0, 0x80, 0xF0, 0x80, 0xF0, //E
+      0xF0, 0x80, 0xF0, 0x80, 0x80  //F
+  };
+
+  clearScreen();
+  if(strchr(filename + 1, '/')) {
+    drawAppTitle(strchr(filename + 1, '/') + 1);
+  }
+  else {
+    drawAppTitle(filename);
+  }
+
+  // Загружаем ром
+  file = Storage->open(filename);
+  if(!file) {
+    drawError("Unable to open ROM");
+    return;
+  }
+  // Резервируем память
+  mem = (char*)malloc(4096 * sizeof(char));
+  for(i = 0; i < 4096; i++) {
+    mem[i] = 0;
+  }
+  videomem = mem + 4095 - 256;
+
+  // Загружаем шрифт
+  for(i = 0; i < 80; i++) {
+    mem[i + 0x50] = fontset[i];
+  }
+  // Загружаем ROM в память
+  for(i = 512; file.available(); i++) {
+    mem[i] = file.read();
+  }
+
+  // Чистим регистры
+  for(i = 0; i < 16; i++) {
+    v[i] = 0;
+  }
+  dt = 0;
+  st = 0;
+  vi = 0;
+  pc = 512;
+
+  // Рисуем клавиатуру
+  drawButtonMatrix(0, tft.height() - 200, tft.width(), 200, keyboard, 4, 4);
+
+  // Рисуем экран
+  tft.fillRect(CHIP8_SCREEN_LEFT, CHIP8_SCREEN_TOP, CHIP8_WIDTH * CHIP8_SCREEN_SCALE, CHIP8_HEIGHT * CHIP8_SCREEN_SCALE, TFT_BLACK);
+
+  // Рабочий цикл
+  while(1) {
+    // pc loop
+    if(pc >= 4096) pc = 0;
+    // stack pointer loop
+    if(sp >= 4096) sp = 0;
+    if(sp < 0) sp = 4094;
+
+    // Таймеры
+    if(millis() - timer_millis > 1000 / 60) {
+      timer_millis = millis();
+      if(dt > 0) dt--;
+      if(st > 0) {
+        st--;
+      }
+      if(st == 0) {
+        noTone(BUZZER_PIN);
+      }
+    }
+
+    // Отобразить экран
+    if(screen_changed && millis() - cycle_millis > 1000 / 10) {
+      //Serial.printf("pc = %d, %1X %1X %1X %1X, sp = %d\n", pc, (int)ia, (int)ib, (int)ic, (int)id, sp);
+
+      cycle_millis = millis();
+      for(y = 0; y < CHIP8_HEIGHT; y++) {
+        for(x = 0; x < CHIP8_WIDTH; x++) {
+          byte_offset = 4095 - 256 + (x + y * CHIP8_WIDTH) / 8;
+          bit_offset = x % 8;
+          if(mem[byte_offset] & (0x80 >> bit_offset)) {
+            tft.fillRect(CHIP8_SCREEN_LEFT + x * CHIP8_SCREEN_SCALE, CHIP8_SCREEN_TOP + y * CHIP8_SCREEN_SCALE, CHIP8_SCREEN_SCALE, CHIP8_SCREEN_SCALE, TFT_GREEN);
+          }
+          else {
+            tft.fillRect(CHIP8_SCREEN_LEFT + x * CHIP8_SCREEN_SCALE, CHIP8_SCREEN_TOP + y * CHIP8_SCREEN_SCALE, CHIP8_SCREEN_SCALE, CHIP8_SCREEN_SCALE, TFT_BLACK);
+          }
+        }
+      }
+      screen_changed = 0;
+    }
+
+    // Считать нажатую кнопку (если есть)
+    touchCheckNowait();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      drawAppTitle(filename);
+      touchExitActionReset();
+      break;
+    }
+
+    key = -1;
+    if(global_touch_present_flag) {
+      if(global_touch_y >= tft.height() - 200) {
+        key = keymap[(int)(global_touch_x / (tft.width() / 4) + 4 * floor((global_touch_y - tft.height() + 200) / 50)) % 16];
+        //Serial.println(key);
+      }
+    }
+    // Получаем инструкцию
+    // pc - instruction pointer
+    // Четыре полубайта, ia, ib, ic ,id
+    ia = (mem[pc] & 0xF0) >> 4;
+    ib = mem[pc] & 0x0F;
+    ic = (mem[pc + 1] & 0xF0) >> 4;
+    id = mem[pc + 1] & 0x0F;
+    
+    //Serial.printf("pc = %d, %1X %1X %1X %1X, sp = %d\n", pc, (int)ia, (int)ib, (int)ic, (int)id, sp);
+    //delay(100);
+    // Сделать шаг
+    // 00E0 Clear screen
+    if(ia == 0x0 && ib == 0x0 && ic == 0xE && id == 0x0) {
+      for(i = 0; i < 256; i++) {
+        videomem[i] = 0;
+      }
+      pc += 2;
+      screen_changed = 1;
+    }
+    // 00EE RET
+    else if(ia == 0x0 && ib == 0x0 && ic == 0xE && id == 0xE) {
+      sp -= 2;
+      pc = ((int)(mem[sp]) << 8) + mem[sp + 1];
+      pc += 2;
+    }
+    // 00FD EXIT
+    else if(ia == 0x0 && ib == 0x0 && ic == 0xF && id == 0xD) {
+      drawInfo("Exit called");
+      break;
+    }
+
+    // 1XXX JUMP
+    else if(ia == 0x1) {
+      pc = (ib << 8) + (ic << 4) + id;
+    }
+
+    // 2XXX CALL
+    else if(ia == 0x2) {
+      mem[sp] = pc >> 8;
+      sp++;
+      mem[sp] = pc & 0xFF;
+      sp++;
+      pc = (ib << 8) + (ic << 4) + id;
+    }
+
+    // 3XNN if (Vx == NN)
+    else if(ia == 0x3) {
+      if(v[ib] == (ic << 4) + id) pc += 4;
+      else pc += 2;
+    }
+
+    // 4XNN if (Vx != NN)
+    else if(ia == 0x4) {
+      if(v[ib] != (ic << 4) + id) pc += 4;
+      else pc += 2;
+    }
+
+    // 5XY0 if (Vx == Vy)
+    else if(ia == 0x5 && id == 0x0) {
+      if(v[ib] == v[ic]) pc += 4;
+      else pc += 2;
+    }
+
+    // 6XNN Vx = NN
+    else if(ia == 0x6) {
+      v[ib] = (ic << 4) + id;
+      pc += 2;
+    }
+
+    // 7XNN Vx += NN
+    else if(ia == 0x7) {
+      v[ib] += (ic << 4) + id;
+      pc += 2;
+    }
+
+    // 8XY0 Vx = Vy
+    else if(ia == 0x8 && id == 0x0) {
+      v[ib] = v[ic];
+      pc += 2;
+    }
+    // 8XY1	Vx |= Vy
+    else if(ia == 0x8 && id == 0x1) {
+      v[ib] |= v[ic];
+      v[15] = 0;
+      pc += 2;
+    }
+    // 8XY2	Vx &= Vy
+    else if(ia == 0x8 && id == 0x2) {
+      v[ib] &= v[ic];
+      v[15] = 0;
+      pc += 2;
+    }
+    // 8XY3[a]	Vx ^= Vy
+    else if(ia == 0x8 && id == 0x3) {
+      v[ib] ^= v[ic];
+      v[15] = 0;
+      pc += 2;
+    }
+    // 8XY4	Vx += Vy
+    else if(ia == 0x8 && id == 0x4) {
+      carry = 0;
+      if((int)v[ib] + (int)v[ic] >= 256) {
+        carry = 1;
+      }
+      v[ib] += v[ic];
+      v[15] = carry;
+      pc += 2;
+    }
+    // 8XY5	Vx -= Vy
+    else if(ia == 0x8 && id == 0x5) {
+      carry = 1;
+      if((int)v[ib] < (int)v[ic]) {
+        carry = 0;
+      }
+      v[ib] -= v[ic];
+      v[15] = carry;
+      pc += 2;
+    }
+    // 8XY6[a]	Vx >>= 1
+    else if(ia == 0x8 && id == 0x6) {
+      carry = v[ib] & 0x1 ? 1 : 0;
+      v[ib] = v[ic];
+      v[ib] = v[ib] >> 1;
+      v[15] = carry;
+      pc += 2;
+    }
+    // 8XY7[a]	Vx = Vy - Vx
+    else if(ia == 0x8 && id == 0x7) {
+      carry = 1;
+      if((int)v[ic] < (int)v[ib]) {
+        carry = 0;
+      }
+      v[ib] = v[ic] - v[ib];
+      v[15] = carry;
+      pc += 2;
+    }
+    // 8XYE[a]	Vx <<= 1
+    else if(ia == 0x8 && id == 0xE) {
+      carry = v[ib] & B10000000 ? 1 : 0;
+      v[ib] = v[ic];
+      v[ib] = v[ib] << 1;
+      v[15] = carry;
+      pc += 2;
+    }
+
+    // 9XY0	if (Vx != Vy)
+    else if(ia == 0x9 && id == 0x0) {
+      if(v[ib] != v[ic]) pc += 4;
+      else pc += 2;
+    }
+    
+    // ANNN	I = NNN
+    else if(ia == 0xA) {
+      vi = ((ib << 8) + (ic << 4) + id) % 4096;
+      pc += 2;
+    }
+
+    // BNNN	PC = V0 + NNN
+    else if(ia == 0xB) {
+      pc = v[0] + (ib << 8) + (ic << 4) + id;
+    }
+
+    // CXNN	Vx = rand() & NN
+    else if(ia == 0xC) {
+      v[ib] = random(0, 256) & (ic << 4) + id;
+      pc += 2;
+    }
+
+    // DXYN	draw(Vx, Vy, N)
+    else if(ia == 0xD) {
+      v[15] = 0;
+      for(y = 0; y < id; y++) {
+        for(x = 0; x < 8; x++) {
+          byte_offset = ((x + (int)v[ib]) % 64 + ((y + (int)v[ic]) % 32) * CHIP8_WIDTH) / 8;
+          bit_offset = ((x + (int)v[ib]) % 64 + ((y + (int)v[ic]) % 32) * CHIP8_WIDTH) % 8;
+          memory_bit = videomem[byte_offset] & 0x80 >> bit_offset;
+          sprite_bit = mem[(vi + y) % 4096] & 0x80 >> x;
+          if(memory_bit && sprite_bit) {
+            v[15] = 1;
+          }
+          videomem[byte_offset] ^= sprite_bit ? 0x80 >> bit_offset : 0;
+        }
+      }
+      pc += 2;
+      screen_changed = 1;
+    }
+
+    // EX9E	if (key() == Vx)
+    else if(ia == 0xE && ic == 0x9 && id == 0xE) {
+      if(key == v[ib]) pc += 4;
+      else pc += 2;
+    }
+    // EXA1	if (key() != Vx)
+    else if(ia == 0xE && ic == 0xA && id == 0x1) {
+      if(key != v[ib]) pc += 4;
+      else pc += 2;
+    }
+
+    // FX07	Vx = get_delay()
+    else if(ia == 0xF && ic == 0x0 && id == 0x7) {
+      v[ib] = dt;
+      pc += 2;
+    }
+    // FX0A	Vx = get_key()
+    else if(ia == 0xF && ic == 0x0 && id == 0xA) {
+      if(key != -1) {
+        touchWaitRelease();
+        v[ib] = key;
+        pc += 2;
+      }
+    }
+    // FX15	delay_timer(Vx)
+    else if(ia == 0xF && ic == 0x1 && id == 0x5) {
+      dt = v[ib];
+      pc += 2;
+    }
+    // FX18	sound_timer(Vx)
+    else if(ia == 0xF && ic == 0x1 && id == 0x8) {
+      st = v[ib];
+      if(st > 0 && global_is_beep_enabled) {
+        tone(BUZZER_PIN, 1000);
+      }
+      pc += 2;
+    }
+    // FX1E	I += Vx
+    else if(ia == 0xF && ic == 0x1 && id == 0xE) {
+      vi += v[ib];
+      pc += 2;
+    }
+    // FX29	I = sprite_addr[Vx]
+    else if(ia == 0xF && ic == 0x2 && id == 0x9) {
+      vi = 0x50 + v[ib] * 5;
+      pc += 2;
+    }
+    // FX33	set_BCD(Vx)
+    else if(ia == 0xF && ic == 0x3 && id == 0x3) {
+      mem[vi + 0] = v[ib] / 100;
+      mem[vi + 1] = (v[ib] / 10) % 10;
+      mem[vi + 2] = v[ib] % 10;
+      pc += 2;
+    }
+    // FX55	reg_dump(Vx, &I)
+    else if(ia == 0xF && ic == 0x5 && id == 0x5) {
+      for(i = 0; i <= ib; i++) {
+        mem[(vi + i) % 4096] = v[i];
+      }
+      pc += 2;
+    }
+    // FX65	reg_load(Vx, &I)
+    else if(ia == 0xF && ic == 0x6 && id == 0x5) {
+      for(i = 0; i <= ib; i++) {
+        v[i] = mem[(vi + i) % 4096];
+      }
+      pc += 2;
+    }
+    else {
+      Serial.printf("NI pc = %d, %1X %1X %1X %1X, sp = %d\n", pc, (int)ia, (int)ib, (int)ic, (int)id, sp);
+      pc += 2;
+    }
+  }
+
+  free(mem);
+}
+
+void chip8_draw_screen() {
+
+}
+
+void chip8(char mode, char *io_buff) {
+  char *buttons[] = {
+    "Run", "Rename", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01001110, B01110010,
+    B01010000, B10001010,
+    B01010000, B01110010,
+    B01010000, B10001010,
+    B01010000, B10001010,
+    B01001110, B01110010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Chip-8");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Chp8");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  pim_app("Chip-8", CHIP8_PATH, chip8_file_to_list, buttons, chip8_action);
 }
 
 // ====================================================
@@ -9238,6 +10802,8 @@ void wifi_select_network() {
           //Serial.println(WiFi.SSID(i).c_str());
           networks[networks_unique] = (char *)malloc(80 * sizeof(char));
           strcpy(networks[networks_unique], WiFi.SSID(i).c_str());
+          // Название сети может быть в utf8
+          utf8_to_cp1251(networks[networks_unique]);
           networks_unique++;
         }
       }
@@ -9438,6 +11004,7 @@ void timeSyncCallback(struct timeval *tv) {
   Serial.println("timeSyncCallback");
   global_unixtime_synced = 1;
   time(&global_unixtime_retrieved);
+  global_unixtime_retrieved_millis = millis();
   //drawAppTitleRight();
 }
 
@@ -9447,6 +11014,7 @@ void get_current_timestamp_wifi() {
     delay(100);
   }
   time(&global_unixtime_retrieved);
+  global_unixtime_retrieved_millis = millis();
 }
 
 #define GOPHER_BYTES_MAX 32768
@@ -11307,7 +12875,7 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
   }
 
   terminal_clear_screen();
-  terminal_print("Connecting...\r\n");
+  terminal_println("Connecting...");
   terminal_show_screen();
 
   client->connect(host, port);
@@ -13515,6 +15083,7 @@ void reboot(char mode, char *io_buff) {
   unsigned char byte;
   int button_pressed;
   char buff[80];
+  esp_reset_reason_t reason;
   char *buttons[] = {
     "Reboot",
     NULL
@@ -13555,8 +15124,13 @@ void reboot(char mode, char *io_buff) {
   clearScreen();
   drawAppTitle("Reboot");
 
+  reason = esp_reset_reason();
+  sprintf(buff, "Reset reason:\n%s", get_reset_reason_text(reason));
+
   while(1) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "Last reset reason:\n%s", get_reset_reason_text(reason));
+    draw_text_formatted(buff, 1, 20, tft.width() - 2, 3, FONT_DEFAULT, 1);
 
     drawButtonMatrix(0, 100, tft.width(), 32, buttons, 1, 1);
 
@@ -15443,6 +17017,7 @@ void oscilloscope_draw_values(int *values, int interval_millis) {
   static char first_run_flag = 1;
 
   if(first_run_flag) {
+    Serial.println("Malloc old_values");
     old_values = (int *)malloc(240 * sizeof(int));
     for(i = 0; i < 240; i ++) {
       old_values[i] = 16 + tft.width() / 2;
@@ -15560,8 +17135,10 @@ int oscilloscope_get_value(int input_index) {
   int byte;
   static char *buff = NULL;
   if(first_run_flag) {
+    Serial.println("Malloc buff");
     buff = (char *)malloc(20 * sizeof(char));
     buff[0] = 0;
+    first_run_flag = 0;
   }
 
   if(input_index == 0) {
@@ -18151,6 +19728,7 @@ void drawButtonMatrix(int left_x, int top_y, int width, int height, char **str, 
     for(x = 0; x < cols; x++) {
       if(!is_eol) {
         if(str[x + y * cols]) {
+          tft.drawRect(left_x + x * width / cols, top_y + y * height / rows, width / cols, height / rows, color_scheme_bg);
           tft.drawRect(left_x + x * width / cols + 1, top_y + y * height / rows + 1, width / cols - 2, height / rows - 2, color_scheme_button_fg);
           tft.fillRect(left_x + x * width / cols + 2, top_y + y * height / rows + 2, width / cols - 4, height / rows - 4, color_scheme_button_bg);
           if(!strcmp(str[x + y * cols], ":enter:")) {
@@ -19277,6 +20855,24 @@ void secondly() {
   //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 }
 
+char * get_reset_reason_text(esp_reset_reason_t reason) {
+  switch (reason) {
+    case ESP_RST_UNKNOWN:   return "Unknown"; break;
+    case ESP_RST_POWERON:   return "Power-on event or EN pin"; break;
+    case ESP_RST_EXT:       return "External pin reset (not applicable to ESP32)"; break;
+    case ESP_RST_SW:        return "Software reset via esp_restart()"; break;
+    case ESP_RST_PANIC:     return "Software crash / Exception panic"; break;
+    case ESP_RST_INT_WDT:   return "Interrupt Watchdog Timer reset"; break;
+    case ESP_RST_TASK_WDT:  return "Task Watchdog Timer reset"; break;
+    case ESP_RST_WDT:       return "Other Watchdog reset"; break;
+    case ESP_RST_DEEPSLEEP: return "Exiting Deep Sleep mode"; break;
+    case ESP_RST_BROWNOUT:  return "Brownout reset (voltage drop)"; low_power_flag = 1; break;
+    case ESP_RST_SDIO:      return "Reset over SDIO"; break;
+    default:                return "Unknown reset reason"; break;
+  }
+  return "Unknown reset reason";
+}
+
 void setup() {
   char buff[80];
   char autorun_app_name[80];
@@ -19284,6 +20880,7 @@ void setup() {
   int index;
   char calibration_required = 0;
   char password_present;
+  esp_reset_reason_t reason;
 
   Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
@@ -19314,6 +20911,15 @@ void setup() {
   tft.setRotation(2);
   // Очистка
   clearScreen();
+
+  // Причина перезагрузки
+  reason = esp_reset_reason();
+  if(reason == ESP_RST_BROWNOUT) {
+    low_power_flag = 1; 
+  }
+  sprintf(buff, "Reset reason:\n%s", get_reset_reason_text(reason));
+  drawProcessWindow(buff);
+  delay(1000);
 
   // Выясняем, есть ли баг со считыванием цветов
   global_screen_color_read_extra_byte = 0;
@@ -19408,7 +21014,11 @@ void setup() {
   // Загрузка настроек
   if(storage_type != STORAGE_TYPE_NONE) {
     // Яркость
-    if(read_file_to_buff("/Settings/Brightness", 79, buff)) {
+    if(low_power_flag) {
+      global_brightness = 12;
+      set_brightness(global_brightness);
+    }
+    else if(read_file_to_buff("/Settings/Brightness", 79, buff)) {
       sscanf(buff, "%d", &global_brightness);
       set_brightness(global_brightness);
     }
@@ -19594,6 +21204,7 @@ void setup() {
 
   Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   #ifdef IS_WIFI_ENABLED
+  if(low_power_flag == 0) {
     WiFi.begin();
     WiFi.onEvent(WiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
 
@@ -19602,7 +21213,7 @@ void setup() {
     if(read_file_to_buff("/Settings/NTP", 79, buff)) {
       sscanf(buff, "%d", &global_ntp_enabled);
     }
-
+  }
   #endif
   Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
