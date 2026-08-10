@@ -114,7 +114,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * N back - see https://en.wikipedia.org/wiki/N-back for details
 * Mental Math - see https://en.wikipedia.org/wiki/Mental_calculation for details :)
 * 2048 - see https://en.wikipedia.org/wiki/2048_(video_game) for details
-* CHIP-8 emulator
+* CHIP-8 emulator - see https://en.wikipedia.org/wiki/CHIP-8 for details
 
 ## Screensavers
 * Stars
@@ -122,6 +122,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Lorenz attractor
 * Noise
 * Matrix
+* Forest Fire Simulator
 
 ## Wi-Fi
 * Wi-Fi connection
@@ -156,6 +157,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * telnet {host} [port] - connect via telnet to specified host and port
 * telnets {host} [port] - connect via telnet to specified host and port using SSL
 * wget {url} [filename] - download file with http/https and show or store to file
+* tracert {host} - traceroute ho host
 * ipinfo {ip} - show IP information (via ipinfo.io)
 * sd_to_ffat {sd_path} {ffat_path} - copy file from SD to FFat
 * ffat_to_sd {ffat_path} {sd_path} - copy file from FFat to SD
@@ -163,6 +165,25 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * beep - beep sound
 * tone - start sound tone
 * notone - stop tone
+* hexdump {path} - view files in hex codes
+* uuidgen - generate uuid
+* uptime - shows uptime in days, hours, minutes, seconds
+* tracert {host} - traceroute host
+* random [from] [to] - random number
+* more {path} - show file page by page
+* head {path} - show beginning of the file
+* tail {path} - show ending of the file
+* echo {text} - show text and exit
+* caesar {text} - encodes text with Caesar encryption
+* seq {from} {to} - generate number sequence
+* wc {path} - calculate words, lines and bytes in file
+* lscpu - information about CPU
+* lsmem - information about memory
+* lsblk - information about internal storage
+* brainfuck {path} - brainfuck interpretator
+* view {path} - view file (GUI viewer)
+* edit {file} - edit file (GUI editor)
+* csv {file} - edit file in CSV editor
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
