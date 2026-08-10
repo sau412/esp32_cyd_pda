@@ -174,7 +174,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * head {path} - show beginning of the file
 * tail {path} - show ending of the file
 * echo {text} - show text and exit
-* caesar {text} - encodes text with Caesar encryption
+* caesar {text} - encodes text with Caesar encryption, https://en.wikipedia.org/wiki/Caesar_cipher
 * seq {from} {to} - generate number sequence
 * wc {path} - calculate words, lines and bytes in file
 * lscpu - information about CPU
