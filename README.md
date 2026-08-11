@@ -190,7 +190,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * brainfuck {path} - brainfuck interpretator
 * view {path} - view file (GUI viewer)
 * edit {path} - edit file (GUI editor)
-* csv {path} - edit file in CSV editor
+* csv {path} - edit file in table editor
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
