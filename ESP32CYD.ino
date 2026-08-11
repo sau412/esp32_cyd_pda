@@ -212,9 +212,9 @@
 2026-08-08 Доработка справки
 2026-08-09 forest_fire_model
 2026-08-10 forest_fire_model, csv полноценный просмотр
+2026-08-11 csv редактирование, табличный редактор
 
 До сообщения на esp32
-- (д) CSV редактор
 - (д) Basic
 - (д) Ещё один заход Bluetooth
 - (д) Музыка в фоне
@@ -223,6 +223,7 @@
 - (д) Просмотр картинок через JPEGDEC/PNGDec
 - (д) sha256sum
 - (д) md5sum
+- (д) cp, mv в консоли
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (н) CHIP-8 ускорение работы вывода спрайта
@@ -893,6 +894,7 @@ void breathe(char mode, char *io_buff);
 void brightness_app(char mode, char *io_buff);
 void lights_off(char mode, char *io_buff);
 void notes(char mode, char *io_buff);
+void tables(char mode, char *io_buff);
 void contacts(char mode, char *io_buff);
 void books(char mode, char *io_buff);
 void todo(char mode, char *io_buff);
@@ -960,6 +962,7 @@ function_application_pointer all_apps[] = {
   books,
   passwords,
   screenshots,
+  tables,
   tunes,
   music,
   webradio,
@@ -1631,6 +1634,7 @@ void user_manual(char mode, char *io_buff) {
   "/Schedule - schedule folder\n"
   "/Flashcards - flashcards folder\n"
   "/Passwords - encrypted notes folder\n"
+  "/Tables - tables folder\n"
   "/Tunes - tunes folder\n"
   "/RSS - RSS channels folder\n"
   "/IRC - IRC settings folder\n"
@@ -1713,6 +1717,7 @@ void terminal_manual() {
   "uptime - shows uptime in days, hours, minutes, seconds\n"
   "tracert {host} - traceroute host\n"
   "random [from] [to] - random number\n"
+  "more {path} - show file page by page\n"
   "head {path} - show beginning of the file\n"
   "tail {path} - show ending of the file\n"
   "echo {text} - show text and exit\n"
@@ -1739,6 +1744,7 @@ void terminal_manual() {
   "flashcards - Flashcards app\n"
   "books - Books app\n"
   "passwords - Passwords app\n"
+  "tables - Tables app\n"
   "screenshots - Screenshots app\n"
   "tunes - Tunes app\n"
   "music - Music app\n"
@@ -2925,6 +2931,9 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "passwords") == 0) {
     passwords(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "tables") == 0) {
+    tables(APP_MODE_LAUNCH, NULL);
   }
   else if(strcmp(cmdline_params[0], "screenshots") == 0) {
     screenshots(APP_MODE_LAUNCH, NULL);
@@ -5292,6 +5301,110 @@ void notes(char mode, char *io_buff) {
   }
 
   pim_app("Notes", NOTES_PATH, notes_file_to_list, buttons, notes_action);
+}
+
+// ====================================================
+// Табличный редактор (CSV)
+// ====================================================
+
+#define TABLES_PATH "/Tables"
+
+void tables_action(int action_index, char *filename) {
+  fs::File file;
+  char buff[80];
+  char new_path_filename[80];
+  char old_path_filename[80];
+
+  if(action_index && !filename) return;
+
+  if(action_index == 0) {
+    // Редактируем новый файл
+    sprintf(buff, "%s/%s", TABLES_PATH, "New_table");
+    edit_csv("New table", buff);
+
+    file = Storage->open(buff);
+    if(!file) {
+      return;
+    }
+    else if(file.size() == 0) {
+      file.close();
+      Storage->remove(buff);
+    }
+    else {
+      file.close();
+    }
+  }
+  else if(action_index == 1) {
+    // Редактируем существующий файл
+    sprintf(buff, "%s/%s", TABLES_PATH, filename);
+    edit_csv("Edit note", buff);
+  }
+  else if(action_index == 2) {
+    // Переименование
+    strcpy(buff, filename);
+    if(drawPrompt("New table name", buff) == 0) {
+      // Если название не пустое
+      if(strcmp(buff, "")) {
+        sprintf(old_path_filename, "%s/%s", TABLES_PATH, filename);
+        sprintf(new_path_filename, "%s/%s", TABLES_PATH, buff);
+        Storage->rename(old_path_filename, new_path_filename);
+      }
+    }
+
+  }
+  else if(action_index == 3) {
+    if(drawConfirm("Delete this table?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(buff, "%s/%s", TABLES_PATH, filename);
+      Storage->remove(buff);
+    }
+  }
+}
+
+int tables_file_to_list(fs::File file, char *buff) {
+  sprintf(buff, "%s", file.name());
+  return 1;
+}
+
+void tables(char mode, char *io_buff) {
+  char *buttons[] = {
+    "New", "Edit", "Rename", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000100, B01000010,
+    B01000100, B01000010,
+    B01111111, B11111110,
+    B01000100, B01000010,
+    B01000100, B01000010,
+    B01111111, B11111110,
+    B01000100, B01000010,
+    B01000100, B01000010,
+    B01111111, B11111110,
+    B01000100, B01000010,
+    B01000100, B01000010,
+    B01000100, B01000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Tables");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Tbls");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  pim_app("Tables", TABLES_PATH, tables_file_to_list, buttons, tables_action);
 }
 
 // ====================================================
@@ -17310,6 +17423,7 @@ void edit_csv(char *title, char *filename) {
   int byte;
   int i, j;
   char buff[80];
+  char cell[80];
   int offset_cell_x = 0;
   int offset_cell_y = 0;
   int edit_cell_x;
@@ -17326,21 +17440,19 @@ void edit_csv(char *title, char *filename) {
   drawAppTitle(title);
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
-  file = Storage->open(filename);
-  if(!file) {
-    drawError("Unable to open file");
-    return;
-  }
-
   contents = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
+  strcpy(contents, "");
 
-  offset = 0;
-  while(file.available()) {
-    contents[offset] = file.read();
-    offset++;
-    contents[offset] = 0;
+  file = Storage->open(filename);
+  if(file) {
+    offset = 0;
+    while(file.available()) {
+      contents[offset] = file.read();
+      offset++;
+      contents[offset] = 0;
+    }
+    file.close();
   }
-  file.close();
 
   while(1) {
     // Показать таблицу с текущими сдвигами
@@ -17351,12 +17463,24 @@ void edit_csv(char *title, char *filename) {
     touchWaitPress();
 
     // Нажатие на ячейку - редактирование ячейки
-    if(global_touch_y >= 32 && global_touch_y < tft.height() - 32) {
-      // Определяем ячейку
-      edit_cell_x = floor((global_touch_x - 32) / ((tft.width() - 32) / 4));
-      edit_cell_y = floor((global_touch_y - 32) / 16);
+    if(global_touch_y >= 32 && global_touch_y < tft.height() - 32 && global_touch_x >= 32) {
+      touchWaitRelease();
+      if(global_touch_y >= 32 && global_touch_y < tft.height() - 32 && global_touch_x >= 32) {
+        // Определяем ячейку
 
-      Serial.printf("Edit cell %d %d", offset_cell_x + edit_cell_x, offset_cell_y + edit_cell_y);
+        edit_cell_x = floor((global_touch_x - 32) / ((tft.width() - 32) / 4));
+        edit_cell_y = floor((global_touch_y - 32) / 16);
+
+        sprintf(buff, "Edit cell %c%d", 'A' + offset_cell_x + edit_cell_x, offset_cell_y + edit_cell_y + 1);
+
+        csv_get_cell_value(contents, offset_cell_x + edit_cell_x, offset_cell_y + edit_cell_y, cell);
+        if(drawPrompt(buff, cell) == 0) {
+          // Сохранить указанную ячейку
+          csv_set_cell_value(contents, offset_cell_x + edit_cell_x, offset_cell_y + edit_cell_y, cell);
+          //Serial.println(contents);
+          changes_present = 1;
+        }
+      }
     }
 
     button_pressed = touchCheckMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 4, 1);
@@ -17404,6 +17528,175 @@ void edit_csv(char *title, char *filename) {
   }
 }
 
+// Получить значение ячейки в буфер
+// Возвращает сдвиг начала ячейки
+long csv_get_cell_value(char *contents, int offset_x, int offset_y, char *io_buff) {
+  long offset = 0;
+  int lines_skipped;
+  int fields_skipped;
+  int byte;
+  char *buff;
+  
+  strcpy(io_buff, "");
+
+  // Пропускаем строки до нужной
+  lines_skipped = 0;
+  while(lines_skipped < offset_y) {
+    byte = contents[offset];
+    if(byte == 0) {
+      Serial.println("EOF");
+      return -1;
+    }
+    if(byte == '\n' && contents[offset + 1] == '\r') {
+      offset++;
+    }
+    if(byte == '\r' && contents[offset + 1] == '\n') {
+      offset++;
+    }
+    if(byte == '\n') {
+      Serial.println("Skipping line...");
+      lines_skipped++;
+    }
+    offset++;
+  }
+
+  // Пропускаем поля до нужного
+  fields_skipped = 0;
+  while(fields_skipped < offset_x) {
+    Serial.println("Skipping field...");
+    buff = csv_get_next_field(contents + offset);
+    if(!buff || buff[0] == 0) {
+      Serial.println("EOF");
+      return -1;
+    }
+    if(buff[0] == '\n') {
+      Serial.println("EOL");
+      return -1;
+    }
+    // Смещение это разница между указателями
+    offset = buff - contents;
+    fields_skipped++;
+  }
+Serial.println(offset);
+Serial.println(contents + offset);
+  csv_get_field_value(contents + offset, io_buff);
+
+  return offset;
+}
+
+// Установить указанное значение в указанной ячейке
+void csv_set_cell_value(char *contents, int offset_x, int offset_y, char *io_buff) {
+  long offset, content_len;
+  char buff[80];
+  char field_escaped[80];
+  char *tmp;
+  char is_escaping_required = 0;
+  int lines_skipped;
+  int fields_skipped;
+  int i;
+  int byte;
+
+  // Получаем значение поля с эскейпингом
+  for(i = 0; i < strlen(io_buff); i++) {
+    if(io_buff[i] == '"' || io_buff[i] == ',' || io_buff[i] == '\n') {
+      is_escaping_required = 1;
+    }
+  }
+  if(is_escaping_required) {
+    field_escaped[0] = 0;
+    strcat(field_escaped, "\"");
+    for(i = 0; i < strlen(io_buff); i++) {
+      field_escaped[strlen(field_escaped) + 1] = 0;
+      field_escaped[strlen(field_escaped)] = io_buff[i];
+
+      if(io_buff[i] == '"') {
+        field_escaped[strlen(field_escaped) + 2] = 0;
+        field_escaped[strlen(field_escaped) + 1] = '"';
+      }
+    }
+    strcat(field_escaped, "\"");
+  }
+  else {
+    strcpy(field_escaped, io_buff);
+  }
+
+  // Находим место, где оно должно быть
+  offset = csv_get_cell_value(contents, offset_x, offset_y, buff);
+  if(offset == -1) {
+    Serial.println("Adding rows/cols");
+    Serial.println(contents);
+    // Ищем строку, по необходимости добавляем пустые строки
+    lines_skipped = 0;
+    offset = 0;
+    while(lines_skipped < offset_y) {
+      byte = contents[offset];
+      if(byte == 0) {
+        Serial.println("Adding line...");
+        byte = '\n';
+        contents[offset] = '\n';
+        contents[offset + 1] = 0;
+      }
+      if(byte == '\n' && contents[offset + 1] == '\r') {
+        offset++;
+      }
+      if(byte == '\r' && contents[offset + 1] == '\n') {
+        offset++;
+      }
+      if(byte == '\n') {
+        Serial.println("Skipping line...");
+        lines_skipped++;
+      }
+      offset++;
+    }
+
+    // Ищем ячейку, по необходимости добавляем пустые ячейки
+    fields_skipped = 0;
+    while(fields_skipped < offset_x) {
+      Serial.println("Skipping field...");
+      tmp = csv_get_next_field(contents + offset);
+      if(!tmp || tmp[0] == 0 || tmp[0] == '\n') {
+        Serial.println("Adding field...");
+        content_len = csv_get_cell_length(contents + offset);
+        Serial.printf("csv_add_data %d %d %d\n", strlen(contents), offset, content_len);
+        csv_add_data(contents, offset + content_len, ",");
+        tmp = csv_get_next_field(contents + offset);
+      }
+      // Смещение это разница между указателями
+      offset = tmp - contents;
+      fields_skipped++;
+    }
+    // Если это последнее поле в строке, и после него нет запятой - добавляем
+    tmp = csv_get_next_field(contents + offset);
+    if(!tmp || tmp[0] == 0 || tmp[0] == '\n') {
+      Serial.println("Adding extra field...");
+      content_len = csv_get_cell_length(contents + offset);
+      Serial.printf("csv_add_data %d %d %d\n", strlen(contents), offset, content_len);
+      csv_add_data(contents, offset + content_len, ",");
+    }
+
+    Serial.println("--");
+    Serial.println(contents);
+    Serial.println("--");
+
+    offset = csv_get_cell_value(contents, offset_x, offset_y, buff);
+    if(offset == -1) {
+      Serial.println("Field not exists");
+      return;
+    }
+  }
+  // Длина данных
+  content_len = csv_get_cell_length(contents + offset);
+
+  // Теперь нужно убрать старое значение и добавить новое
+  Serial.println(contents);
+  Serial.printf("csv_remove_data %d %d\n", offset, content_len);
+  csv_remove_data(contents, offset, content_len);
+  Serial.println(contents);
+  Serial.printf("csv_add_data %d %s\n", offset, field_escaped);
+  csv_add_data(contents, offset, field_escaped);
+  Serial.println(contents);
+}
+
 // Редактирование небольшого файла CSV
 void edit_csv_show(char *contents, int offset_cell_x, int offset_cell_y) {
   fs::File file;
@@ -17439,6 +17732,7 @@ void edit_csv_show(char *contents, int offset_cell_x, int offset_cell_y) {
 
     // Читаем строку
     i = 0;
+    line[0] = 0;
     while(offset < strlen(contents)) {
       byte = contents[offset];
       offset++;
@@ -17503,32 +17797,49 @@ void edit_csv_show(char *contents, int offset_cell_x, int offset_cell_y) {
 
 char * csv_get_next_field(char *str) {
   int offset = 0;
-  char field_escaped = 0;
-  if(str[0] == 0) return NULL;
-  if(str[0] == '"'){
-    field_escaped = 1;
+  offset = csv_get_cell_length(str);
+  if(str[offset] == ',') {
+    return str + offset + 1;
+  }
+  return NULL;
+}
+
+long csv_get_cell_length(char *str) {
+  long offset = 0;
+  char is_escaping = 0;
+  if(str[offset] == '"') {
+    is_escaping = 1;
     offset++;
   }
-  while(field_escaped || str[offset] != ',') {
-    if(field_escaped && str[offset] == '"' && str[offset + 1] != '"') {
-      field_escaped = 0;
-      offset++;
+  while(is_escaping || (str[offset] != ',' && str[offset] != '\n')) {
+    if(str[offset] == 0) break;
+    if(is_escaping) {
+      if(str[offset] == '"') {
+        if(str[offset + 1] != '"') {
+          is_escaping = 0;
+        }
+        else {
+          // Skip double quote
+          offset++;
+        }
+      }
     }
     offset++;
-    if(str[offset] == 0) return NULL;
   }
-  return str + offset + 1;
+  
+  return offset;
 }
 
 void csv_get_field_value(char *str, char *buff) {
   char field_escaped = 0;
   int read_offset = 0;
   int write_offset = 0;
+  strcpy(buff, "");
   if(str[0] == '"'){
     field_escaped = 1;
     read_offset++;
   }
-  while(field_escaped || str[read_offset] != ',') {
+  while(field_escaped || (str[read_offset] != ',' && str[read_offset] != '\n')) {
     // Двойная кавычка это заэскейпленная одиночная
     if(field_escaped && str[read_offset] == '"' && str[read_offset + 1] == '"') {
       buff[write_offset] = str[read_offset];
@@ -17547,6 +17858,30 @@ void csv_get_field_value(char *str, char *buff) {
     }
     read_offset++;
     if(str[read_offset] == 0) return;
+  }
+}
+
+// Добавить в contents данные data по смещению offset
+void csv_add_data(char *contents, long offset, char *data) {
+  int i;
+  long contents_len = strlen(contents);
+  long data_len = strlen(data);
+  // Сдвигаем contents
+  for(i = contents_len; i >= offset; i--) {
+    contents[i + data_len] = contents[i];
+  }
+  // Добавялем data
+  for(i = 0; i < data_len; i++) {
+    contents[i + offset] = data[i];
+  }
+}
+
+// Удалить из contents по смещению offset count байт
+void csv_remove_data(char *contents, long offset, int count) {
+  int i;
+  long contents_len = strlen(contents);
+  for(i = 0; contents[offset + i] != 0; i++) {
+    contents[offset + i] = contents[offset + i + count];
   }
 }
 
