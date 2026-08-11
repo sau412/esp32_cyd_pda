@@ -101,6 +101,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Schedule
 * Passwords - AES-256 encrypted notes
 * Flashcards
+* Table editor (stored in CSV format)
 
 ## Games
 * Fifteen puzzle game - see https://en.wikipedia.org/wiki/15_puzzle for details
@@ -170,6 +171,12 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * uptime - shows uptime in days, hours, minutes, seconds
 * tracert {host} - traceroute host
 * random [from] [to] - random number
+* mkdir {path} - create directory
+* rmdir {path} - remove empty directory
+* rm {path} - remove file
+* touch {path} - create empty file
+* ls {path} - list directory files
+* cat {path} - show file contents
 * more {path} - show file page by page
 * head {path} - show beginning of the file
 * tail {path} - show ending of the file
@@ -182,8 +189,8 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * lsblk - information about internal storage
 * brainfuck {path} - brainfuck interpretator
 * view {path} - view file (GUI viewer)
-* edit {file} - edit file (GUI editor)
-* csv {file} - edit file in CSV editor
+* edit {path} - edit file (GUI editor)
+* csv {path} - edit file in CSV editor
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
