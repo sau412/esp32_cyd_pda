@@ -87,6 +87,8 @@
 - Переводчик
 - Вольтметр
 - CHIP-8 emulator
+- Редактор таблиц
+- TOTP
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -222,7 +224,6 @@
 - (д) Ещё один заход Bluetooth
 - (д) Генератор сигналов
 - (д) Просмотр картинок через JPEGDEC/PNGDec
-- (д) 2FA TOTP генератор
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (н) CHIP-8 ускорение работы вывода спрайта
@@ -422,6 +423,9 @@ WiFiClient *global_client = NULL;
 #include <rom/crc.h>
 #include "mbedtls/md5.h"
 #include "mbedtls/sha256.h"
+
+// For TOTP
+#include <TOTP.h>
 
 #define CHECKSUM_CRC 1
 #define CHECKSUM_MD5 2
@@ -914,6 +918,7 @@ void todo(char mode, char *io_buff);
 void expenses(char mode, char *io_buff);
 void schedule(char mode, char *io_buff);
 void passwords(char mode, char *io_buff);
+void totp(char mode, char *io_buff);
 void screenshots(char mode, char *io_buff);
 void tunes(char mode, char *io_buff);
 void music(char mode, char *io_buff);
@@ -974,6 +979,7 @@ function_application_pointer all_apps[] = {
   flashcards,
   books,
   passwords,
+  totp,
   screenshots,
   tables,
   tunes,
@@ -3017,6 +3023,9 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "passwords") == 0) {
     passwords(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "totp") == 0) {
+    totp(APP_MODE_LAUNCH, NULL);
   }
   else if(strcmp(cmdline_params[0], "tables") == 0) {
     tables(APP_MODE_LAUNCH, NULL);
@@ -7279,6 +7288,188 @@ void passwords(char mode, char *io_buff) {
     }
     pim_app("Passwords", PASSWORDS_PATH, passwords_file_to_list, buttons, passwords_action);
   }
+}
+
+// ====================================================
+// Одноразовые пароли TOTP
+// ====================================================
+
+#define TOTP_PATH "/TOTP"
+
+void totp_action(int action_index, char *filename) {
+  fs::File file;
+  char buff[80];
+
+  if(action_index && !filename) return;
+
+  if(action_index == 0) {
+    // Редактируем новый файл
+    sprintf(buff, "%s/%s", TOTP_PATH, "__New");
+    //file = Storage->open(buff, FILE_WRITE);
+    //file.close();
+    edit_file("New TOTP", buff);
+
+    file = Storage->open(buff);
+    if(!file) {
+      return;
+    }
+    else if(file.size() == 0) {
+      file.close();
+      Storage->remove(buff);
+    }
+    else {
+      file.close();
+      // Меняем название в соответствии с содержимым
+      pim_rename_file(TOTP_PATH, "__New", NULL);
+    }
+  }
+  else if(action_index == 1) {
+    // Воспроизведение
+    sprintf(buff, "%s/%s", TOTP_PATH, filename);
+    totp_show(buff);
+  }
+  else if(action_index == 2) {
+    // Редактируем существующий файл
+    sprintf(buff, "%s/%s", TOTP_PATH, filename);
+    edit_file("Edit TOTP", buff);
+
+    // Меняем название в соответствии с содержимым
+    pim_rename_file(TOTP_PATH, filename, NULL);
+  }
+  else if(action_index == 3) {
+    if(drawConfirm("Delete this TOTP?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(buff, "%s/%s", TOTP_PATH, filename);
+      Storage->remove(buff);
+    }
+  }
+}
+
+int totp_file_to_list(fs::File file, char *buff) {
+  stream_get_line_by_index(file, 0, buff);
+  return 1;
+}
+
+void totp_show(char *filename) {
+  fs::File file;
+  char name[80];
+  char key[80];
+  char other[80];
+  char code[80];
+  char prev_code[80];
+  unsigned long unix_timestamp;
+  int seconds_to_update;
+  int progress_len;
+  char *buttons[] = {NULL};
+
+  if(!Storage) {
+    drawError("Storage unavailable");
+    return;
+  }
+  file = Storage->open(filename);
+  if(file) {
+    stream_get_line_by_index(file, 0, name);
+    stream_get_line_by_index(file, 0, key);
+    stream_get_line_by_index(file, 0, other);
+    file.close();
+
+    drawPopupWindow(name, other, buttons);
+    strcpy(prev_code, "");
+    do {
+      unix_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
+      seconds_to_update = unix_timestamp % 30 + 1;
+      totp_get_current_code(key, code);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      tft.drawCentreString(code, tft.width() / 2, 120 + 16 + 25, FONT_BIG);
+      progress_len = (tft.width() - 8 * 2) * seconds_to_update / 30;
+      tft.fillRect(8, 120 + 16 + 20 + 40, progress_len, 8, color_scheme_fg);
+      tft.fillRect(8 + progress_len, 120 + 16 + 20 + 40, tft.width() - 8 * 2 - progress_len, 8, color_scheme_bg);
+      if(strcmp(prev_code, "") && strcmp(prev_code, code)) {
+        beep_if_enabled();
+      }
+      strcpy(prev_code, code);
+      delayOrTouchWait(1000);
+      if(touchCheckNowait()) break;
+    } while(1);
+    touchWaitRelease();
+  }
+}
+
+void totp_get_current_code(char *key, char *buff) {
+  unsigned long unix_timestamp;
+  byte hmacKey[128];
+  char *code;
+  int keyLength = base32ToBytes((String)key, hmacKey);
+  TOTP totp = TOTP(hmacKey, keyLength);
+  unix_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
+  code = totp.getCode(unix_timestamp);
+  //Serial.printf("key '%s', code '%s' epoch %lu\n", key, code, global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000);
+  strcpy(buff, code);
+}
+
+// Helper: Decode a Base32 string into a byte array
+int base32ToBytes(String base32, uint8_t* resultBytes) {
+  base32.toUpperCase();
+  int i = 0, index = 0, val = 0, bits = 0;
+  while (i < base32.length()) {
+    char c = base32.charAt(i);
+    int charVal = -1;
+    if (c >= 'A' && c <= 'Z') charVal = c - 'A';
+    else if (c >= '2' && c <= '7') charVal = c - '2' + 26;
+    else if (c == '=') { i++; continue; }
+    
+    if (charVal >= 0) {
+      val = (val << 5) | charVal;
+      bits += 5;
+      if (bits >= 8) {
+        resultBytes[index++] = (val >> (bits - 8)) & 0xFF;
+        bits -= 8;
+      }
+    }
+    i++;
+  }
+  return index; // returns byte array length
+}
+
+void totp(char mode, char *io_buff) {
+  char *buttons[] = {
+    "New", "Show", "Edit", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01001011, B00110010,
+    B01011000, B10001010,
+    B01001001, B00010010,
+    B01001010, B00001010,
+    B01001011, B10110010,
+    B01000000, B00000010,
+    B01011111, B00000010,
+    B01011111, B00000010,
+    B01011111, B00000010,
+    B01011111, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "TOTP");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "TOTP");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  pim_app("TOTP", TOTP_PATH, totp_file_to_list, buttons, totp_action);
 }
 
 // ====================================================
