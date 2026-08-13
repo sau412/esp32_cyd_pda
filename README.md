@@ -102,6 +102,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Passwords - AES-256 encrypted notes
 * Flashcards
 * Table editor (stored in CSV format)
+* TOTP (like Google Authenticator)
 
 ## Games
 * Fifteen puzzle game - see https://en.wikipedia.org/wiki/15_puzzle for details
