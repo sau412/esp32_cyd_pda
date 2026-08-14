@@ -54,7 +54,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * F - main storage is FFat (internal storage)
 
 # Applications/Functions
-* File management (with viewing and editing support)
+* File management (with viewing text, JPEG, PNG and editing text support)
 * Touch sensor calibration
 * TFT screen test
 * Random number generator
