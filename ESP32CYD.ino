@@ -218,12 +218,14 @@
 2026-08-11 csv редактирование, табличный редактор
 2026-08-12 cp, mv, rm, воспроизведение WAV, воспроизведение музыки/радио в фоне, запуск приложений из autorun,
   CRC, md5sum, sha256sum
+2026-08-13 TOTP
+2026-08-14 Просмотр PNG, JPEG, русские названия файлов при листинге папок в терминале или файлах, оптимизация Files обновление списка по необходимости
 
 До сообщения на esp32
 - (д) Basic
 - (д) Ещё один заход Bluetooth
 - (д) Генератор сигналов
-- (д) Просмотр картинок через JPEGDEC/PNGDec
+- (д) Поддержка UTF-8 при обращениях к ФС
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (н) CHIP-8 ускорение работы вывода спрайта
@@ -426,6 +428,12 @@ WiFiClient *global_client = NULL;
 
 // For TOTP
 #include <TOTP.h>
+
+// For PNG
+#include <PNGdec.h>
+
+// For JPEG
+#include <JPEGDEC.h>
 
 #define CHECKSUM_CRC 1
 #define CHECKSUM_MD5 2
@@ -875,7 +883,6 @@ Ticker minuteTicker;
 char current_app_title[80];
 char app_title_enabled = 0;
 long app_title_updated_millis = 0;
-char global_io_flag = 0;
 char low_power_flag = 0;
 
 void launcher(char mode, char *io_buff);
@@ -1834,7 +1841,7 @@ void files(char mode, char *io_buff) {
   int prev_file_offset = 0;
   int file_index = 0;
   char redraw_required = 0;
-  char continue_flag = 0;
+  char rescan_files = 0;
   int current_op = -1;
   char show_updir = 0;
   char path[80] = "/";
@@ -1891,7 +1898,8 @@ void files(char mode, char *io_buff) {
   }
 
   redraw_required = 1;
-  
+  rescan_files = 1;
+
   while(1) {
     if(redraw_required) {
       clearScreen();
@@ -1902,71 +1910,78 @@ void files(char mode, char *io_buff) {
       redraw_required = 0;
     }
 
-    // Список файлов
-    current_dir = Storage->open(path);
-    file_index = 0;
-
-    if (!current_dir) {
-      drawError("Failed to open directory");
-      return;
-    }
-    if (!current_dir.isDirectory()) {
-      drawError("Not a directory");
-      if(!strcmp("/", path)) {
-        if(storage_type == STORAGE_TYPE_FFAT) {
-          if(drawConfirm("Format storage?") == 0) {
-            // Форматирование
-            FFat.format();
-            FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
-            Storage->mkdir("/Settings");
-          }
-        }
-      }
-      return;
-    }
-
-    // Текущий путь
-    file_index = 0;
     sprintf(buff, "Path: %s", path);
+    utf8_to_cp1251(buff);
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.fillRect(0, 16, tft.width(), 16, color_scheme_bg);
     tft.drawString(buff, 8, 16, FONT_DEFAULT);
 
-    // Освобождаем память
-    if(files) {
-      for(i = 0; files[i] != NULL; i++) {
-        free(files[i]);
+    if(rescan_files) {
+      // Список файлов
+      current_dir = Storage->open(path);
+      file_index = 0;
+
+      if (!current_dir) {
+        drawError("Failed to open directory");
+        return;
       }
-      free(files);
-    }
-    // Занимаем память, сразу на FILES_COUNT_MAX элементов, с realloc глючит
-    files = (char**)malloc(FILES_COUNT_MAX * sizeof(char*));
-    files[0] = NULL;
-    //delay(1000);
-    if(strcmp(path, "/")) {
-      sprintf(buff, "[u] ..");
-      files[file_index] = (char*)malloc((strlen(buff) + 1) * sizeof(char));
-      strcpy(files[file_index], buff);
-      files[file_index + 1] = NULL;
-      file_index ++;
-    }
-    while(file = current_dir.openNextFile()) {
-      //realloc(files, (file_index + 2) * sizeof(char*));
-      if(file.isDirectory()) {
-        sprintf(buff, "%s\t%s", file.name(), "[dir]");
+      if (!current_dir.isDirectory()) {
+        drawError("Not a directory");
+        if(!strcmp("/", path)) {
+          if(storage_type == STORAGE_TYPE_FFAT) {
+            if(drawConfirm("Format storage?") == 0) {
+              // Форматирование
+              FFat.format();
+              FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
+              Storage->mkdir("/Settings");
+            }
+          }
+        }
+        return;
       }
-      else {
-        if(file.size() > 4096) {
-          sprintf(buff, "%s\t%dk", file.name(), file.size() / 1024);
+
+      // Текущий путь
+      file_index = 0;
+
+      // Освобождаем память
+      if(files) {
+        for(i = 0; files[i] != NULL; i++) {
+          free(files[i]);
+        }
+        free(files);
+      }
+      // Занимаем память, сразу на FILES_COUNT_MAX элементов, с realloc глючит
+      files = (char**)malloc(FILES_COUNT_MAX * sizeof(char*));
+      files[0] = NULL;
+      //delay(1000);
+      if(strcmp(path, "/")) {
+        sprintf(buff, "[u] ..");
+        files[file_index] = (char*)malloc((strlen(buff) + 1) * sizeof(char));
+        strcpy(files[file_index], buff);
+        files[file_index + 1] = NULL;
+        file_index ++;
+      }
+      while(file = current_dir.openNextFile()) {
+        //realloc(files, (file_index + 2) * sizeof(char*));
+        if(file.isDirectory()) {
+          sprintf(buff, "%s\t%s", file.name(), "[dir]");
         }
         else {
-          sprintf(buff, "%s\t%db", file.name(), file.size());
+          if(file.size() > 4096) {
+            sprintf(buff, "%s\t%dk", file.name(), file.size() / 1024);
+          }
+          else {
+            sprintf(buff, "%s\t%db", file.name(), file.size());
+          }
         }
+        utf8_to_cp1251(buff);
+        files[file_index] = (char*)malloc((strlen(buff) + 1) * sizeof(char));
+        strcpy(files[file_index], buff);
+        files[file_index + 1] = NULL;
+        file_index ++;
       }
-      files[file_index] = (char*)malloc((strlen(buff) + 1) * sizeof(char));
-      strcpy(files[file_index], buff);
-      files[file_index + 1] = NULL;
-      file_index ++;
+      
+      rescan_files = 0;
     }
 
     // Сначала проверить нажатия, потом нарисовать, так нажатие сработает сразу
@@ -2004,18 +2019,19 @@ void files(char mode, char *io_buff) {
       // Новый файл
       if(current_op == 0) {
         strcpy(user_input, "");
-        drawPrompt("New file name", user_input);
-        if(strlen(user_input) > 0) {
-          sprintf(buff, "%s%s", path, user_input);
-          file = Storage->open(buff, FILE_WRITE);
-          if (!file) {
-            drawAlert("Failed to create new file");
-            return;
+        if(drawPrompt("New file name", user_input) == 0) {
+          if(strlen(user_input) > 0) {
+            sprintf(buff, "%s%s", path, user_input);
+            file = Storage->open(buff, FILE_WRITE);
+            if (!file) {
+              drawAlert("Failed to create new file");
+              return;
+            }
+            file.close();
+            rescan_files = 1;
           }
-          file.close();
+          redraw_required = 1;
         }
-        current_op = -1;
-        redraw_required = 1;
       }
       // Просмотр или переход к папке
       if(current_op == 1) {
@@ -2030,6 +2046,7 @@ void files(char mode, char *io_buff) {
           }
           file_selected = 0;
           file_offset = 0;
+          rescan_files = 1;
         }
         else {
           if(file.isDirectory()) {
@@ -2037,10 +2054,29 @@ void files(char mode, char *io_buff) {
             strcat(path, "/");
             file_selected = 0;
             file_offset = 0;
+            rescan_files = 1;
           }
           else {
             sprintf(buff, "%s%s", path, file.name());
-            view_file(buff, buff);
+            if(is_bmp_file(buff)) {
+              disableAppTitle();
+              clearScreen();
+              bmp_show_image(buff, 0, 0);
+              touchWaitPress();
+              touchWaitRelease();
+            }
+            else if(is_png_file(buff)) {
+              png_show_image(buff, 0, 0);
+            }
+            else if(is_jpeg_file(buff)) {
+              jpeg_show_image(buff, 0, 0);
+            }
+            else if(is_webp_file(buff)) {
+              drawError("WEBP is not supported");
+            }
+            else {
+              view_file(buff, buff);
+            }
           }
         }
       }
@@ -2057,107 +2093,113 @@ void files(char mode, char *io_buff) {
       // Переименование
       if(current_op == 3) {
         strcpy(user_input, "");
-        drawPrompt("Rename file name", user_input);
-        if(strlen(user_input) != 0) {
-          sprintf(buff, "%s%s", path, file.name());
-          sprintf(filename_to, "%s%s", path, user_input);
-          if(!Storage->rename(buff, filename_to)) {
-            drawAlert("Rename failed");
-            drawInfo(buff);
-            drawInfo(filename_to);
+        if(drawPrompt("Rename file name", user_input) == 0) {
+          if(strlen(user_input) != 0) {
+            sprintf(buff, "%s%s", path, file.name());
+            sprintf(filename_to, "%s%s", path, user_input);
+            if(!Storage->rename(buff, filename_to)) {
+              drawAlert("Rename failed");
+              drawInfo(buff);
+              drawInfo(filename_to);
+            }
+          rescan_files = 1;
           }
         }
       }
       // Новая папка
       if(current_op == 4) {
         strcpy(user_input, "");
-        drawPrompt("New directory name", user_input);
-        sprintf(buff, "%s%s", path, user_input);
-        if(!Storage->mkdir(buff)) {
-          drawAlert("Failed to create new directory");
-          return;
+        if(drawPrompt("New directory name", user_input) == 0) {
+          sprintf(buff, "%s%s", path, user_input);
+          if(!Storage->mkdir(buff)) {
+            drawAlert("Failed to create new directory");
+          }
+          rescan_files = 1;
         }
       }
       // Копирование
       if(current_op == 5) {
         strcpy(user_input, "");
-        drawPrompt("Enter path to copy", user_input);
-        if(strlen(user_input) != 0) {
-          sprintf(buff, "%s%s", path, file.name());
-          strcpy(filename_to, user_input);
-          
-          // Если путь без / в начале, то это относительный путь
-          if(user_input[0] != '/') {
-            sprintf(filename_to, "%s%s", path, user_input);
-          }
-          strcpy(user_input, filename_to);
+        if(drawPrompt("Enter path to copy", user_input) == 0) {
+          if(strlen(user_input) != 0) {
+            sprintf(buff, "%s%s", path, file.name());
+            strcpy(filename_to, user_input);
+            
+            // Если путь без / в начале, то это относительный путь
+            if(user_input[0] != '/') {
+              sprintf(filename_to, "%s%s", path, user_input);
+            }
+            strcpy(user_input, filename_to);
 
-          // Если путь не заканчивается на /, то надо проверить, папка это или файл, который нужно создать
-          if(user_input[strlen(user_input) - 1] == '/') {
-            sprintf(filename_to, "%s%s", user_input, file.name());
-          }
-          else {
-            // Если это папка нужно добавить '/' и имя файла
-            current_dir = Storage->open(user_input);
-            if(current_dir) {
-              if(current_dir.isDirectory()) {
-                sprintf(filename_to, "%s/%s", user_input, file.name());
+            // Если путь не заканчивается на /, то надо проверить, папка это или файл, который нужно создать
+            if(user_input[strlen(user_input) - 1] == '/') {
+              sprintf(filename_to, "%s%s", user_input, file.name());
+            }
+            else {
+              // Если это папка нужно добавить '/' и имя файла
+              current_dir = Storage->open(user_input);
+              if(current_dir) {
+                if(current_dir.isDirectory()) {
+                  sprintf(filename_to, "%s/%s", user_input, file.name());
+                }
+                current_dir.close();
               }
-              current_dir.close();
+              // А если нет, то ничего не трогать
             }
-            // А если нет, то ничего не трогать
-          }
-
-          // Копирование
-          file = Storage->open(buff);
-          file_copy = Storage->open(filename_to, FILE_WRITE);
-          if(!file) {
-            drawAlert("Cannot open source file");
-          }
-          else if(!file_copy) {
-            drawAlert("Cannot open destination file");
-          }
-          else {
-            while(file.available()) {
-              byte = file.read();
-              file_copy.print(byte);
+            // Копирование
+            file = Storage->open(buff);
+            file_copy = Storage->open(filename_to, FILE_WRITE);
+            if(!file) {
+              drawAlert("Cannot open source file");
             }
-            file.close();
-            file_copy.close();
+            else if(!file_copy) {
+              drawAlert("Cannot open destination file");
+            }
+            else {
+              while(file.available()) {
+                byte = file.read();
+                file_copy.print(byte);
+              }
+              file.close();
+              file_copy.close();
+            }
+            rescan_files = 1;
           }
         }
       }
       // Перемещение
       if(current_op == 6) {
         strcpy(user_input, "");
-        drawPrompt("Enter path to move", user_input);
-        if(strlen(user_input) != 0) {
-          sprintf(buff, "%s%s", path, file.name());
-          strcpy(filename_to, user_input);
+        if(drawPrompt("Enter path to move", user_input) == 0) {
+          if(strlen(user_input) != 0) {
+            sprintf(buff, "%s%s", path, file.name());
+            strcpy(filename_to, user_input);
 
-          // Если путь без / в начале, то это относительный путь
-          if(user_input[0] != '/') {
-            sprintf(filename_to, "%s%s", path, user_input);
-          }
-          strcpy(user_input, filename_to);
-
-          // Если путь заканчивается без /, то надо проверить, папка это или файл, который нужно создать
-          if(user_input[strlen(user_input) - 1] == '/') {
-            sprintf(filename_to, "%s%s", user_input, file.name());
-          }
-          else {
-            // Если это папка нужно добавить '/' и имя файла
-            current_dir = Storage->open(user_input);
-            if(current_dir && current_dir.isDirectory()) {
-              sprintf(filename_to, "%s/%s", user_input, file.name());
+            // Если путь без / в начале, то это относительный путь
+            if(user_input[0] != '/') {
+              sprintf(filename_to, "%s%s", path, user_input);
             }
-            current_dir.close();
-          }
-          sprintf(filename_to, "%s", user_input);
-          if(!Storage->rename(buff, filename_to)) {
-            drawAlert("Rename failed");
-            drawInfo(buff);
-            drawInfo(filename_to);
+            strcpy(user_input, filename_to);
+
+            // Если путь заканчивается без /, то надо проверить, папка это или файл, который нужно создать
+            if(user_input[strlen(user_input) - 1] == '/') {
+              sprintf(filename_to, "%s%s", user_input, file.name());
+            }
+            else {
+              // Если это папка нужно добавить '/' и имя файла
+              current_dir = Storage->open(user_input);
+              if(current_dir && current_dir.isDirectory()) {
+                sprintf(filename_to, "%s/%s", user_input, file.name());
+              }
+              current_dir.close();
+            }
+            sprintf(filename_to, "%s", user_input);
+            if(!Storage->rename(buff, filename_to)) {
+              drawAlert("Rename failed");
+              drawInfo(buff);
+              drawInfo(filename_to);
+            }
+            rescan_files = 1;
           }
         }
       }
@@ -2175,8 +2217,8 @@ void files(char mode, char *io_buff) {
               drawError("Remove failed");
             }
           }
-          current_op = -1;
           file_selected = 0;
+          rescan_files = 1;
         }
       }
       redraw_required = 1;
@@ -2584,7 +2626,9 @@ void terminal_execute_single(char *str) {
       current_dir = Storage->open(cmdline_params[1]);
       if(current_dir && current_dir.isDirectory()) {
         while(file = current_dir.openNextFile()) {
-          terminal_println((char *)file.name());
+          strcpy(buff, file.name());
+          utf8_to_cp1251(buff);
+          terminal_println(buff);
         }
       }
       else {
@@ -2692,7 +2736,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "view") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: edit {file}\r");
+      terminal_println("Usage: view {file}\r");
     }
     else {
       view_file(cmdline_params[1], cmdline_params[1]);
@@ -8224,13 +8268,13 @@ void draw_edit(char *title, char *filename) {
               byte = 0;
               pixel_color = tft.readPixel(x, y + 16 - 1);
               for(color_index = 0; color_index < 16; color_index++) {
-                if(pixel_color == colors[color_index]) break;
+                if(pixel_color == colors_read[color_index]) break;
               }
               byte |= color_index << 4;
               x++;
               pixel_color = tft.readPixel(x, y + 16 - 1);
               for(color_index = 0; color_index < 16; color_index++) {
-                if(pixel_color == colors[color_index]) break;
+                if(pixel_color == colors_read[color_index]) break;
               }
               byte |= color_index;
               x++;
@@ -11331,12 +11375,12 @@ void screensaver_noise() {
   char buff[8];
   int i;
   disableAppTitle();
+
   while(1) {
     for(i = 0; i < 8; i++) {
       buff[i] = random(0, 256);
     }
     tft.drawBitmap(random(0, tft.width() / 8) * 8, random(0, tft.height() / 8) * 8, (const uint8_t *)buff, 8, 8, TFT_WHITE, TFT_BLACK);
-    //tft.drawPixel(random(0, tft.width()), random(0, tft.height()), random(0, 2) ? TFT_BLACK : TFT_WHITE);
     if(touchCheckNowait()) {
       touchWaitRelease();
       return;
@@ -15441,6 +15485,56 @@ char is_bmp_file(char *filename) {
   // Файл начинается буквами BM
   if(file.read() != 'B') result = 0;
   if(file.read() != 'M') result = 0;
+  file.close();
+  return result;
+}
+
+// PNG или нет
+char is_png_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 67 байта
+  if(file.size() < 67) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 0x89) result = 0;
+  if(file.read() != 'P') result = 0;
+  if(file.read() != 'N') result = 0;
+  if(file.read() != 'G') result = 0;
+  file.close();
+  return result;
+}
+
+// JPEG или нет
+char is_jpeg_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 107 байт
+  if(file.size() < 107) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 0xFF) result = 0;
+  if(file.read() != 0xD8) result = 0;
+  if(file.read() != 0xFF) result = 0;
+  file.close();
+  return result;
+}
+
+// WEBP или нет
+char is_webp_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 47 байт
+  if(file.size() < 47) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 'R') result = 0;
+  if(file.read() != 'I') result = 0;
+  if(file.read() != 'F') result = 0;
+  if(file.read() != 'F') result = 0;
   file.close();
   return result;
 }
@@ -22701,6 +22795,163 @@ void bmp_save_image(char *filename, int start_x, int start_y, int width, int hei
 
 }
 
+PNG *png;
+fs::File pngFile;
+
+void * pngOpen(const char *filename, int32_t *size) {
+  pngFile = Storage->open(filename);
+  if (!pngFile) {
+    Serial.println("Failed to open PNG file");
+    return NULL;
+  }
+  *size = pngFile.size();
+  return &pngFile; 
+}
+
+void pngClose(void *handle) {
+  if (pngFile) pngFile.close();
+}
+
+int32_t pngRead(PNGFILE *page, uint8_t *buffer, int32_t length) {
+  if (!pngFile) return 0;
+  return pngFile.read(buffer, length);
+}
+
+int32_t pngSeek(PNGFILE *page, int32_t position) {
+  if (!pngFile) return 0;
+  return pngFile.seek(position);
+}
+
+// Callback function to render decoded pixel lines onto the TFT
+int pngDraw(PNGDRAW *pDraw) {
+  uint16_t usPixels[tft.width() * 2]; // Buffer sized for screen width
+  
+  png->getLineAsRGB565(pDraw, usPixels, PNG_RGB565_LITTLE_ENDIAN, 0xffffffff);
+  tft.pushImage(0, pDraw->y, pDraw->iWidth, 1, usPixels);
+  return 1;
+}
+
+// Отобразить PNG в указанном месте
+int png_show_image(char *filename, int start_x, int start_y) {
+  char buff[80];
+  int rc;
+
+  disableAppTitle();
+  clearScreen();
+  png = new PNG;
+  rc = png->open(filename, pngOpen, pngClose, pngRead, pngSeek, pngDraw);
+  if (rc == PNG_SUCCESS) {
+
+    int imgWidth = png->getWidth();
+    int imgHeight = png->getHeight();
+    
+    int scrWidth = tft.width();
+    int scrHeight = tft.height();
+
+    // 2. Вычисляем, во сколько раз картинка больше экрана
+    float scaleX = (float)imgWidth / scrWidth;
+    float scaleY = (float)imgHeight / scrHeight;
+    float maxScale = max(scaleX, scaleY);
+
+    // 3. Выбираем встроенный коэффициент сжатия PNGdec (1, 2, 4 или 8)
+    int iScale = 0; // 0 = Без изменений (1:1)
+    
+    if (maxScale > 4.0) {
+      iScale = -3; // Уменьшить в 8 раз (PNG_SCALE_EIGHTH)
+    } else if (maxScale > 2.0) {
+      iScale = -2; // Уменьшить в 4 раза (PNG_SCALE_QUARTER)
+    } else if (maxScale > 1.0) {
+      iScale = -1; // Уменьшить в 2 раза (PNG_SCALE_HALF)
+    }
+    
+    rc = png->decode(NULL, iScale);
+    png->close();
+
+    touchWaitPress();
+    touchWaitRelease();
+  } else {
+    sprintf(buff, "PNG error code: %d\n", rc);
+    drawError(buff);
+  }
+  delete png;
+  png = nullptr;
+  return 0;
+}
+
+JPEGDEC *jpeg;
+
+// Отобразить JPEG в указанном месте
+int jpeg_show_image(char *filename, int start_x, int start_y) {
+  char buff[80];
+  int rc;
+  int scaleOption = 0;
+  int divisor = 1;
+  disableAppTitle();
+  clearScreen();
+  jpeg = new JPEGDEC;
+  rc = jpeg->open((const char *)filename, myOpen, myClose, myRead, mySeek, JPEGDraw);
+  if (rc) {
+    int imgWidth = jpeg->getWidth();
+    int imgHeight = jpeg->getHeight();
+    
+    int scrWidth = tft.width();
+    int scrHeight = tft.height();
+
+    float scaleX = (float)imgWidth / scrWidth;
+    float scaleY = (float)imgHeight / scrHeight;
+    float maxScale = max(scaleX, scaleY);
+
+    if (maxScale > 4.0) {
+      scaleOption = JPEG_SCALE_EIGHTH; // Уменьшить в 8 раз
+      divisor = 8;
+    } else if (maxScale > 2.0) {
+      scaleOption = JPEG_SCALE_QUARTER; // Уменьшить в 4 раза
+      divisor = 4;
+    } else if (maxScale > 1.0) {
+      scaleOption = JPEG_SCALE_HALF;    // Уменьшить в 2 раза
+      divisor = 2;
+    }
+
+    jpeg->decode(0, 0, scaleOption);
+    jpeg->close();
+
+    touchWaitPress();
+    touchWaitRelease();
+  }
+  else {
+    sprintf(buff, "JPEG error code: %d\n", rc);
+    drawError(buff);
+  }
+  delete jpeg;
+  return 0;
+}
+
+// Functions to access a file on the SD card
+fs::File myfile;
+
+void * myOpen(const char *filename, int32_t *size) {
+  myfile = Storage->open(filename);
+  *size = myfile.size();
+  return &myfile;
+}
+void myClose(void *handle) {
+  if (myfile) myfile.close();
+}
+int32_t myRead(JPEGFILE *handle, uint8_t *buffer, int32_t length) {
+  if (!myfile) return 0;
+  return myfile.read(buffer, length);
+}
+int32_t mySeek(JPEGFILE *handle, int32_t position) {
+  if (!myfile) return 0;
+  return myfile.seek(position);
+}
+
+// Function to draw pixels to the display
+int JPEGDraw(JPEGDRAW *pDraw) {
+  tft.pushImage(pDraw->x, pDraw->y, pDraw->iWidth, pDraw->iHeight, pDraw->pPixels);
+  return 1;
+}
+
 // На экране только стандартные 16 цветов или нет
 char is_screen_has_only_16_colors() {
   int x, y;
@@ -22835,6 +23086,8 @@ void setup() {
   tft.init();
   // Поворот
   tft.setRotation(2);
+  // Без этого неправильно работает JPEGDEC/PNGDec
+  tft.setSwapBytes(true);
   // Очистка
   clearScreen();
 
@@ -22855,6 +23108,8 @@ void setup() {
     global_screen_color_read_extra_byte = 1;
     tft.setReadExtraByte(global_screen_color_read_extra_byte);
   }
+
+  // Считываем стандартные 16 цветов с экрана, могут отличаться от записываемых значений
   for(i = 0; i < 16; i++) {
     tft.drawPixel(0, 0, colors[i]);
     colors_read[i] = tft.readPixel(0, 0);
@@ -22862,7 +23117,6 @@ void setup() {
       Serial.printf("Wrong color on read: write %04X read %04X\n", colors[i], colors_read[i]);
     }
   }
-  global_io_flag = 0;
 
   // Инициализация хранилища
   storage_type = STORAGE_TYPE_NONE;
