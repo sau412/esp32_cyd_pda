@@ -89,6 +89,7 @@
 - CHIP-8 emulator
 - Редактор таблиц
 - TOTP
+- Генератор сигналов
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -220,11 +221,12 @@
   CRC, md5sum, sha256sum
 2026-08-13 TOTP
 2026-08-14 Просмотр PNG, JPEG, русские названия файлов при листинге папок в терминале или файлах, оптимизация Files обновление списка по необходимости
+2026-08-15 Исправление бага wget
+2026-08-16 Ещё заход Bluetooth (неудачно, но лучше чем в прошлый раз), генератор сигналов, поддержка chunked для wget
 
 До сообщения на esp32
 - (д) Basic
 - (д) Ещё один заход Bluetooth
-- (д) Генератор сигналов
 - (д) Поддержка UTF-8 при обращениях к ФС
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
@@ -234,6 +236,7 @@
 - (д) /Terminal/Environment
 - (д) /Terminal/Aliases
 
+- (д) Форест файр - ранняя остановка пожара
 - (д) Терминал операции со строками ESC-кодами
 - (д) tftp
 - (д) tar
@@ -339,7 +342,7 @@
 #define PREFER_SD_IF_AVAILABLE
 
 // У некоторых CYD младший бит зелёного слишком яркий, для вывода 24-битной картинки можно его игнорировать чтобы не искажались цвета
-#define BMP_USE_555
+//#define BMP_USE_555
 //#define IS_BLE_ENABLED
 //#define IS_BLUETOOTH_ENABLED
 //#define IS_SSH_ENABLED
@@ -963,6 +966,7 @@ void chip8(char mode, char *io_buff);
 void clock_control(char mode, char *io_buff);
 void translate(char mode, char *io_buff);
 void voltmeter(char mode, char *io_buff);
+void generator(char mode, char *io_buff);
 
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
@@ -1024,6 +1028,7 @@ function_application_pointer all_apps[] = {
   //touch_calibration_test,
   oscilloscope,
   voltmeter,
+  generator,
   life,
   i2c_scanner,
   dashboard,
@@ -1459,7 +1464,7 @@ void system_info(char mode, char *io_buff) {
 
     i = 0;
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    sprintf(buff, "ESP32 CYD PDA v1.4 by sau412");
+    sprintf(buff, "ESP32 CYD PDA v1.5 by sau412");
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
@@ -1800,6 +1805,7 @@ void terminal_manual() {
   "touch_calibration - Touch Calibration app\n"
   "oscilloscope - Oscilloscope app\n"
   "voltmeter - Voltmeter app\n"
+  "generator - Signal generator app\n"
   "life - Life app\n"
   "dashboard - Dashboard app\n"
   "fuzzy_clock - Fuzzy Clock app\n"
@@ -3010,12 +3016,15 @@ void terminal_execute_single(char *str) {
       terminal_telnet(arg_count, cmdline_params, 1);
     }
   }
-  else if(memcmp(cmdline_params[0], "wget ", 5) == 0) {
-    if(arg_count != 2) {
+  else if(strcmp(cmdline_params[0], "wget") == 0) {
+    if(arg_count < 2) {
       terminal_println("Usage: wget {URL}");
     }
+    else if(arg_count == 2) {
+      terminal_wget(cmdline_params[1], NULL);
+    }
     else {
-      terminal_wget(cmdline_params[1]);
+      terminal_wget(cmdline_params[1], cmdline_params[2]);
     }
   }
   else if(strcmp(cmdline_params[0], "ipinfo") == 0) {
@@ -3095,6 +3104,7 @@ void terminal_execute_single(char *str) {
   else if(strcmp(cmdline_params[0], "draw") == 0) {
     draw(APP_MODE_LAUNCH, NULL);
   }
+#ifdef IS_WIFI_ENABLED
   else if(strcmp(cmdline_params[0], "wifi") == 0) {
     wifi(APP_MODE_LAUNCH, NULL);
   }
@@ -3119,6 +3129,7 @@ void terminal_execute_single(char *str) {
   else if(strcmp(cmdline_params[0], "translate") == 0) {
     translate(APP_MODE_LAUNCH, NULL);
   }
+#endif
   else if(strcmp(cmdline_params[0], "counter") == 0) {
     counter(APP_MODE_LAUNCH, NULL);
   }
@@ -3160,6 +3171,9 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "voltmeter") == 0) {
     voltmeter(APP_MODE_LAUNCH, NULL);
+  }
+  else if(strcmp(cmdline_params[0], "generator") == 0) {
+    generator(APP_MODE_LAUNCH, NULL);
   }
   else if(strcmp(cmdline_params[0], "life") == 0) {
     life(APP_MODE_LAUNCH, NULL);
@@ -4866,26 +4880,21 @@ int terminal_telnet(int arg_count, char **args, char ssl_flag) {
   }
 }
 
-int terminal_wget(char *params) {
+int terminal_wget(char *url, char *filename) {
   int httpResponseCode;
   int byte;
   char buff[80];
-  char *url = params;
-  char *filename = NULL;
+  char chunked = 0;
+  char chunk_header = 0;
+  long chunk_size;
   fs::File file;
   int offset;
   int result;
-  //WiFiClientSecure *client = new WiFiClientSecure;
   WiFiClient *client;
   WiFiClient *stream;
   HTTPClient http;
   long millis_last_byte;
   long bytes_count = 0;
-  filename = strchr(params, ' ');
-  if(filename) {
-    *(filename) = 0;
-    filename++;
-  }
 
   if(memcmp(url, "http", 4) != 0) {
     terminal_println("Unknown url type");
@@ -4908,6 +4917,7 @@ int terminal_wget(char *params) {
     client = global_client;
   }
 
+
   if(client) {
     result = 0;
     if(url[4] == 's') {
@@ -4922,11 +4932,38 @@ int terminal_wget(char *params) {
         if(filename) {
           sprintf(buff, "Received code %d, contents length %d\n\r", httpResponseCode, http.getSize());
           terminal_print(buff);
+          terminal_show_screen();
         }
         stream = http.getStreamPtr();
+        chunk_header = 0;
+        if(http.getSize() <= 0) {
+          chunked = 1;
+          chunk_header = 1;
+          chunk_size = 0;
+          buff[0] = 0;
+        }
         bytes_count = 0;
         while(stream->available()) {
           byte = stream->read();
+          if(chunk_size == 0 && chunk_header == 0) {
+            // Читаем ещё два байта
+            byte = stream->read();
+            byte = stream->read();
+            chunk_header = 1;
+            buff[0] = 0;
+          }
+          if(chunk_header) {
+            Serial.printf("Chunk header byte %02x\n", byte);
+            buff[strlen(buff) + 1] = 0;
+            buff[strlen(buff)] = byte;
+            if(byte == '\n') {
+              sscanf(buff, "%X", &chunk_size);
+              Serial.printf("Chunk size %d (%X)\n", chunk_size, chunk_size);
+              chunk_header = 0;
+            }
+            continue;
+          }
+          chunk_size--;
           bytes_count++;
           millis_last_byte = millis();
           if(filename) {
@@ -4940,8 +4977,14 @@ int terminal_wget(char *params) {
             break;
           }
           while(!stream->available()) {
-            sprintf(buff, "Downloaded %d of %d\n\r", bytes_count, http.getSize());
+            if(http.getSize() > 0) {
+              sprintf(buff, "Downloaded %d of %d\n\r", bytes_count, http.getSize());
+            }
+            else {
+              sprintf(buff, "Downloaded %d\n\r", bytes_count);
+            }
             terminal_print(buff);
+            terminal_show_screen();
             if(millis() - millis_last_byte > 30000) {
               break;
             }
@@ -6139,16 +6182,108 @@ void music_play_task(void *pvParameters) {
   vTaskDelete(NULL);
 }
 
+#ifdef IS_BLUETOOTH_ENABLED
+
+BluetoothA2DPSource a2dp;
+// ── Ring buffer: 4K frames = 16KB ───────────────────────────
+#define RING_SIZE 4096
+static int16_t ring[RING_SIZE * 2];
+static volatile size_t rbHead = 0;
+static volatile size_t rbTail = 0;
+
+static inline size_t rbAvail() {
+  size_t h = rbHead, t = rbTail;
+  return (h >= t) ? (h - t) : (RING_SIZE - t + h);
+}
+
+class RingBufOutput : public AudioOutput {
+public:
+  float _gain = 0.7f;
+
+  virtual bool begin() { return true; }
+  virtual bool stop()  { return true; }
+  virtual bool ConsumeSample(int16_t sample[2]) {
+    Serial.println("ConsumeSample");
+    size_t next = (rbHead + 1) % RING_SIZE;
+    if (next == rbTail) return false;
+
+    int32_t l = (int32_t)(sample[0] * _gain);
+    int32_t r = (int32_t)(sample[1] * _gain);
+    ring[rbHead * 2]     = constrain(l, -32768, 32767);
+    ring[rbHead * 2 + 1] = constrain(r, -32768, 32767);
+    rbHead = next;
+
+    return true;
+  }
+
+  void setGain(float g) { _gain = g; }
+};
+
+int32_t btCallback(Frame *frame, int32_t count) {
+  //Serial.println("btCallback");
+  int32_t avail = (int32_t)rbAvail();
+  int32_t toSend = min(count, avail);
+  for (int32_t i = 0; i < toSend; i++) {
+    frame[i].channel1 = ring[rbTail * 2];
+    frame[i].channel2 = ring[rbTail * 2 + 1];
+    rbTail = (rbTail + 1) % RING_SIZE;
+  }
+  for (int32_t i = toSend; i < count; i++) {
+    frame[i].channel1 = 0;
+    frame[i].channel2 = 0;
+  }
+  return count;
+}
+
+void music_play(char *filename) {
+  AudioGeneratorMP3 *mp3;
+  AudioFileSourceFS *file;
+  RingBufOutput *audioOut  = nullptr;
+
+Serial.println(__LINE__);
+  a2dp.set_volume(127);
+  a2dp.start("JBL GO 2", btCallback);
+Serial.println(__LINE__);
+
+  audioOut = new RingBufOutput();
+  if (audioOut) audioOut->setGain((float)70 / 100.0f);
+Serial.println(__LINE__);
+  file = new AudioFileSourceFS(*Storage, filename);
+Serial.println(__LINE__);
+
+  drawProcessWindow("Playing...");
+Serial.println(__LINE__);
+  mp3 = new AudioGeneratorMP3();
+Serial.println(__LINE__);
+  mp3->begin(file, audioOut);
+Serial.println(__LINE__);
+  long t0 = millis();
+  while (!a2dp.is_connected() && millis() - t0 < 15000) {
+    Serial.println("Connecting BT...");
+    delay(500);
+  }
+return;
+  while(mp3->isRunning()) {
+    Serial.println(millis());
+    if(!mp3->loop()) {
+      mp3->stop();
+    }
+    if(touchCheckNowait() == 1) {
+      mp3->stop();
+    }
+  }
+}
+
+#else
+
 void music_play(char *filename) {
   AudioGeneratorMP3 *mp3;
   AudioGeneratorWAV *wav;
   AudioFileSourceFS *file;
   AudioOutputI2SNoDAC *out;
-  AudioFileSourceID3 *id3;
   
   file = new AudioFileSourceFS(*Storage, filename);
   if(is_mp3_file(filename)) {
-    id3 = new AudioFileSourceID3(file);
 
     out = new AudioOutputI2SNoDAC();
     out->SetGain((float)global_volume / 100);
@@ -6158,7 +6293,7 @@ void music_play(char *filename) {
     }
     mp3 = new AudioGeneratorMP3();
 
-    mp3->begin(id3, out);
+    mp3->begin(file, out);
 
     while(mp3->isRunning()) {
       vTaskDelay(1 / portTICK_PERIOD_MS);
@@ -6196,119 +6331,6 @@ void music_play(char *filename) {
   else {
     if(xPortGetCoreID() != 0) {
       drawError("Unknown file format");
-    }
-  }
-}
-
-#ifdef IS_BLUETOOTH_ENABLED
-
-class AudioOutputBT : public AudioOutput {
-  public:
-    BluetoothA2DPSource a2dp_source;
-    int16_t *buff = NULL;
-    int buff_pointer_write;
-    int buff_pointer_read;
-    int buff_len = 4096;
-    // Начало
-    bool begin() override {
-  Serial.println("AudioOutputBT::begin");
-      if(buff == NULL) {
-        buff = (int16_t *)malloc(buff_len * sizeof(int16_t));
-      }
-      buff_pointer_write = 0;
-      buff_pointer_read = 0;
-      a2dp_source.set_volume(30);
-      a2dp_source.set_data_callback_in_frames(get_data_frames);
-      a2dp_source.start("JBL GO 2");
-      delay(10000);
-      return true;
-    }
-    // Добавить в кольцевой буфер
-    bool consumeSample(int16_t sample[2]) {
-  Serial.println("AudioOutputBT::consumeSample");
-      buff[buff_pointer_write] = sample[0];
-      buff_pointer_write++;
-      if(buff_pointer_write >= buff_len) buff_pointer_write = 0;
-      buff[buff_pointer_write] = sample[1];
-      buff_pointer_write++;
-      if(buff_pointer_write >= buff_len) buff_pointer_write = 0;
-      return true;
-    }
-    int16_t get_from_buffer() {
-  Serial.println("AudioOutputBT::get_from_buffer");
-      int16_t result;
-      result = buff[buff_pointer_read];
-      buff_pointer_read++;
-      if(buff_pointer_read >= buff_len) buff_pointer_read = 0;
-      return result;
-    }
-};
-
-AudioOutputBT *out;
-
-// Прочитать из кольцевого буфера
-int32_t get_sound_data(Frame *frame, int32_t frame_count) {
-  Serial.println("get_sound_data");
-  for (int sample = 0; sample < frame_count; ++sample) {
-    frame[sample].channel1 = out->get_from_buffer();
-    frame[sample].channel2 = out->get_from_buffer();
-  }
-  // to prevent watchdog
-  delay(1);
-  return frame_count;
-}
-
-
-#define c3_frequency  220
-const float pi_2 = PI * 2.0;
-const float angular_frequency = pi_2 * c3_frequency;
-const float deltaAngle = angular_frequency / 44100.0;
-
-int32_t get_data_frames(Frame *frame, int32_t frame_count) {
-    static float m_angle = 0.0;
-    float m_amplitude = 10000.0;  // -32,768 to 32,767
-    float m_phase = 0.0;
-    // fill the channel data
-    for (int sample = 0; sample < frame_count; ++sample) {
-        frame[sample].channel1 = m_amplitude * sin(m_angle + m_phase);
-        frame[sample].channel2 = frame[sample].channel1;
-        m_angle += deltaAngle;
-        if (m_angle > pi_2) m_angle -= pi_2;
-    }
-    // to prevent watchdog
-    delay(1);
-
-    return frame_count;
-}
-
-void music_play_bt(char *filename) {
-  AudioGeneratorMP3 *mp3;
-  AudioFileSourceFS *file;
-  AudioFileSourceID3 *id3;
-
-Serial.println(__LINE__);
-  file = new AudioFileSourceFS(*Storage, filename);
-Serial.println(__LINE__);
-  id3 = new AudioFileSourceID3(file);
-Serial.println(__LINE__);
-
-  out = new AudioOutputBT();
-Serial.println(__LINE__);
-
-  drawProcessWindow("Playing...");
-Serial.println(__LINE__);
-  mp3 = new AudioGeneratorMP3();
-Serial.println(__LINE__);
-  mp3->begin(id3, out);
-Serial.println(__LINE__);
-
-  while(mp3->isRunning()) {
-    Serial.println(millis());
-    if(!mp3->loop()) {
-      mp3->stop();
-    }
-    if(touchCheckNowait() == 1) {
-      mp3->stop();
     }
   }
 }
@@ -6450,15 +6472,14 @@ void webradio_play(char *filename) {
     drawProcessWindow("Connecting...");
   }
   file_get_line_by_index(filename, 1, url);
-Serial.println(url);
+  Serial.println(url);
   file = new AudioFileSourceICYStream(url);
-  //file->RegisterMetadataCB(webradio_MDCallback, NULL);
   buff = new AudioFileSourceBuffer(file, 2048);
   out = new AudioOutputI2SNoDAC();
   out->SetGain((float)global_volume / 100);
   out->SetPinout(-1, -1, BUZZER_PIN);
+
   mp3 = new AudioGeneratorMP3();
-  //mp3->RegisterStatusCB(webradio_StatusCallback, (void*)"mp3");
   mp3->begin(buff, out);
   if(xPortGetCoreID() != 0) {
     drawProcessWindow("Playing...");
@@ -13833,6 +13854,10 @@ Serial.printf("%d\n", __LINE__);
 void rss_view_source(char *source_name, char *source_url) {
   char *data = NULL;
   char buff[80];
+  char chunk_header_bytes[10];
+  char chunked = 0;
+  char chunk_header = 0;
+  long chunk_size;
   int http_code;
   HTTPClient http;
   WiFiClient *stream = NULL;
@@ -13882,6 +13907,14 @@ Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
     return;
   }
 
+  chunk_header = 0;
+  if(http.getSize() <= 0) {
+    chunked = 1;
+    chunk_header = 1;
+    chunk_size = 0;
+    chunk_header_bytes[0] = 0;
+  }
+
 //Serial.printf("%d\n", __LINE__);
   stream = http.getStreamPtr();
 
@@ -13916,11 +13949,32 @@ Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
       }
       buff_offset -= shift_length;
     }
+
     // В буфере около 20 байт, достаточно чтобы смотреть вперёд
     while(buff_offset < 20 && stream->available()) {
       byte = stream->read();
+      /*
+      if(chunk_size == 0 && chunk_header == 0) {
+        // Читаем ещё два байта
+        byte = stream->read();
+        byte = stream->read();
+        chunk_header = 1;
+        chunk_header_bytes[0] = 0;
+      }
+      if(chunk_header) {
+        Serial.printf("Chunk header byte %02x\n", byte);
+        chunk_header_bytes[strlen(chunk_header_bytes) + 1] = 0;
+        chunk_header_bytes[strlen(chunk_header_bytes)] = byte;
+        if(byte == '\n') {
+          sscanf(chunk_header_bytes, "%X", &chunk_size);
+          Serial.printf("Chunk size %d (%X)\n", chunk_size, chunk_size);
+          chunk_header = 0;
+        }
+        continue;
+      }
+      chunk_size--;
       //Serial.print((char)byte);
-
+*/
       // Пропустить непечатаемые символы (код меньше пробела)
       if(byte < ' ') continue;
 
@@ -19151,16 +19205,16 @@ int oscilloscope_get_value(int input_index) {
   }
 #endif
   else if(input_index == 5) {
-    return analogRead(21);
+    return analogReadMilliVolts(21);
   }
   else if(input_index == 6) {
-    return analogRead(22);
+    return analogReadMilliVolts(22);
   }
   else if(input_index == 7) {
-    return analogRead(27);
+    return analogReadMilliVolts(27);
   }
   else if(input_index == 8) {
-    return analogRead(35);
+    return analogReadMilliVolts(35);
   }
   else if(input_index == 9) {
     if(Serial.available()) {
@@ -19187,7 +19241,7 @@ void voltmeter(char mode, char *io_buff) {
   float multiplier = 1.0 / 1000;
   float voltage = 0;
   int value;
-  int input = 35;
+  int pin = 35;
   char update_flag;
   char *buttons[] = {
     "Multiplier",
@@ -19230,9 +19284,9 @@ void voltmeter(char mode, char *io_buff) {
   clearScreen();
   drawAppTitle("Voltmeter");
 
-  pinMode(input, INPUT_PULLUP);
+  pinMode(pin, INPUT_PULLUP);
   while(1) {
-    value = analogReadMilliVolts(input);
+    value = analogReadMilliVolts(pin);
     voltage = (float)value * multiplier;
     sprintf(buff, "   %0.3f   ", voltage);
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
@@ -19242,7 +19296,7 @@ void voltmeter(char mode, char *io_buff) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "   %f   ", multiplier);
     tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 64 + 32 * 0 + 8, FONT_DEFAULT);
-    sprintf(buff, "   %d   ", input);
+    sprintf(buff, "   %d   ", pin);
     tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 64 + 32 * 1 + 8, FONT_DEFAULT);
 
 
@@ -19263,10 +19317,150 @@ void voltmeter(char mode, char *io_buff) {
         clearPrompt();
       }
       else if(button_pressed == 1) {
-        sprintf(buff, "%d", input);
+        sprintf(buff, "%d", pin);
         if(drawPrompt("Input", buff) == 0) {
-          sscanf(buff, "%d", &input);
-          pinMode(input, INPUT_PULLUP);
+          sscanf(buff, "%d", &pin);
+          pinMode(pin, INPUT_PULLUP);
+        }
+        clearPrompt();
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void generator(char mode, char *io_buff) {
+  int button_pressed;
+  char buff[80];
+  enum {TYPE_UNKNOWN, TYPE_SIN, TYPE_SQUARE, TYPE_PWM, TYPE_TRIANGLE, TYPE_SAW_RISING, TYPE_SAW_FALLING, TYPE_SERVO} type = TYPE_SQUARE;
+  float frequency = 1;
+  float amplitude = 1;
+  int value;
+  int pin = 35;
+
+  char update_flag;
+  char *buttons[] = {
+    "Type",
+    "Frequency",
+    "Amplitude",
+    "Pin",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01001110, B00111010,
+    B01010000, B01000010,
+    B01001100, B01011010,
+    B01000010, B01001010,
+    B01011100, B00111010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01011001, B10011010,
+    B01011001, B10011010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Generator");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Gnrt");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Signal Generator");
+
+  pinMode(pin, OUTPUT);
+  while(1) {
+    drawButtonMatrix(0, tft.height() - 32 * 4, tft.width() / 2, 32 * 4, buttons, 1, 4);
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    switch(type) {
+      case TYPE_SIN: strcpy(buff, "   sinus   "); break;
+      case TYPE_SQUARE: strcpy(buff, "   square   "); break;
+      default: strcpy(buff, "   unknown   "); break;
+    }
+    tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 32 * 4 + 32 * 0 + 8, FONT_DEFAULT);
+    sprintf(buff, "   %f   ", frequency);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 32 * 4 + 32 * 1 + 8, FONT_DEFAULT);
+    sprintf(buff, "   %f   ", amplitude);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 32 * 4 + 32 * 2 + 8, FONT_DEFAULT);
+    sprintf(buff, "   %d   ", pin);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 32 * 4 + 32 * 3 + 8, FONT_DEFAULT);
+
+    while(touchCheckNowait() == 0) {
+      switch(type) {
+        case TYPE_SIN:
+          value = 128 + 127 * amplitude * sin(2 * PI * micros() / 1000000 * frequency);
+          break;
+        case TYPE_SQUARE:
+          value = 128 + 127 * amplitude * (sin(2 * PI * micros() / 1000000 * frequency) >= 0 ? 1 : -1);
+          break;
+        default:
+          value = 0;
+          break;
+      }
+      if(value < 0) value = 0;
+      if(value > 255) value = 255;
+      if(pin == -1) {
+        Serial.println(value);
+      }
+      else {
+        analogWrite(pin, value);
+      }
+    }
+    
+    touchWaitPress();
+
+    button_pressed = touchCheckMatrix(0, tft.height() - 32 * 4, tft.width() / 2, 32 * 4, buttons, 1, 4);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        if(type == TYPE_SIN) {
+          type = TYPE_SQUARE;
+        }
+        else {
+          type = TYPE_SIN;
+        }
+      }
+      else if(button_pressed == 1) {
+        sprintf(buff, "%g", frequency);
+        if(drawPrompt("Frequency", buff) == 0) {
+          sscanf(buff, "%f", &frequency);
+        }
+        clearPrompt();
+      }
+      else if(button_pressed == 2) {
+        sprintf(buff, "%g", amplitude);
+        if(drawPrompt("Amplitude", buff) == 0) {
+          sscanf(buff, "%f", &amplitude);
+        }
+        clearPrompt();
+      }
+      else if(button_pressed == 3) {
+        sprintf(buff, "%d", pin);
+        if(drawPrompt("Pin", buff) == 0) {
+          sscanf(buff, "%d", &pin);
+          if(pin >= 0) pinMode(pin, OUTPUT);
         }
         clearPrompt();
       }
