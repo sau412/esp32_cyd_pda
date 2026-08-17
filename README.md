@@ -89,6 +89,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Translate (via google translate unofficial API)
 * Clock settings
 * Screen settings
+* Signal generator
 
 ## PIM apps
 * Calculator
