@@ -52,6 +52,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * T - time synced with NTP
 * S - main storage is SD
 * F - main storage is FFat (internal storage)
+* M - music playing in progress
 
 # Applications/Functions
 * File management (with viewing text, JPEG, PNG and editing text support)
