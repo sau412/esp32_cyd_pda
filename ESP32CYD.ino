@@ -6,9 +6,12 @@
 - ФС FFat/SD
 - Папка настроек /Settings
 - Wi-Fi и работа с сетью
+- Работа с текстом, данными
+- Управление пинами, осциллограф, вольтметр, генератор сигналов
+- Игры
 - Без Bluetooth
 - Без SSH
-- Текст, таблицы, музыка, картинки
+- Просмотр: текст, таблицы, музыка, картинки
 
 Функции:
 - Лаунчер
@@ -90,6 +93,7 @@
 - Редактор таблиц
 - TOTP
 - Генератор сигналов
+- Wikipedia
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -222,20 +226,15 @@
 2026-08-13 TOTP
 2026-08-14 Просмотр PNG, JPEG, русские названия файлов при листинге папок в терминале или файлах, оптимизация Files обновление списка по необходимости
 2026-08-15 Исправление бага wget
-2026-08-16 Ещё заход Bluetooth (неудачно, но лучше чем в прошлый раз), генератор сигналов, поддержка chunked для wget
+2026-08-17 Ещё заход Bluetooth (неудачно, но лучше чем в прошлый раз), генератор сигналов, поддержка chunked для wget, append
+2026-08-18 Поддержка UTF-8 названий для PIM, translate из консоли, get_file_https поддержка чанков, просмотр статей википедии через API
 
 До сообщения на esp32
 - (д) Basic
-- (д) Ещё один заход Bluetooth
-- (д) Поддержка UTF-8 при обращениях к ФС
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
-- (н) CHIP-8 ускорение работы вывода спрайта
-- (н) CHIP-8 рисовать только изменённые части экрана
-
 - (д) /Terminal/Environment
 - (д) /Terminal/Aliases
-
 - (д) Форест файр - ранняя остановка пожара
 - (д) Терминал операции со строками ESC-кодами
 - (д) tftp
@@ -247,7 +246,6 @@
 - (д) Мировое время
 - (д) Функции для кодов ANSI управления терминалом
 - (д) translate
-- (д) append
 - (д) weather
 - (д) chat
 - (д) cal
@@ -280,7 +278,7 @@
 - (д) Сокобан
 - (д) Шахматы (задачи)
 - (д) Шахматы (игра)
-- (д) Настройка: не показывать значки статуса AFSWT
+- (д) Настройка: не показывать значки статуса AFMSWT
 - (д) Настройка: не показывать время
 - (д) Настройка: не показывать время пока оно не синхронизировано
 - (и) Убирать значки в лаунчере
@@ -312,19 +310,15 @@
 - (и) Bluetooth музыка и радио - похоже не хватает на это памяти
 - (н) Использовать NVS для настроек, привязанных к устройству - инверсия, калибровка, предпочитаемое хранилище - но это дополнительная сущность
 - (и) Другое погодное апи или выбор из нескольких
-- (д) В файлах просмотр бмп, слушать мп3
+- (д) В файлах слушать музыку
 - (и) Дашборд - если есть соединение показывать пинг до шлюза, или писать что соединения нет, Время юникс, Синхронизировано ли время, Текущая фс, Аптайм в дашборд
 - (д) Заставка двойной маятник (сложно)
-- (д) Запуск приложений из командной строки - не расчитано приложение на это
-- (н) Просмотр статей Wikipedia через API
 - (н) Fun Fact / Random Useless Facts
-- (н) Информация по валютам и криптовалютам (курсы)
-- (н) Информация по криптовалютам (блокчейн)
 - (н) Кодирование-декодирование b64 из терминала
 - (н) Шифрование-расшифрование AES в терминале
 - (н) Терминал переменные окружения
 - (д) Дашборд - выбрать какую ещё информацию: соединение, пинг до шлюза, время юникс, синхронизация времени, дела на день, текущая фс, аптайм
-- (д) Кастомные значки в заголовке вместо букв AFSWT
+- (д) Кастомные значки в заголовке вместо букв AFMSWT
 - (д) Картинки для три-в-ряд
 - (д) Возможность менять яркость, звук из приложения
 - (д) Ланучер-список
@@ -332,6 +326,20 @@
 - (д) Выбор вида лаунчера
 - (н) Многозадачность в консоли через FreeRTOS
 - (д) Обновление по OTA
+- (н) CHIP-8 ускорение работы вывода спрайта
+- (н) CHIP-8 рисовать только изменённые части экрана
+- (н) Информация по валютам и криптовалютам (курсы)
+- (н) Информация по криптовалютам (блокчейн) - последний блок, время с последнего блока, транзакции в mempool
+- (д) Ещё один заход Bluetooth
+
+Стенды:
++ Timestand
++ Wearherstand
+- Cryptostand
+- Netstand
+- Flightstand
+- Photostand
+- Newsstand
 
 */
 
@@ -967,6 +975,7 @@ void clock_control(char mode, char *io_buff);
 void translate(char mode, char *io_buff);
 void voltmeter(char mode, char *io_buff);
 void generator(char mode, char *io_buff);
+void wikipedia(char mode, char *io_buff);
 
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
@@ -1008,6 +1017,7 @@ function_application_pointer all_apps[] = {
   weather,
   http_file_access,
   translate,
+  wikipedia,
 #endif
 #ifdef IS_BLE_ENABLED
   ble,
@@ -1740,6 +1750,8 @@ void terminal_manual() {
   "telnet {host} [port] - connect to host and port via telnet\n"
   "telnets {host} [port] - connect to host and port via telnet using SSL\n"
   "wget {url} [path] - download file from HTTP/HTTPS to local file\n"
+  "ipinfo {ip} - IP information from ipinfo.io\n"
+  "translate {lang_from|auto} {lang_to} {query} - translate via Google Translate\n"
   "sd_to_ffat {path_sd} {path_ffat} - copy file from SD to FFat\n"
   "ffat_to_sd {path_ffat} {path_sd} - copy file from FFat to SD\n"
   "utf8_to_cp1251 {input_file} {output_file} - change file encoding\n"
@@ -2748,6 +2760,16 @@ void terminal_execute_single(char *str) {
       view_file(cmdline_params[1], cmdline_params[1]);
     }
   }
+  else if(strcmp(cmdline_params[0], "append") == 0) {
+    if(arg_count < 3) {
+      terminal_println("Usage: append {file} {line} [line] ...\r");
+    }
+    else {
+      for(i = 2; i < arg_count; i++) {
+        file_append_line(cmdline_params[1], cmdline_params[i]);
+      }
+    }
+  }
   else if(strcmp(cmdline_params[0], "edit") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: edit {file}\r");
@@ -3035,6 +3057,24 @@ void terminal_execute_single(char *str) {
       terminal_ipinfo(cmdline_params[1]);
     }
   }
+  else if(strcmp(cmdline_params[0], "translate") == 0) {
+    if(arg_count == 1) {
+      translate(APP_MODE_LAUNCH, NULL);
+    }
+    if(arg_count != 4) {
+      terminal_println("Usage: translate {lang_from|auto} {lang_to} {query}");
+    }
+    else {
+      i = translate_perform(cmdline_params[1], cmdline_params[2], cmdline_params[3], buff);
+      if(i == 0) {
+        terminal_print("Translation: ");
+        terminal_println(buff);
+      }
+      else {
+        terminal_println("Translation query error");
+      }
+    }
+  }
 #ifdef IS_SSH_ENABLED
   else if(strcmp(cmdline_params[0], "ssh") == 0) {
     if(arg_count == 1) {
@@ -3126,8 +3166,11 @@ void terminal_execute_single(char *str) {
   else if(strcmp(cmdline_params[0], "file_server") == 0) {
     http_file_access(APP_MODE_LAUNCH, NULL);
   }
-  else if(strcmp(cmdline_params[0], "translate") == 0) {
-    translate(APP_MODE_LAUNCH, NULL);
+//  else if(strcmp(cmdline_params[0], "translate") == 0) {
+//    translate(APP_MODE_LAUNCH, NULL);
+//  }
+  else if(strcmp(cmdline_params[0], "wikipedia") == 0) {
+    wikipedia(APP_MODE_LAUNCH, NULL);
   }
 #endif
   else if(strcmp(cmdline_params[0], "counter") == 0) {
@@ -4936,6 +4979,7 @@ int terminal_wget(char *url, char *filename) {
         }
         stream = http.getStreamPtr();
         chunk_header = 0;
+        chunked = 0;
         if(http.getSize() <= 0) {
           chunked = 1;
           chunk_header = 1;
@@ -4945,14 +4989,14 @@ int terminal_wget(char *url, char *filename) {
         bytes_count = 0;
         while(stream->available()) {
           byte = stream->read();
-          if(chunk_size == 0 && chunk_header == 0) {
+          if(chunked && chunk_size == 0 && chunk_header == 0) {
             // Читаем ещё два байта
             byte = stream->read();
             byte = stream->read();
             chunk_header = 1;
             buff[0] = 0;
           }
-          if(chunk_header) {
+          if(chunked && chunk_header) {
             Serial.printf("Chunk header byte %02x\n", byte);
             buff[strlen(buff) + 1] = 0;
             buff[strlen(buff)] = byte;
@@ -5634,6 +5678,7 @@ void tables_action(int action_index, char *filename) {
 
 int tables_file_to_list(fs::File file, char *buff) {
   sprintf(buff, "%s", file.name());
+  utf8_to_cp1251(buff);
   return 1;
 }
 
@@ -6173,6 +6218,7 @@ void music_action(int action_index, char *filename) {
 
 int music_file_to_list(fs::File file, char *buff) {
   sprintf(buff, "%s", file.name());
+  utf8_to_cp1251(buff);
   return 1;
 }
 
@@ -6595,6 +6641,7 @@ void chip8_action(int action_index, char *filename) {
 
 int chip8_file_to_list(fs::File file, char *buff) {
   strcpy(buff, file.name());
+  utf8_to_cp1251(buff);
   return 1;
 }
 
@@ -7928,6 +7975,8 @@ int books_file_to_list(fs::File file, char *buff) {
   else {
     sprintf(buff, "%s\t%d", file.name(), file.size());
   }
+  utf8_to_cp1251(buff);
+
   return 1;
 }
 
@@ -8028,6 +8077,7 @@ int screenshots_file_to_list(fs::File file, char *buff) {
   else {
     sprintf(buff, "%s\t%d", file.name(), file.size());
   }
+  utf8_to_cp1251(buff);
   return 1;
 }
 
@@ -8129,6 +8179,7 @@ void draw_action(int action_index, char *filename) {
 
 int draw_file_to_list(fs::File file, char *buff) {
   sprintf(buff, "%s", file.name());
+  utf8_to_cp1251(buff);
   return 1;
 }
 
@@ -8375,6 +8426,7 @@ void backups_action(int action_index, char *filename) {
 
 int backups_file_to_list(fs::File file, char *buff) {
   sprintf(buff, "%s", file.name());
+  utf8_to_cp1251(buff);
   return 1;
 }
 
@@ -13734,6 +13786,10 @@ int get_file_http(char *url, char *buff, long max_length) {
 }
 
 int get_file_https(char *url, char *buff, long max_length) {
+  char chunked = 0;
+  char chunk_header = 0;
+  long chunk_size;
+  char chunk_header_bytes[10];
   HTTPClient https;
   WiFiClientSecure *client = NULL;
   WiFiClient *stream = NULL;
@@ -13751,9 +13807,39 @@ int get_file_https(char *url, char *buff, long max_length) {
       httpResponseCode = https.GET();
       if (httpResponseCode > 0) {
         stream = https.getStreamPtr();
+
+        chunk_header = 0;
+        chunked = 0;
+        if(https.getSize() <= 0) {
+          chunked = 1;
+          chunk_header = 1;
+          chunk_size = 0;
+          chunk_header_bytes[0] = 0;
+        }
+
         offset = 0;
         while(stream->available()) {
           byte = stream->read();
+          if(chunked && chunk_size == 0 && chunk_header == 0) {
+            // Читаем ещё два байта
+            byte = stream->read();
+            byte = stream->read();
+            chunk_header = 1;
+            chunk_header_bytes[0] = 0;
+          }
+          if(chunked && chunk_header) {
+            Serial.printf("Chunk header byte %02x\n", byte);
+            chunk_header_bytes[strlen(chunk_header_bytes) + 1] = 0;
+            chunk_header_bytes[strlen(chunk_header_bytes)] = byte;
+            if(byte == '\n') {
+              sscanf(chunk_header_bytes, "%X", &chunk_size);
+              Serial.printf("Chunk size %d (%X)\n", chunk_size, chunk_size);
+              chunk_header = 0;
+            }
+            continue;
+          }
+          chunk_size--;
+
           buff[offset] = byte;
           offset++;
           buff[offset] = 0;
@@ -13908,6 +13994,7 @@ Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
   }
 
   chunk_header = 0;
+  chunked = 0;
   if(http.getSize() <= 0) {
     chunked = 1;
     chunk_header = 1;
@@ -14991,14 +15078,13 @@ void translate(char mode, char *io_buff) {
   int i;
   unsigned char byte;
   int button_pressed;
-  char buff[300];
+  int translation_result;
+  char buff[80];
   char from_lang[80];
   char to_lang[80];
   char translation[300];
+  char translation_text[300];
   char query[80];
-  char query_utf8[160];
-  char url[300];
-  int httpResponseCode;
   char *buttons[] = {
     "From language",
     "To language",
@@ -15086,30 +15172,13 @@ void translate(char mode, char *io_buff) {
           strcpy(translation, "");
           strcat(translation, "Query:\n");
           strcat(translation, query);
-          strcat(translation, "\n\nTranslation:\n");
+          strcat(translation, "\n\n");
 
-          sprintf(url, "https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=%s&tl=%s&q=", from_lang, to_lang);
-          cp1251_to_utf8(query, query_utf8);
-          
-          for(i = 0; i < strlen(query_utf8); i++) {
-            sprintf(buff, "%%%02X", query_utf8[i]);
-            strcat(url, buff);
-          }
-          Serial.println(url);
-          httpResponseCode = get_file_https(url, buff, 80);
-          if(httpResponseCode == 200) {
-            utf8_to_cp1251(buff);
-            // Текст перевода расположен от " до ,
-            if(strchr(buff, ',') != NULL) {
-              *(strchr(buff, ',') - 1) = 0;
-            }
-            if(strchr(buff, '"') != NULL) {
-              strcat(translation, strchr(buff, '"') + 1);
-            }
-            else {
-              strcat(translation, buff);
-            }
-            strcpy(query, "");
+          translation_result = translate_perform(from_lang, to_lang, query, translation_text);
+
+          if(translation_result == 0) {
+            strcat(translation, "Translation:\n");
+            strcat(translation, translation_text);
           }
           else {
             strcat(translation, "Translation query error");
@@ -15128,6 +15197,297 @@ void translate(char mode, char *io_buff) {
     }
     touchWaitRelease();
   }
+}
+
+int translate_perform(char *from_lang, char *to_lang, char *query, char *translation) {
+  char *url;
+  char *query_utf8;
+  char *buff;
+  int result = 0;
+  int httpResponseCode;
+  int i;
+
+  url = (char*)malloc(3000 * sizeof(char));
+  query_utf8 = (char*)malloc(3000 * sizeof(char));
+  buff = (char*)malloc(3000 * sizeof(char));
+
+  strcpy(translation, "");
+
+  sprintf(url, "https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=%s&tl=%s&q=", from_lang, to_lang);
+  cp1251_to_utf8(query, query_utf8);
+  
+  for(i = 0; i < strlen(query_utf8); i++) {
+    sprintf(buff, "%%%02X", query_utf8[i]);
+    strcat(url, buff);
+  }
+
+  Serial.println(url);
+  
+  httpResponseCode = get_file_https(url, buff, 3000);
+  if(httpResponseCode == 200) {
+    Serial.println(buff);
+    utf8_to_cp1251(buff);
+    // Текст перевода расположен от " до второй "
+    if(strchr(buff, '"') != NULL && strchr(strchr(buff, '"') + 1, '"') != NULL) {
+      *(strchr(strchr(buff, '"') + 1, '"')) = 0;
+    }
+    if(strchr(buff, '"') != NULL) {
+      strcat(translation, strchr(buff, '"') + 1);
+    }
+    else {
+      strcat(translation, buff);
+    }
+  }
+  else {
+    result = 1;
+  }
+
+  free(buff);
+  free(query_utf8);
+  free(url);
+
+  return result;
+}
+
+// ====================================================
+// Wikipedia reader
+// ====================================================
+
+void wikipedia(char mode, char *io_buff) {
+  int i;
+  unsigned char byte;
+  int button_pressed;
+  int translation_result;
+  char buff[300];
+  char lang[80];
+  char query[80];
+  char query_utf8[160];
+  char url[300];
+  char *data;
+  int httpResponseCode;
+  
+  char *buttons[] = {
+    "Language",
+    "Query",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01010000, B00001010,
+    B01010000, B00001010,
+    B01010001, B10001010,
+    B01010001, B10001010,
+    B01001010, B01010010,
+    B01001010, B01010010,
+    B01000100, B00100010,
+    B01000100, B00100010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Wikipedia");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Wiki");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Wikipedia");
+
+  strcpy(lang, "en");
+  strcpy(query, "");
+
+  while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+    drawButtonMatrix(0, 20, tft.width() / 2, 32 * 2, buttons, 1, 2);
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "  %s  ", lang);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 0, FONT_DEFAULT);
+
+    //draw_text_formatted(translation, 1, 28 + 32 * 3, tft.width() - 2, 12, FONT_DEFAULT, 1);
+
+    touchWaitPress();
+
+    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32 * 2, buttons, 1, 2);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        strcpy(buff, lang);
+        if(drawPrompt("Language code", buff) == 0) {
+          strcpy(lang, buff);
+        }
+        clearPrompt();
+      }
+      else if(button_pressed == 1) {
+        // Магия википедии здесь
+        strcpy(buff, query);
+        if(drawPrompt("Query", buff) == 0) {
+          wikipedia_select_article(lang, buff);
+        }
+        clearScreen();
+        drawAppTitle("Wikipedia");
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void wikipedia_select_article(char *lang, char *query) {
+  int httpResponseCode;
+  char buff[80];
+  char query_utf8[300];
+  char url[300];
+  char *data = NULL;
+  char *list[20];
+  int offset = 0;
+  int selected = 0;
+  char *buttons[] = {
+    "View", NULL
+  };
+  int i;
+  int button_pressed;
+  HTTPClient http;
+
+  drawProcessWindow("Querying...");
+  sprintf(url, "https://%s.wikipedia.org/w/api.php?action=query&format=xml&gsrlimit=15&generator=search&origin=*&gsrsearch=", lang, query);
+  cp1251_to_utf8(query, query_utf8);
+  for(i = 0; i < strlen(query_utf8); i++) {
+    sprintf(buff, "%%%02X", query_utf8[i]);
+    strcat(url, buff);
+  }
+
+  data = (char*)malloc(5000 * sizeof(char));
+  for(i = 0; i < 20; i++) {
+    list[i] = NULL;
+  }
+
+  httpResponseCode = get_file_https(url, data, 5000);
+  if(httpResponseCode == 200) {
+    clearScreen();
+    drawAppTitle("Wikipedia");
+
+    utf8_to_cp1251(data);
+
+    // Выцепляем названия статей
+    offset = 0;
+    for(i = 0; i < strlen(data); i++) {
+      if(memcmp(data + i, "title=\"", 7) == 0) {
+        list[offset] = (char*)malloc(80 * sizeof(char));
+        memcpy(list[offset], data + i + 7, 80);
+        list[offset][79] = 0;
+        Serial.println(list[offset]);
+        if(strchr(list[offset], '"') != NULL) {
+          *(strchr(list[offset], '"')) = 0;
+        }
+        offset++;
+      }
+    }
+    offset = 0;
+
+    while(1) {
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      tft.drawString("Select article:", 1, 16, FONT_DEFAULT);
+
+      touchCheckList(0, 32, tft.width(), tft.height() - 72, list, 15, &offset, &selected);
+      drawList(0, 32, tft.width(), tft.height() - 72, list, 15, &offset, &selected);
+
+      drawButtonMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+      
+      touchWaitPress();
+      touchCheckList(0, 32, tft.width(), tft.height() - 32 - 40, list, 15, &offset, &selected);
+
+      button_pressed = touchCheckMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+      if(button_pressed != -1) {
+        if(button_pressed == 0) {
+          wikipedia_show_artice(lang, list[selected]);
+
+          clearScreen();
+          drawAppTitle("Wikipedia");
+        }
+      }
+
+      touchWaitReleaseOrExit();
+      if(global_exit_flag) {
+        drawAppTitle("Exit");
+        touchWaitRelease();
+        touchExitActionReset();
+        return;
+      }
+      touchWaitRelease();
+    }
+  }
+  else {
+    if(httpResponseCode <= 0) {
+      drawError((char *)http.errorToString(httpResponseCode).c_str());
+    }
+    else {
+      sprintf(buff, "HTTP code %d", httpResponseCode);
+      drawError(buff);
+    }
+  }
+
+  for(i = 0; i < 20; i++) {
+    if(list[i]) free(list[i]);
+  }
+  free(data);
+}
+
+void wikipedia_show_artice(char *lang, char *title) {
+  int httpResponseCode;
+  char buff[80];
+  char url[300];
+  char query_utf8[300];
+  char *data;
+  int i;
+  HTTPClient http;
+
+  drawProcessWindow("Querying...");
+  sprintf(url, "https://%s.wikipedia.org/w/index.php?action=raw&title=", lang);
+  cp1251_to_utf8(title, query_utf8);
+  for(i = 0; i < strlen(query_utf8); i++) {
+    sprintf(buff, "%%%02X", query_utf8[i]);
+    strcat(url, buff);
+  }
+
+  data = (char*)malloc(50000 * sizeof(char));
+  httpResponseCode = get_file_https(url, data, 50000);
+  if(httpResponseCode == 200) {
+    //Serial.println(data);
+    utf8_to_cp1251(data);
+    view_text(title, data);
+  }
+  else {
+    if(httpResponseCode <= 0) {
+      drawError((char *)http.errorToString(httpResponseCode).c_str());
+    }
+    else {
+      sprintf(buff, "HTTP code %d", httpResponseCode);
+      drawError(buff);
+    }
+  }
+  free(data);
 }
 
 #endif
@@ -18842,10 +19202,10 @@ void oscilloscope(char mode, char *io_buff) {
     "Wi-Fi RSSI",
     "Ping gateway",
     "Ping 8.8.8.8",
-    "IO21",
-    "IO22",
-    "IO27",
-    "IO35",
+    "IO21 millivolts",
+    "IO22 millivolts",
+    "IO27 millivolts",
+    "IO35 millivolts",
     "Serial",
     NULL,
   };
@@ -19344,7 +19704,7 @@ void generator(char mode, char *io_buff) {
   float frequency = 1;
   float amplitude = 1;
   int value;
-  int pin = 35;
+  int pin = 22;
 
   char update_flag;
   char *buttons[] = {
@@ -19411,10 +19771,10 @@ void generator(char mode, char *io_buff) {
     while(touchCheckNowait() == 0) {
       switch(type) {
         case TYPE_SIN:
-          value = 128 + 127 * amplitude * sin(2 * PI * micros() / 1000000 * frequency);
+          value = 127.5 + 127.5 * amplitude * sin(2 * PI * micros() / 1000000 * frequency);
           break;
         case TYPE_SQUARE:
-          value = 128 + 127 * amplitude * (sin(2 * PI * micros() / 1000000 * frequency) >= 0 ? 1 : -1);
+          value = 127.5 + 127.5 * amplitude * (sin(2 * PI * micros() / 1000000 * frequency) >= 0 ? 1 : -1);
           break;
         default:
           value = 0;
@@ -22348,7 +22708,15 @@ void touchWaitRelease() {
 }
 
 char touchCheckNowait() {
-  if(digitalRead(BOOT_BUTTON_PIN) == LOW) saveScreenshot();
+  int boot_low_begin;
+  if(digitalRead(BOOT_BUTTON_PIN) == LOW) {
+    // Защита от помех
+    boot_low_begin = millis();
+    while(digitalRead(BOOT_BUTTON_PIN) == LOW);
+    if(Storage && millis() - boot_low_begin > 100) {
+      saveScreenshot();
+    }
+  }
   drawAppTitleRight();
   // Проверить касание без блокировки
   if(touchPollTouchStatus()) {
