@@ -87,7 +87,6 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * View Screenshots
 * Backup FFat to SD and restore from SD to FFat
 * Voltmeter
-* Translate (via google translate unofficial API)
 * Clock settings
 * Screen settings
 * Signal generator
@@ -136,6 +135,8 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * File Server (for backups and file upload)
 * RSS Reader - see https://en.wikipedia.org/wiki/RSS for details
 * IRC client - see https://en.wikipedia.org/wiki/IRC for details
+* Translate (via google translate unofficial API)
+* Wikipedia article reader
 
 ## Sound
 * Piano
