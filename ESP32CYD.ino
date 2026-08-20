@@ -228,9 +228,11 @@
 2026-08-15 Исправление бага wget
 2026-08-17 Ещё заход Bluetooth (неудачно, но лучше чем в прошлый раз), генератор сигналов, поддержка chunked для wget, append
 2026-08-18 Поддержка UTF-8 названий для PIM, translate из консоли, get_file_https поддержка чанков, просмотр статей википедии через API
+2026-08-20 Доработка поддержки UTF-8 и конвертации между кодировками, экранное меню
 
 До сообщения на esp32
 - (д) Basic
+- (д) Разбор выражения
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (д) /Terminal/Environment
@@ -846,6 +848,7 @@ TouchPoint global_touch_p;
 int global_touch_x;
 int global_touch_y;
 char global_touch_present_flag;
+char global_menu_visible_flag = 0;
 char global_exit_flag;
 unsigned long global_exit_flag_touch_begin;
 unsigned long global_exit_flag_touch_length;
@@ -1133,19 +1136,17 @@ void launcher(char mode, char *io_buff) {
   touchCheckNowait();
   while(1) {
     app_selected = -1;
-    app_selected_col = global_touch_x / (tft.width() / 8);
-    app_selected_row = (global_touch_y - 16) / (tft.height() / 10);
-    app_selected = app_selected_row * 8 + app_selected_col + 1;
-
-    if(global_touch_present_flag == 0) {
+    if(global_touch_y >= 16) {
+      app_selected_col = global_touch_x / (tft.width() / 8);
+      app_selected_row = (global_touch_y - 16) / (tft.height() / 10);
+      app_selected = app_selected_row * 8 + app_selected_col + 1;
+    }
+    if(global_touch_present_flag == 0 || global_touch_x < 16) {
       app_selected_row = -1;
       app_selected_col = -1;
       app_selected = -1;
     }
     
-    //Serial.printf("touch_x=%d touch_y=%d app_selected_col=%d app_selected_row=%d app_selected=%d apps_max=%d\n",
-      //global_touch_x, global_touch_y, app_selected_col, app_selected_row, app_selected, apps_max);
-
     for(row = 0; row != 10; row++) {
       for(col = 0; col != 8; col++) {
         if(row * 8 + col + 1 >= apps_max) {
@@ -1198,6 +1199,15 @@ void launcher(char mode, char *io_buff) {
       touchWaitRelease();
       break;
     }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
   }
 }
 
@@ -12181,11 +12191,22 @@ void screen_settings(char mode, char *io_buff) {
   }
 }
 
+// Преобразует цвет из 16-битного в 4-битный
 int color_to_index(int color) {
   int i;
   for(i = 0; i < 16; i++) {
     if(colors[i] == color) return i;
   }
+  return 0;
+}
+
+// Преобразует цвет, считанный с экрана из 16-битного в 4-битный
+int color_read_to_index(int color) {
+  int i;
+  for(i = 0; i < 16; i++) {
+    if(colors_read[i] == color) return i;
+  }
+  Serial.printf("Color not found: %04X\n", color);
   return 0;
 }
 
@@ -14071,11 +14092,18 @@ Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
         // Трёхбайтовые символы
         if(byte == 0xE2 && byte2 == 0x80) {
           byte3 = stream->read();
+          if(byte3 == 0x90) byte = '-';
+          if(byte3 == 0x91) byte = '-';
+          if(byte3 == 0x92) byte = '-';
           if(byte3 == 0x93) byte = '-';
           if(byte3 == 0x94) byte = '-';
+          if(byte3 == 0x95) byte = '-';
+          if(byte3 == 0x98) byte = '\'';
+          if(byte3 == 0x99) byte = '\'';
           if(byte3 == 0x9C) byte = '"';
           if(byte3 == 0x9D) byte = '"';
           if(byte3 == 0x9E) byte = '"';
+          if(byte3 == 0xA6) byte = 0x85; // Троеточие
         }
         else {
           byte = utf8_to_cp1251_byte(byte, byte2);
@@ -15627,8 +15655,9 @@ void ble(char mode, char *io_buff) {
 // IS_BLE_ENABLED
 
 void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
-  int byte1, byte2;
+  int byte1, byte2, byte3;
   int byte_out;
+  char buff[80];
   fs::File file_from;
   fs::File file_to;
   file_from = Storage->open(from_filename);
@@ -15640,7 +15669,31 @@ void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
     }
     else {
       byte2 = file_from.read();
-      byte_out = utf8_to_cp1251_byte(byte1, byte2);
+      // Трёхбайтовые символы
+      if(byte1 == 0xE2 && byte2 == 0x80) {
+        byte3 = file_from.read();
+        byte_out = '?';
+        if(byte3 == 0x90) byte_out = '-';
+        else if(byte3 == 0x91) byte_out = '-';
+        else if(byte3 == 0x92) byte_out = '-';
+        else if(byte3 == 0x93) byte_out = '-';
+        else if(byte3 == 0x94) byte_out = '-';
+        else if(byte3 == 0x95) byte_out = '-';
+        else if(byte3 == 0x98) byte_out = '\'';
+        else if(byte3 == 0x99) byte_out = '\'';
+        else if(byte3 == 0x9C) byte_out = '"';
+        else if(byte3 == 0x9D) byte_out = '"';
+        else if(byte3 == 0x9E) byte_out = '"';
+        else if(byte3 == 0xA6) byte_out = 0x85; // Троеточие
+        else {
+          sprintf(buff, "Unknown 3-byte symbol: %02X %02X %02X", byte1, byte2, byte3);
+          terminal_println(buff);
+          Serial.println(buff);
+        }
+      }
+      else {
+        byte_out = utf8_to_cp1251_byte(byte1, byte2);
+      }
     }
     file_to.write(byte_out);
   }
@@ -15718,9 +15771,23 @@ void utf8_to_cp1251(char *buff) {
   while(read_offset < length) {
     byte = buff[read_offset];
     read_offset++;
-    if(byte >= 0xC0) {
+    if(utf8_is_double_byte(byte)) {
+      //Serial.printf("2-byte: %02X %02X\n", byte, buff[read_offset]);
       byte = utf8_to_cp1251_byte(byte, buff[read_offset]);
       read_offset++;
+    }
+    else if(utf8_is_triple_byte(byte)) {
+      //Serial.printf("3-byte: %02X %02X %02X\n", byte, buff[read_offset], buff[read_offset + 1]);
+      byte = '?';
+      read_offset += 2;
+    }
+    else if(utf8_is_quad_byte(byte)) {
+      //Serial.printf("4-byte: %02X %02X %02X %02X\n", byte, buff[read_offset], buff[read_offset + 1], buff[read_offset + 2]);
+      byte = '?';
+      read_offset += 3;
+    }
+    else {
+      //Serial.printf("1-byte: %02X\n", byte);
     }
     
     buff[write_offset] = byte;
@@ -15818,6 +15885,38 @@ void cp1251_to_translit(char *in_buff, char *out_buff) {
   out_buff[write_offset] = 0;
 }
 
+// Проверка на начало однобайтового символа
+char utf8_is_single_byte(char byte1) {
+  if(byte1 <= 0x7F) {
+    return 1;
+  }
+  return 0;
+}
+
+// Проверка на начало двухбайтового символа
+char utf8_is_double_byte(char byte1) {
+  if(byte1 > 0x7F && byte1 <= 0xDF) {
+    return 1;
+  }
+  return 0;
+}
+
+// Проверка на начало трёхбайтового символа
+char utf8_is_triple_byte(char byte1) {
+  if(byte1 > 0xDF && byte1 <= 0xEF) {
+    return 1;
+  }
+  return 0;
+}
+
+// Проверка на начало четырёхбайтового символа
+char utf8_is_quad_byte(char byte1) {
+  if(byte1 > 0xEF && byte1 <= 0xF4) {
+    return 1;
+  }
+  return 0;
+}
+
 // Проверка, является ли корректной строкой UTF-8
 int is_correct_utf8_string(char *str) {
   int offset = 0;
@@ -15846,7 +15945,7 @@ int is_correct_utf8_string(char *str) {
     }
     else if(str[offset] <= 0xF4) {
       // Первый байт из диапазона 0xF0 - 0xF4 - маска B11110xxx
-      // Второй и даольше байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      // Второй и дальше байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
       if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
       if(str[offset + 2] < 0x80 || str[offset + 2] > 0xBF) return 0;
       if(str[offset + 3] < 0x80 || str[offset + 3] > 0xBF) return 0;
@@ -17780,9 +17879,9 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
       // Всё остальное неотображаемые до пробела, кроме переводов строк
       if(byte < ' ' && byte != '\n' && byte != '\r') byte = '_';
       // После 128 - кроме букв ё, Ё и №
-      if(byte >= 128 && byte <= 167) byte = '_';
-      if(byte >= 169 && byte <= 183) byte = '_';
-      if(byte >= 186 && byte <= 191) byte = '_';
+      //if(byte >= 128 && byte <= 167) byte = '_';
+      //if(byte >= 169 && byte <= 183) byte = '_';
+      //if(byte >= 186 && byte <= 191) byte = '_';
       
       //Serial.printf("%c %s\n", byte, current_word);
       // Последовательности \n\r и \r\n это один перевод строки
@@ -22556,6 +22655,86 @@ int touchCheckList(int left_x, int top_y, int width, int height, char **str, int
   return -1;
 }
 
+// Показать системное меню
+int show_system_menu() {
+  int selected;
+  char *items[] = {
+    "Back",
+    "Brightness",
+    "Close menu",
+    NULL
+  };
+  if(global_menu_visible_flag) {
+    return 0;
+  }
+  global_menu_visible_flag = 1;
+  if(global_touch_present_flag) {
+    touchWaitRelease();
+  }
+  selected = show_menu(tft.width() / 2, 16, tft.width() / 2, 2 + 16 * 3, items);
+  if(selected == 0) {
+    global_exit_flag = 1;
+  }
+  else if(selected == 1) {
+    if(get_brightness() == 255) {
+      set_brightness(64);
+    }
+    else if(get_brightness() == 255) {
+      set_brightness(64);
+    }
+    else if(get_brightness() == 64) {
+      set_brightness(2);
+    }
+    else {
+      set_brightness(255);
+    }
+  }
+  else if(selected == 2) {
+    // Ничего не делать, просто закрыть меню
+  }
+  touchWaitRelease();
+
+  global_menu_visible_flag = 0;
+
+  return 0;
+}
+
+// Показать меню
+int show_menu(int x0, int y0, int width, int height, char **items) {
+  int offset;
+  int selected = -1;
+  int selected_prev = -1;
+  int in_menu = 0;
+  char *buff = NULL;
+  // Сохраняем часть экрана где будет меню
+  buff = (char*)malloc(width * height / 2 * sizeof(char));
+  screen_area_to_buffer(buff, x0, y0, width, height);
+
+  // Рисуем рамку
+  tft.drawRect(x0, y0, width, height, color_scheme_fg);
+  tft.fillRect(x0 + 1, y0 + 1, width - 2, height - 2, color_scheme_bg);
+
+  // Рисуем элементы
+  drawList(x0 + 1, y0 + 1, width - 2, height - 2, items, (height - 2) / 16 , &offset, &selected);
+  selected_prev = selected;
+  touchWaitPress();
+  while(touchCheckNowait()) {
+    in_menu = touchCheckList(x0 + 1, y0 + 1, width - 2, height - 2, items, (height - 2) / 16 , &offset, &selected);
+    if(in_menu == -1) {
+      selected = -1;
+    }
+    if(selected_prev != selected) {
+      drawList(x0 + 1, y0 + 1, width - 2, height - 2, items, (height - 2) / 16 , &offset, &selected);
+      selected_prev = selected;
+    }
+  }
+
+  // Восстанавливаем экран
+  buffer_to_screen_area(buff, x0, y0, width, height);
+  free(buff);
+  return selected;
+}
+
 // Простые функции тач-скрина
 int touchMapX_test(int px, int py) {
   int x, y;
@@ -22613,7 +22792,16 @@ int touchMapY(int x_raw, int y_raw) {
   return y;
 }
 
+char touchIsMenuAction() {
+  if(global_touch_present_flag && global_touch_y < 16 && global_touch_x >= tft.width() - 16 && global_menu_visible_flag == 0) {
+    show_system_menu();
+    return 1;
+  }
+  return 0;
+}
+
 char touchIsExitAction() {
+  touchIsMenuAction();
   //Serial.println("touchIsExitAction");
   // Обновить заголовок
   drawAppTitleRight();
@@ -22668,6 +22856,7 @@ void touchExitActionReset() {
 }
 
 void touchWaitPress() {
+  long boot_low_begin;
   //Serial.println("touchWaitPress begin");
   while(!touchPollTouchStatus()) {
     // Light sleep
@@ -22679,7 +22868,14 @@ void touchWaitPress() {
     drawAppTitleRight();
     global_exit_flag_touch_begin = 0;
     if(global_exit_flag) return;
-    if(digitalRead(BOOT_BUTTON_PIN) == LOW) saveScreenshot();
+    if(digitalRead(BOOT_BUTTON_PIN) == LOW) {
+      // Защита от помех
+      boot_low_begin = millis();
+      while(digitalRead(BOOT_BUTTON_PIN) == LOW);
+      if(Storage && millis() - boot_low_begin > 100) {
+        saveScreenshot();
+      }
+    }
   }
   global_touch_begin = millis();
   delay(20);
@@ -22687,6 +22883,7 @@ void touchWaitPress() {
   global_touch_x = touchMapX(global_touch_p.xRaw, global_touch_p.yRaw);
   global_touch_y = touchMapY(global_touch_p.xRaw, global_touch_p.yRaw);
   global_touch_present_flag = 1;
+
   //Serial.println("touchWaitPress end");
 }
 
@@ -23355,6 +23552,75 @@ int bmp_show_image(char *filename, int start_x, int start_y) {
 // Сохранить указанный участок экрана в BMP
 void bmp_save_image(char *filename, int start_x, int start_y, int width, int height, int bpp) {
 
+}
+
+// Считать указанный участок экрана (16-цветный) в буфер
+void screen_area_to_buffer(char *buff, int x0, int y0, int width, int height) {
+  int x, y;
+  int pixel;
+  int index;
+  int offset = 0;
+  char hi_flag = 0;
+  for(y = 0; y < height; y++) {
+    for(x = 0; x < width; x++) {
+      pixel = tft.readPixel(x0 + x, y0 + y);
+      index = color_read_to_index(pixel);
+      if(hi_flag) {
+        buff[offset] |= (index & 0xF) << 4;
+        hi_flag = 0;
+        offset++;
+      }
+      else {
+        buff[offset] = index & 0xF;
+        hi_flag = 1;
+      }
+    }
+  }
+}
+
+void buffer_to_screen_area(char *buff, int x0, int y0, int width, int height) {
+  int x, y;
+  int index;
+  int offset = 0;
+  char hi_flag = 0;
+  for(y = 0; y < height; y++) {
+    for(x = 0; x < width; x++) {
+      if(hi_flag) {
+        index = buff[offset] >> 4;
+        tft.drawPixel(x0 + x, y0 + y, colors[index]);
+        hi_flag = 0;
+        offset++;
+      }
+      else {
+        index = buff[offset] & 0xF;
+        tft.drawPixel(x0 + x, y0 + y, colors[index]);
+        hi_flag = 1;
+      }
+    }
+  }
+}
+
+// Отладочная функция
+void shuffle_screen() {
+  int x1, y1, x2, y2;
+  int s = 16;
+  char buff1[128], buff2[128];
+
+  while(1) {
+    x1 = random(0, tft.width() / s);
+    y1 = random(0, tft.height() / s);
+    x2 = random(0, tft.width() / s);
+    y2 = random(0, tft.height() / s);
+    //Serial.println("screen_area_to_buffer"); delay(1000);
+    screen_area_to_buffer(buff1, x1 * s, y1 * s, s, s);
+    //Serial.println("screen_area_to_buffer"); delay(1000);
+    screen_area_to_buffer(buff2, x2 * s, y2 * s, s, s);
+    //Serial.println("buffer_to_screen_area"); delay(1000);
+    buffer_to_screen_area(buff2, x1 * s, y1 * s, s, s);
+    //Serial.println("buffer_to_screen_area"); delay(1000);
+    buffer_to_screen_area(buff1, x2 * s, y2 * s, s, s);
+    //delay(1000);
+  }
 }
 
 PNG *png;
