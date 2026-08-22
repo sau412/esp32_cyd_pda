@@ -247,7 +247,6 @@
 - (д) Разархиватор zip
 - (д) Мировое время
 - (д) Функции для кодов ANSI управления терминалом
-- (д) translate
 - (д) weather
 - (д) chat
 - (д) cal
@@ -297,22 +296,21 @@
 - (н) Флаг автосохранения файла при редактировании и неактивности
 - (н) Автосохранение позиции просмотра при неактивности
 - (и) ssh - Debug exception reason: BREAK instr
-- (д) Гофер браузер - специальная домашняя страница для CYD с объяснениями
-- (д) Гофер браузер - менять домашнюю страницу
+- (н) Гофер браузер - специальная домашняя страница для CYD с объяснениями
+- (н) Гофер браузер - менять домашнюю страницу
 - (н) Триггерные кнопки (не ясно как использовать) или чекбоксы
 - (н) Выбирать SD или FFat для каждого приложения отдельно
 - (н) Прокрутка терминала
 - (н) Не отжимать кнопку если увод касания меньше 100 мс
 - (н) В книгах сохранять смещения для последних ста страниц для перемотки назад
-- (н) Переделать мп3-плеер в сторону мп3, а не просто пим
-- (н) Функция меню - показать list в рамке, по нажатию выбирать пункт. Так можно сделать системное меню (меню в приложениях долго и сложно делать)
+- (н) Переделать мп3-плеер в сторону мп3, а не просто пим (мп3 не выдаёт прерываний)
 - (н) Многозадачность или хотя бы некоторые задачи в фоне - музыка, вебсервер, чат, IRC
 - (н) Сохранение состояния приложения, хотя бы некоторых и хотя бы частичное
 - (н) Соединение через HTTP прокси
 - (и) Bluetooth музыка и радио - похоже не хватает на это памяти
 - (н) Использовать NVS для настроек, привязанных к устройству - инверсия, калибровка, предпочитаемое хранилище - но это дополнительная сущность
 - (и) Другое погодное апи или выбор из нескольких
-- (д) В файлах слушать музыку
+- (н) В файлах слушать музыку
 - (и) Дашборд - если есть соединение показывать пинг до шлюза, или писать что соединения нет, Время юникс, Синхронизировано ли время, Текущая фс, Аптайм в дашборд
 - (д) Заставка двойной маятник (сложно)
 - (н) Fun Fact / Random Useless Facts
@@ -988,6 +986,7 @@ void launcher_return_back(char mode, char *io_buff);
 typedef void (*function_application_pointer) (char mode, char *io_buff);
 typedef void (*function_action_pointer) (int action, char *filename);
 typedef int (*function_conversion_pointer) (fs::File file, char *buff);
+typedef double (*function_expr_value_by_name_pointer) (char *var_name);
 
 function_application_pointer all_apps[] = {
   launcher,
@@ -1781,6 +1780,7 @@ void terminal_manual() {
   "lsmem - information about memory\n"
   "lsblk - information about internal storage\n"
   "brainfuck {path} - brainfuck interpretator\n"
+  "basic {path} - BASIC interpretator"
   "view {path} - view file\n"
   "edit {file} - edit file\n"
   "csv {file} - edit file in CSV editor\n"
@@ -2844,6 +2844,14 @@ void terminal_execute_single(char *str) {
       terminal_brainfuck(cmdline_params[1]);
     }
   }
+  else if(strcmp(cmdline_params[0], "basic") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: basic {file}\r");
+    }
+    else {
+      terminal_basic(cmdline_params[1]);
+    }
+  }
   else if(strcmp(cmdline_params[0], "touch") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: touch {filename}");
@@ -2959,6 +2967,13 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: bc {expression}");
     }
     else {
+      float ans;
+      char error_flag = 0;
+      int expr_offset = 0;
+      ans = parse_expression(cmdline_params[1], parse_expr_constant_by_name, &error_flag, &expr_offset);
+      sprintf(buff, "%g", ans);
+      terminal_println(buff);
+      /*
       float a, b;
       char op;
       sscanf(cmdline_params[1], "%f%c%f", &a, &op, &b);
@@ -2971,6 +2986,7 @@ void terminal_execute_single(char *str) {
         default: sprintf(buff, "Unknown operation"); break;
       }
       terminal_println(buff);
+      */
     }
   }
 #ifdef IS_WIFI_ENABLED
@@ -4067,14 +4083,14 @@ void terminal_parse_cmdline(char *cmdline, int *arg_count, char **parsed_cmdline
   for(;write_index < cmdlen; write_index++) {
     cmdline[write_index] = 0;
   }
-  Serial.printf("%s\n", cmdline);
+  //Serial.printf("%s\n", cmdline);
   // Выбираем аргументы
   space_flag = 1;
   arg_index = 0;
   for(read_index = 0; read_index < cmdlen; read_index++) {
     if(space_flag && cmdline[read_index] != 0) {
       parsed_cmdline[arg_index] = cmdline + read_index;
-      Serial.printf("Arg %d: %s\n", arg_index, cmdline + read_index);
+      //Serial.printf("Arg %d: %s\n", arg_index, cmdline + read_index);
       *(arg_count) = arg_index + 1;
       arg_index++;
       space_flag = 0;
@@ -4647,6 +4663,120 @@ void terminal_brainfuck(char *filename) {
   }
 
   free(mem);
+}
+
+// Интерпретатор BASIC
+void terminal_basic(char *filename) {
+  char str[80];
+  char buff[80];
+  long stack[80];
+  int stack_pointer = 0;
+  double vars[80];
+  double val;
+  fs::File file;
+  int arg_count;
+  int i;
+  int index;
+  char *cmdline_params[20];
+  int expr_offset;
+  char error_flag;
+
+  for(i = 0; i < 80; i++) vars[i] = 0;
+
+  file = Storage->open(filename);
+  if(file) {
+    while(file.available()) {
+      strcpy(str, file.readStringUntil('\n').c_str());
+      Serial.printf("basic string: %s\n", str);
+      basic_parse_cmdline(str, &arg_count, cmdline_params);
+      Serial.printf("basic command: %s\n", str);
+      if(strcmp(cmdline_params[0], "stop") == 0) {
+        break;
+      }
+      if(strcmp(cmdline_params[0], "end") == 0) {
+        break;
+      }
+      if(strcmp(cmdline_params[0], "rem") == 0) {
+        // Комментарий - ничего не делаем
+      }
+      if(strcmp(cmdline_params[0], "'") == 0) {
+        // Комментарий - ничего не делаем
+      }
+      if(strcmp(cmdline_params[0], "cls") == 0) {
+        terminal_clear_screen();
+      }
+      if(strcmp(cmdline_params[0], "let") == 0) {
+        if(cmdline_params[1][0] >= 'a' && cmdline_params[1][0] <= 'z') {
+          index = cmdline_params[1][0] - 'a';
+          expr_offset = 0;
+          error_flag = 0;
+          vars[index] = parse_expression(cmdline_params[3], parse_expr_constant_by_name, &error_flag, &expr_offset);
+        }
+      }
+      else if(strcmp(cmdline_params[0], "print") == 0) {
+        for(i = 1; i < arg_count; i++) {
+          if(cmdline_params[i][0] == '"') {
+            unquote_string(cmdline_params[i]);
+            terminal_print(cmdline_params[i]);
+          }
+          else {
+            expr_offset = 0;
+            error_flag = 0;
+            val = parse_expression(cmdline_params[i], parse_expr_constant_by_name, &error_flag, &expr_offset);
+            sprintf(buff, "%g", val);
+            terminal_print(buff);
+          }
+        }
+        terminal_println("");
+      }
+      else {
+        Serial.printf("Unknown basic command\n");
+      }
+      terminal_show_screen();
+    }
+    file.close();
+  }
+}
+
+void basic_parse_cmdline(char *str, int *arg_count, char **params) {
+  int i = 0;
+  char *ptr;
+  ptr = str;
+  do {
+    params[i] = ptr;
+    i++;
+    ptr = strchr(ptr, ' ');
+    if(ptr) {
+      *(ptr) = 0;
+      ptr++;
+    }
+    Serial.println(params[i - 1]);
+  } while(ptr != NULL);
+  *arg_count = i;
+}
+
+void unquote_string(char *str) {
+  int read_offset = 1;
+  char escape = 0;
+  int write_offset = 0;
+  while(str[read_offset] != '"' && str[read_offset] != 0) {
+    if(escape) {
+      str[write_offset] = str[read_offset];
+      write_offset++;
+      read_offset++;
+      escape = 0;
+      continue;
+    }
+    if(str[read_offset] == '\\') {
+      escape = 1;
+    }
+    else {
+      str[write_offset] = str[read_offset];
+      write_offset++;
+      read_offset++;
+    }
+  }
+  str[write_offset] = 0;
 }
 
 #ifdef IS_WIFI_ENABLED
@@ -23847,6 +23977,168 @@ void secondly() {
   //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 }
 
+// Парсер арифметических выражений
+// expr - выражение
+double parse_expression(char *expr, function_expr_value_by_name_pointer expr_value_by_name, char *error_flag, int *expr_offset) {
+  double left, right;
+  char op;
+
+  //Serial.printf("parse_expression: %s\n", expr + *expr_offset);
+  //Serial.printf("*expr_offset = %d\n", *expr_offset);
+  // Вычисляем левую часть
+  left = parse_factor(expr, expr_value_by_name, error_flag, expr_offset);
+  while(*expr_offset < strlen(expr)) {
+    // Пропускаем пробелы
+    while(*(expr + *expr_offset) == ' ') {
+      (*expr_offset)++;
+    }
+    if(*(expr + *expr_offset) == '+' || *(expr + *expr_offset) == '-') {
+      op = *(expr + *expr_offset);
+      (*expr_offset)++;
+      right = parse_factor(expr, expr_value_by_name, error_flag, expr_offset);
+      //Serial.printf("parse_expression right = %g\n", right);
+      if(op == '+') {
+        left = left + right;
+      }
+      else {
+        left = left - right;
+      }
+    }
+    else {
+      break;
+    }
+  }
+  //Serial.printf("parse_expression result = %g\n", left);
+  // Результат
+  return left;
+}
+
+double parse_factor(char *expr, function_expr_value_by_name_pointer expr_value_by_name, char *error_flag, int *expr_offset) {
+  double left, right;
+  char op;
+  //Serial.printf("parse_factor: %s\n", expr + *expr_offset);
+  //Serial.printf("*expr_offset = %d\n", *expr_offset);
+  // Вычисляем левую часть
+  left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+  //Serial.printf("parse_factor left = %g\n", left);
+  while(*expr_offset < strlen(expr)) {
+    // Пропускаем пробелы
+    while(*(expr + *expr_offset) == ' ') {
+      (*expr_offset)++;
+    }
+    if(*(expr + *expr_offset) == '*' || *(expr + *expr_offset) == '/' || *(expr + *expr_offset) == '%') {
+      op = *(expr + *expr_offset);
+      (*expr_offset)++;
+      right = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+      //Serial.printf("parse_factor right = %g\n", right);
+      if(op == '*') {
+        left = left * right;
+      }
+      else if(op == '%') {
+        left = fmod(left, right);
+      }
+      else {
+        left = left / right;
+      }
+    }
+    else {
+      break;
+    }
+  }
+  //Serial.printf("parse_factor result = %g\n", left);
+  return left;  
+}
+
+double parse_term(char *expr, function_expr_value_by_name_pointer expr_value_by_name, char *error_flag, int *expr_offset) {
+  double left = 0;
+  char *expr_ptr;
+  int i;
+  expr_ptr = expr + *expr_offset;
+  //Serial.printf("parse_term: %s\n", expr + *expr_offset);
+  //Serial.printf("*expr_offset = %d\n", *expr_offset);
+
+  // Пропускаем пробелы
+  while(*(expr + *expr_offset) == ' ') {
+    (*expr_offset)++;
+  }
+  if(*(expr + *expr_offset) == '(') {
+    (*expr_offset)++;
+    left = parse_expression(expr, expr_value_by_name, error_flag, expr_offset);
+    // Пропускаем пробелы
+    while(*(expr + *expr_offset) == ' ') {
+      (*expr_offset)++;
+    }
+    // Пропускаем закрывающую
+    if(*(expr + *expr_offset) == ')') {
+      (*expr_offset)++;
+    }
+  }
+  else if(strncasecmp(expr + *expr_offset, "sin(", 4) == 0) {
+    (*expr_offset) += 3;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = sin(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "cos(", 4) == 0) {
+    (*expr_offset) += 3;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = cos(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "tan(", 4) == 0) {
+    (*expr_offset) += 3;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = tan(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "sqr(", 4) == 0) {
+    (*expr_offset) += 3;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = sqrt(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "abs(", 4) == 0) {
+    (*expr_offset) += 3;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = abs(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "sgn(", 4) == 0) {
+    (*expr_offset) += 3;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    if(left == 0) left = 0;
+    else if(left > 0) left = 1;
+    else if(left < 0) left = -1;
+  }
+  else {
+    left = strtod(expr + *expr_offset, &expr_ptr);
+    if(expr + *expr_offset != expr_ptr) {
+      *expr_offset = (int)(expr_ptr - expr);
+    }
+    // Если не число - вызываем функцию подстановки
+    else {
+      //Serial.println("Not a number");
+      expr_ptr = (char*)malloc(80 * sizeof(char));
+      memcpy(expr_ptr, expr + *expr_offset, 79);
+      for(i = 0; i < 79; i++) {
+        if(expr_ptr[i] == ' ') { expr_ptr[i] = 0; break; }
+        if(expr_ptr[i] == '+') { expr_ptr[i] = 0; break; }
+        if(expr_ptr[i] == '-') { expr_ptr[i] = 0; break; }
+        if(expr_ptr[i] == '*') { expr_ptr[i] = 0; break; }
+        if(expr_ptr[i] == '/') { expr_ptr[i] = 0; break; }
+        if(expr_ptr[i] == '%') { expr_ptr[i] = 0; break; }
+      }
+      (*expr_offset) += i;
+      left = (*expr_value_by_name)(expr_ptr);
+      free(expr_ptr);
+    }
+  }
+  //Serial.printf("parse_term result = %g\n", left);
+  return left;
+}
+
+double parse_expr_constant_by_name(char *name) {
+  if(strcmp(name, "pi") == 0 || strcmp(name, "PI") == 0) {
+    return PI;
+  }
+  return 0;
+}
+
 char * get_reset_reason_text(esp_reset_reason_t reason) {
   switch (reason) {
     case ESP_RST_UNKNOWN:   return "Unknown"; break;
@@ -23865,6 +24157,7 @@ char * get_reset_reason_text(esp_reset_reason_t reason) {
   return "Unknown reset reason";
 }
 
+// Запуск приложения по названию
 void run_app_by_name(char *name) {
   char buff[80];
   int i;
