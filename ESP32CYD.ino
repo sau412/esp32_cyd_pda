@@ -229,12 +229,27 @@
 2026-08-17 Ещё заход Bluetooth (неудачно, но лучше чем в прошлый раз), генератор сигналов, поддержка chunked для wget, append
 2026-08-18 Поддержка UTF-8 названий для PIM, translate из консоли, get_file_https поддержка чанков, просмотр статей википедии через API
 2026-08-20 Доработка поддержки UTF-8 и конвертации между кодировками, экранное меню
+2026-08-21 Вычисление выражений, интерпретатор BASIC (начало)
+2026-08-23 Интерпретатор BASIC переменные
+2026-08-24 Математические функции exp, log, log2, log10, log1p, rnd, floor, ceil, round,
+  константы pi, pi_2, half_pi, two_pi, rad2deg, deg2rad, exp1, sqrt2, sqrt3, sqrt5, high, low, true, false, adc_max, nan, inf, input, input_pullup, output,
+  функции бейсика input, let, if, goto
+  группировка дашбордов: часы и календарь, неточные часы, погода
+
+Стенды:
++ Timestand
++ Wearherstand
+- Cryptostand
+- Netstand мин-сред-макс пинг до шлюза, гугла, ещё чего-нибудь, айпишник, днс, сигнал вай-фай
+- Flightstand
+- Photostand
 
 До сообщения на esp32
 - (д) Basic
-- (д) Разбор выражения
+- (д) Пакетные файлы для терминала
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
+- (д) Поиск
 - (д) /Terminal/Environment
 - (д) /Terminal/Aliases
 - (д) Форест файр - ранняя остановка пожара
@@ -247,6 +262,8 @@
 - (д) Разархиватор zip
 - (д) Мировое время
 - (д) Функции для кодов ANSI управления терминалом
+- (д) iperf
+- (д) Wi-Fi sniffer
 - (д) weather
 - (д) chat
 - (д) cal
@@ -331,15 +348,6 @@
 - (н) Информация по валютам и криптовалютам (курсы)
 - (н) Информация по криптовалютам (блокчейн) - последний блок, время с последнего блока, транзакции в mempool
 - (д) Ещё один заход Bluetooth
-
-Стенды:
-+ Timestand
-+ Wearherstand
-- Cryptostand
-- Netstand
-- Flightstand
-- Photostand
-- Newsstand
 
 */
 
@@ -993,6 +1001,7 @@ function_application_pointer all_apps[] = {
   calculator,
   files,
   terminal,
+  dashboard,
   notes,
   contacts,
   todo,
@@ -1041,10 +1050,8 @@ function_application_pointer all_apps[] = {
   oscilloscope,
   voltmeter,
   generator,
-  life,
   i2c_scanner,
-  dashboard,
-  fuzzy_clock,
+  life,
   //set_clock,
   view_font,
   fifteen,
@@ -4666,93 +4673,279 @@ void terminal_brainfuck(char *filename) {
 }
 
 // Интерпретатор BASIC
-void terminal_basic(char *filename) {
-  char str[80];
-  char buff[80];
-  long stack[80];
-  int stack_pointer = 0;
-  double vars[80];
-  double val;
-  fs::File file;
-  int arg_count;
-  int i;
-  int index;
-  char *cmdline_params[20];
-  int expr_offset;
-  char error_flag;
+#define BASIC_VARS_COUNT 80
+#define BASIC_STACK_LEN 80
 
-  for(i = 0; i < 80; i++) vars[i] = 0;
+double *basic_vars = NULL;
+char **basic_var_names = NULL;
+long *basic_stack = NULL;
+
+void terminal_basic(char *filename) {
+  int i;
+  char cont_flag = 1;
+  char str[80];
+  int stack_pointer = 0;
+  fs::File file;
+
+  basic_stack = (long*)malloc(BASIC_STACK_LEN * sizeof(long));
+  basic_vars = (double*)malloc(BASIC_VARS_COUNT * sizeof(double));
+  basic_var_names = (char**)malloc(BASIC_VARS_COUNT * sizeof(char*));
+  for(i = 0; i < BASIC_VARS_COUNT; i++) {
+    basic_vars[i] = 0;
+    basic_var_names[i] = NULL;
+  }
 
   file = Storage->open(filename);
   if(file) {
     while(file.available()) {
       strcpy(str, file.readStringUntil('\n').c_str());
-      Serial.printf("basic string: %s\n", str);
-      basic_parse_cmdline(str, &arg_count, cmdline_params);
-      Serial.printf("basic command: %s\n", str);
-      if(strcmp(cmdline_params[0], "stop") == 0) {
-        break;
-      }
-      if(strcmp(cmdline_params[0], "end") == 0) {
-        break;
-      }
-      if(strcmp(cmdline_params[0], "rem") == 0) {
-        // Комментарий - ничего не делаем
-      }
-      if(strcmp(cmdline_params[0], "'") == 0) {
-        // Комментарий - ничего не делаем
-      }
-      if(strcmp(cmdline_params[0], "cls") == 0) {
-        terminal_clear_screen();
-      }
-      if(strcmp(cmdline_params[0], "let") == 0) {
-        if(cmdline_params[1][0] >= 'a' && cmdline_params[1][0] <= 'z') {
-          index = cmdline_params[1][0] - 'a';
-          expr_offset = 0;
-          error_flag = 0;
-          vars[index] = parse_expression(cmdline_params[3], parse_expr_constant_by_name, &error_flag, &expr_offset);
-        }
-      }
-      else if(strcmp(cmdline_params[0], "print") == 0) {
-        for(i = 1; i < arg_count; i++) {
-          if(cmdline_params[i][0] == '"') {
-            unquote_string(cmdline_params[i]);
-            terminal_print(cmdline_params[i]);
-          }
-          else {
-            expr_offset = 0;
-            error_flag = 0;
-            val = parse_expression(cmdline_params[i], parse_expr_constant_by_name, &error_flag, &expr_offset);
-            sprintf(buff, "%g", val);
-            terminal_print(buff);
-          }
-        }
-        terminal_println("");
-      }
-      else {
-        Serial.printf("Unknown basic command\n");
-      }
+      basic_execute_command(str, &cont_flag, &file);
       terminal_show_screen();
     }
     file.close();
   }
+
+  for(i = 0; i < BASIC_VARS_COUNT; i++) {
+    if(basic_var_names[i] != NULL) {
+      free(basic_var_names[i]);
+    }
+  }
+  free(basic_var_names);
+  free(basic_vars);
+  free(basic_stack);
 }
 
+// Получить номер переменной по названию
+int basic_get_variable_index(char *var_name) {
+  Serial.printf("basic_get_variable_index %s\n", var_name);
+  int i;
+  // Пробуем найти
+  for(i = 0; i < BASIC_VARS_COUNT; i++) {
+    if(basic_var_names[i] != NULL && strcmp(var_name, basic_var_names[i]) == 0) {
+      Serial.printf("found exists %s index %d\n", var_name, i);
+      return i;
+    }
+  }
+  // Пробуем добавить
+  for(i = 0; i < BASIC_VARS_COUNT; i++) {
+    if(basic_var_names[i] == NULL) {
+      basic_var_names[i] = (char*)malloc(strlen(var_name) + 1);
+      strcpy(basic_var_names[i], var_name);
+      Serial.printf("new %s index %d\n", var_name, i);
+      return i;
+    }
+  }
+
+  // Возвращаем ошибку
+  if(i == BASIC_VARS_COUNT) {
+    Serial.printf("var not found\n");
+    return -1;
+  }
+}
+
+// Получить значение переменной по названию (для вычислений выражений)
+double basic_get_variable_by_name(char *var_name) {
+  int index = basic_get_variable_index(var_name);
+  if(index >= 0) {
+    return basic_vars[index];
+  }
+  else {
+    return parse_expr_constant_by_name(var_name);
+  }
+}
+
+// Разделить команду на токены
 void basic_parse_cmdline(char *str, int *arg_count, char **params) {
   int i = 0;
-  char *ptr;
-  ptr = str;
-  do {
-    params[i] = ptr;
-    i++;
-    ptr = strchr(ptr, ' ');
-    if(ptr) {
-      *(ptr) = 0;
-      ptr++;
+  int param_index = 0;
+  int len = strlen(str);
+  char quoted = 0;
+  char spaces = 1;
+  char escaped = 0;
+  char op_flag = 0;
+
+  for(i = 0; i < len; i++) {
+    if(escaped) {
+      escaped = 0;
+      continue;
     }
-    Serial.println(params[i - 1]);
-  } while(ptr != NULL);
-  *arg_count = i;
+    else {
+      if(spaces && str[i] == ' ') {
+        str[i] = 0;
+        continue;
+      }
+      if(str[i] == '\\') {
+        escaped = 1;
+        continue;
+      }
+      else if(str[i] == ' ') {
+        if(quoted == 0) {
+          str[i] = 0;
+          spaces = 1;
+          op_flag = 0;
+        }
+      }
+      else {
+        spaces = 0;
+        if(str[i] == '"') {
+          if(quoted == 0) {
+            quoted = 1;
+          }
+          else {
+            quoted = 0;
+          }
+        }
+        if(!op_flag) {
+          params[param_index] = str + i;
+          param_index++;
+          op_flag = 1;
+        }
+      }
+    }
+  }
+  *arg_count = param_index;
+}
+
+void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
+  int arg_count;
+  char *cmdline_params[20];
+  int i;
+  int index;
+  int expr_offset;
+  char error_flag;
+  char is_true;
+  char buff[80];
+  double val, left, right;
+
+  Serial.printf("basic command: %s\n", str);
+  basic_parse_cmdline(str, &arg_count, cmdline_params);
+  if(arg_count == 1 && cmdline_params[0][strlen(cmdline_params[0]) - 1] == ':') {
+    // Метка - ничего не делаем
+  }
+  else if(strcmp(cmdline_params[0], "stop") == 0) {
+    *cont_flag = 0;
+  }
+  else if(strcmp(cmdline_params[0], "end") == 0) {
+    *cont_flag = 0;
+  }
+  else if(strcmp(cmdline_params[0], "rem") == 0) {
+    // Комментарий - ничего не делаем
+  }
+  else if(strcmp(cmdline_params[0], "cls") == 0) {
+    terminal_clear_screen();
+  }
+  else if(strcmp(cmdline_params[0], "let") == 0) {
+    index = basic_get_variable_index(cmdline_params[1]);
+    if(index >= 0) {
+      buff[0] = 0;
+      for(i = 3; i < arg_count; i++) {
+        if(strcmp(buff, "")) {
+          strcat(buff, " ");
+        }
+        strcat(buff, cmdline_params[i]);
+      }
+      expr_offset = 0;
+      error_flag = 0;
+      basic_vars[index] = parse_expression(buff, basic_get_variable_by_name, &error_flag, &expr_offset);
+    }
+    else {
+      terminal_print("Out of variable memory");
+    }
+  }
+  else if(strcmp(cmdline_params[0], "print") == 0) {
+    for(i = 1; i < arg_count; i++) {
+      if(cmdline_params[i][0] == '"') {
+        unquote_string(cmdline_params[i]);
+        terminal_print(cmdline_params[i]);
+      }
+      else {
+        expr_offset = 0;
+        error_flag = 0;
+        val = parse_expression(cmdline_params[i], basic_get_variable_by_name, &error_flag, &expr_offset);
+        sprintf(buff, "%g", val);
+        terminal_print(buff);
+      }
+    }
+    terminal_println("");
+  }
+  else if(strcmp(cmdline_params[0], "input") == 0) {
+    for(i = 1; i < arg_count; i++) {
+      if(cmdline_params[i][0] == '"') {
+        unquote_string(cmdline_params[i]);
+        terminal_print(cmdline_params[i]);
+      }
+      else {
+        expr_offset = 0;
+        error_flag = 0;
+        terminal_show_screen();
+        terminal_input_string(buff);
+        //Serial.printf("terminal_input_string %s\n", buff);
+        val = parse_expression(buff, basic_get_variable_by_name, &error_flag, &expr_offset);
+        index = basic_get_variable_index(cmdline_params[i]);
+        if(index >= 0) {
+          basic_vars[index] = val;
+        }
+        else {
+          terminal_print("Out of variable memory");
+          return;
+        }
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "if") == 0) {
+    is_true = 0;
+    expr_offset = 0;
+    error_flag = 0;
+    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+    //Serial.printf("left (%s) = %g\n", cmdline_params[1], left);
+    expr_offset = 0;
+    error_flag = 0;
+    right = parse_expression(cmdline_params[3], basic_get_variable_by_name, &error_flag, &expr_offset);
+    //Serial.printf("right (%s) = %g\n", cmdline_params[3], right);
+
+    if(strcmp(cmdline_params[2], "=") == 0 && left == right) is_true = 1;
+    if(strcmp(cmdline_params[2], "==") == 0 && left == right) is_true = 1;
+    if(strcmp(cmdline_params[2], ">") == 0 && left > right) is_true = 1;
+    if(strcmp(cmdline_params[2], ">=") == 0 && left >= right) is_true = 1;
+    if(strcmp(cmdline_params[2], "<") == 0 && left < right) is_true = 1;
+    if(strcmp(cmdline_params[2], "<=") == 0 && left <= right) is_true = 1;
+    if(strcmp(cmdline_params[2], "<>") == 0 && left != right) is_true = 1;
+    if(strcmp(cmdline_params[2], "!=") == 0 && left != right) is_true = 1;
+    if(is_true) {
+      Serial.printf("true\n");
+      // Формируем команду
+      buff[0] = 0;
+      for(i = 4; i < arg_count; i++) {
+        // Пропускаем ключевое слово then
+        if(i == 4 && strcmp(cmdline_params[i], "then") == 0) continue;
+        if(strcmp(buff, "") != 0) {
+          strcat(buff, " ");
+        }
+        strcat(buff, cmdline_params[i]);
+      }
+      // Запускаем
+      basic_execute_command(buff, cont_flag, file);
+    }
+    else {
+      Serial.printf("false\n");
+    }
+  }
+  else if(strcmp(cmdline_params[0], "goto") == 0) {
+    strcat(cmdline_params[1], ":");
+    // Ищем в файле метку
+    file->seek(0);
+    while(file->available()) {
+      strcpy(buff, file->readStringUntil('\n').c_str());
+      if(strcmp(cmdline_params[1], buff) == 0) {
+        //Serial.println("Label found");
+        break;
+      }
+    }
+  }
+  else {
+    //Serial.printf("Unknown basic command\n");
+  }
+  //delay(1000);
 }
 
 void unquote_string(char *str) {
@@ -8842,7 +9035,6 @@ void pim_rename_file(char *path, char *old_filename, char *prefix) {
 
 void schedule(char mode, char *io_buff) {
   fs::File file;
-  int wifi_status;
   char filename[80];
   char *buff;
   //char schedule_file_template[] = "8:00 \n9:00 \n10:00 \n11:00 \n12:00 \n13:00 \n14:00 \n15:00 \n16:00 \n17:00 \n18:00 \n";
@@ -16339,17 +16531,99 @@ void i2c_scanner(char mode, char *io_buff) {
 }
 
 // ====================================================
+// Дашборды (часы, календарь, информация)
+// ====================================================
+
+void dashboard(char mode, char *io_buff) {
+  int button_pressed;
+  char *buttons[] = {
+    "Clock & Calendar",
+    "Fuzzy Clock",
+    "Weather",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111110, B11111110,
+    B01000010, B10000010,
+    B01000010, B00000010,
+    B01000010, B10000010,
+    B01111110, B10000010,
+    B00000000, B10000000,
+    B01111110, B10000010,
+    B01000010, B11111110,
+    B00000010, B00000000,
+    B01000010, B11111110,
+    B01000010, B10000010,
+    B01000000, B10000010,
+    B01000010, B10000010,
+    B01111110, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Dashboards");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Dshb");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Dashboards");
+  
+  while(1) {
+    drawButtonMatrix(0, 20, tft.width(), 300, buttons, 1, 6);
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, 20, tft.width(), 300, buttons, 1, 6);
+    if(button_pressed != -1) {
+      // Clock & Calendar
+      if(button_pressed == 0) {
+        dashboard_calendar(APP_MODE_LAUNCH, NULL);
+      }
+      // Fuzzy Clock
+      if(button_pressed == 1) {
+        fuzzy_clock(APP_MODE_LAUNCH, NULL);
+      }
+      // Weather
+      if(button_pressed == 2) {
+        weather(APP_MODE_LAUNCH, NULL);
+      }
+      clearScreen();
+      drawAppTitle("Dashboards");
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+
+}
+
+
+// ====================================================
 // Дашборд (часы, календарь, информация)
 // ====================================================
 
 #define CLOCK_UPDATE_SCREEN_INTERVAL 1000
 #define CLOCK_UPDATE_DATA_INTERVAL 600000
 
-void dashboard(char mode, char *io_buff) {
+void dashboard_calendar(char mode, char *io_buff) {
   char buff[80];
   char weather[80];
   char rates[80];
-  int wifi_status;
 
   long unix_timestamp;
   int hour;
@@ -16400,7 +16674,7 @@ void dashboard(char mode, char *io_buff) {
   };
 
   if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Dashboard");
+    strcpy(io_buff, "Clock & Calendar");
     return;
   }
   if(mode == APP_MODE_RETURN_NAME_SHORT) {
@@ -16413,7 +16687,7 @@ void dashboard(char mode, char *io_buff) {
   }
 
   clearScreen();
-  drawAppTitle("Dashboard");
+  drawAppTitle("Clock & Calendar");
 
   strcpy(weather, "");
   strcpy(rates, "");
@@ -16526,7 +16800,6 @@ void dashboard(char mode, char *io_buff) {
 #define FUZZY_CLOCK_UPDATE_SCREEN_INTERVAL 60000
 
 void fuzzy_clock(char mode, char *io_buff) {
-  int wifi_status;
   char buff[80];
   long unix_timestamp;
   int hour;
@@ -24073,6 +24346,7 @@ double parse_term(char *expr, function_expr_value_by_name_pointer expr_value_by_
       (*expr_offset)++;
     }
   }
+  // Тригонометрия
   else if(strncasecmp(expr + *expr_offset, "sin(", 4) == 0) {
     (*expr_offset) += 3;
     left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
@@ -24088,15 +24362,57 @@ double parse_term(char *expr, function_expr_value_by_name_pointer expr_value_by_
     left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
     left = tan(left);
   }
+  else if(strncasecmp(expr + *expr_offset, "asin(", 5) == 0) {
+    (*expr_offset) += 4;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = asin(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "acos(", 5) == 0) {
+    (*expr_offset) += 4;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = acos(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "atan(", 5) == 0) {
+    (*expr_offset) += 4;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = atan(left);
+  }
+  // Корень, экспоненты, логарифмы
   else if(strncasecmp(expr + *expr_offset, "sqr(", 4) == 0) {
     (*expr_offset) += 3;
     left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
     left = sqrt(left);
   }
+  else if(strncasecmp(expr + *expr_offset, "exp(", 4) == 0) {
+    (*expr_offset) += 3;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = exp(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "log(", 4) == 0) {
+    (*expr_offset) += 3;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = log(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "log10(", 6) == 0) {
+    (*expr_offset) += 5;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = log10(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "log1p(", 6) == 0) {
+    (*expr_offset) += 5;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = log1p(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "log2(", 5) == 0) {
+    (*expr_offset) += 4;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = log2(left);
+  }
+  // Модуль, знак, округление, ближайшие целые
   else if(strncasecmp(expr + *expr_offset, "abs(", 4) == 0) {
     (*expr_offset) += 3;
     left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
-    left = abs(left);
+    left = fabs(left);
   }
   else if(strncasecmp(expr + *expr_offset, "sgn(", 4) == 0) {
     (*expr_offset) += 3;
@@ -24105,7 +24421,29 @@ double parse_term(char *expr, function_expr_value_by_name_pointer expr_value_by_
     else if(left > 0) left = 1;
     else if(left < 0) left = -1;
   }
+  else if(strncasecmp(expr + *expr_offset, "floor(", 6) == 0) {
+    (*expr_offset) += 5;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = floor(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "ceil(", 5) == 0) {
+    (*expr_offset) += 4;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = ceil(left);
+  }
+  else if(strncasecmp(expr + *expr_offset, "round(", 6) == 0) {
+    (*expr_offset) += 5;
+    left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
+    left = round(left);
+  }
+  // Случайное число
+  else if(strncasecmp(expr + *expr_offset, "rnd(", 4) == 0) {
+    (*expr_offset) += 3;
+    left = (double)esp_random() / UINT32_MAX;
+  }
+  // Возможно это число
   else {
+    // Пытаемся преобразовать в число
     left = strtod(expr + *expr_offset, &expr_ptr);
     if(expr + *expr_offset != expr_ptr) {
       *expr_offset = (int)(expr_ptr - expr);
@@ -24115,6 +24453,7 @@ double parse_term(char *expr, function_expr_value_by_name_pointer expr_value_by_
       //Serial.println("Not a number");
       expr_ptr = (char*)malloc(80 * sizeof(char));
       memcpy(expr_ptr, expr + *expr_offset, 79);
+      expr_ptr[79] = 0;
       for(i = 0; i < 79; i++) {
         if(expr_ptr[i] == ' ') { expr_ptr[i] = 0; break; }
         if(expr_ptr[i] == '+') { expr_ptr[i] = 0; break; }
@@ -24124,6 +24463,7 @@ double parse_term(char *expr, function_expr_value_by_name_pointer expr_value_by_
         if(expr_ptr[i] == '%') { expr_ptr[i] = 0; break; }
       }
       (*expr_offset) += i;
+      //Serial.printf("expr_ptr: %s\n", expr_ptr);
       left = (*expr_value_by_name)(expr_ptr);
       free(expr_ptr);
     }
@@ -24132,9 +24472,68 @@ double parse_term(char *expr, function_expr_value_by_name_pointer expr_value_by_
   return left;
 }
 
+// Получение константы по названию
+// PI, EXP1, PI_2, HALF_PI, TWO_PI, TRUE, FALSE, NAN, INF, ADC_MAX, HIGH, LOW, INPUT, OUTPUT, INPUT_PULLUP, DEG2RAD, RAD2DEG, SQRT2, SQRT3
 double parse_expr_constant_by_name(char *name) {
-  if(strcmp(name, "pi") == 0 || strcmp(name, "PI") == 0) {
+  if(strcasecmp(name, "pi") == 0) {
     return PI;
+  }
+  if(strcasecmp(name, "exp1") == 0) {
+    return exp(1);
+  }
+  if(strcasecmp(name, "pi_2") == 0) {
+    return PI / 2;
+  }
+  if(strcasecmp(name, "half_pi") == 0) {
+    return PI / 2;
+  }
+  if(strcasecmp(name, "two_pi") == 0) {
+    return PI * 2;
+  }
+  if(strcasecmp(name, "true") == 0) {
+    return 1;
+  }
+  if(strcasecmp(name, "false") == 0) {
+    return 0;
+  }
+  if(strcasecmp(name, "nan") == 0) {
+    return NAN;
+  }
+  if(strcasecmp(name, "inf") == 0) {
+    return INFINITY;
+  }
+  if(strcasecmp(name, "adc_max") == 0) {
+    return 4095;
+  }
+  if(strcasecmp(name, "high") == 0) {
+    return HIGH;
+  }
+  if(strcasecmp(name, "low") == 0) {
+    return LOW;
+  }
+  if(strcasecmp(name, "input") == 0) {
+    return INPUT;
+  }
+  if(strcasecmp(name, "output") == 0) {
+    return OUTPUT;
+  }
+  if(strcasecmp(name, "input_pullup") == 0) {
+    return INPUT_PULLUP;
+  }
+  if(strcasecmp(name, "deg2rad") == 0) {
+    return PI / 180;
+  }
+  if(strcasecmp(name, "rad2deg") == 0) {
+    return 180 / PI;
+  }
+  if(strcasecmp(name, "sqrt2") == 0) {
+    return sqrt(2);
+  }
+  if(strcasecmp(name, "sqrt3") == 0) {
+    return sqrt(3);
+  }
+  if(strcasecmp(name, "sqrt5") == 0) {
+    return sqrt(5);
   }
   return 0;
 }
