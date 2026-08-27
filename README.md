@@ -67,8 +67,6 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Breathing timer
 * Brightness
 * Life (cellular automaton) - see https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life for details
-* Clock stand
-* Fuzzy clock
 * Counter
 * I2C Scanner
 * Set clock and timezone
@@ -104,6 +102,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Flashcards
 * Table editor (stored in CSV format)
 * TOTP (like Google Authenticator)
+* Basic interpeter - advanced calculations
 
 ## Games
 * Fifteen puzzle game - see https://en.wikipedia.org/wiki/15_puzzle for details
@@ -118,6 +117,15 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Mental Math - see https://en.wikipedia.org/wiki/Mental_calculation for details :)
 * 2048 - see https://en.wikipedia.org/wiki/2048_(video_game) for details
 * CHIP-8 emulator - see https://en.wikipedia.org/wiki/CHIP-8 for details
+
+## Dashboards
+* Clock and Calendar
+* Fuzzy Clock
+* Unix Time
+* Internet Time
+* Analog Time
+* Weather
+* Network
 
 ## Screensavers
 * Stars
