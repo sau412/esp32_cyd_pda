@@ -242,7 +242,8 @@
   weather как команда терминала
 2026-08-27 Баг в вычислении выражений, скриншоты - проверять хранилище, не инициализировать FFat если есть SD, константы пинов,
   другие, более удобные символы для русского на основной клавиатуре, функции для управления курсором,
-  поддержка азбуки Морзе
+  поддержка азбуки Морзе, сигнал на четверть часа
+2026-08-28 Бейсик баг с переменными, rot13, stopwatch в фоне, stopwatch морзе, улучшение будильника, фигурки для три-в-ряд, ускорение спрайтов
 
 - (д) Сделать сообщение на esp32
 - (д) Сделать сообщение на пикабу
@@ -251,7 +252,11 @@
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (д) Пакетные файлы для терминала
 - (д) Basic: сообщения об ошибках
+- (д) Basic: несколько команд в строке
+- (д) Basic поддержка \n\r\t хотя бы
+- (д) Basic команда cursor
 - (д) Поиск
+- (д) grep
 - (д) /Terminal/Environment
 - (д) /Terminal/Aliases
 - (д) Терминал переменные окружения
@@ -260,7 +265,7 @@
 - (д) Конвертер валют, единиц измерения
 - (д) Мировое время
 - (д) iperf
-- (д) Wi-Fi sniffer
+- (д) Wi-Fi sniffer stand
 - (д) chat
 - (д) cal
 - (д) df
@@ -271,8 +276,6 @@
 - (д) Установка даты-времени из терминала
 - (д) Возможность отмонтировать всё и подготовить устройство к отключению питания
 - (д) Восход и закат
-- (д) Секундомер в фоне
-- (д) Таймер в фоне
 - (д) Крутая калибровка
 - (д) Прошлые команды в терминале
 - (д) Текущий путь в терминале
@@ -299,6 +302,8 @@
 - (д) Ещё один заход Bluetooth
 - (п) Просмотреть справку, может быть что-то добавить
 
+- (н) Генератор сигналов в фоне
+- (н) Таймер в фоне
 - (н) Дашборд криптовалюты
 - (н) Дашборд валюты
 - (н) Дашборд акции
@@ -318,8 +323,9 @@
 - (н) Сокобан
 - (н) Убирать значки в лаунчере
 - (н) Соединение через HTTP прокси
-- (н) Сохранение состояния приложения, хотя бы некоторых и хотя бы частичное
-- (н) Некоторые задачи в фоне - вебсервер, чат, IRC
+- (н) Вебсервер в фоне
+- (н) Чат в фоне
+- (н) IRC в фоне
 - (н) Переделать мп3-плеер в сторону мп3, а не просто пим (мп3 не выдаёт прерываний)
 - (н) Автояркость - нужно определять вход резистора
 - (н) Определять инверсию экрана
@@ -941,7 +947,7 @@ void security(char mode, char *io_buff);
 void counter(char mode, char *io_buff);
 void random_numbers(char mode, char *io_buff);
 void timer(char mode, char *io_buff);
-void stopwatch_app(char mode, char *io_buff);
+void stopwatch(char mode, char *io_buff);
 void breathe(char mode, char *io_buff);
 void brightness_app(char mode, char *io_buff);
 void lights_off(char mode, char *io_buff);
@@ -1046,7 +1052,7 @@ function_application_pointer all_apps[] = {
   counter,
   random_numbers,
   timer,
-  stopwatch_app,
+  stopwatch,
   breathe,
   piano,
   metronome,
@@ -2458,24 +2464,23 @@ void terminal_execute_single(char *str) {
       terminal_println("caesar {text}");
     }
     else {
+      // Шифр цезаря - сдвиг на 3
       for(i = 1; i < arg_count; i++) {
-        for(j = 0; j < strlen(cmdline_params[i]); j++) {
-          if(cmdline_params[i][j] == 'z') {
-            cmdline_params[i][j] = 'a';
-          }
-          else if(cmdline_params[i][j] == 'Z') {
-            cmdline_params[i][j] = 'A';
-          }
-          else if(cmdline_params[i][j] == 0xFF) {
-            cmdline_params[i][j] = 0xE0;
-          }
-          else if(cmdline_params[i][j] == 0xDF) {
-            cmdline_params[i][j] = 0xC0;
-          }
-          else {
-            cmdline_params[i][j]++;
-          }
-        }
+        terminal_rot_string(cmdline_params[i], 3);
+        terminal_print(cmdline_params[i]);
+        if(i + 1 != arg_count) terminal_print(" ");
+      }
+      terminal_println("");
+    }
+  }
+  else if(strcmp(cmdline_params[0], "rot13") == 0) {
+    if(arg_count == 1) {
+      terminal_println("rot13 {text}");
+    }
+    else {
+      // rot13 - сдвиг на 13
+      for(i = 1; i < arg_count; i++) {
+        terminal_rot_string(cmdline_params[i], 13);
         terminal_print(cmdline_params[i]);
         if(i + 1 != arg_count) terminal_print(" ");
       }
@@ -3248,7 +3253,7 @@ void terminal_execute_single(char *str) {
     timer(APP_MODE_LAUNCH, NULL);
   }
   else if(strcmp(cmdline_params[0], "stopwatch") == 0) {
-    stopwatch_app(APP_MODE_LAUNCH, NULL);
+    stopwatch(APP_MODE_LAUNCH, NULL);
   }
   else if(strcmp(cmdline_params[0], "breathe") == 0) {
     breathe(APP_MODE_LAUNCH, NULL);
@@ -3766,6 +3771,38 @@ void terminal_ansi_query_size() {
 
 void terminal_ansi_clear_screen() {
   terminal_print("\e[2J");
+}
+
+void terminal_rot_string(char *str, int shift) {
+  char next[] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50,
+    0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70,
+    0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xA8, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0,
+    0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF, 0xC0,
+    0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xB8, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF, 0xF0,
+    0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF, 0xE0,
+  };
+  int i, j;
+  char c;
+  for(i = 0; i < strlen(str); i++) {
+    c = str[i];
+    if(next[c] != 0) {
+      for(j = 0; j < shift; j++) {
+        c = next[c];
+      }
+      str[i] = c;
+    }
+  }
 }
 
 void terminal_show_screen() {
@@ -4800,7 +4837,7 @@ int basic_get_variable_index(char *var_name) {
   //Serial.printf("basic_get_variable_index %s\n", var_name);
   int i;
   i = basic_get_variable_index_exists(var_name);
-  if(i < BASIC_VARS_COUNT) return i;
+  if(i >= 0) return i;
 
   // Пробуем добавить
   for(i = 0; i < BASIC_VARS_COUNT; i++) {
@@ -4945,6 +4982,16 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
       *cont_flag = 0;
       return;
     }
+  }
+  else if(strcmp(cmdline_params[0], "cursor") == 0) {
+    error_flag = 0;
+    expr_offset = 0;
+    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+    error_flag = 0;
+    expr_offset = 0;
+    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
+    
+    terminal_ansi_set_cursor(left, right);
   }
   else if(strcmp(cmdline_params[0], "print") == 0) {
     for(i = 1; i < arg_count; i++) {
@@ -10429,6 +10476,7 @@ void timer(char mode, char *io_buff) {
           sprintf(buff, "%02d", 0);
           tft.drawCentreString(buff, 3 * tft.width() / 4, 56, FONT_BIG);
 
+          beep_morse_if_enabled("T");
           drawInfo("Time's up!");
           tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
           minutes = preset_minutes;
@@ -10438,8 +10486,8 @@ void timer(char mode, char *io_buff) {
           continue;
         }
         else {
+          beep_morse_if_enabled("T");
           start_millis = millis();
-          beep_if_enabled();
           time_remains = preset_minutes * 60 + preset_seconds - (millis() - start_millis) / 1000;
         }
       }
@@ -10530,13 +10578,17 @@ void timer(char mode, char *io_buff) {
       // Старт
       if(button_pressed == 0) {
         if(preset_minutes > 0 || preset_seconds > 0) {
+          beep_morse_if_enabled("S");
           start_millis = millis();
           timer_run = 1;
         }
       }
       // Cтоп
       else if(button_pressed == 1) {
-        timer_run = 0;
+        if(timer_run) {
+          beep_morse_if_enabled("T");
+          timer_run = 0;
+        }
       }
       redraw_flag = 1;
     }
@@ -10601,22 +10653,22 @@ void timer(char mode, char *io_buff) {
 
 #define STOPWATCH_MAX_LAPS 100
 
-void stopwatch_app(char mode, char *io_buff) {
+void stopwatch(char mode, char *io_buff) {
   int button_pressed;
   int i;
-  long millis_from_start = 0;
+  static long millis_from_start = 0;
   long millis_prev = 0;
   long millis_value = 0;
   long millis_from_lap = 0;
-  char stopwatch_run = 0;
-  char redraw_flag = 0;
+  static char stopwatch_run = 0;
+  char redraw_flag = 1;
   char buff[80];
   char *buttons_control[] = {
     "Start", "Lap", "Stop", "Reset",
     NULL
   };
   char *buttons_lap_control[] = {
-    "Delete", "Delete all",
+    "Delete", "Clear all",
     NULL
   };
   char **stopwatch_laps;
@@ -10708,12 +10760,14 @@ void stopwatch_app(char mode, char *io_buff) {
     if(button_pressed != -1) {
       // Start
       if(button_pressed == 0) {
+        beep_morse_if_enabled("S");
         stopwatch_run = 1;
         millis_prev = millis();
       }
       // Lap
       else if(button_pressed == 1) {
         if(stopwatch_run && current_lap < 99) {
+          beep_morse_if_enabled("L");
           sprintf(buff, "%02d:%02d:%02d.%02d",
             millis_from_lap / 36000000,
             (millis_from_lap / 60000) % 60,
@@ -10727,10 +10781,14 @@ void stopwatch_app(char mode, char *io_buff) {
       }
       // Stop
       else if(button_pressed == 2) {
-        stopwatch_run = 0;
+        if(stopwatch_run) {
+          beep_morse_if_enabled("T");
+          stopwatch_run = 0;
+        }
       }
       // Reset
       else if(button_pressed == 3) {
+        beep_morse_if_enabled("R");
         current_lap = 0;
         lap_list_offset = 0;
         lap_list_selected = 0;
@@ -10752,6 +10810,7 @@ void stopwatch_app(char mode, char *io_buff) {
       // Delete one
       if(button_pressed == 0) {
         if(current_lap > 0) {
+          beep_morse_if_enabled("D");
           if(stopwatch_laps[lap_list_selected]) {
             free(stopwatch_laps[lap_list_selected]);
           }
@@ -10770,6 +10829,7 @@ void stopwatch_app(char mode, char *io_buff) {
       }
       // Delete all laps
       else if(button_pressed == 1) {
+        beep_morse_if_enabled("C");
         current_lap = 0;
         lap_list_offset = 0;
         lap_list_selected = 0;
@@ -21015,7 +21075,7 @@ void generator(char mode, char *io_buff) {
   float frequency = 1;
   float amplitude = 1;
   int value;
-  int pin = 22;
+  int pin = 27;
 
   char update_flag;
   char *buttons[] = {
@@ -21062,6 +21122,7 @@ void generator(char mode, char *io_buff) {
   drawAppTitle("Signal Generator");
 
   pinMode(pin, OUTPUT);
+
   while(1) {
     drawButtonMatrix(0, tft.height() - 32 * 4, tft.width() / 2, 32 * 4, buttons, 1, 4);
 
@@ -22294,6 +22355,7 @@ void hanoi_towers(char mode, char *io_buff) {
 void match_three(char mode, char *io_buff) {
   TouchPoint p;
   int touch_x, touch_y;
+  int touch_x_start, touch_y_start;
   int row1, col1;
   int row2, col2;
   int button_pressed;
@@ -22379,7 +22441,7 @@ void match_three(char mode, char *io_buff) {
       
       changes_found_flag = 0;
       while(match_three_shift_down(field) > 0) {
-        delay(100);
+        //delay(50);
         match_three_show_field(field, col1, row1);
         changes_found_flag = 1;
       }
@@ -22406,6 +22468,35 @@ void match_three(char mode, char *io_buff) {
 
     touch_x = global_touch_x;
     touch_y = global_touch_y;
+
+    // Если первое нажатие попадает в поле
+    if(col1 == -1 && touch_y > 40 && touch_y < 40 + MATCH_THREE_FIELD_WIDTH * (tft.width() / MATCH_THREE_FIELD_WIDTH)) {
+      col1 = touch_x / (tft.width() / MATCH_THREE_FIELD_WIDTH);
+      row1 = (touch_y - 40) / (tft.width() / MATCH_THREE_FIELD_WIDTH);
+      if(col1 >= MATCH_THREE_FIELD_WIDTH || row1 >= MATCH_THREE_FIELD_HEIGHT) {
+        col1 = -1;
+        row1 = -1;
+      }
+      while(touchCheckNowait()) {
+        touch_x = global_touch_x;
+        touch_y = global_touch_y;
+      }
+      touchWaitRelease();
+      col2 = touch_x / (tft.width() / MATCH_THREE_FIELD_WIDTH);
+      row2 = (touch_y - 40) / (tft.width() / MATCH_THREE_FIELD_WIDTH);
+      if(col1 >= MATCH_THREE_FIELD_WIDTH || row1 >= MATCH_THREE_FIELD_HEIGHT) {
+        col2 = -1;
+        row2 = -1;
+      }
+      // Если начало и конец на одном блоке, то сбрасываем
+      if(col1 == col2 && row1 == row2) {
+        col1 = -1;
+        row1 = -1;
+        col2 = -1;
+        row2 = -1;
+      }
+    }
+    
     if(col1 == -1) {
       col1 = touch_x / (tft.width() / MATCH_THREE_FIELD_WIDTH);
       row1 = (touch_y - 40) / (tft.width() / MATCH_THREE_FIELD_WIDTH);
@@ -22485,6 +22576,170 @@ int match_three_moves_available(int *field) {
 void match_three_show_field(int *field, int col_selected, int row_selected) {
   int row, col;
   char buff[80];
+  char *icon;
+  char icon_a[] = {
+    24, 24,
+    B00000000, B00000000, B00000000,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B00000000, B00000000, B00000000
+  };
+  char icon_e[] = {
+    24, 24,
+    B00000000, B00011000, B00000000,
+    B00000000, B00111100, B00000000,
+    B00000000, B01111110, B00000000,
+    B00000000, B11100111, B00000000,
+    B00000001, B11000011, B10000000,
+    B00000011, B10000001, B11000000,
+    B00000111, B00000000, B11100000,
+    B00001110, B00000000, B01110000,
+    B00011100, B00000000, B00111000,
+    B00111000, B00000000, B00011100,
+    B01110000, B00000000, B00001110,
+    B11100000, B00000000, B00000111,
+    B11100000, B00000000, B00000111,
+    B01110000, B00000000, B00001110,
+    B00111000, B00000000, B00011100,
+    B00011100, B00000000, B00111000,
+    B00001110, B00000000, B01110000,
+    B00000111, B00000000, B11100000,
+    B00000011, B10000001, B11000000,
+    B00000001, B11000011, B10000000,
+    B00000000, B11100111, B00000000,
+    B00000000, B01111110, B00000000,
+    B00000000, B00111100, B00000000,
+    B00000000, B00011000, B00000000,
+  };
+  char icon_c[] = {
+    24, 24,
+    B00000000, B00000000, B00000000,
+    B00000000, B00011000, B00000000,
+    B00000000, B00011000, B00000000,
+    B00000000, B00111100, B00000000,
+    B00000000, B00111100, B00000000,
+    B00000000, B01100110, B00000000,
+    B00000000, B01100110, B00000000,
+    B00000000, B11000011, B00000000,
+    B00000000, B11000011, B00000000,
+    B00000001, B10000001, B10000000,
+    B00000001, B10000001, B10000000,
+    B00000011, B00000000, B11000000,
+    B00000011, B00000000, B11000000,
+    B00000110, B00000000, B01100000,
+    B00000110, B00000000, B01100000,
+    B00001100, B00000000, B00110000,
+    B00001100, B00000000, B00110000,
+    B00011000, B00000000, B00011000,
+    B00011000, B00000000, B00011000,
+    B00110000, B00000000, B00001100,
+    B00110000, B00000000, B00001100,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B00000000, B00000000, B00000000
+  };
+  char icon_d[] = {
+    24, 24,
+    B00000000, B00000000, B00000000,
+    B00000000, B00011000, B00000000,
+    B00000000, B01111110, B00000000,
+    B00000001, B11100111, B10000000,
+    B00000111, B10000001, B11100000,
+    B00011110, B00000000, B01111000,
+    B01111000, B00000000, B00011110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01111000, B00000000, B00011110,
+    B00011110, B00000000, B01111000,
+    B00000111, B10000001, B11100000,
+    B00000001, B11100111, B10000000,
+    B00000000, B01111110, B00000000,
+    B00000000, B00011000, B00000000,
+    B00000000, B00000000, B00000000
+  };
+  char icon_b[] = {
+    24, 24,
+    B00000000, B00000000, B00000000,
+    B00000111, B00000000, B11100000,
+    B00011111, B11000011, B11111000,
+    B00111001, B11000011, B10011100,
+    B01110000, B11100111, B00001110,
+    B01110000, B01111110, B00001110,
+    B11100000, B00111100, B00000111,
+    B11000000, B00011000, B00000011,
+    B11000000, B00000000, B00000011,
+    B11000000, B00000000, B00000011,
+    B11100000, B00000000, B00000111,
+    B01100000, B00000000, B00000110,
+    B01110000, B00000000, B00001110,
+    B00111000, B00000000, B00011100,
+    B00011100, B00000000, B00111000,
+    B00001110, B00000000, B01110000,
+    B00000111, B00000000, B11100000,
+    B00000011, B10000001, B11000000,
+    B00000001, B11000011, B10000000,
+    B00000000, B11100111, B00000000,
+    B00000000, B01111110, B00000000,
+    B00000000, B00111100, B00000000,
+    B00000000, B00011000, B00000000,
+    B00000000, B00000000, B00000000
+  };
+  char icon_f[] = {
+    24, 24,
+    B00000000, B00000000, B00000000,
+    B00000000, B11111111, B00000000,
+    B00000011, B11111111, B11000000,
+    B00001111, B10000001, B11110000,
+    B00011110, B00000000, B01111000,
+    B00111100, B00000000, B00111100,
+    B00111000, B00000000, B00011100,
+    B01110000, B00000000, B00001110,
+    B01110000, B00000000, B00001110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01100000, B00000000, B00000110,
+    B01110000, B00000000, B00001110,
+    B01110000, B00000000, B00001110,
+    B00111000, B00000000, B00011100,
+    B00111100, B00000000, B00111000,
+    B00011110, B00000000, B01111000,
+    B00001111, B10000001, B11110000,
+    B00000011, B11111111, B11000000,
+    B00000000, B11111111, B00000000,
+    B00000000, B00000000, B00000000
+  };
+
   // Эти цвета неплохо видно и на чёрном, и на белом
   int item_to_color[] = {TFT_DARKGREY, TFT_RED, TFT_GREEN, TFT_BLUE, TFT_OLIVE, TFT_MAGENTA};
   for(row = 0; row < MATCH_THREE_FIELD_HEIGHT; row++) {
@@ -22496,17 +22751,36 @@ void match_three_show_field(int *field, int col_selected, int row_selected) {
         tft.width() / MATCH_THREE_FIELD_HEIGHT,
         color_scheme_bg
       );
-      Serial.print((int)field[col + row * MATCH_THREE_FIELD_WIDTH]);
-      Serial.print(" ");
+      //Serial.print((int)field[col + row * MATCH_THREE_FIELD_WIDTH]);
+      //Serial.print(" ");
       if(field[col + row * MATCH_THREE_FIELD_WIDTH] != -1) {
-        tft.setTextColor(item_to_color[field[col + row * MATCH_THREE_FIELD_WIDTH]], color_scheme_bg);
-        sprintf(buff, " %c ", field[col + row * MATCH_THREE_FIELD_WIDTH] + 'A');
-        tft.drawCentreString(
-          buff,
-          col * tft.width() / MATCH_THREE_FIELD_WIDTH + tft.width() / (2 * MATCH_THREE_FIELD_WIDTH),
-          34 + row * tft.width() / MATCH_THREE_FIELD_HEIGHT + tft.width() / (3 * MATCH_THREE_FIELD_WIDTH),
-          FONT_BIG
+        switch(field[col + row * MATCH_THREE_FIELD_WIDTH]) {
+          case 0: icon = icon_a; break;
+          case 1: icon = icon_b; break;
+          case 2: icon = icon_c; break;
+          case 3: icon = icon_d; break;
+          case 4: icon = icon_e; break;
+          case 5: icon = icon_f; break;
+        }
+        image_from_bits(
+          col * tft.width() / MATCH_THREE_FIELD_WIDTH + 3,
+          40 + row * tft.width() / MATCH_THREE_FIELD_HEIGHT + 3,
+          icon,
+          item_to_color[field[col + row * MATCH_THREE_FIELD_WIDTH]],
+          color_scheme_bg
         );
+        /*
+        else {
+          sprintf(buff, " %c ", field[col + row * MATCH_THREE_FIELD_WIDTH] + 'A');
+          tft.setTextColor(item_to_color[field[col + row * MATCH_THREE_FIELD_WIDTH]], color_scheme_bg);
+          tft.drawCentreString(
+            buff,
+            col * tft.width() / MATCH_THREE_FIELD_WIDTH + tft.width() / (2 * MATCH_THREE_FIELD_WIDTH),
+            34 + row * tft.width() / MATCH_THREE_FIELD_HEIGHT + tft.width() / (3 * MATCH_THREE_FIELD_WIDTH),
+            FONT_BIG
+          );
+        }
+        */
       }
       else {
         tft.fillRect(
@@ -22527,7 +22801,7 @@ void match_three_show_field(int *field, int col_selected, int row_selected) {
         );
       }
     }
-    Serial.println();
+    //Serial.println();
   }
 }
 
@@ -22993,11 +23267,6 @@ void metronome(char mode, char *io_buff) {
       continue;
     }
 
-    if(redraw_flag) {
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
-      redraw_flag = 0;
-    }
-
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "  %d  ", tempo);
     tft.drawCentreString(buff, 3 * tft.width() / 4, 28, FONT_DEFAULT);
@@ -23031,8 +23300,8 @@ void metronome(char mode, char *io_buff) {
         if(drawPrompt("Enter tempo", buff) == 0) {
           sscanf(buff, "%d", &tempo);
         }
+        clearPrompt();
       }
-      redraw_flag = 1;
     }
 
     button_pressed = touchCheckMatrix(0, 200, tft.width(), tft.height() - 200, buttons_presets, 3, 3);
@@ -23745,6 +24014,7 @@ void drawList(int left_x, int top_y, int width, int height, char **str, int rows
   if(str[0] == NULL) {
     tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
     tft.drawString("<empty list>", left_x + 1, top_y, FONT_DEFAULT);
+    tft.fillRect(left_x + tft.textWidth("<empty list>", FONT_DEFAULT), top_y, width - tft.textWidth("<empty list>", FONT_DEFAULT), 16, color_scheme_bg);
     tft.fillRect(left_x, top_y + 16, width, height - 16, color_scheme_bg);
     return;
   }
@@ -24376,6 +24646,10 @@ void image_from_bits(int start_x, int start_y, char *image, int color, int bg_co
   char bit;
   int width = (int)image[0];
   int height = (int)image[1];
+
+  tft.drawBitmap(start_x, start_y, (uint8_t*)(image + 2), width, height, color, bg_color);
+  return;
+
   for(y = 0; y < height; y++) {
     for(x = 0; x < width; x++) {
       byte_index = (width - x - 1 + y * width) / 8 + 2;
@@ -24459,6 +24733,7 @@ void beep_morse_perform(char c) {
     case 'X': case 'x': morse_dah(); morse_dit(); morse_dit(); morse_dah(); break;
     case 'Y': case 'y': morse_dah(); morse_dit(); morse_dah(); morse_dah(); break;
     case 'Z': case 'z': morse_dah(); morse_dah(); morse_dit(); morse_dit(); break;
+    case ' ': morse_wait(); morse_wait(); morse_wait(); break;
   }
 }
 
@@ -24468,15 +24743,17 @@ void beep_morse_if_enabled(char *str) {
   }
 }
 void beep_morse(char *str) {
-  xTaskCreatePinnedToCore(
-    beep_morse_task,   /* Task function */
-    "beep_morse_task", /* name of task */
-    8192,              /* Stack size of task */
-    str,              /* parameter */
-    1,                 /* priority */
-    &MorseTaskHandle,  /* Task handle */
-    0                  /* Core ID (0 or 1) */
-  );
+  if(MorseTaskHandle == NULL) {
+    xTaskCreatePinnedToCore(
+      beep_morse_task,   /* Task function */
+      "beep_morse_task", /* name of task */
+      8192,              /* Stack size of task */
+      str,              /* parameter */
+      1,                 /* priority */
+      &MorseTaskHandle,  /* Task handle */
+      0                  /* Core ID (0 or 1) */
+    );
+  }
 }
 
 void beep_if_enabled() {
@@ -24506,18 +24783,62 @@ void beep_quarter() {
 // Будильник, работает до касания или до минуты
 void beep_alarm() {
   int i;
-  long millis_start = millis();
+  char *buff = NULL;
+  char bl_flag = 1;
+  long touch_millis_start;
+  int brightness = global_brightness;
+  int x0 = tft.width() / 2 - 100 / 2;
+  int y0 = tft.height() / 2 - 32 / 2;
+  int width = 100;
+  int height = 32;
+
   global_alarm_set = 0;
-  for(i = 0; i < 60; i++) {
-    tone(BUZZER_PIN, 2000, 100);
-    delay(100);
-    tone(BUZZER_PIN, 3000, 300);
-    delay(100);
+  Serial.println("Alarm begin");
+  
+/* Работает асинхронно, возможны конфликты при обновлении экрана, поэтому экран не трогаем
+  // Сохраняем часть экрана где будет сообщение
+  buff = (char*)malloc(width * height * sizeof(char));
+  screen_area_to_buffer(buff, x0, y0, width, height);
+  tft.drawRect(x0, y0, width, height, color_scheme_fg);
+  tft.fillRect(x0 + 1, y0 + 1, width - 2, height - 2, color_scheme_bg);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
+  tft.drawCentreString("ALARM", tft.width() / 2, tft.height() / 2 - 8, FONT_DEFAULT);
+*/
+  for(i = 0; i < 150; i++) {
+    if(bl_flag) {
+      set_brightness(255);
+      bl_flag = 0;
+    }
+    else {
+      set_brightness(0);
+      bl_flag = 1;
+    }
+
+    // Модифицированный А
+    tone(BUZZER_PIN, 2000, MORSE_DOT_LEN);
+    delay(MORSE_DOT_LEN);
     noTone(BUZZER_PIN);
-    delay(300);
-    if(touchCheckNowait()) break;
+    delay(MORSE_DOT_LEN);
+    tone(BUZZER_PIN, 3000, MORSE_DOT_LEN * 3);
+    delay(MORSE_DOT_LEN * 3);
+    noTone(BUZZER_PIN);
+    delay(MORSE_DOT_LEN * 3);
+
+    if(global_touch_present_flag && i > 1) {
+      Serial.println("Break");
+      break;
+    }
   }
+/*
+  // Вернуть как было
+  
+  buffer_to_screen_area(buff, x0, y0, width, height);
+  free(buff);
+*/
+  set_brightness(brightness);
   global_alarm_set = 1;
+
+  Serial.println("Alarm end");
 }
 
 // Функции ширования и расшифровки - минное поле
