@@ -244,28 +244,33 @@
   другие, более удобные символы для русского на основной клавиатуре, функции для управления курсором,
   поддержка азбуки Морзе, сигнал на четверть часа
 2026-08-28 Бейсик баг с переменными, rot13, stopwatch в фоне, stopwatch морзе, улучшение будильника, фигурки для три-в-ряд, ускорение спрайтов
-
-- (д) Сделать сообщение на esp32
-- (д) Сделать сообщение на пикабу
-- (б) Баг с копированием/перемещением (сходу не воспроизвелось)
+2026-08-30 Заполненые спрайты для три-в-ряд
+2026-08-31 Все символы 1251 в 6х8, убрать информационное сообщение при успешном соединении вай-фай, пакетные файлы для терминала,
+  запуск по имени из /Terminal, grep, морзе победа в игре W, морзе поражение в игре L, формулы в CSV,
+  запуск приложений командой app из терминала, cursor команда терминала
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
-- (д) Пакетные файлы для терминала
+- (д) В книгах сохранять смещения для последних ста страниц для перемотки назад
+- (д) iperf
+- (д) Wi-Fi sniffer stand
+
+- (д) Меньше мигания в ханойских башнях
+- (д) Все символы 1251 в FONT_DEFAULT
+- (д) Улучшенный декодинг утф-8 (учёт новых символов)
+- (д) Дополнительные символы в символьной клавиатуре по шифту
+- (б) Баг с копированием/перемещением (сходу не воспроизвелось)
 - (д) Basic: сообщения об ошибках
 - (д) Basic: несколько команд в строке
 - (д) Basic поддержка \n\r\t хотя бы
-- (д) Basic команда cursor
-- (д) Поиск
-- (д) grep
+- (д) Терминал, парсинг строки, поддержка \n\r\t
+- (д) Приложение поиск
+- (д) Терминал переменные окружения
 - (д) /Terminal/Environment
 - (д) /Terminal/Aliases
-- (д) Терминал переменные окружения
 - (д) Форест файр - ранняя остановка пожара
 - (д) Терминал операции со строками ESC-кодами
 - (д) Конвертер валют, единиц измерения
-- (д) Мировое время
-- (д) iperf
-- (д) Wi-Fi sniffer stand
+- (д) Мировое время (дашборд)
 - (д) chat
 - (д) cal
 - (д) df
@@ -277,8 +282,9 @@
 - (д) Возможность отмонтировать всё и подготовить устройство к отключению питания
 - (д) Восход и закат
 - (д) Крутая калибровка
-- (д) Прошлые команды в терминале
+- (д) Прошлые команды в терминале по стрелке вверх
 - (д) Текущий путь в терминале
+- (д) Операции в терминале на основе текущего пути
 - (д) Буфер обмена
 - (д) Выделение в просмотре, копирование
 - (д) Выделение в редактировании, копирование, вставка
@@ -288,12 +294,7 @@
 - (д) Prompt - возможность переставлять курсор
 - (д) Категории для PIM
 - (д) Автосохранение позиции просмотра при неактивности
-- (д) В книгах сохранять смещения для последних ста страниц для перемотки назад
-- (д) Кодирование-декодирование b32 из терминала
-- (д) Кодирование-декодирование b64 из терминала
-- (д) Шифрование-расшифрование AES в терминале
 - (д) Кастомные значки в заголовке вместо букв AFMSWT
-- (д) Картинки для три-в-ряд
 - (д) Возможность менять звук из приложения
 - (д) Мини-калькулятор
 - (д) Ланучер-список
@@ -360,6 +361,11 @@
 - (н) Basic строки
 - (н) Basic работа с файлами
 - (н) Полноцветные скриншоты (24 бита) если нужно
+- (н) Заставка Boids
+- (н) Заставка DLA
+- (н) Кодирование-декодирование b32 из терминала
+- (н) Кодирование-декодирование b64 из терминала
+- (н) Шифрование-расшифрование AES в терминале
 
 */
 
@@ -1809,7 +1815,7 @@ void terminal_manual() {
   "csv {file} - edit file in CSV editor\n"
   "\n"
   "== Running apps from termminal ==\n"
-  "Type app name to launch:\n"
+  "Type \"app {name}\" to launch:\n"
   "calculator - Calculator app\n"
   "files - File app\n"
   "notes - Notes app\n"
@@ -2440,6 +2446,16 @@ void terminal_execute_single(char *str) {
   else if(strcmp(cmdline_params[0], "exit") == 0) {
     global_exit_flag = 1;
   }
+  else if(strcmp(cmdline_params[0], "cursor") == 0) {
+    if(arg_count != 3) {
+      terminal_println("cursor {col} {row}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      i2 = strtol(cmdline_params[2], NULL, 10);
+      terminal_ansi_set_cursor(i1, i2);
+    }
+  }
   else if(strcmp(cmdline_params[0], "date") == 0) {
     sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
     terminal_println(buff);
@@ -2784,6 +2800,14 @@ void terminal_execute_single(char *str) {
       terminal_more(cmdline_params[1]);
     }
   }
+  else if(strcmp(cmdline_params[0], "grep") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: grep {text} {file}\r");
+    }
+    else {
+      terminal_grep(cmdline_params[1], cmdline_params[2]);
+    }
+  }
   else if(strcmp(cmdline_params[0], "view") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: view {file}\r");
@@ -3121,91 +3145,6 @@ void terminal_execute_single(char *str) {
       }
     }
   }
-#ifdef IS_SSH_ENABLED
-  else if(strcmp(cmdline_params[0], "ssh") == 0) {
-    if(arg_count == 1) {
-      terminal_println("Usage: ssh {host} [port]");
-    }
-    else {
-      terminal_ssh(cmdline_params[0] + 4);
-    }
-  }
-#endif
-#endif
-  // Обычные приложения
-  else if(strcmp(cmdline_params[0], "calculator") == 0) {
-    calculator(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "files") == 0) {
-    files(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "notes") == 0) {
-    notes(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "contacts") == 0) {
-    contacts(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "todo") == 0) {
-    todo(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "schedule") == 0) {
-    schedule(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "expenses") == 0) {
-    expenses(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "flashcards") == 0) {
-    flashcards(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "books") == 0) {
-    books(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "passwords") == 0) {
-    passwords(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "totp") == 0) {
-    totp(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "tables") == 0) {
-    tables(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "screenshots") == 0) {
-    screenshots(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "tunes") == 0) {
-    tunes(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "music") == 0) {
-    music(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "webradio") == 0) {
-    webradio(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "system_info") == 0) {
-    system_info(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "torch") == 0) {
-    torch(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "draw") == 0) {
-    draw(APP_MODE_LAUNCH, NULL);
-  }
-#ifdef IS_WIFI_ENABLED
-  else if(strcmp(cmdline_params[0], "wifi") == 0) {
-    wifi(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "gopher") == 0) {
-    gopher(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "rss") == 0) {
-    rss(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "irc") == 0) {
-    irc(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "chat") == 0) {
-    chat(APP_MODE_LAUNCH, NULL);
-  }
   else if(strcmp(cmdline_params[0], "weather") == 0) {
     char temp[20];
     char wind[20];
@@ -3233,132 +3172,237 @@ void terminal_execute_single(char *str) {
       terminal_println("Unable to get weather");
     }
   }
-  else if(strcmp(cmdline_params[0], "file_server") == 0) {
-    http_file_access(APP_MODE_LAUNCH, NULL);
-  }
-//  else if(strcmp(cmdline_params[0], "translate") == 0) {
-//    translate(APP_MODE_LAUNCH, NULL);
-//  }
-  else if(strcmp(cmdline_params[0], "wikipedia") == 0) {
-    wikipedia(APP_MODE_LAUNCH, NULL);
+#ifdef IS_SSH_ENABLED
+  else if(strcmp(cmdline_params[0], "ssh") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: ssh {host} [port]");
+    }
+    else {
+      terminal_ssh(cmdline_params[0] + 4);
+    }
   }
 #endif
-  else if(strcmp(cmdline_params[0], "counter") == 0) {
-    counter(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "random_numbers") == 0) {
-    random_numbers(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "timer") == 0) {
-    timer(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "stopwatch") == 0) {
-    stopwatch(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "breathe") == 0) {
-    breathe(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "piano") == 0) {
-    piano(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "metronome") == 0) {
-    metronome(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "screensaver") == 0) {
-    screensaver(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "user_manual") == 0) {
-    user_manual(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "security") == 0) {
-    security(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "brightness") == 0) {
-    brightness_app(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "touch_calibration") == 0) {
-    touch_calibration(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "oscilloscope") == 0) {
-    oscilloscope(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "voltmeter") == 0) {
-    voltmeter(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "generator") == 0) {
-    generator(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "life") == 0) {
-    life(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "dashboard") == 0) {
-    dashboard(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "fuzzy_clock") == 0) {
-    fuzzy_clock(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "view_font") == 0) {
-    view_font(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "fifteen") == 0) {
-    fifteen(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "lights_off") == 0) {
-    lights_off(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "snake") == 0) {
-    snake(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "turkish_kerchief") == 0) {
-    turkish_kerchief(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "memory_match") == 0) {
-    memory_match(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "hanoi_towers") == 0) {
-    hanoi_towers(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "match_three") == 0) {
-    match_three(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "simon") == 0) {
-    simon(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "n_back") == 0) {
-    n_back(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "mental_math") == 0) {
-    mental_math(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "game2048") == 0) {
-    game2048(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "screen_settings") == 0) {
-    screen_settings(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "keyboard_control") == 0) {
-    keyboard_control(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "sound_control") == 0) {
-    sound_control(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "set_clock") == 0) {
-    set_clock(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "autorun") == 0) {
-    autorun(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "select_storage") == 0) {
-    select_storage_app(APP_MODE_LAUNCH, NULL);
-  }
-  else if(strcmp(cmdline_params[0], "backups") == 0) {
-    backups(APP_MODE_LAUNCH, NULL);
+#endif
+  // Обычные приложения
+  else if(strcmp(cmdline_params[0], "app") == 0) {
+    if(strcmp(cmdline_params[1], "calculator") == 0) {
+      calculator(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "files") == 0) {
+      files(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "notes") == 0) {
+      notes(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "contacts") == 0) {
+      contacts(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "todo") == 0) {
+      todo(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "schedule") == 0) {
+      schedule(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "expenses") == 0) {
+      expenses(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "flashcards") == 0) {
+      flashcards(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "books") == 0) {
+      books(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "passwords") == 0) {
+      passwords(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "totp") == 0) {
+      totp(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "tables") == 0) {
+      tables(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "screenshots") == 0) {
+      screenshots(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "tunes") == 0) {
+      tunes(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "music") == 0) {
+      music(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "webradio") == 0) {
+      webradio(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "system_info") == 0) {
+      system_info(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "torch") == 0) {
+      torch(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "draw") == 0) {
+      draw(APP_MODE_LAUNCH, NULL);
+    }
+#ifdef IS_WIFI_ENABLED
+    else if(strcmp(cmdline_params[1], "wifi") == 0) {
+      wifi(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "gopher") == 0) {
+      gopher(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "rss") == 0) {
+      rss(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "irc") == 0) {
+      irc(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "chat") == 0) {
+      chat(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "weather") == 0) {
+      weather(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "file_server") == 0) {
+      http_file_access(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "translate") == 0) {
+      translate(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "wikipedia") == 0) {
+      wikipedia(APP_MODE_LAUNCH, NULL);
+    }
+#endif
+    else if(strcmp(cmdline_params[1], "counter") == 0) {
+      counter(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "random_numbers") == 0) {
+      random_numbers(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "timer") == 0) {
+      timer(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "stopwatch") == 0) {
+      stopwatch(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "breathe") == 0) {
+      breathe(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "piano") == 0) {
+      piano(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "metronome") == 0) {
+      metronome(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "screensaver") == 0) {
+      screensaver(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "user_manual") == 0) {
+      user_manual(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "security") == 0) {
+      security(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "brightness") == 0) {
+      brightness_app(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "touch_calibration") == 0) {
+      touch_calibration(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "oscilloscope") == 0) {
+      oscilloscope(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "voltmeter") == 0) {
+      voltmeter(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "generator") == 0) {
+      generator(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "life") == 0) {
+      life(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "dashboard") == 0) {
+      dashboard(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "fuzzy_clock") == 0) {
+      fuzzy_clock(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "view_font") == 0) {
+      view_font(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "fifteen") == 0) {
+      fifteen(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "lights_off") == 0) {
+      lights_off(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "snake") == 0) {
+      snake(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "turkish_kerchief") == 0) {
+      turkish_kerchief(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "memory_match") == 0) {
+      memory_match(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "hanoi_towers") == 0) {
+      hanoi_towers(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "match_three") == 0) {
+      match_three(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "simon") == 0) {
+      simon(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "n_back") == 0) {
+      n_back(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "mental_math") == 0) {
+      mental_math(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "game2048") == 0) {
+      game2048(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "screen_settings") == 0) {
+      screen_settings(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "keyboard_control") == 0) {
+      keyboard_control(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "sound_control") == 0) {
+      sound_control(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "set_clock") == 0) {
+      set_clock(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "autorun") == 0) {
+      autorun(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "select_storage") == 0) {
+      select_storage_app(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "backups") == 0) {
+      backups(APP_MODE_LAUNCH, NULL);
+    }
+    else {
+      terminal_println("Unknown app name");
+    }
   }
   else if(strcmp(cmdline_params[0], "help") == 0) {
     terminal_manual();
   }
   else {
-    if(strcmp(cmdline_params[0], "")) {
+    // Ищем в /Terminal
+    sprintf(buff, "/Terminal/%s", cmdline_params[0]);
+    if(Storage->exists(buff)) {
+      file = Storage->open(buff);
+      while(file.available()) {
+        // Читаем команду
+        strcpy(buff, file.readStringUntil('\n').c_str());
+        // Выполняем команду из строки
+        terminal_execute(buff);
+      }
+      file.close();
+    }
+    else if(strcmp(cmdline_params[0], "")) {
       terminal_println("Unknown command");
     }
   }
@@ -4444,6 +4488,75 @@ void terminal_more(char *filename) {
         if(byte == 0x03) break;
         lines = 0;
         chars = 0;
+      }
+    }
+    file.close();
+    if(chars != 0) {
+      terminal_println("");
+    }
+  }
+  else {
+    terminal_println("File not found");
+  }
+}
+
+void terminal_grep(char *text, char *filename) {
+  fs::File file;
+  int lines = 0;
+  int chars = 0;
+  int i;
+  char match_present_flag = 0;
+  int byte;
+  long file_offset;
+  int buff_offset;
+  char buff[80];
+  file = Storage->open(filename);
+  if(file) {
+    while(file.available()) {
+      // Сохраняем начало строки
+      file_offset = file.position();
+      match_present_flag = 0;
+      buff[0] = 0;
+      buff_offset = 0;
+      // Читаем строку и ищем совпадение
+      while(file.available()) {
+        byte = file.read();
+        if(byte == '\n' && file.peek() == '\r') file.read();
+        if(byte == '\r' && file.peek() == '\n') file.read();
+        if(byte == '\n' || byte == '\r') {
+          break;
+        }
+        // Сдвигаем буфер если надо
+        if(buff_offset >= 79) {
+          for(i = 1; i < 79; i++) {
+            buff[i - 1] = buff[i];
+          }
+          buff_offset--;
+        }
+        buff[buff_offset] = byte;
+        buff_offset++;
+        buff[buff_offset] = 0;
+        if(strstr(buff, text) != NULL) {
+          match_present_flag = 1;
+          break;
+        }
+      }
+      if(match_present_flag) {
+        // Перематываем на начало строки
+        file.seek(file_offset);
+        // Выводим строку
+        while(file.available()) {
+          byte = file.read();
+          if(byte == '\n' && file.peek() == '\r') file.read();
+          if(byte == '\r' && file.peek() == '\n') file.read();
+          if(byte == '\n' || byte == '\r') {
+            terminal_println("");
+            break;
+          }
+          else {
+            terminal_print_char(byte);
+          }
+        }
       }
     }
     file.close();
@@ -11915,11 +12028,13 @@ void turkish_kerchief(char mode, char *io_buff) {
     }
 
     if(cards_present_flag == 0) {
+      beep_morse_if_enabled("W");
       drawInfo("You won!");
       restart_flag = 1;
       continue;
     }
     else if(moves == 0) {
+      beep_morse_if_enabled("L");
       drawInfo("No moves left");
       restart_flag = 1;
       continue;
@@ -13172,7 +13287,7 @@ void wifi_select_network() {
           if(wifi_status == WL_CONNECTED) {
             WiFi.setAutoReconnect(true);
             write_key_value_to_file("/Settings/Wifi", networks[network_selected], password);
-            drawInfo("Connected");
+            //drawInfo("Connected");
             return;
           }
           else if(wifi_status == WL_NO_SSID_AVAIL) {
@@ -18434,18 +18549,18 @@ void keyboard_control(char mode, char *io_buff) {
     16, 16,
     B00000000, B00000000,
     B01111111, B11111110,
-    B01000000, B00000010,
-    B01000000, B00000010,
-    B01000011, B11110010,
-    B01000100, B00010010,
-    B01001000, B00010010,
-    B01000100, B00010010,
-    B01000011, B11110010,
-    B01000010, B00010010,
-    B01000100, B00010010,
-    B01001000, B00010010,
-    B01000000, B00000010,
-    B01000000, B00000010,
+    B01100000, B00000110,
+    B01011111, B11111010,
+    B01010000, B00001010,
+    B01010100, B00101010,
+    B01010100, B01001010,
+    B01010111, B10001010,
+    B01010100, B10001010,
+    B01010100, B01001010,
+    B01010100, B00101010,
+    B01010000, B00001010,
+    B01011111, B11111010,
+    B01100000, B00000110,
     B01111111, B11111110,
     B00000000, B00000000
   };
@@ -19784,6 +19899,13 @@ void edit_file(char *title, char *filename) {
 }
 
 // Редактирование небольшого файла CSV
+
+#define CSV_CACHE_COUNT 100
+
+char *csv_contents = NULL;
+char **csv_cache_vars = NULL;
+double *csv_cache_vals = NULL;
+
 void edit_csv(char *title, char *filename) {
   fs::File file;
   int byte;
@@ -19807,7 +19929,15 @@ void edit_csv(char *title, char *filename) {
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
   contents = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
+  csv_contents = contents;
   strcpy(contents, "");
+
+  csv_cache_vars = (char **)malloc(CSV_CACHE_COUNT * sizeof(char*));
+  csv_cache_vals = (double*)malloc(CSV_CACHE_COUNT * sizeof(double));
+  for(i = 0; i < CSV_CACHE_COUNT; i++) {
+    csv_cache_vars[i] = NULL;
+    csv_cache_vals[i] = 0;
+  }
 
   file = Storage->open(filename);
   if(file) {
@@ -19887,6 +20017,18 @@ void edit_csv(char *title, char *filename) {
         }
       }
       free(contents);
+
+      for(i = 0; i < CSV_CACHE_COUNT; i++) {
+        if(csv_cache_vars[i]) {
+          free(csv_cache_vars[i]);
+          csv_cache_vars[i] = NULL;
+        }
+      }
+      free(csv_cache_vars);
+      free(csv_cache_vals);
+      csv_cache_vars = NULL;
+      csv_cache_vals = NULL;
+
       touchExitActionReset();
       return;
     }
@@ -19943,8 +20085,8 @@ long csv_get_cell_value(char *contents, int offset_x, int offset_y, char *io_buf
     offset = buff - contents;
     fields_skipped++;
   }
-Serial.println(offset);
-Serial.println(contents + offset);
+//Serial.println(offset);
+//Serial.println(contents + offset);
   csv_get_field_value(contents + offset, io_buff);
 
   return offset;
@@ -20091,7 +20233,7 @@ void edit_csv_show(char *contents, int offset_cell_x, int offset_cell_y) {
   }
 
   // Зачищаем поле
-  tft.fillRect(32, 32, tft.width() - 32, tft.height() - 32, color_scheme_bg);
+  tft.fillRect(32, 32, tft.width() - 32, tft.height() - 32 - 32, color_scheme_bg);
 
   offset = 0;
   while(offset < strlen(contents)) {
@@ -20136,7 +20278,7 @@ void edit_csv_show(char *contents, int offset_cell_x, int offset_cell_y) {
 
     if(line_ptr) {
       for(i = 0; i != 4; i++) {
-        csv_get_field_value(line_ptr, buff);
+        csv_get_field_expr(line_ptr, buff);
         tft.setTextColor(color_scheme_fg, color_scheme_bg);
         while(tft.textWidth(buff, FONT_DEFAULT) >= (tft.width() - 32) / 4) {
           buff[strlen(buff) - 1] = 0;
@@ -20149,6 +20291,10 @@ void edit_csv_show(char *contents, int offset_cell_x, int offset_cell_y) {
     }
 
     current_cell_y++;
+    // Если достигли границы экрана - выходим
+    if(current_cell_y - offset_cell_y >= 16) {
+      break;
+    }
   }
 
   // Вертикальные линии
@@ -20200,6 +20346,7 @@ void csv_get_field_value(char *str, char *buff) {
   char field_escaped = 0;
   int read_offset = 0;
   int write_offset = 0;
+
   strcpy(buff, "");
   if(str[0] == '"'){
     field_escaped = 1;
@@ -20223,7 +20370,23 @@ void csv_get_field_value(char *str, char *buff) {
       buff[write_offset] = 0;
     }
     read_offset++;
-    if(str[read_offset] == 0) return;
+    if(str[read_offset] == 0) break;
+  }
+}
+
+void csv_get_field_expr(char *str, char *buff) {
+  int expr_offset;
+  char error_flag;
+  double val;
+
+  csv_get_field_value(str, buff);
+
+  // Вычисление формулы
+  if(buff[0] == '=') {
+    expr_offset = 0;
+    error_flag = 0;
+    val = parse_expression(buff + 1, csv_get_variable_by_name, &error_flag, &expr_offset);
+    sprintf(buff, "%g", val);
   }
 }
 
@@ -20248,6 +20411,93 @@ void csv_remove_data(char *contents, long offset, int count) {
   long contents_len = strlen(contents);
   for(i = 0; contents[offset + i] != 0; i++) {
     contents[offset + i] = contents[offset + i + count];
+  }
+}
+
+void csv_clear_variables() {
+  int i;
+  for(i = 0; i < CSV_CACHE_COUNT; i++) {
+    if(csv_cache_vars[i]) {
+      free(csv_cache_vars[i]);
+      csv_cache_vars[i] = NULL;
+      csv_cache_vals[i] = 0;
+    }
+  }
+}
+
+// Получить значение ячейки по названию для формул
+int csv_get_variable_index_exists(char *var_name) {
+  int i;
+  for(i = 0; i < CSV_CACHE_COUNT; i++) {
+    if(csv_cache_vars[i] && strcmp(var_name, csv_cache_vars[i]) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+int csv_get_variable_index(char *var_name) {
+  int i;
+  i = csv_get_variable_index_exists(var_name);
+  if(i >= 0) return i;
+  for(i = 0; i < CSV_CACHE_COUNT; i++) {
+    if(csv_cache_vars[i] == 0) {
+      csv_cache_vars[i] = (char *)malloc((strlen(var_name) + 1) * sizeof(char));
+      strcpy(csv_cache_vars[i], var_name);
+      break;
+    }
+  }
+  if(i == CSV_CACHE_COUNT) return -1;
+  return i;
+}
+
+double csv_get_variable_by_name(char *var_name) {
+  int offset_x = -1;
+  int offset_y = -1;
+  int expr_offset;
+  int index;
+  double val;
+  char error_flag;
+  char buff[80];
+
+  Serial.printf("csv_get_variable_by_name %s\n", var_name);
+
+  // Индекс переменной из кэша
+  index = csv_get_variable_index_exists(var_name);
+  if(index >= 0) {
+    Serial.printf("get from cache %s = %g\n", var_name, csv_cache_vals[index]);
+    return csv_cache_vals[index];
+  }
+
+  if(var_name[0] >= 'A' && var_name[0] <= 'Z') {
+    offset_x = var_name[0] - 'A';
+  }
+  if(var_name[0] >= 'a' && var_name[0] <= 'z') {
+    offset_x = var_name[0] - 'a';
+  }
+  offset_y = strtol(var_name + 1, NULL, 10);
+  if(offset_x >= 0 && offset_y >= 0) {
+    offset_y--;
+    // Получить значение по названию
+    csv_get_cell_value(csv_contents, offset_x, offset_y, buff);
+    // Вычисление формулы
+    if(buff[0] == '=') {
+      expr_offset = 0;
+      error_flag = 0;
+      val = parse_expression(buff + 1, csv_get_variable_by_name, &error_flag, &expr_offset);
+      // Сохраняем перемен
+      index = csv_get_variable_index(var_name);
+      if(index >= 0) {
+        csv_cache_vals[index] = val;
+      }
+      Serial.printf("parse_expression %s (%s) = %g\n", var_name, buff + 1, val);
+      sprintf(buff, "%g", val);
+    }
+
+    return strtod(buff, NULL);
+  }
+  else {
+    return parse_expr_constant_by_name(var_name);
   }
 }
 
@@ -21333,6 +21583,7 @@ void fifteen(char mode, char *io_buff) {
       if(buttons_won[i] != buttons[i]) won_flag = 0;
     }
     if(won_flag) {
+      beep_morse_if_enabled("W");
       drawInfo("You won!");
       tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       shuffle_flag = 1;
@@ -21491,6 +21742,7 @@ void memory_match(char mode, char *io_buff) {
       if(buttons_show[i] == empty) won_flag = 0;
     }
     if(won_flag) {
+      beep_morse_if_enabled("W");
       drawInfo("You won!");
       tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       shuffle_flag = 1;
@@ -21610,12 +21862,14 @@ void simon(char mode, char *io_buff) {
       if(button_pressed == guess[step]) {
         step++;
         if(step >= level) {
+          beep_morse_if_enabled("W");
           drawInfo("You won!");
           level++;
           show_flag = 1;
         }
       }
       else {
+        beep_morse_if_enabled("L");
         drawInfo("You lose!");
         show_flag = 1;
         level = 1;
@@ -21991,6 +22245,7 @@ void n_back(char mode, char *io_buff) {
         step++;
       }
       else {
+        beep_morse_if_enabled("L");
         drawInfo("You lose!");
         show_flag = 1;
         step = 0;
@@ -22275,6 +22530,7 @@ void hanoi_towers(char mode, char *io_buff) {
       if(towers[i] != 0) won_flag = 0;
     }
     if(won_flag) {
+      beep_morse_if_enabled("W");
       drawInfo("You won!");
       tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       restart_flag = 1;
@@ -22582,24 +22838,24 @@ void match_three_show_field(int *field, int col_selected, int row_selected) {
     B00000000, B00000000, B00000000,
     B01111111, B11111111, B11111110,
     B01111111, B11111111, B11111110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
     B01111111, B11111111, B11111110,
     B01111111, B11111111, B11111110,
     B00000000, B00000000, B00000000
@@ -22609,24 +22865,24 @@ void match_three_show_field(int *field, int col_selected, int row_selected) {
     B00000000, B00011000, B00000000,
     B00000000, B00111100, B00000000,
     B00000000, B01111110, B00000000,
-    B00000000, B11100111, B00000000,
-    B00000001, B11000011, B10000000,
-    B00000011, B10000001, B11000000,
-    B00000111, B00000000, B11100000,
-    B00001110, B00000000, B01110000,
-    B00011100, B00000000, B00111000,
-    B00111000, B00000000, B00011100,
-    B01110000, B00000000, B00001110,
-    B11100000, B00000000, B00000111,
-    B11100000, B00000000, B00000111,
-    B01110000, B00000000, B00001110,
-    B00111000, B00000000, B00011100,
-    B00011100, B00000000, B00111000,
-    B00001110, B00000000, B01110000,
-    B00000111, B00000000, B11100000,
-    B00000011, B10000001, B11000000,
-    B00000001, B11000011, B10000000,
-    B00000000, B11100111, B00000000,
+    B00000000, B11111111, B00000000,
+    B00000001, B11111111, B10000000,
+    B00000011, B11111111, B11000000,
+    B00000111, B11111111, B11100000,
+    B00001111, B11111111, B11110000,
+    B00011111, B11111111, B11111000,
+    B00111111, B11111111, B11111100,
+    B01111111, B11111111, B11111110,
+    B11111111, B11111111, B11111111,
+    B11111111, B11111111, B11111111,
+    B01111111, B11111111, B11111110,
+    B00111111, B11111111, B11111100,
+    B00011111, B11111111, B11111000,
+    B00001111, B11111111, B11110000,
+    B00000111, B11111111, B11100000,
+    B00000011, B11111111, B11000000,
+    B00000001, B11111111, B10000000,
+    B00000000, B11111111, B00000000,
     B00000000, B01111110, B00000000,
     B00000000, B00111100, B00000000,
     B00000000, B00011000, B00000000,
@@ -22638,22 +22894,22 @@ void match_three_show_field(int *field, int col_selected, int row_selected) {
     B00000000, B00011000, B00000000,
     B00000000, B00111100, B00000000,
     B00000000, B00111100, B00000000,
-    B00000000, B01100110, B00000000,
-    B00000000, B01100110, B00000000,
-    B00000000, B11000011, B00000000,
-    B00000000, B11000011, B00000000,
-    B00000001, B10000001, B10000000,
-    B00000001, B10000001, B10000000,
-    B00000011, B00000000, B11000000,
-    B00000011, B00000000, B11000000,
-    B00000110, B00000000, B01100000,
-    B00000110, B00000000, B01100000,
-    B00001100, B00000000, B00110000,
-    B00001100, B00000000, B00110000,
-    B00011000, B00000000, B00011000,
-    B00011000, B00000000, B00011000,
-    B00110000, B00000000, B00001100,
-    B00110000, B00000000, B00001100,
+    B00000000, B01111110, B00000000,
+    B00000000, B01111110, B00000000,
+    B00000000, B11111111, B00000000,
+    B00000000, B11111111, B00000000,
+    B00000001, B11111111, B10000000,
+    B00000001, B11111111, B10000000,
+    B00000011, B11111111, B11000000,
+    B00000011, B11111111, B11000000,
+    B00000111, B11111111, B11100000,
+    B00000111, B11111111, B11100000,
+    B00001111, B11111111, B11110000,
+    B00001111, B11111111, B11110000,
+    B00011111, B11111111, B11111000,
+    B00011111, B11111111, B11111000,
+    B00111111, B11111111, B11111100,
+    B00111111, B11111111, B11111100,
     B01111111, B11111111, B11111110,
     B01111111, B11111111, B11111110,
     B00000000, B00000000, B00000000
@@ -22663,24 +22919,24 @@ void match_three_show_field(int *field, int col_selected, int row_selected) {
     B00000000, B00000000, B00000000,
     B00000000, B00011000, B00000000,
     B00000000, B01111110, B00000000,
-    B00000001, B11100111, B10000000,
-    B00000111, B10000001, B11100000,
-    B00011110, B00000000, B01111000,
-    B01111000, B00000000, B00011110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01111000, B00000000, B00011110,
-    B00011110, B00000000, B01111000,
-    B00000111, B10000001, B11100000,
-    B00000001, B11100111, B10000000,
+    B00000001, B11111111, B10000000,
+    B00000111, B11111111, B11100000,
+    B00011111, B11111111, B11111000,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B00011111, B11111111, B11111000,
+    B00000111, B11111111, B11100000,
+    B00000001, B11111111, B10000000,
     B00000000, B01111110, B00000000,
     B00000000, B00011000, B00000000,
     B00000000, B00000000, B00000000
@@ -22690,23 +22946,23 @@ void match_three_show_field(int *field, int col_selected, int row_selected) {
     B00000000, B00000000, B00000000,
     B00000111, B00000000, B11100000,
     B00011111, B11000011, B11111000,
-    B00111001, B11000011, B10011100,
-    B01110000, B11100111, B00001110,
-    B01110000, B01111110, B00001110,
-    B11100000, B00111100, B00000111,
-    B11000000, B00011000, B00000011,
-    B11000000, B00000000, B00000011,
-    B11000000, B00000000, B00000011,
-    B11100000, B00000000, B00000111,
-    B01100000, B00000000, B00000110,
-    B01110000, B00000000, B00001110,
-    B00111000, B00000000, B00011100,
-    B00011100, B00000000, B00111000,
-    B00001110, B00000000, B01110000,
-    B00000111, B00000000, B11100000,
-    B00000011, B10000001, B11000000,
-    B00000001, B11000011, B10000000,
-    B00000000, B11100111, B00000000,
+    B00111111, B11000011, B11111100,
+    B01111111, B11100111, B11111110,
+    B01111111, B11111111, B11111110,
+    B11111111, B11111111, B11111111,
+    B11111111, B11111111, B11111111,
+    B11111111, B11111111, B11111111,
+    B11111111, B11111111, B11111111,
+    B11111111, B11111111, B11111111,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B00111111, B11111111, B11111100,
+    B00011111, B11111111, B11111000,
+    B00001111, B11111111, B11110000,
+    B00000111, B11111111, B11100000,
+    B00000011, B11111111, B11000000,
+    B00000001, B11111111, B10000000,
+    B00000000, B11111111, B00000000,
     B00000000, B01111110, B00000000,
     B00000000, B00111100, B00000000,
     B00000000, B00011000, B00000000,
@@ -22717,24 +22973,24 @@ void match_three_show_field(int *field, int col_selected, int row_selected) {
     B00000000, B00000000, B00000000,
     B00000000, B11111111, B00000000,
     B00000011, B11111111, B11000000,
-    B00001111, B10000001, B11110000,
-    B00011110, B00000000, B01111000,
-    B00111100, B00000000, B00111100,
-    B00111000, B00000000, B00011100,
-    B01110000, B00000000, B00001110,
-    B01110000, B00000000, B00001110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01100000, B00000000, B00000110,
-    B01110000, B00000000, B00001110,
-    B01110000, B00000000, B00001110,
-    B00111000, B00000000, B00011100,
-    B00111100, B00000000, B00111000,
-    B00011110, B00000000, B01111000,
-    B00001111, B10000001, B11110000,
+    B00001111, B11111111, B11110000,
+    B00011111, B11111111, B11111000,
+    B00111111, B11111111, B11111100,
+    B00111111, B11111111, B11111100,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B01111111, B11111111, B11111110,
+    B00111111, B11111111, B11111100,
+    B00111111, B11111111, B11111000,
+    B00011111, B11111111, B11111000,
+    B00001111, B11111111, B11110000,
     B00000011, B11111111, B11000000,
     B00000000, B11111111, B00000000,
     B00000000, B00000000, B00000000
@@ -23028,6 +23284,7 @@ void lights_off(char mode, char *io_buff) {
       if(buttons[i] == on) won_flag = 0;
     }
     if(won_flag) {
+      beep_morse_if_enabled("W");
       sprintf(buff, "You won level %d in %d steps", level, steps);
       drawInfo(buff);
       tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
