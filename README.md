@@ -3,7 +3,7 @@ This is PDA firmware for ESP32 Cheap Yellow Display. Inspired by Palm OS.
 
 PDA is Personal Digital Assistant. Small handheld computer. Like smartphone without phone functions.
 
-![CYD with keyboard on screen screenshot](Launcher.png)
+![CYD PDA Screenshots](Collage.png)
 
 # Details
 * No additional hardware required. All you need is CYD
@@ -126,6 +126,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Analog Time
 * Weather
 * Network
+* Wi-Fi Channels Monitor
 
 ## Screensavers
 * Stars
