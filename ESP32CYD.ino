@@ -8,9 +8,11 @@
 - Wi-Fi и работа с сетью
 - Работа с текстом, данными
 - Управление пинами, осциллограф, вольтметр, генератор сигналов
+- Программирование: Brainfuck, BASIC
 - Игры
-- Без Bluetooth
-- Без SSH
+- Без Bluetooth (не хватает памяти?)
+- Без SSH (не хватает памяти?)
+- Без iperf (нет библиотеки)
 - Просмотр: текст, таблицы, музыка, картинки
 
 Функции:
@@ -248,17 +250,16 @@
 2026-08-31 Все символы 1251 в 6х8, убрать информационное сообщение при успешном соединении вай-фай, пакетные файлы для терминала,
   запуск по имени из /Terminal, grep, морзе победа в игре W, морзе поражение в игре L, формулы в CSV,
   запуск приложений командой app из терминала, cursor команда терминала
+2026-09-01 Кэширование пролистанных страниц в книгах (для перемотки назад), инверсия, поворот, звук из экранного меню,
+  лёгкий сон, глубокий сон, сон из меню, предлагать сохранить настройки только если нужно
+2026-09-02 cal, storage, df, file - получить тип файла, коллаж для гитхаба и презентаций
+2026-09-03 hexview, перевернуть календарь 3 сентября, морзе на русском, morse в терминале, utf8<->1251 полное конвертирование,
+  баг при выходе из IRC
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
-- (д) В книгах сохранять смещения для последних ста страниц для перемотки назад
-- (д) iperf
-- (д) Wi-Fi sniffer stand
-
 - (д) Меньше мигания в ханойских башнях
-- (д) Все символы 1251 в FONT_DEFAULT
-- (д) Улучшенный декодинг утф-8 (учёт новых символов)
 - (д) Дополнительные символы в символьной клавиатуре по шифту
-- (б) Баг с копированием/перемещением (сходу не воспроизвелось)
+- (б) Баг с копированием/перемещением файлов (сходу не воспроизвелось)
 - (д) Basic: сообщения об ошибках
 - (д) Basic: несколько команд в строке
 - (д) Basic поддержка \n\r\t хотя бы
@@ -266,20 +267,9 @@
 - (д) Приложение поиск
 - (д) Терминал переменные окружения
 - (д) /Terminal/Environment
-- (д) /Terminal/Aliases
-- (д) Форест файр - ранняя остановка пожара
-- (д) Терминал операции со строками ESC-кодами
-- (д) Конвертер валют, единиц измерения
+- (б) Форест файр - ранняя остановка пожара
 - (д) Мировое время (дашборд)
-- (д) chat
-- (д) cal
-- (д) df
-- (д) file - получить тип файла
-- (д) passwd
-- (д) storage {ffat|sd}
-- (д) Информация по sd из консоли
 - (д) Установка даты-времени из терминала
-- (д) Возможность отмонтировать всё и подготовить устройство к отключению питания
 - (д) Восход и закат
 - (д) Крутая калибровка
 - (д) Прошлые команды в терминале по стрелке вверх
@@ -289,20 +279,23 @@
 - (д) Выделение в просмотре, копирование
 - (д) Выделение в редактировании, копирование, вставка
 - (д) Автоопределение кодировки файла при просмотре
-- (б) Баг выхода из IRC
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор
 - (д) Категории для PIM
 - (д) Автосохранение позиции просмотра при неактивности
 - (д) Кастомные значки в заголовке вместо букв AFMSWT
-- (д) Возможность менять звук из приложения
-- (д) Мини-калькулятор
 - (д) Ланучер-список
 - (д) Лаунчер с более крупными значками
 - (д) Выбор вида лаунчера
 - (д) Ещё один заход Bluetooth
 - (п) Просмотреть справку, может быть что-то добавить
 
+- (н) Мини-калькулятор
+- (н) Конвертер валют, единиц измерения
+- (н) Терминал операции со строками ESC-кодами
+- (н) /Terminal/Aliases (а что это должно делать?)
+- (н) chat
+- (н) passwd
 - (н) Генератор сигналов в фоне
 - (н) Таймер в фоне
 - (н) Дашборд криптовалюты
@@ -352,8 +345,6 @@
 - (н) CHIP-8 рисовать только изменённые части экрана
 - (н) Информация по валютам и криптовалютам (курсы)
 - (н) Информация по криптовалютам (блокчейн) - последний блок, время с последнего блока, транзакции в mempool
-- (н) tftp
-- (н) tar
 - (н) управление через веб
 - (н) I2C чтение распространённых датчиков
 - (н) Разархиватор zip
@@ -363,6 +354,8 @@
 - (н) Полноцветные скриншоты (24 бита) если нужно
 - (н) Заставка Boids
 - (н) Заставка DLA
+- (н) tftp
+- (н) tar
 - (н) Кодирование-декодирование b32 из терминала
 - (н) Кодирование-декодирование b64 из терминала
 - (н) Шифрование-расшифрование AES в терминале
@@ -405,6 +398,8 @@
 
 // Wi-Fi
 #include "WiFi.h"
+// Для мониторинга wi-fi
+#include "esp_wifi.h"
 
 // HTTP client
 #include <HTTPClient.h>
@@ -462,6 +457,9 @@ WiFiClient *global_client = NULL;
 #include <rom/crc.h>
 #include "mbedtls/md5.h"
 #include "mbedtls/sha256.h"
+
+// For deep sleep
+#include "driver/rtc_io.h"
 
 // For TOTP
 #include <TOTP.h>
@@ -1512,7 +1510,7 @@ void system_info(char mode, char *io_buff) {
 
     i = 0;
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    sprintf(buff, "ESP32 CYD PDA v1.5 by sau412");
+    sprintf(buff, "ESP32 CYD PDA v1.6 by sau412");
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
@@ -2448,7 +2446,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "cursor") == 0) {
     if(arg_count != 3) {
-      terminal_println("cursor {col} {row}");
+      terminal_println("Usage: cursor {col} {row}");
     }
     else {
       i1 = strtol(cmdline_params[1], NULL, 10);
@@ -2460,12 +2458,15 @@ void terminal_execute_single(char *str) {
     sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
     terminal_println(buff);
   }
+  else if(strcmp(cmdline_params[0], "cal") == 0) {
+    terminal_cal();
+  }
   else if(strcmp(cmdline_params[0], "history") == 0) {
     terminal_tail("/Terminal/History");
   }
   else if(strcmp(cmdline_params[0], "echo") == 0) {
     if(arg_count == 1) {
-      terminal_println("echo {text}");
+      terminal_println("Usage: echo {text}");
     }
     else {
       for(i = 1; i < arg_count; i++) {
@@ -2475,9 +2476,24 @@ void terminal_execute_single(char *str) {
       terminal_println("");
     }
   }
+  else if(strcmp(cmdline_params[0], "morse") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: morse {text}");
+    }
+    else {
+      for(i = 1; i < arg_count; i++) {
+        for(j = 0; j < strlen(cmdline_params[i]); j++) {
+          beep_morse_perform(cmdline_params[i][j]);
+          morse_wait();
+          morse_wait();
+        }
+        if(i + 1 != arg_count) beep_morse_perform(' ');
+      }
+    }
+  }
   else if(strcmp(cmdline_params[0], "caesar") == 0) {
     if(arg_count == 1) {
-      terminal_println("caesar {text}");
+      terminal_println("Usage: caesar {text}");
     }
     else {
       // Шифр цезаря - сдвиг на 3
@@ -2491,7 +2507,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "rot13") == 0) {
     if(arg_count == 1) {
-      terminal_println("rot13 {text}");
+      terminal_println("Usage: rot13 {text}");
     }
     else {
       // rot13 - сдвиг на 13
@@ -2598,6 +2614,26 @@ void terminal_execute_single(char *str) {
       }
     }
   }
+  else if(strcmp(cmdline_params[0], "df") == 0) {
+    switch(storage_type) {
+      case STORAGE_TYPE_NONE:
+        terminal_println("Storage type: none");
+        break;
+      case STORAGE_TYPE_FFAT:
+        terminal_println("Storage type: FFAT");
+        sprintf(buff, "Used: %d bytes of %d bytes (%d %%)", FFat.usedBytes(), FFat.totalBytes(), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
+        terminal_println(buff);
+        break;
+      case STORAGE_TYPE_SD:
+        terminal_println("Storage type: SD");
+        sprintf(buff, "Used: %llu MiB of %llu MiB (%d %%)", SD.usedBytes() / (1024 * 1024), SD.totalBytes() / (1024 * 1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+        terminal_println(buff);
+        break;
+      default:
+        terminal_println("Storage type: unknown");
+        break;
+    }
+  }
   else if(strcmp(cmdline_params[0], "random") == 0) {
     if(arg_count == 1) {
       sprintf(buff, "Random number from 1 to 6: %d", random(1, 7));
@@ -2628,7 +2664,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "seq") == 0) {
     if(arg_count != 3) {
-      terminal_println("seq {start_number} {end_number}");
+      terminal_println("Usage: seq {start_number} {end_number}");
     }
     else {
       sscanf(cmdline_params[1], "%d", &i1);
@@ -2660,6 +2696,38 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "serial") == 0) {
     terminal_serial(arg_count, cmdline_params);
+  }
+  else if(strcmp(cmdline_params[0], "storage") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: storage {ffat|sd|none}");
+    }
+    else {
+      if(storage_type == STORAGE_TYPE_FFAT) {
+        FFat.end();
+        storage_type = STORAGE_TYPE_NONE;
+      }
+      if(storage_type == STORAGE_TYPE_SD) {
+        SD.end();
+        storage_type = STORAGE_TYPE_NONE;
+      }
+      if(strcmp(cmdline_params[1], "ffat") == 0) {
+        storage_type = STORAGE_TYPE_FFAT;
+        FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
+        Storage = &FFat;
+      }
+      else if(strcmp(cmdline_params[1], "sd") == 0) {
+        storage_type = STORAGE_TYPE_SD;
+        SD.begin(SD_CS, sdSPI);
+        Storage = &SD;
+      }
+      else if(strcmp(cmdline_params[1], "none") == 0) {
+        storage_type = STORAGE_TYPE_NONE;
+        Storage = NULL;
+      }
+      else {
+        terminal_println("Unknown storage type");
+      }
+    }
   }
   else if(strcmp(cmdline_params[0], "format") == 0) {
     if(strcmp(cmdline_params[1], "ffat") == 0) {
@@ -2768,9 +2836,52 @@ void terminal_execute_single(char *str) {
       }
     }
   }
+  else if(strcmp(cmdline_params[0], "file") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: file {file}");
+    }
+    else {
+      if(!Storage) {
+        terminal_println("No storage");
+      }
+      else if(!Storage->exists(cmdline_params[1])) {
+        terminal_println("File not exists");
+      }
+      else if(is_directory(cmdline_params[1])) {
+        terminal_println("Directory");
+      }
+      else if(is_empty_file(cmdline_params[1])) {
+        terminal_println("Empty file");
+      }
+      else if(is_bmp_file(cmdline_params[1])) {
+        terminal_println("BMP image");
+      }
+      else if(is_png_file(cmdline_params[1])) {
+        terminal_println("PNG image");
+      }
+      else if(is_jpeg_file(cmdline_params[1])) {
+        terminal_println("JPEG image");
+      }
+      else if(is_webp_file(cmdline_params[1])) {
+        terminal_println("WEBP image");
+      }
+      else if(is_mp3_file(cmdline_params[1])) {
+        terminal_println("MP3 sound");
+      }
+      else if(is_wav_file(cmdline_params[1])) {
+        terminal_println("WAV sound");
+      }
+      else if(is_binary_file(cmdline_params[1])) {
+        terminal_println("Binary file");
+      }
+      else {
+        terminal_println("Text file");
+      }
+    }
+  }
   else if(strcmp(cmdline_params[0], "cat") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: cat {file}\r");
+      terminal_println("Usage: cat {file}");
     }
     else {
       terminal_cat(cmdline_params[1]);
@@ -2778,7 +2889,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "head") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: head {file}\r");
+      terminal_println("Usage: head {file}");
     }
     else {
       terminal_head(cmdline_params[1]);
@@ -2786,7 +2897,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "tail") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: tail {file}\r");
+      terminal_println("Usage: tail {file}");
     }
     else {
       terminal_tail(cmdline_params[1]);
@@ -2794,7 +2905,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "more") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: more {file}\r");
+      terminal_println("Usage: more {file}");
     }
     else {
       terminal_more(cmdline_params[1]);
@@ -2802,7 +2913,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "grep") == 0) {
     if(arg_count != 3) {
-      terminal_println("Usage: grep {text} {file}\r");
+      terminal_println("Usage: grep {text} {file}");
     }
     else {
       terminal_grep(cmdline_params[1], cmdline_params[2]);
@@ -2816,9 +2927,17 @@ void terminal_execute_single(char *str) {
       view_file(cmdline_params[1], cmdline_params[1]);
     }
   }
+  else if(strcmp(cmdline_params[0], "hexview") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: hexview {file}\r");
+    }
+    else {
+      hexview_file(cmdline_params[1], cmdline_params[1]);
+    }
+  }
   else if(strcmp(cmdline_params[0], "append") == 0) {
     if(arg_count < 3) {
-      terminal_println("Usage: append {file} {line} [line] ...\r");
+      terminal_println("Usage: append {file} {line} [line] ...");
     }
     else {
       for(i = 2; i < arg_count; i++) {
@@ -2828,7 +2947,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "edit") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: edit {file}\r");
+      terminal_println("Usage: edit {file}");
     }
     else {
       edit_file(cmdline_params[1], cmdline_params[1]);
@@ -2836,7 +2955,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "csv") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: csv {file}\r");
+      terminal_println("Usage: csv {file}");
     }
     else {
       edit_csv(cmdline_params[1], cmdline_params[1]);
@@ -2844,7 +2963,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "hexdump") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: hexdump {file}\r");
+      terminal_println("Usage: hexdump {file}");
     }
     else {
       terminal_hexdump(cmdline_params[1]);
@@ -2852,7 +2971,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "wc") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: wc {file}\r");
+      terminal_println("Usage: wc {file}");
     }
     else {
       terminal_wc(cmdline_params[1]);
@@ -2860,7 +2979,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "crc") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: crc {file}\r");
+      terminal_println("Usage: crc {file}");
     }
     else {
       terminal_checksum(cmdline_params[1], CHECKSUM_CRC);
@@ -2868,7 +2987,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "md5sum") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: md5sum {file}\r");
+      terminal_println("Usage: md5sum {file}");
     }
     else {
       terminal_checksum(cmdline_params[1], CHECKSUM_MD5);
@@ -2876,7 +2995,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "sha256sum") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: sha256sum {file}\r");
+      terminal_println("Usage: sha256sum {file}");
     }
     else {
       terminal_checksum(cmdline_params[1], CHECKSUM_SHA256);
@@ -2884,7 +3003,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "brainfuck") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: brainfuck {file}\r");
+      terminal_println("Usage: brainfuck {file}");
     }
     else {
       terminal_brainfuck(cmdline_params[1]);
@@ -2892,7 +3011,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "basic") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: basic {file}\r");
+      terminal_println("Usage: basic {file}");
     }
     else {
       terminal_basic(cmdline_params[1]);
@@ -4744,7 +4863,7 @@ void file_append(char *filename, char *data) {
 
 void file_append_line(char *filename, char *data) {
   fs::File file;
-
+  if(!Storage) return;
   file = Storage->open(filename, FILE_APPEND);
   if(file) {
     file.print(data);
@@ -5723,6 +5842,7 @@ int terminal_telnet(int arg_count, char **args, char ssl_flag) {
   }
 }
 
+// Wget
 int terminal_wget(char *url, char *filename) {
   int httpResponseCode;
   int byte;
@@ -6006,6 +6126,53 @@ void delete_recursive(fs::FS *Storage_from, char *path) {
     Serial.printf("rm %s\n", path);
     Storage_from->remove(path);
   }
+}
+
+// Показать текущий месяц
+void terminal_cal() {
+  char buff[80];
+  int i;
+  int dow = global_day_of_week;
+  char *month_to_name[] = {
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  };
+  int month_to_days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+  sprintf(buff, "%s %d", month_to_name[global_month - 1], global_year);
+  i = 10 - strlen(buff) / 2;
+  while(i > 0) {
+    terminal_print(" ");
+    i--;
+  }
+  terminal_println(buff);
+  terminal_println("Mo Tu We Th Fr Sa Su");
+
+  // Високосный год?
+  if(global_year % 4 == 0 && (global_year % 100 == 0 || global_year % 400 != 0)) {
+    month_to_days[1] = 29;
+  }
+
+  // Какой сейчас день недели?
+  i = global_day;
+  while(i > 0) {
+    Serial.printf("i: %d, dow: %d\n", i, dow);
+    i = (i + 1) % 7;
+    dow = (dow + 1) % 7;
+  }
+  dow++;
+  Serial.printf("dow: %d\n", dow);
+  for(i = 0; i < dow; i++) {
+    terminal_print("   ");
+  }
+  
+  for(i = 1; i <= month_to_days[global_month - 1]; i++) {
+    sprintf(buff, "%2d ", i);
+    terminal_print(buff);
+    dow = (dow + 1) % 7;
+    if(dow == 0) terminal_println("");
+  }
+  terminal_println("");
 }
 
 #ifdef IS_SSH_ENABLED
@@ -10312,6 +10479,7 @@ void brightness_app(char mode, char *io_buff) {
   int button_pressed;
   int result = 0;
   int i;
+  char changes_flag = 0;
   char buff[80];
   char *buttons[] = {
     "Off", "Min",
@@ -10390,11 +10558,16 @@ void brightness_app(char mode, char *io_buff) {
       else if(button_pressed == 7) {
         set_brightness(255);
       }
+      changes_flag = 1;
     }
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
-      save_brightness();
+      if(changes_flag) {
+        if(drawConfirm("Save settings?") == 0) {
+          save_brightness();
+        }
+      }
       drawAppTitle("Exit");
       touchWaitRelease();
       touchExitActionReset();
@@ -10468,7 +10641,7 @@ void select_storage_app(char mode, char *io_buff) {
         }
       }
       else if(button_pressed == 1) {
-        if(ffat_available_flag) {
+        if(FFat.begin(IS_FORMAT_FFAT_IF_FAILED)) {
           Storage = &FFat;
           storage_type = STORAGE_TYPE_FFAT;
           if(mode == APP_MODE_SPECIAL) return;
@@ -10483,7 +10656,7 @@ void select_storage_app(char mode, char *io_buff) {
         }
       }
       else if(button_pressed == 2) {
-        if(sd_available_flag) {
+        if(SD.begin(SD_CS, sdSPI)) {
           Storage = &SD;
           storage_type = STORAGE_TYPE_SD;
           if(mode == APP_MODE_SPECIAL) return;
@@ -12630,6 +12803,7 @@ void color_settings(char mode, char *io_buff) {
   int scheme_selected = 0;
   int i;
   int button_pressed;
+  char changes_flag = 0;
   char redraw_flag;
   char buff[80];
   char *scheme_text;
@@ -12904,6 +13078,7 @@ void color_settings(char mode, char *io_buff) {
           // Цвет ссылки
           color_scheme_link_fg = colors[random(0, 16)];
         }
+        changes_flag = 1;
       }
       redraw_flag = 1;
     }
@@ -12913,38 +13088,40 @@ void color_settings(char mode, char *io_buff) {
       drawAppTitle("Exit");
       touchWaitRelease();
 
-      if(drawConfirm("Save settings?") == 0) {
-        sprintf(buff, "%d", global_inversion);
-        write_file_from_buff("/Settings/Inversion", buff);
+      if(changes_flag) {
+        if(drawConfirm("Save settings?") == 0) {
+          sprintf(buff, "%d", global_inversion);
+          write_file_from_buff("/Settings/Inversion", buff);
 
-        scheme_text = (char*)malloc(2000);
-        scheme_text[0] = 0;
-        sprintf(buff, "background=%d\n", color_to_index(color_scheme_bg));
-        strcat(scheme_text, buff);
-        sprintf(buff, "foreground=%d\n", color_to_index(color_scheme_fg));
-        strcat(scheme_text, buff);
-        sprintf(buff, "title_background=%d\n", color_to_index(color_scheme_title_bg));
-        strcat(scheme_text, buff);
-        sprintf(buff, "title_foreground=%d\n", color_to_index(color_scheme_title_fg));
-        strcat(scheme_text, buff);
-        sprintf(buff, "selection_background=%d\n", color_to_index(color_scheme_selection_bg));
-        strcat(scheme_text, buff);
-        sprintf(buff, "selection_foreground=%d\n", color_to_index(color_scheme_selection_fg));
-        strcat(scheme_text, buff);
-        sprintf(buff, "button_background=%d\n", color_to_index(color_scheme_button_bg));
-        strcat(scheme_text, buff);
-        sprintf(buff, "button_foreground=%d\n", color_to_index(color_scheme_button_fg));
-        strcat(scheme_text, buff);
-        sprintf(buff, "button_active_background=%d\n", color_to_index(color_scheme_button_active_bg));
-        strcat(scheme_text, buff);
-        sprintf(buff, "button_active_foreground=%d\n", color_to_index(color_scheme_button_active_fg));
-        strcat(scheme_text, buff);
-        sprintf(buff, "inactive_foreground=%d\n", color_to_index(color_scheme_inactive_fg));
-        strcat(scheme_text, buff);
-        sprintf(buff, "link_foreground=%d\n", color_to_index(color_scheme_link_fg));
-        strcat(scheme_text, buff);
-        write_file_from_buff("/Settings/Colors", scheme_text);
-        free(scheme_text);
+          scheme_text = (char*)malloc(2000);
+          scheme_text[0] = 0;
+          sprintf(buff, "background=%d\n", color_to_index(color_scheme_bg));
+          strcat(scheme_text, buff);
+          sprintf(buff, "foreground=%d\n", color_to_index(color_scheme_fg));
+          strcat(scheme_text, buff);
+          sprintf(buff, "title_background=%d\n", color_to_index(color_scheme_title_bg));
+          strcat(scheme_text, buff);
+          sprintf(buff, "title_foreground=%d\n", color_to_index(color_scheme_title_fg));
+          strcat(scheme_text, buff);
+          sprintf(buff, "selection_background=%d\n", color_to_index(color_scheme_selection_bg));
+          strcat(scheme_text, buff);
+          sprintf(buff, "selection_foreground=%d\n", color_to_index(color_scheme_selection_fg));
+          strcat(scheme_text, buff);
+          sprintf(buff, "button_background=%d\n", color_to_index(color_scheme_button_bg));
+          strcat(scheme_text, buff);
+          sprintf(buff, "button_foreground=%d\n", color_to_index(color_scheme_button_fg));
+          strcat(scheme_text, buff);
+          sprintf(buff, "button_active_background=%d\n", color_to_index(color_scheme_button_active_bg));
+          strcat(scheme_text, buff);
+          sprintf(buff, "button_active_foreground=%d\n", color_to_index(color_scheme_button_active_fg));
+          strcat(scheme_text, buff);
+          sprintf(buff, "inactive_foreground=%d\n", color_to_index(color_scheme_inactive_fg));
+          strcat(scheme_text, buff);
+          sprintf(buff, "link_foreground=%d\n", color_to_index(color_scheme_link_fg));
+          strcat(scheme_text, buff);
+          write_file_from_buff("/Settings/Colors", scheme_text);
+          free(scheme_text);
+        }
       }
       touchExitActionReset();
       return;
@@ -12958,6 +13135,7 @@ void screen_settings(char mode, char *io_buff) {
   int i;
   int button_pressed;
   char redraw_flag;
+  char changes_flag = 0;
   char buff[80];
   char *buttons_settings[] = {
     "Inversion",
@@ -13051,6 +13229,7 @@ void screen_settings(char mode, char *io_buff) {
           global_inversion = 1;
         }
         tft.invertDisplay(global_inversion ? true : false);
+        changes_flag = 1;
       }
       if(button_pressed == 1) {
         if(global_rotation) {
@@ -13060,6 +13239,7 @@ void screen_settings(char mode, char *io_buff) {
           global_rotation = 1;
         }
         tft.setRotation(global_rotation ? 0 : 2);
+        changes_flag = 1;
       }
       // Brightness
       if(button_pressed == 2) {
@@ -13084,6 +13264,7 @@ void screen_settings(char mode, char *io_buff) {
         else {
           global_view_font_small = 1;
         }
+        changes_flag = 1;
       }
       redraw_flag = 1;
     }
@@ -13093,15 +13274,17 @@ void screen_settings(char mode, char *io_buff) {
       drawAppTitle("Exit");
       touchWaitRelease();
 
-      if(drawConfirm("Save settings?") == 0) {
-        sprintf(buff, "%d", global_inversion);
-        write_file_from_buff("/Settings/Inversion", buff);
+      if(changes_flag) {
+        if(drawConfirm("Save settings?") == 0) {
+          sprintf(buff, "%d", global_inversion);
+          write_file_from_buff("/Settings/Inversion", buff);
 
-        sprintf(buff, "%d", global_rotation);
-        write_file_from_buff("/Settings/Rotation", buff);
+          sprintf(buff, "%d", global_rotation);
+          write_file_from_buff("/Settings/Rotation", buff);
 
-        sprintf(buff, "%d", global_view_font_small);
-        write_file_from_buff("/Settings/Font", buff);
+          sprintf(buff, "%d", global_view_font_small);
+          write_file_from_buff("/Settings/Font", buff);
+        }
       }
       touchExitActionReset();
       return;
@@ -15034,18 +15217,32 @@ Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
         // Трёхбайтовые символы
         if(byte == 0xE2 && byte2 == 0x80) {
           byte3 = stream->read();
-          if(byte3 == 0x90) byte = '-';
-          if(byte3 == 0x91) byte = '-';
-          if(byte3 == 0x92) byte = '-';
-          if(byte3 == 0x93) byte = '-';
-          if(byte3 == 0x94) byte = '-';
-          if(byte3 == 0x95) byte = '-';
-          if(byte3 == 0x98) byte = '\'';
-          if(byte3 == 0x99) byte = '\'';
-          if(byte3 == 0x9C) byte = '"';
-          if(byte3 == 0x9D) byte = '"';
-          if(byte3 == 0x9E) byte = '"';
+          if(byte3 == 0x90) byte = '-';  // дефис
+          if(byte3 == 0x91) byte = '-'; // неразрывный дефис
+          if(byte3 == 0x92) byte = '-'; // фигурное тире (по ширине цифры)
+          if(byte3 == 0x93) byte = 0x96; // N dash
+          if(byte3 == 0x94) byte = 0x97; // M dash
+          if(byte3 == 0x95) byte = '-'; // Горизонтальная черта
+          if(byte3 == 0x98) byte = 0x91; // Левая одинарная кавычка
+          if(byte3 == 0x99) byte = 0x92; // Правая одинарная кавычка
+          if(byte3 == 0x9A) byte = 0x83; // 
+          if(byte3 == 0x9C) byte = 0x93; // Открывающая кавычка (верх)
+          if(byte3 == 0x9D) byte = 0x94; // Правая двойная кавычка
+          if(byte3 == 0x9E) byte = 0x84; // Нижняя открывающая двойная кавычка
+          if(byte3 == 0xA0) byte = 0x86; // Типографский крестик
+          if(byte3 == 0xA1) byte = 0x87; // Двойной типографский крестик
+          if(byte3 == 0xA2) byte = 0x95; // Буллет
           if(byte3 == 0xA6) byte = 0x85; // Троеточие
+          if(byte3 == 0xB0) byte = 0x89; // Промилле
+          if(byte3 == 0xB9) byte = 0x8B; // Открывающая одиночная ёлочка
+          if(byte3 == 0xBA) byte = 0x9B; // Закрывающая одиночная ёлочка
+        }
+        else if(byte == 0xE2 && byte2 == 0x82) {
+          if(byte3 == 0xAC) byte = 0x88; // Евро
+        }
+        else if(byte == 0xE2 && byte2 == 0x84) {
+          if(byte3 == 0x96) byte = 0xB9; // №
+          if(byte3 == 0xA2) byte = 0x99; // TM
         }
         else {
           byte = utf8_to_cp1251_byte(byte, byte2);
@@ -15496,7 +15693,8 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
         if(memcmp(input_buff, "PING :", 6) == 0) {
           sprintf(buff, "PONG :%s\r\n", input_buff + 6);
           client->print(buff);
-          strcat(chat_history[0], buff);
+          sprintf(buff, "PONG :%s", input_buff + 6);
+          irc_chat_history_add(chat_history[0], buff);
         }
 
         // Копируем сообщение как есть в серверный чат
@@ -15830,13 +16028,15 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
       }
       touchWaitRelease();
       touchExitActionReset();
-      free(input_buff);
-      free(message);
-      free(out_message);
+
       for(i = 0; i < IRC_MAX_CHATS; i++) {
         if(chat_name[i]) free(chat_name[i]);
         if(chat_history[i]) free(chat_history[i]);
       }
+
+      free(input_buff);
+      free(message);
+      free(out_message);
       return;
     }
   }
@@ -15855,7 +16055,7 @@ void irc_show_current_chat(char *chat_history, char *chat_name, char *message) {
 // Добавить сообщение в историю чата
 void irc_chat_history_add(char *chat_history, char *message) {
   int i;
-  if(strlen(chat_history) + strlen(message) >= IRC_HISTORY_LENGTH - 2) {
+  if(strlen(chat_history) + strlen(message) + 2 >= IRC_HISTORY_LENGTH - 2) {
     for(i = 0; i < IRC_HISTORY_LENGTH; i++) {
       if(i + strlen(message) + 2 + 1 >= IRC_HISTORY_LENGTH) break;
       chat_history[i] = chat_history[i + strlen(message) + 2];
@@ -15864,6 +16064,7 @@ void irc_chat_history_add(char *chat_history, char *message) {
   }
   strcat(chat_history, message);
   strcat(chat_history, "\r\n");
+  Serial.printf("Chat history len = %d\n", strlen(chat_history));
 }
 
 int irc_find_or_add_chat_name(char *new_name, char **chat_name) {
@@ -16615,23 +16816,37 @@ void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
       if(byte1 == 0xE2 && byte2 == 0x80) {
         byte3 = file_from.read();
         byte_out = '?';
-        if(byte3 == 0x90) byte_out = '-';
-        else if(byte3 == 0x91) byte_out = '-';
-        else if(byte3 == 0x92) byte_out = '-';
-        else if(byte3 == 0x93) byte_out = '-';
-        else if(byte3 == 0x94) byte_out = '-';
-        else if(byte3 == 0x95) byte_out = '-';
-        else if(byte3 == 0x98) byte_out = '\'';
-        else if(byte3 == 0x99) byte_out = '\'';
-        else if(byte3 == 0x9C) byte_out = '"';
-        else if(byte3 == 0x9D) byte_out = '"';
-        else if(byte3 == 0x9E) byte_out = '"';
+        if(byte3 == 0x90) byte_out = '-'; // дефис
+        else if(byte3 == 0x91) byte_out = '-'; // неразрывный дефис
+        else if(byte3 == 0x92) byte_out = '-'; // фигурное тире (по ширине цифры)
+        else if(byte3 == 0x93) byte_out = 0x96; // N dash
+        else if(byte3 == 0x94) byte_out = 0x97; // M dash
+        else if(byte3 == 0x95) byte_out = '-'; // Горизонтальная черта
+        else if(byte3 == 0x98) byte_out = 0x91; // Левая одинарная кавычка
+        else if(byte3 == 0x99) byte_out = 0x92; // Правая одинарная кавычка
+        else if(byte3 == 0x9A) byte_out = 0x83; // 
+        else if(byte3 == 0x9C) byte_out = 0x93; // Открывающая кавычка (верх)
+        else if(byte3 == 0x9D) byte_out = 0x94; // Правая двойная кавычка
+        else if(byte3 == 0x9E) byte_out = 0x84; // Нижняя открывающая двойная кавычка
+        else if(byte3 == 0xA0) byte_out = 0x86; // Типографский крестик
+        else if(byte3 == 0xA1) byte_out = 0x87; // Двойной типографский крестик
+        else if(byte3 == 0xA2) byte_out = 0x95; // Буллет
         else if(byte3 == 0xA6) byte_out = 0x85; // Троеточие
+        else if(byte3 == 0xB0) byte_out = 0x89; // Промилле
+        else if(byte3 == 0xB9) byte_out = 0x8B; // Открывающая одиночная ёлочка
+        else if(byte3 == 0xBA) byte_out = 0x9B; // Закрывающая одиночная ёлочка
         else {
           sprintf(buff, "Unknown 3-byte symbol: %02X %02X %02X", byte1, byte2, byte3);
           terminal_println(buff);
           Serial.println(buff);
         }
+      }
+      else if(byte1 == 0xE2 && byte2 == 0x82) {
+        if(byte3 == 0xAC) byte_out = 0x88; // Евро
+      }
+      else if(byte1 == 0xE2 && byte2 == 0x84) {
+        if(byte3 == 0x96) byte_out = 0xB9; // №
+        if(byte3 == 0xA2) byte_out = 0x99; // TM
       }
       else {
         byte_out = utf8_to_cp1251_byte(byte1, byte2);
@@ -16674,9 +16889,20 @@ char utf8_to_cp1251_byte(char byte1, char byte2) {
   char byte;
   byte = byte1;
   if(byte1 == 0xD0) {
-    if(byte2 == 0x81) {
-      byte = 0xA8; // Ё
-    }
+    if(byte2 == 0x81) byte = 0xA8; // Ё
+    else if(byte2 == 0x82) byte = 0x80; // Ђ
+    else if(byte2 == 0x83) byte = 0x81; // Ѓ
+    else if(byte2 == 0x84) byte = 0xAA; // Є
+    else if(byte2 == 0x85) byte = 0xBD; // Ѕ
+    else if(byte2 == 0x86) byte = 0xB2; // І
+    else if(byte2 == 0x87) byte = 0xAF; // Ї
+    else if(byte2 == 0x88) byte = 0xA3; // Ј
+    else if(byte2 == 0x89) byte = 0x8A; // Љ
+    else if(byte2 == 0x8A) byte = 0x8C; // Њ
+    else if(byte2 == 0x8B) byte = 0x8E; // Ћ
+    else if(byte2 == 0x8C) byte = 0x8D; // Ќ
+    else if(byte2 == 0x8E) byte = 0xA1; // Ў
+    else if(byte2 == 0x8F) byte = 0x8F; // Џ
     else if(byte2 < 0xA0) {
       byte = 0xC0 + byte2 - 0x90; // А-П
     }
@@ -16685,21 +16911,44 @@ char utf8_to_cp1251_byte(char byte1, char byte2) {
     }
   }
   else if(byte1 == 0xD1) {
-    if(byte2 == 0x91) {
-      byte = 0xB8; // ё
-    }
+    if(byte2 == 0x91) byte = 0xB8; // ё
+    else if(byte2 == 0x92) byte = 0x90; // ђ
+    else if(byte2 == 0x93) byte = 0x83; // ѓ
+    else if(byte2 == 0x94) byte = 0xBA; // є
+    else if(byte2 == 0x95) byte = 0xBE; // ѕ
+    else if(byte2 == 0x96) byte = 0xB3; // і
+    else if(byte2 == 0x97) byte = 0xBF; // ї
+    else if(byte2 == 0x98) byte = 0xBC; // ј
+    else if(byte2 == 0x99) byte = 0x9A; // љ
+    else if(byte2 == 0x9A) byte = 0x9C; // њ
+    else if(byte2 == 0x9B) byte = 0x9E; // ћ
+    else if(byte2 == 0x9C) byte = 0x9D; // ќ
+    else if(byte2 == 0x9E) byte = 0xA2; // ў
+    else if(byte2 == 0x9F) byte = 0x9F; // џ
     else {
       byte = 0xF0 + byte2 - 0x80; // р-я
     }
   }
+  else if(byte1 == 0xD2) {
+    if(byte2 == 0x90) byte = 0x81; // Ґ
+    if(byte2 == 0x91) byte = 0x83; // ґ
+  }
   else if(byte1 == 0xC2) {
-    // Кавычки-ёлочки
-    if(byte2 == 0xAB || byte2 == 0xBB) {
-      byte = '"';
-    }
-    if(byte2 == 0xA0) {
-      byte = ' ';
-    }
+    if(byte2 == 0xA0) byte = 0xA0; // Неразрывный пробел
+    if(byte2 == 0xA4) byte = 0xA4; // ¤
+    if(byte2 == 0xA6) byte = 0xA6; // ¦
+    if(byte2 == 0xA7) byte = 0xA7; // §
+    if(byte2 == 0xA9) byte = 0xA9; // ©
+    if(byte2 == 0xAB) byte = 0xAB; // Кавычка ёлочка открывающая
+    if(byte2 == 0xAC) byte = 0xAC; // ¬
+    if(byte2 == 0xAD) byte = 0xAD; // Мягкий перенос
+    if(byte2 == 0xAE) byte = 0xAE; // ®
+    if(byte2 == 0xB0) byte = 0xB0; // °
+    if(byte2 == 0xB1) byte = 0xB1; // ±
+    if(byte2 == 0xB5) byte = 0xB5; // µ
+    if(byte2 == 0xB6) byte = 0xB6; // ¶
+    if(byte2 == 0xB7) byte = 0xB7; // ·
+    if(byte2 == 0xBB) byte = 0xBB; // Кавычка ёлочка закрывающая
   }
 
   return byte;
@@ -16741,7 +16990,76 @@ void utf8_to_cp1251(char *buff) {
 void cp1251_to_utf8(char *in_buff, char *out_buff) {
   int read_offset = 0;
   int write_offset = 0;
+  int i;
   unsigned char byte;
+  // 1251 byte, utf8 bytes (2/3), byte1, byte2, byte3
+  char byte_to_bytes[] = {
+    0x80, 2, 0xD0, 0x82, 0x00, // Ђ
+    0x81, 2, 0xD0, 0x83, 0x00, // Ѓ
+    0x82, 3, 0xE2, 0x80, 0x9A, // ‚
+    0x83, 2, 0xD1, 0x93, 0x00, // ѓ
+    0x84, 3, 0xE2, 0x80, 0x9E, // „
+    0x85, 3, 0xE2, 0x80, 0xA6, // …
+    0x86, 3, 0xE2, 0x80, 0xA0, // †
+    0x87, 3, 0xE2, 0x80, 0xA1, // ‡
+    0x88, 3, 0xE2, 0x82, 0xAC, // €
+    0x89, 3, 0xE2, 0x80, 0xB0, // ‰
+    0x8A, 2, 0xD0, 0x89, 0x00, // Љ
+    0x8B, 3, 0xE2, 0x80, 0xB9, // ‹
+    0x8C, 2, 0xD0, 0x8A, 0x00, // Њ
+    0x8D, 2, 0xD0, 0x8C, 0x00, // Ќ
+    0x8E, 2, 0xD0, 0x8B, 0x00, // Ћ
+    0x8F, 2, 0xD0, 0x8F, 0x00, // Џ
+    0x90, 2, 0xD1, 0x92, 0x00, // ђ
+    0x91, 3, 0xE2, 0x80, 0x98, // ‘
+    0x92, 3, 0xE2, 0x80, 0x99, // ’
+    0x93, 3, 0xE2, 0x80, 0x9C, // “
+    0x94, 3, 0xE2, 0x80, 0x9D, // ”
+    0x95, 3, 0xE2, 0x80, 0xA2, // •
+    0x96, 3, 0xE2, 0x80, 0x93, // –
+    0x97, 3, 0xE2, 0x80, 0x94, // —
+    0x98, 1, 0x20, 0x00, 0x00, //  
+    0x99, 3, 0xE2, 0x84, 0xA2, // ™
+    0x9A, 2, 0xD1, 0x99, 0x00, // љ
+    0x9B, 3, 0xE2, 0x80, 0xBA, // ›
+    0x9C, 2, 0xD1, 0x9A, 0x00, // њ
+    0x9D, 2, 0xD1, 0x9C, 0x00, // ќ
+    0x9E, 2, 0xD1, 0x9B, 0x00, // ћ
+    0x9F, 2, 0xD1, 0x9F, 0x00, // џ
+    0xA0, 2, 0xC2, 0xA0, 0x00, // NBSP
+    0xA1, 2, 0xD0, 0x8E, 0x00, // Ў
+    0xA2, 2, 0xD1, 0x9E, 0x00, // ў
+    0xA3, 2, 0xD0, 0x88, 0x00, // Ј
+    0xA4, 2, 0xC2, 0xA4, 0x00, // ¤
+    0xA5, 2, 0xD2, 0x90, 0x00, // Ґ
+    0xA6, 2, 0xC2, 0xA6, 0x00, // ¦
+    0xA7, 2, 0xC2, 0xA7, 0x00, // §
+    0xA8, 2, 0xD0, 0x81, 0x00, // Ё
+    0xA9, 2, 0xC2, 0xA9, 0x00, // ©
+    0xAA, 2, 0xD0, 0x84, 0x00, // Є
+    0xAB, 2, 0xC2, 0xAB, 0x00, // «
+    0xAC, 2, 0xC2, 0xAC, 0x00, // ¬
+    0xAD, 2, 0xC2, 0xAD, 0x00, // SHY
+    0xAE, 2, 0xC2, 0xAE, 0x00, // ®
+    0xAF, 2, 0xD0, 0x87, 0x00, // Ї
+    0xB0, 2, 0xC2, 0xB0, 0x00, // °
+    0xB1, 2, 0xC2, 0xB1, 0x00, // ±
+    0xB2, 2, 0xD0, 0x86, 0x00, // І
+    0xB3, 2, 0xD1, 0x96, 0x00, // і
+    0xB4, 2, 0xD2, 0x91, 0x00, // ґ
+    0xB5, 2, 0xC2, 0xB5, 0x00, // µ
+    0xB6, 2, 0xC2, 0xB6, 0x00, // ¶
+    0xB7, 2, 0xC2, 0xB7, 0x00, // ·
+    0xB8, 2, 0xD1, 0x91, 0x00, // ё
+    0xB9, 3, 0xE2, 0x84, 0x96, // №
+    0xBA, 2, 0xD1, 0x94, 0x00, // є
+    0xBB, 2, 0xC2, 0xBB, 0x00, // »
+    0xBC, 2, 0xD1, 0x98, 0x00, // ј
+    0xBD, 2, 0xD0, 0x85, 0x00, // Ѕ
+    0xBE, 2, 0xD1, 0x95, 0x00, // ѕ
+    0xBF, 2, 0xD1, 0x97, 0x00, // ї
+    0x00
+  };
   int length = strlen(in_buff);
   while(read_offset < length) {
     byte = in_buff[read_offset];
@@ -16752,19 +17070,22 @@ void cp1251_to_utf8(char *in_buff, char *out_buff) {
       write_offset++;
     }
     else {
-      // Ё
-      if(byte == 0xA8) {
-        out_buff[write_offset] = 0xD0;
-        write_offset++;
-        out_buff[write_offset] = 0x81;
-        write_offset++;
-      }
-      // ё
-      if(byte == 0xB8) {
-        out_buff[write_offset] = 0xD1;
-        write_offset++;
-        out_buff[write_offset] = 0x91;
-        write_offset++;
+      for(i = 0; byte_to_bytes[i] != 0x00; i += 5) {
+        if(byte_to_bytes[i] == byte) {
+          if(byte_to_bytes[i + 1] >= 1) {
+            out_buff[write_offset] = byte_to_bytes[i + 2];
+            write_offset++;
+          }
+          if(byte_to_bytes[i + 1] >= 2) {
+            out_buff[write_offset] = byte_to_bytes[i + 3];
+            write_offset++;
+          }
+          if(byte_to_bytes[i + 1] >= 3) {
+            out_buff[write_offset] = byte_to_bytes[i + 4];
+            write_offset++;
+          }
+          break;
+        }
       }
       // А-П
       if(byte >= 0xC0 && byte <= 0xCF) {
@@ -16925,6 +17246,22 @@ char is_directory(char *filename) {
   char result = 0;
   file = Storage->open(filename);
   result = file.isDirectory();
+  file.close();
+  return result;
+}
+
+// Пустой файл или нет
+char is_empty_file(char *filename) {
+  if(get_file_size(filename) == 0) return 1;
+  return 0;
+}
+
+long get_file_size(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 0;
+  file = Storage->open(filename);
+  result = file.size();
   file.close();
   return result;
 }
@@ -17164,6 +17501,7 @@ void dashboard(char mode, char *io_buff) {
     "Internet Time",
     "Analog Time",
     "Network",
+    "Wi-Fi Monitor",
     NULL
   };
   char app_icon[] = {
@@ -17235,6 +17573,10 @@ void dashboard(char mode, char *io_buff) {
       // Network
       if(button_pressed == 6) {
         dashboard_network();
+      }
+      // Wi-Fi channel monitor
+      if(button_pressed == 7) {
+        dashboard_channel_monitor();
       }
       
       clearScreen();
@@ -17356,6 +17698,18 @@ void dashboard_calendar(char mode, char *io_buff) {
       sprintf(buff, " %d:%02d:%02d ", hour, min, sec);
       tft.drawCentreString(buff, tft.width() / 2, 35, FONT_BIGGER);
 
+
+      // 3 сентября переворачиваем календарь
+      if(global_month == 9 && global_day == 3) {
+        if(global_rotation) {
+          global_rotation = 0;
+        }
+        else {
+          global_rotation = 1;
+        }
+        tft.setRotation(global_rotation ? 0 : 2);
+      }
+
       //tft.drawCentreString(day_of_week_name[day_of_week], tft.width() / 2, 70, FONT_BIG);
       sprintf(buff, "%s, %04d", month_name[month], year);
       tft.drawCentreString(buff, tft.width() / 2, 90, FONT_BIG);
@@ -17390,6 +17744,16 @@ void dashboard_calendar(char mode, char *io_buff) {
           }
           tft.drawCentreString(buff, (cal_col + 0.5) * tft.width() / 7, 130 + cal_row * 16, FONT_DEFAULT);
         }
+      }
+      // 3 сентября переворачиваем календарь
+      if(global_month == 9 && global_day == 3) {
+        if(global_rotation) {
+          global_rotation = 0;
+        }
+        else {
+          global_rotation = 1;
+        }
+        tft.setRotation(global_rotation ? 0 : 2);
       }
 
       // Лунный день
@@ -17698,6 +18062,83 @@ void dashboard_network() {
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// Монитор использования Wi-Fi каналов
+
+#define WIFI_MAX_CHANNELS 14
+int wifi_packet_count;
+
+void wifi_packet_handler(void* buf, wifi_promiscuous_pkt_type_t type) {
+    // Get the current channel the ESP32 is listening on
+    uint8_t current_channel;
+    wifi_second_chan_t second_channel;
+    esp_wifi_get_channel(&current_channel, &second_channel);
+
+    wifi_packet_count++;
+}
+
+void dashboard_channel_monitor() {
+  int ch;
+  char buff[80];
+  long packets_counts[WIFI_MAX_CHANNELS];
+  long this_ch_count = 0;
+  long total_packets = 0;
+
+  total_packets = 0;
+  for(ch = 0; ch < WIFI_MAX_CHANNELS; ch++) {
+    packets_counts[ch] = 0;
+  }
+
+  clearScreen();
+  drawAppTitle("Wi-Fi Monitor");
+
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  esp_wifi_set_promiscuous(true);
+  esp_wifi_set_promiscuous_rx_cb(&wifi_packet_handler);
+
+  ch = 1;
+  while(1) {
+    // Выводим время
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, " %d:%02d:%02d ", global_hours, global_minutes, global_seconds);
+    tft.drawCentreString(buff, tft.width() / 2, 27, FONT_BIGGER);
+
+    esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
+    wifi_packet_count = 0;
+    delay(1000);
+    Serial.printf("Channel %d packets %d\n", ch, wifi_packet_count);
+    this_ch_count = wifi_packet_count;
+    total_packets += this_ch_count;
+    packets_counts[ch] += this_ch_count;
+
+    sprintf(buff, "Ch %d: %d pkts/s, %d total, %d%%     ", ch, this_ch_count, packets_counts[ch], 100 * packets_counts[ch] / total_packets);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.drawString(buff, 1, 60 + 18 * ch, FONT_DEFAULT);
+
+    tft.fillRect(0, 60 + 18 * ch + 15, tft.width(), 3, color_scheme_bg);
+    tft.fillRect(0, 60 + 18 * ch + 15, tft.width() * packets_counts[ch] / total_packets, 3, color_scheme_fg);
+
+    ch++;
+    if(ch >= WIFI_MAX_CHANNELS) {
+      ch = 1;
+    }
+
+    if(!touchCheckNowait()) continue;
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      esp_wifi_set_promiscuous(false);
+      esp_wifi_set_promiscuous_rx_cb(NULL);
+      WiFi.begin();
       drawAppTitle("Exit");
       touchWaitRelease();
       touchExitActionReset();
@@ -18252,6 +18693,7 @@ void set_clock(char mode, char *io_buff) {
 
 void view_font(char mode, char *io_buff) {
   int i;
+  int width1, width2;
   unsigned char byte;
   char buff[80];
   char app_icon[] = {
@@ -18296,9 +18738,19 @@ void view_font(char mode, char *io_buff) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
     for(i = 0; i < 16; i++) {
-      sprintf(buff, " %d 0x%02X %c     ", (int)byte, (int)byte, byte);
-      tft.drawString(buff, 1, 16 + i * 16, FONT_DEFAULT);
-      tft.drawString(buff, tft.width() / 2, 16 + i * 16 + 4, FONT_MONOSPACE);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      sprintf(buff, " %d 0x%02X      ", (int)byte, (int)byte);
+      tft.drawString(buff, 1, 16 + i * 17, FONT_DEFAULT);
+      tft.drawString(buff, tft.width() / 2, 16 + i * 17 + 4, FONT_MONOSPACE);
+
+      // Символы в инверсном виде, чтобы видеть знакоместа
+      sprintf(buff, " %d 0x%02X ", (int)byte, (int)byte);
+      width1 = tft.textWidth(buff, FONT_DEFAULT);
+      width2 = tft.textWidth(buff, FONT_MONOSPACE);
+      tft.setTextColor(color_scheme_bg, color_scheme_fg);
+      sprintf(buff, "%c", byte);
+      tft.drawString(buff, 1 + width1, 16 + i * 17, FONT_DEFAULT);
+      tft.drawString(buff, tft.width() / 2 + width2, 16 + i * 17 + 4, FONT_MONOSPACE);
       byte++;
     }
 
@@ -18463,6 +18915,9 @@ void reboot(char mode, char *io_buff) {
   esp_reset_reason_t reason;
   char *buttons[] = {
     "Reboot",
+    "Light sleep (touch wake up)",
+    "Light sleep (BOOT wake up)",
+    "Deep sleep (BOOT wake up)",
     NULL
   };
   char app_icon[] = {
@@ -18486,11 +18941,11 @@ void reboot(char mode, char *io_buff) {
   };
 
   if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Reboot");
+    strcpy(io_buff, "Power");
     return;
   }
   if(mode == APP_MODE_RETURN_NAME_SHORT) {
-    strcpy(io_buff, "Rebt");
+    strcpy(io_buff, "Pwr");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -18499,7 +18954,7 @@ void reboot(char mode, char *io_buff) {
   }
 
   clearScreen();
-  drawAppTitle("Reboot");
+  drawAppTitle("Power");
 
   reason = esp_reset_reason();
   sprintf(buff, "Reset reason:\n%s", get_reset_reason_text(reason));
@@ -18509,13 +18964,24 @@ void reboot(char mode, char *io_buff) {
     sprintf(buff, "Last reset reason:\n%s", get_reset_reason_text(reason));
     draw_text_formatted(buff, 1, 20, tft.width() - 2, 3, FONT_DEFAULT, 1);
 
-    drawButtonMatrix(0, 100, tft.width(), 32, buttons, 1, 1);
+    drawButtonMatrix(0, 100, tft.width(), 32 * 4, buttons, 1, 4);
 
     touchWaitPress();
 
-    button_pressed = touchCheckMatrix(0, 100, tft.width(), 32, buttons, 1, 1);
+    button_pressed = touchCheckMatrix(0, 100, tft.width(), 32 * 4, buttons, 1, 4);
     if(button_pressed != -1) {
-      ESP.restart();
+      if(button_pressed == 0) {
+        ESP.restart();
+      }
+      if(button_pressed == 1) {
+        sleep_until_touch_or_boot();
+      }
+      if(button_pressed == 2) {
+        sleep_until_boot();
+      }
+      if(button_pressed == 3) {
+        deep_sleep_until_boot();
+      }
     }
 
     touchWaitReleaseOrExit();
@@ -18538,6 +19004,7 @@ void keyboard_control(char mode, char *io_buff) {
   unsigned char byte;
   int button_pressed;
   char buff[80];
+  char changes_flag = 0;
   char *contents;
   char *buttons[] = {
     "Alt keyboard",
@@ -18622,6 +19089,7 @@ void keyboard_control(char mode, char *io_buff) {
           keyboard_indent_right = 1;
         }
       }
+      changes_flag = 1;
     }
 
     touchWaitReleaseOrExit();
@@ -18629,26 +19097,27 @@ void keyboard_control(char mode, char *io_buff) {
       drawAppTitle("Exit");
       touchWaitRelease();
 
-      if(drawConfirm("Save changes?") == 0) {
-        contents = (char *)malloc(500 * sizeof(char));
-        if(contents) {
-          contents[0] = 0;
+      if(changes_flag) {
+        if(drawConfirm("Save changes?") == 0) {
+          contents = (char *)malloc(500 * sizeof(char));
+          if(contents) {
+            contents[0] = 0;
 
-          sprintf(buff, "alt_keyboard_enabled_flag=%s\n", alt_keyboard_enabled_flag ? "1" : "0");
-          strcat(contents, buff);
-          sprintf(buff, "keyboard_indent_left=%s\n", keyboard_indent_left ? "1" : "0");
-          strcat(contents, buff);
-          sprintf(buff, "keyboard_indent_right=%s\n", keyboard_indent_right ? "1" : "0");
-          strcat(contents, buff);
+            sprintf(buff, "alt_keyboard_enabled_flag=%s\n", alt_keyboard_enabled_flag ? "1" : "0");
+            strcat(contents, buff);
+            sprintf(buff, "keyboard_indent_left=%s\n", keyboard_indent_left ? "1" : "0");
+            strcat(contents, buff);
+            sprintf(buff, "keyboard_indent_right=%s\n", keyboard_indent_right ? "1" : "0");
+            strcat(contents, buff);
 
-          write_file_from_buff("/Settings/Keyboard", contents);
+            write_file_from_buff("/Settings/Keyboard", contents);
 
-          free(contents);
+            free(contents);
+          }
+          else {
+            drawError("Cannot allocate memory");
+          }
         }
-        else {
-          drawError("Cannot allocate memory");
-        }
-        //write_key_value_to_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", (char*)(alt_keyboard_enabled_flag ? "1" : "0"));
       }
 
       touchExitActionReset();
@@ -18666,6 +19135,7 @@ void sound_control(char mode, char *io_buff) {
   int i;
   unsigned char byte;
   int button_pressed;
+  char changes_flag = 0;
   char buff[80];
   char *buttons[] = {
     "Beep on events",
@@ -18771,6 +19241,7 @@ void sound_control(char mode, char *io_buff) {
         }
         clearPrompt();
       }
+      changes_flag = 1;
     }
 
     touchWaitReleaseOrExit();
@@ -18778,15 +19249,16 @@ void sound_control(char mode, char *io_buff) {
       drawAppTitle("Exit");
       touchWaitRelease();
 
-      if(Storage && drawConfirm("Save changes?") == 0) {
-        write_key_value_to_file("/Settings/Sound", "beep_enabled_flag", (char*)(global_is_beep_enabled ? "1" : "0"));
-        write_key_value_to_file("/Settings/Sound", "beep_tap_enabled_flag", (char*)(global_is_beep_tap_enabled ? "1" : "0"));
-        write_key_value_to_file("/Settings/Sound", "beep_hour_enabled_flag", (char*)(global_is_beep_hour_enabled ? "1" : "0"));
-        write_key_value_to_file("/Settings/Sound", "beep_quarter_enabled_flag", (char*)(global_is_beep_quarter_enabled ? "1" : "0"));
-        sprintf(buff, "%d", global_volume);
-        write_key_value_to_file("/Settings/Sound", "volume", buff);
+      if(changes_flag) {
+        if(drawConfirm("Save changes?") == 0) {
+          write_key_value_to_file("/Settings/Sound", "beep_enabled_flag", (char*)(global_is_beep_enabled ? "1" : "0"));
+          write_key_value_to_file("/Settings/Sound", "beep_tap_enabled_flag", (char*)(global_is_beep_tap_enabled ? "1" : "0"));
+          write_key_value_to_file("/Settings/Sound", "beep_hour_enabled_flag", (char*)(global_is_beep_hour_enabled ? "1" : "0"));
+          write_key_value_to_file("/Settings/Sound", "beep_quarter_enabled_flag", (char*)(global_is_beep_quarter_enabled ? "1" : "0"));
+          sprintf(buff, "%d", global_volume);
+          write_key_value_to_file("/Settings/Sound", "volume", buff);
+        }
       }
-
       touchExitActionReset();
       return;
     }
@@ -18802,6 +19274,7 @@ void clock_control(char mode, char *io_buff) {
   int i;
   unsigned char byte;
   int button_pressed;
+  char changes_flag = 0;
   char buff[80];
   char *buttons[] = {
     "Alarm",
@@ -18925,6 +19398,7 @@ void clock_control(char mode, char *io_buff) {
       
       clearScreen();
       drawAppTitle("Clock Settings");
+      changes_flag = 1;
     }
 
     touchWaitReleaseOrExit();
@@ -18932,18 +19406,20 @@ void clock_control(char mode, char *io_buff) {
       drawAppTitle("Exit");
       touchWaitRelease();
 
-      if(Storage && drawConfirm("Save changes?") == 0) {
-        sprintf(buff, "%d", global_alarm_set);
-        write_key_value_to_file("/Settings/Alarm", "enabled", buff);
-        sprintf(buff, "%d", global_alarm_hour);
-        write_key_value_to_file("/Settings/Alarm", "hour", buff);
-        sprintf(buff, "%d", global_alarm_minute);
-        write_key_value_to_file("/Settings/Alarm", "minute", buff);
-        write_key_value_to_file("/Settings/Sound", "beep_hour_enabled_flag", (char*)(global_is_beep_hour_enabled ? "1" : "0"));
-        write_key_value_to_file("/Settings/Sound", "beep_quarter_enabled_flag", (char*)(global_is_beep_quarter_enabled ? "1" : "0"));
+      if(changes_flag) {
+        if(drawConfirm("Save changes?") == 0) {
+          sprintf(buff, "%d", global_alarm_set);
+          write_key_value_to_file("/Settings/Alarm", "enabled", buff);
+          sprintf(buff, "%d", global_alarm_hour);
+          write_key_value_to_file("/Settings/Alarm", "hour", buff);
+          sprintf(buff, "%d", global_alarm_minute);
+          write_key_value_to_file("/Settings/Alarm", "minute", buff);
+          write_key_value_to_file("/Settings/Sound", "beep_hour_enabled_flag", (char*)(global_is_beep_hour_enabled ? "1" : "0"));
+          write_key_value_to_file("/Settings/Sound", "beep_quarter_enabled_flag", (char*)(global_is_beep_quarter_enabled ? "1" : "0"));
 
-        sprintf(buff, "%d", global_ntp_enabled);
-        write_file_from_buff("/Settings/NTP", buff);
+          sprintf(buff, "%d", global_ntp_enabled);
+          write_file_from_buff("/Settings/NTP", buff);
+        }
       }
 
       touchExitActionReset();
@@ -19265,12 +19741,7 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
       if(byte == 0x09) byte = ' ';
       // Всё остальное неотображаемые до пробела, кроме переводов строк
       if(byte < ' ' && byte != '\n' && byte != '\r') byte = '_';
-      // После 128 - кроме букв ё, Ё и №
-      //if(byte >= 128 && byte <= 167) byte = '_';
-      //if(byte >= 169 && byte <= 183) byte = '_';
-      //if(byte >= 186 && byte <= 191) byte = '_';
       
-      //Serial.printf("%c %s\n", byte, current_word);
       // Последовательности \n\r и \r\n это один перевод строки
       newline_symbols = 0;
       if(byte == '\r' && text[text_offset + 1] == '\n') {
@@ -19383,23 +19854,36 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
   }
 
   // Возвращаем число выведенных байтов = число считанных - число невыведенных - переводы строки
-  Serial.printf("text_offset = %d, current_word = '%s', current_line = '%s', newline_symbols = %d\n", text_offset, current_word, current_line, newline_symbols);
+  //Serial.printf("text_offset = %d, current_word = '%s', current_line = '%s', newline_symbols = %d\n", text_offset, current_word, current_line, newline_symbols);
   if(strlen(current_word) + strlen(current_line) == 0) newline_symbols = 0;
   return text_offset - strlen(current_word) - strlen(current_line) - newline_symbols;
 }
 
 // Просмотр файла
+
+// Длина истории для перемотки назад
+#define VIEW_HISTORY_LEN 100
+
 void view_file(char *title, char *filename) {
   fs::File file;
   int touch_x, touch_y;
   long file_offset = 0;
+  long initial_file_offset = 0;
   long visible_offset;
   long prev_offset;
+  long prev_offset_history[VIEW_HISTORY_LEN];
+  int history_index = 0;
+  int skipped_pages = 0;
   char *buff;
 
   clearScreen();
   drawAppTitle(title);
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+  for(history_index = 0; history_index < VIEW_HISTORY_LEN; history_index++) {
+    prev_offset_history[history_index] = -1;
+  }
+  history_index = -1;
 
   buff = (char*)malloc(2050 * sizeof(char));
 
@@ -19416,10 +19900,11 @@ void view_file(char *title, char *filename) {
   // Нет ли сохранённого смещения для файла?
   if(read_key_value_from_file("/Settings/View", filename, buff)) {
     sscanf(buff, "%d", &file_offset);
+    initial_file_offset = file_offset;
   }
 
   while(1) {
-    Serial.printf("file_offset = %d\n", file_offset);
+    Serial.printf("file_offset = %d of %d (%d%%)\n", file_offset, file.size(), 100 * file_offset / file.size());
     file.seek(file_offset);
     memset(buff, 0, 2048);
     file.read((uint8_t *)buff, 2048);
@@ -19440,31 +19925,60 @@ void view_file(char *title, char *filename) {
     if(touch_y > 16) {
       // Левая часть экрана - назад
       if(touch_x < tft.width() / 2) {
-        // Ищем страницу назад
-        prev_offset = 0;
-        visible_offset = 0;
-        while(prev_offset < file_offset) {
-          file.seek(prev_offset);
-          file.read((uint8_t *)buff, 2048);
-          buff[2048] = 0;
-          if(global_view_font_small) {
-            visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, (tft.height() / 8) - 2, FONT_MONOSPACE, 0);
+        if(history_index > 0) {
+          history_index--;
+          file_offset = prev_offset_history[history_index];
+        }
+        else {
+          skipped_pages = 0;
+          // Ищем страницу назад
+          prev_offset = 0;
+          visible_offset = 0;
+          history_index = 0;
+          prev_offset_history[history_index] = 0;
+          while(prev_offset < file_offset) {
+            history_index++;
+            if(history_index == VIEW_HISTORY_LEN) {
+              for(history_index = 1; history_index < VIEW_HISTORY_LEN; history_index++) {
+                prev_offset_history[history_index - 1] = prev_offset_history[history_index];
+              }
+              history_index = VIEW_HISTORY_LEN - 1;
+            }
+            prev_offset_history[history_index] = prev_offset;
+            
+            file.seek(prev_offset);
+            file.read((uint8_t *)buff, 2048);
+            buff[2048] = 0;
+            if(global_view_font_small) {
+              visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, (tft.height() / 8) - 2, FONT_MONOSPACE, 0);
+            }
+            else {
+              visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, (tft.height() / 16) - 1, FONT_DEFAULT, 0);
+            }
+            
+            if(prev_offset + visible_offset >= file_offset) {
+              file_offset = prev_offset;
+              break;
+            }
+            prev_offset += visible_offset;
+            skipped_pages++;
           }
-          else {
-            visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, (tft.height() / 16) - 1, FONT_DEFAULT, 0);
-          }
-          
-          if(prev_offset + visible_offset >= file_offset) {
-            file_offset = prev_offset;
-            break;
-          }
-          prev_offset += visible_offset;
+          Serial.printf("Skipped pages: %d\n", skipped_pages);
         }
       }
       // Правая - вперёд, если есть куда
       else if(touch_x > tft.width() / 2) {
         if(file_offset + visible_offset < file.size()) {
           file_offset += visible_offset;
+
+          history_index++;
+          if(history_index == VIEW_HISTORY_LEN) {
+            for(history_index = 1; history_index < VIEW_HISTORY_LEN; history_index++) {
+              prev_offset_history[history_index - 1] = prev_offset_history[history_index];
+            }
+            history_index = VIEW_HISTORY_LEN - 1;
+          }
+          prev_offset_history[history_index] = file_offset;
         }
       }
     }
@@ -19474,8 +19988,10 @@ void view_file(char *title, char *filename) {
       drawAppTitle("Exit");
       touchWaitRelease();
       drawAppTitle(title);
-      sprintf(buff, "%d", file_offset);
-      write_key_value_to_file("/Settings/View", filename, buff);
+      if(initial_file_offset != file_offset) {
+        sprintf(buff, "%d", file_offset);
+        write_key_value_to_file("/Settings/View", filename, buff);
+      }
       free(buff);
       touchExitActionReset();
       return;
@@ -19533,6 +20049,121 @@ void view_text(char *title, char *data) {
       drawAppTitle("Exit");
       touchWaitRelease();
       drawAppTitle(title);
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// Просмотр файла в шестнадцатеричном виде
+void hexview_file(char *title, char *filename) {
+  fs::File file;
+  int touch_x, touch_y;
+  int x, y, byte;
+  long file_offset = 0;
+  long initial_file_offset = 0;
+  long visible_offset;
+  long prev_offset;
+  long prev_offset_history[VIEW_HISTORY_LEN];
+  int history_index = 0;
+  int skipped_pages = 0;
+  char buff[80];
+  char buff2[80];
+
+  clearScreen();
+  drawAppTitle(title);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+  for(history_index = 0; history_index < VIEW_HISTORY_LEN; history_index++) {
+    prev_offset_history[history_index] = -1;
+  }
+  history_index = -1;
+
+  file = Storage->open(filename);
+  if(!file) {
+    drawError("Cannot open file");
+    return;
+  }
+  if(file.isDirectory()) {
+    drawError("Cannot view directory");
+    return;
+  }
+
+  // Нет ли сохранённого смещения для файла?
+  if(read_key_value_from_file("/Settings/View", filename, buff)) {
+    sscanf(buff, "%d", &file_offset);
+    initial_file_offset = file_offset;
+  }
+
+  while(1) {
+    Serial.printf("file_offset = %d of %d (%d%%)\n", file_offset, file.size(), 100 * file_offset / file.size());
+    file.seek(file_offset);
+
+    y = 0;
+    x = 0;
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    while(file.available()) {
+      if(x == 0) {
+        memset(buff, 0x20, 40);
+        buff[40] = 0;
+        sprintf(buff2, "%07X", file_offset + y * 8);
+        memcpy(buff, buff2, 7);
+        buff[7] = '|';
+        buff[31] = '|';
+      }
+
+      byte = file.read();
+      sprintf(buff2, "%02X", byte);
+      memcpy(buff + 8 + x * 3, buff2, 2);
+
+      buff[8 + 8 * 3 + x] = byte >= 32 ? byte : ' ';
+
+      if(x == 7 || !file.available()) {
+        tft.drawString(buff, 0, 16 + 8 * y, FONT_MONOSPACE);
+      }
+      //delay(100);
+
+      x++;
+      if(x == 8) {
+        x = 0;
+        y++;
+      }
+      if(y == 39) break;
+    }
+    y++;
+    if(y < 39) {
+      tft.fillRect(0, 16 + y * 8, tft.width(), tft.height() - 16 - y * 8, color_scheme_bg);
+    }
+
+    touchWaitPress();
+
+    // Смотрим куда нажатие, двигаемся либо вперёд по файлу, либо назад
+    touch_x = global_touch_x;
+    touch_y = global_touch_y;
+    if(touch_y > 16) {
+      // Левая часть экрана - назад
+      if(touch_x < tft.width() / 2) {
+        file_offset -= 39 * 8;
+        if(file_offset < 0) file_offset = 0;
+      }
+      // Правая - вперёд, если есть куда
+      else if(touch_x > tft.width() / 2) {
+        if(file_offset + 39 * 8 < file.size()) {
+          file_offset += 39 * 8;
+        }
+      } 
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      drawAppTitle(title);
+      if(initial_file_offset != file_offset) {
+        sprintf(buff, "%d", file_offset);
+        write_key_value_to_file("/Settings/View", filename, buff);
+      }
       touchExitActionReset();
       return;
     }
@@ -21325,7 +21956,7 @@ void generator(char mode, char *io_buff) {
   float frequency = 1;
   float amplitude = 1;
   int value;
-  int pin = 27;
+  int pin = -1;
 
   char update_flag;
   char *buttons[] = {
@@ -21371,7 +22002,9 @@ void generator(char mode, char *io_buff) {
   clearScreen();
   drawAppTitle("Signal Generator");
 
-  pinMode(pin, OUTPUT);
+  if(pin >= 0) {
+    pinMode(pin, OUTPUT);
+  }
 
   while(1) {
     drawButtonMatrix(0, tft.height() - 32 * 4, tft.width() / 2, 32 * 4, buttons, 1, 4);
@@ -21387,7 +22020,12 @@ void generator(char mode, char *io_buff) {
     tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 32 * 4 + 32 * 1 + 8, FONT_DEFAULT);
     sprintf(buff, "   %f   ", amplitude);
     tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 32 * 4 + 32 * 2 + 8, FONT_DEFAULT);
-    sprintf(buff, "   %d   ", pin);
+    if(pin == -1) {
+      sprintf(buff, "   Serial   ", pin);
+    }
+    else {
+      sprintf(buff, "   %d   ", pin);
+    }
     tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 32 * 4 + 32 * 3 + 8, FONT_DEFAULT);
 
     while(touchCheckNowait() == 0) {
@@ -24399,9 +25037,12 @@ int touchCheckList(int left_x, int top_y, int width, int height, char **str, int
 int show_system_menu() {
   int selected;
   char *items[] = {
-    "Back",
     "Brightness",
-    "Close menu",
+    "Inversion",
+    "Rotation",
+    "Sound",
+    "Sleep",
+    "Exit app",
     NULL
   };
   if(global_menu_visible_flag) {
@@ -24411,11 +25052,8 @@ int show_system_menu() {
   if(global_touch_present_flag) {
     touchWaitRelease();
   }
-  selected = show_menu(tft.width() / 2, 16, tft.width() / 2, 2 + 16 * 3, items);
+  selected = show_menu(tft.width() / 2, 16, tft.width() / 2, 2 + 16 * 6, items);
   if(selected == 0) {
-    global_exit_flag = 1;
-  }
-  else if(selected == 1) {
     if(get_brightness() == 255) {
       set_brightness(64);
     }
@@ -24429,8 +25067,35 @@ int show_system_menu() {
       set_brightness(255);
     }
   }
+  else if(selected == 1) {
+    if(global_inversion) global_inversion = 0;
+    else global_inversion = 1;
+    tft.invertDisplay(global_inversion ? true : false);
+  }
   else if(selected == 2) {
-    // Ничего не делать, просто закрыть меню
+    if(global_rotation) global_rotation = 0;
+    else global_rotation = 1;
+    tft.setRotation(global_rotation ? 0 : 2);
+
+    // А теперь нужно повернуть картинку на экране
+    rotate_screen_image();
+  }
+  else if(selected == 3) {
+    if(global_is_beep_enabled == 1) {
+      global_is_beep_tap_enabled = 0;
+      global_is_beep_enabled = 0;
+    }
+    else {
+      global_is_beep_tap_enabled = 1;
+      global_is_beep_enabled = 1;
+      beep_morse_if_enabled("E");
+    }
+  }
+  else if(selected == 4) {
+    sleep_until_touch_or_boot();
+  }
+  else if(selected == 5) {
+    global_exit_flag = 1;
   }
   touchWaitRelease();
 
@@ -24599,12 +25264,6 @@ void touchWaitPress() {
   long boot_low_begin;
   //Serial.println("touchWaitPress begin");
   while(!touchPollTouchStatus()) {
-    // Light sleep
-    //esp_sleep_enable_timer_wakeup(1000);
-    //rtc_wdt_disable();
-    //esp_light_sleep_start();
-    //rtc_wdt_enable();
-
     drawAppTitleRight();
     global_exit_flag_touch_begin = 0;
     if(global_exit_flag) return;
@@ -24897,6 +25556,20 @@ void save_brightness() {
   write_file_from_buff("/Settings/Brightness", buff);
 }
 
+// Переворачивает картинку на экране вверх ногами
+void rotate_screen_image() {
+  int x, y;
+  int pixel1, pixel2;
+  for(y = 0; y < tft.height() / 2; y++) {
+    for(x = 0; x < tft.width(); x++) {
+      pixel1 = tft.readPixel(x, y);
+      pixel2 = tft.readPixel(tft.width() - 1 - x, tft.height() - 1 - y);
+      tft.drawPixel(x, y, pixel2);
+      tft.drawPixel(tft.width() - 1 - x, tft.height() - 1 - y, pixel1);
+    }
+  }
+}
+
 void image_from_bits(int start_x, int start_y, char *image, int color, int bg_color) {
   int byte_index, bit_index;
   int x, y;
@@ -24954,6 +25627,7 @@ void beep_morse_task(void *pvParameters) {
 
 void beep_morse_perform(char c) {
   switch(c) {
+    // Цифры
     case '0': morse_dah(); morse_dah(); morse_dah(); morse_dah(); morse_dah(); break;
     case '1': morse_dit(); morse_dah(); morse_dah(); morse_dah(); morse_dah(); break;
     case '2': morse_dit(); morse_dit(); morse_dah(); morse_dah(); morse_dah(); break;
@@ -24964,6 +25638,8 @@ void beep_morse_perform(char c) {
     case '7': morse_dah(); morse_dah(); morse_dit(); morse_dit(); morse_dit(); break;
     case '8': morse_dah(); morse_dah(); morse_dah(); morse_dit(); morse_dit(); break;
     case '9': morse_dah(); morse_dah(); morse_dah(); morse_dah(); morse_dit(); break;
+
+    // Латинница
     case 'A': case 'a': morse_dit(); morse_dah(); break;
     case 'B': case 'b': morse_dah(); morse_dit(); morse_dit(); morse_dit(); break;
     case 'C': case 'c': morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
@@ -24990,7 +25666,62 @@ void beep_morse_perform(char c) {
     case 'X': case 'x': morse_dah(); morse_dit(); morse_dit(); morse_dah(); break;
     case 'Y': case 'y': morse_dah(); morse_dit(); morse_dah(); morse_dah(); break;
     case 'Z': case 'z': morse_dah(); morse_dah(); morse_dit(); morse_dit(); break;
+    
+    // Русские буквы
+    case 0xC0: case 0xE0: morse_dit(); morse_dah(); break; // А
+    case 0xC1: case 0xE1: morse_dah(); morse_dit(); morse_dit(); morse_dit(); break; // Б
+    case 0xC2: case 0xE2: morse_dit(); morse_dah(); morse_dah(); break; // В
+    case 0xC3: case 0xE3: morse_dah(); morse_dah(); morse_dit(); break; // Г
+    case 0xC4: case 0xE4: morse_dah(); morse_dit(); morse_dit(); break; // Д
+    case 0xC5: case 0xE5: morse_dit(); break; // Е
+    case 0xA8: case 0xB8: morse_dit(); break; // Ё
+    case 0xC6: case 0xE6: morse_dit(); morse_dit(); morse_dit(); morse_dah(); break; // Ж
+    case 0xC7: case 0xE7: morse_dah(); morse_dah(); morse_dit(); morse_dit(); break; // З
+    case 0xC8: case 0xE8: morse_dit(); morse_dit(); break; // И
+    case 0xC9: case 0xE9: morse_dit(); morse_dah(); morse_dah(); morse_dah(); break; // Й
+    case 0xCA: case 0xEA: morse_dah(); morse_dit(); morse_dah(); break; // К
+    case 0xCB: case 0xEB: morse_dit(); morse_dah(); morse_dit(); morse_dit(); break; // Л
+    case 0xCC: case 0xEC: morse_dah(); morse_dah(); break; // М
+    case 0xCD: case 0xED: morse_dah(); morse_dit(); break; // Н
+    case 0xCE: case 0xEE: morse_dah(); morse_dah(); morse_dah(); break; // О
+    case 0xCF: case 0xEF: morse_dit(); morse_dah(); morse_dah(); morse_dit(); break; // П
+    case 0xD0: case 0xF0: morse_dit(); morse_dah(); morse_dit(); break; // Р
+    case 0xD1: case 0xF1: morse_dit(); morse_dit(); morse_dit(); break; // С
+    case 0xD2: case 0xF2: morse_dah(); break; // Т
+    case 0xD3: case 0xF3: morse_dit(); morse_dit(); morse_dah(); break; // У
+    case 0xD4: case 0xF4: morse_dit(); morse_dit(); morse_dah(); morse_dit(); break; // Ф
+    case 0xD5: case 0xF5: morse_dit(); morse_dit(); morse_dit(); morse_dit(); break; // Х
+    case 0xD6: case 0xF6: morse_dah(); morse_dit(); morse_dah(); morse_dit(); break; // Ц
+    case 0xD7: case 0xF7: morse_dah(); morse_dah(); morse_dah(); morse_dit(); break; // Ч
+    case 0xD8: case 0xF8: morse_dah(); morse_dah(); morse_dah(); morse_dah(); break; // Ш
+    case 0xD9: case 0xF9: morse_dah(); morse_dah(); morse_dit(); morse_dah(); break; // Щ
+    case 0xDA: case 0xFA: morse_dah(); morse_dah(); morse_dit(); morse_dah(); morse_dah(); break; // Ъ
+    case 0xDB: case 0xFB: morse_dah(); morse_dit(); morse_dah(); morse_dah(); break; // Ы
+    case 0xDC: case 0xFC: morse_dah(); morse_dit(); morse_dit(); morse_dah(); break; // Ь
+    case 0xDD: case 0xFD: morse_dit(); morse_dit(); morse_dah(); morse_dit(); morse_dit(); break; // Э
+    case 0xDE: case 0xFE: morse_dit(); morse_dit(); morse_dah(); morse_dah(); break; // Ю
+    case 0xDF: case 0xFF: morse_dit(); morse_dah(); morse_dit(); morse_dah(); break; // Я
+
+    // Знаки препинания (русский вариант)
+    case '.': morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); break;
+    case ',': morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); morse_dah(); break;
+    case '?': morse_dit(); morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dit(); break;
+    case '!': morse_dah(); morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dah(); break;
+    case ':': morse_dah(); morse_dah(); morse_dah(); morse_dit(); morse_dit(); morse_dit(); break;
+    case ';': morse_dah(); morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
+    case '(': case ')': morse_dah(); morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dah(); break;
+    case '\'': morse_dit(); morse_dah(); morse_dah(); morse_dah(); morse_dah(); morse_dit(); break;
+    case '"': morse_dit(); morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dit(); break;
+    case '+': morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
+    case '@': morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
+    case '=': morse_dah(); morse_dit(); morse_dit(); morse_dit(); morse_dah(); break;
+    case '/': morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dit(); break;
+    case '_': morse_dit(); morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dah(); break;
+    case 0x08: case 0x7F:
+      morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit();
+      break;
     case ' ': morse_wait(); morse_wait(); morse_wait(); break;
+    default: morse_wait(); break;
   }
 }
 
@@ -26093,7 +26824,7 @@ double parse_expr_constant_by_name(char *name) {
     return LED_BLUE;
   }
   if(strcasecmp(name, "boot_pin") == 0) {
-    return BOOT_PIN;
+    return BOOT_BUTTON_PIN;
   }
   if(strcasecmp(name, "buzzer_pin") == 0) {
     return BUZZER_PIN;
@@ -26140,6 +26871,85 @@ void run_app_by_name(char *name) {
   }
 }
 
+void sleep_until_timer(long interval) {
+  esp_sleep_enable_timer_wakeup(interval);
+  esp_light_sleep_start();
+}
+
+void sleep_until_boot() {
+  int brighness;
+  brighness = get_brightness();
+  set_brightness(0);
+  delay(100);
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)BOOT_BUTTON_PIN, LOW);
+  esp_light_sleep_start();
+  set_brightness(brighness);
+  while(digitalRead(BOOT_BUTTON_PIN) == LOW);
+}
+
+void sleep_until_touch_or_boot() {
+  int brighness;
+  int touch_count = 0;
+  brighness = get_brightness();
+
+  set_brightness(0);
+  touchWaitRelease();
+  delay(100);
+  while(touch_count < 3) {
+    esp_sleep_enable_timer_wakeup(1000000);
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
+    esp_light_sleep_start();
+    if(digitalRead(BOOT_BUTTON_PIN) == LOW) {
+      while(digitalRead(BOOT_BUTTON_PIN) == LOW);
+      break;
+    }
+    if(touchCheckNowait() == 1) {
+      set_brightness(brighness);
+      delay(10);
+      set_brightness(0);
+      touch_count++;
+    }
+    else {
+      touch_count = 0;
+    }
+    while(MorseTaskHandle != NULL) {
+      delay(100);
+    }
+    delay(1);
+  }
+  set_brightness(brighness);
+  touchWaitRelease();
+}
+
+void deep_sleep_until_boot() {
+  // Sleep display
+  tft.writecommand(0x10);
+
+  // 1. Переводим пины CS под управление RTC-домена, чтобы они не «плавали» во сне
+  rtc_gpio_init((gpio_num_t)XPT2046_CS);
+  rtc_gpio_init((gpio_num_t)TFT_CS);
+  rtc_gpio_init((gpio_num_t)SD_CS);
+  
+  // 2. Настраиваем их на вывод
+  rtc_gpio_set_direction((gpio_num_t)XPT2046_CS, RTC_GPIO_MODE_OUTPUT_ONLY);
+  rtc_gpio_set_direction((gpio_num_t)TFT_CS, RTC_GPIO_MODE_OUTPUT_ONLY);
+  rtc_gpio_set_direction((gpio_num_t)SD_CS, RTC_GPIO_MODE_OUTPUT_ONLY);
+  
+  // 3. ПРИНУДИТЕЛЬНО подаем HIGH во время сна. Это отключит периферию и уберет утечки
+  rtc_gpio_set_level((gpio_num_t)XPT2046_CS, 1);
+  rtc_gpio_set_level((gpio_num_t)TFT_CS, 1);
+  rtc_gpio_set_level((gpio_num_t)SD_CS, 1);
+  
+  set_brightness(0);
+  delay(100);
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)BOOT_BUTTON_PIN, LOW);
+  esp_deep_sleep_start();
+}
+
 void setup() {
   char buff[80];
   char autorun_app_name[80];
@@ -26159,11 +26969,7 @@ void setup() {
   pinMode(BACKLIGHT_LED, OUTPUT);
 
   pinMode(LIGHT_SENSOR_PIN, INPUT);
-  pinMode(XPT2046_IRQ, INPUT_PULLUP);
-
-  // Start the SPI for the touchscreen and init the touchscreen
-  //touchscreenSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
-  //touchscreen.begin(touchscreenSPI);
+  pinMode(XPT2046_IRQ, INPUT);
 
   //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
@@ -26221,7 +27027,7 @@ void setup() {
   // Инициализация SD
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
   //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
-  if (SD.begin(SD_CS, sdSPI)) {
+  if(SD.begin(SD_CS, sdSPI)) {
     sd_available_flag = 1;
     Storage = &SD;
     storage_type = STORAGE_TYPE_SD;
@@ -26549,7 +27355,5 @@ void setup() {
 }
 
 void loop() {
-  //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   all_apps[0](APP_MODE_LAUNCH, NULL);
-  //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 }
