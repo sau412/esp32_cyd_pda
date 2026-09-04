@@ -255,6 +255,7 @@
 2026-09-02 cal, storage, df, file - получить тип файла, коллаж для гитхаба и презентаций
 2026-09-03 hexview, перевернуть календарь 3 сентября, морзе на русском, morse в терминале, utf8<->1251 полное конвертирование,
   баг при выходе из IRC
+2026-09-04 Sokoban
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (д) Меньше мигания в ханойских башнях
@@ -314,7 +315,6 @@
 - (н) Арканоид
 - (н) Судоку
 - (н) Сапёр
-- (н) Сокобан
 - (н) Убирать значки в лаунчере
 - (н) Соединение через HTTP прокси
 - (н) Вебсервер в фоне
@@ -976,6 +976,7 @@ void dashboard(char mode, char *io_buff);
 void fuzzy_clock(char mode, char *io_buff);
 void set_clock(char mode, char *io_buff);
 void snake(char mode, char *io_buff);
+void sokoban(char mode, char *io_buff);
 void view_font(char mode, char *io_buff);
 void turkish_kerchief(char mode, char *io_buff);
 void memory_match(char mode, char *io_buff);
@@ -1077,6 +1078,7 @@ function_application_pointer all_apps[] = {
   fifteen,
   lights_off,
   snake,
+  sokoban,
   turkish_kerchief,
   memory_match,
   hanoi_towers,
@@ -2300,8 +2302,11 @@ void files(char mode, char *io_buff) {
 // ====================================================
 // Терминал
 // ====================================================
+
+#define TERMINAL_INPUT_MAX 160
+
 void terminal(char mode, char *io_buff) {
-  char buff[80];
+  char buff[TERMINAL_INPUT_MAX];
   char app_icon[] = {
     16, 16,
     B00000000, B00000000,
@@ -2846,6 +2851,9 @@ void terminal_execute_single(char *str) {
       }
       else if(!Storage->exists(cmdline_params[1])) {
         terminal_println("File not exists");
+      }
+      else if(is_empty_directory(cmdline_params[1])) {
+        terminal_println("Empty directory");
       }
       else if(is_directory(cmdline_params[1])) {
         terminal_println("Directory");
@@ -3480,6 +3488,9 @@ void terminal_execute_single(char *str) {
     else if(strcmp(cmdline_params[1], "game2048") == 0) {
       game2048(APP_MODE_LAUNCH, NULL);
     }
+    else if(strcmp(cmdline_params[1], "sokoban") == 0) {
+      sokoban(APP_MODE_LAUNCH, NULL);
+    }
     else if(strcmp(cmdline_params[1], "screen_settings") == 0) {
       screen_settings(APP_MODE_LAUNCH, NULL);
     }
@@ -4072,10 +4083,8 @@ void terminal_clear_screen() {
   terminal_scroll_line_end = 19;
 }
 
-#define TERMINAL_INPUT_MAX 80
-
 void terminal_input_string(char *input_buff) {
-  char buff[80];
+  char buff[TERMINAL_INPUT_MAX];
   int byte;
   int offset;
   for(offset = 0; offset < TERMINAL_INPUT_MAX; offset++) {
@@ -5907,6 +5916,7 @@ int terminal_wget(char *url, char *filename) {
           buff[0] = 0;
         }
         bytes_count = 0;
+        while(!stream->available()) {};
         while(stream->available()) {
           byte = stream->read();
           if(chunked && chunk_size == 0 && chunk_header == 0) {
@@ -11844,9 +11854,10 @@ void snake(char mode, char *io_buff) {
         cell_color = TFT_WHITE;
         if(snake_get_cell(x, y, field)) {
           cell_color = TFT_DARKGREEN;
-        }
-        if(x == 0 || y == 0 || x == SNAKE_FIELD_WIDTH_CELLS - 1 || y == SNAKE_FIELD_HEIGHT_CELLS - 1) {
-          cell_color = TFT_DARKGREY;
+
+          if(x == 0 || y == 0 || x == SNAKE_FIELD_WIDTH_CELLS - 1 || y == SNAKE_FIELD_HEIGHT_CELLS - 1) {
+            cell_color = TFT_DARKGREY;
+          }
         }
         if(x == bait_x && y == bait_y) {
           cell_color = TFT_RED;
@@ -11942,6 +11953,589 @@ void snake_set_cell(int x, int y, char *field, char value) {
   else field[byte] &= ~(1 << offset);
 }
 
+#define SOKOBAN_PATH "/Sokoban"
+#define SOKOBAN_FIELD_WIDTH 20
+#define SOKOBAN_FIELD_HEIGHT 20
+
+int sokoban_file_to_list(fs::File file, char *buff) {
+  sprintf(buff, "%s", file.name());
+  utf8_to_cp1251(buff);
+  return 1;
+}
+
+void sokoban_action(int action_index, char *filename) {
+  char buff[80];
+
+  if(action_index == 0) {
+    sokoban_select_level(filename);
+  }
+  else if(action_index == 1) {
+    if(drawConfirm("Delete this levels?") == 0) {
+      // Удаляем файл с соответствующим названием
+      sprintf(buff, "%s/%s", SOKOBAN_PATH, filename);
+      Storage->remove(buff);
+    }
+  }
+}
+
+void sokoban(char mode, char *io_buff) {
+  char buff[80];
+  char *buttons[] = {
+    "Play",
+    "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B10000010,
+    B01001000, B10010010,
+    B01010100, B10101010,
+    B01001000, B10010010,
+    B01000000, B10000010,
+    B01000000, B11111110,
+    B01001000, B00000010,
+    B01111110, B00000010,
+    B01001000, B00000010,
+    B01001000, B00000010,
+    B01010100, B00000010,
+    B01010100, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Sokoban");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Skbn");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Sokoban");
+  
+  if(!Storage) {
+    sokoban_play_level("Sokoban",
+      "    #####\n"
+      "    #   #\n"
+      "    #$  #\n"
+      "  ###  $##\n"
+      "  #  $ $ #\n"
+      "### # ## #   ######\n"
+      "#   # ## #####  ..#\n"
+      "# $  $          ..#\n"
+      "##### ### #@##  ..#\n"
+      "    #     #########\n"
+      "    #######\n"
+    );
+    return;
+  }
+
+  if(!Storage->exists(SOKOBAN_PATH)) {
+    Storage->mkdir(SOKOBAN_PATH);
+    if(!Storage->exists(SOKOBAN_PATH)) {
+      drawError("Unable to create directory");
+      return;
+    }
+  }
+
+  // Предложение скачать
+  if(is_empty_directory(SOKOBAN_PATH)) {
+    if(drawConfirm("Download classic levels?") == 0) {
+      terminal_wget("https://raw.githubusercontent.com/lieberkind/sokoban/refs/heads/elm/original-levels.txt", "/Sokoban/Classic");
+    }
+  }
+
+  // А теперь стандартный PIM APP
+  pim_app("Sokoban", SOKOBAN_PATH, sokoban_file_to_list, buttons, sokoban_action);
+}
+
+// Выбор уровня из файла
+void sokoban_select_level(char *filename) {
+  fs::File file;
+  char level_text[SOKOBAN_FIELD_WIDTH * (SOKOBAN_FIELD_HEIGHT + 2)]; // Уровень + переводы строк
+  char level_field[SOKOBAN_FIELD_WIDTH * SOKOBAN_FIELD_HEIGHT];
+  char byte;
+  int offset;
+  int button_pressed;
+  char *buttons[] = {
+    "Prev", "Play", "Next",
+    NULL
+  };
+  int level_offset = 0;
+  char level_present;
+  int i;
+  char string_contains_level;
+  char buff[80];
+
+  clearScreen();
+  drawAppTitle(filename);
+
+  while(1) {
+    strcpy(level_text,
+      "    #####\n"
+      "    #   #\n"
+      "    #$  #\n"
+      "  ###  $##\n"
+      "  #  $ $ #\n"
+      "### # ## #   ######\n"
+      "#   # ## #####  ..#\n"
+      "# $  $          ..#\n"
+      "##### ### #@##  ..#\n"
+      "    #     #########\n"
+      "    #######\n"
+    );
+
+    // Считать уровни до нужного
+    sprintf(buff, "%s/%s", SOKOBAN_PATH, filename);
+    file = Storage->open(buff);
+    if(!file) {
+      drawError("Unable to open file");
+      return;
+    }
+    for(i = 0; i <= level_offset; i++) {
+      // Очистить уровень
+      strcpy(level_text, "");
+      offset = 0;
+      level_present = 0;
+
+      // Найти начало уровня
+      // Пропускаем строки без уровня
+      // На выходе будет первый символ уровня
+      while(file.available()) {
+        byte = file.read();
+        if(byte == '\n' && file.peek() == '\r') {
+          file.read();
+        }
+        if(byte == '\r' && file.peek() == '\n') {
+          file.read();
+        }
+        if(byte == '\n' || byte == '\r') {
+          strcpy(level_text, "");
+          offset = 0;
+          continue;
+        }
+        level_text[offset] = byte;
+        offset++;
+        level_text[offset] = 0;
+        if(byte == '#') {
+          level_present = 1;
+          break;
+        }
+      }
+
+      // Считать пока есть символы уровня в строке
+      string_contains_level = 1;
+      while(file.available()) {
+        byte = file.read();
+        if(byte == '\n' && file.peek() == '\r') {
+          file.read();
+        }
+        if(byte == '\r' && file.peek() == '\n') {
+          file.read();
+        }
+        if(byte == '\n' || byte == '\r') {
+          if(string_contains_level == 0) {
+            break;
+          }
+          string_contains_level = 0;
+        }
+
+        level_text[offset] = byte;
+        offset++;
+        level_text[offset] = 0;
+        if(byte == '#') {
+          string_contains_level = 1;
+        }
+      }
+    }
+    file.close();
+
+    // Если нет уровня - считать предыдущий
+    if(!level_present && level_offset > 0) {
+      level_offset--;
+      continue;
+    }
+
+    // Показать уровень
+    sokoban_text_to_field(level_text, level_field);
+    tft.fillRect(0, 32, tft.width(), tft.width(), color_scheme_bg);
+    sokoban_draw_field(level_field);
+
+    // Кнопки + и -
+    drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 3, 1);
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 3, 1);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        level_offset--;
+        if(level_offset < 0) level_offset = 0;
+      }
+      if(button_pressed == 1) {
+        sprintf(buff, "%s %d", filename, level_offset + 1);
+        sokoban_play_level(buff, level_text);
+
+        clearScreen();
+        drawAppTitle(filename);
+      }
+      if(button_pressed == 2) {
+        level_offset++;
+      }
+    }
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void sokoban_play_level(char *title, char *text) {
+  char buff[80];
+  char field[SOKOBAN_FIELD_WIDTH * SOKOBAN_FIELD_HEIGHT];
+  int touch_x, touch_y;
+  int x, y;
+  char direction;
+  char byte, byte2, byte3;
+  int x2, y2, x3, y3;
+  char restart_flag = 0;
+
+  clearScreen();
+  drawAppTitle(title);
+
+  tft.drawLine(0, 16, tft.width(), tft.height(), color_scheme_fg);
+  tft.drawLine(tft.width(), 16, 0, tft.height(), color_scheme_fg);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
+  tft.drawCentreString("UP", tft.width() / 2, tft.height() / 4, FONT_DEFAULT);
+  tft.drawCentreString("DOWN", tft.width() / 2, 3 * tft.height() / 4, FONT_DEFAULT);
+  tft.drawCentreString("LEFT", tft.width() / 4, tft.height() / 2, FONT_DEFAULT);
+  tft.drawCentreString("RIGHT", 3 * tft.width() / 4, tft.height() / 2, FONT_DEFAULT);
+  touchWaitPress();
+  touchWaitRelease();
+
+  restart_flag = 1;
+  while(1) {
+    if(restart_flag) {
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+      sokoban_text_to_field(text, field);
+      restart_flag = 0;
+    }
+    sokoban_draw_field(field);
+
+    touchWaitPress();
+    // Смотрим, нет ли попадания в поле
+    // Относительные единицы!
+    touch_x = global_touch_x * 100 / tft.width();
+    touch_y = (global_touch_y - 16) * 100 / (tft.height() - 16);
+    if(touch_x > touch_y) {
+      if(touch_x > 100 - touch_y) {
+        direction = 'r';
+      }
+      else {
+        direction = 'u';
+      }
+    }
+    else {
+      if(touch_y > 100 - touch_x) {
+        direction = 'd';
+      }
+      else {
+        direction = 'l';
+      }
+    }
+
+    // Найти фигурку игрока и сдвинуть в указанном направлении
+    for(y = 0; y < SOKOBAN_FIELD_HEIGHT; y++) {
+      for(x = 0; x < SOKOBAN_FIELD_WIDTH; x++) {
+        byte = field[x + y * SOKOBAN_FIELD_WIDTH];
+        if(byte == '@' || byte == '+') {
+          switch(direction) {
+            case 'l':
+              x2 = x - 1;
+              y2 = y;
+              x3 = x - 2;
+              y3 = y;
+              break;
+            case 'r':
+              x2 = x + 1;
+              y2 = y;
+              x3 = x + 2;
+              y3 = y;
+              break;
+            case 'd':
+              x2 = x;
+              y2 = y + 1;
+              x3 = x;
+              y3 = y + 2;
+              break;
+            case 'u':
+              x2 = x;
+              y2 = y - 1;
+              x3 = x;
+              y3 = y - 2;
+              break;
+          }
+          byte2 = '#';
+          if(x2 >= 0 && y2 >= 0 && x2 < SOKOBAN_FIELD_WIDTH && y2 < SOKOBAN_FIELD_HEIGHT) {
+            byte2 = field[x2 + y2 * SOKOBAN_FIELD_WIDTH];
+          }
+          byte3 = '#';
+          if(x3 >= 0 && y3 >= 0 && x3 < SOKOBAN_FIELD_WIDTH && y3 < SOKOBAN_FIELD_HEIGHT) {
+            byte3 = field[x3 + y3 * SOKOBAN_FIELD_WIDTH];
+          }
+
+          // Перемещение в свободном пространстве
+          if(byte2 == ' ' || byte2 == '.') {
+            if(byte == '+') {
+              field[x + y * SOKOBAN_FIELD_WIDTH] = '.';
+            }
+            else {
+              field[x + y * SOKOBAN_FIELD_WIDTH] = ' ';
+            }
+            if(byte2 == '.') {
+              field[x2 + y2 * SOKOBAN_FIELD_WIDTH] = '+';
+            }
+            else {
+              field[x2 + y2 * SOKOBAN_FIELD_WIDTH] = '@';
+            }
+          }
+
+          // Толкание ящика
+          if((byte2 == '$' || byte2 == '*') && (byte3 == ' ' || byte3 == '.')) {
+            if(byte == '+') {
+              field[x + y * SOKOBAN_FIELD_WIDTH] = '.';
+            }
+            else {
+              field[x + y * SOKOBAN_FIELD_WIDTH] = ' ';
+            }
+            if(byte2 == '*') {
+              field[x2 + y2 * SOKOBAN_FIELD_WIDTH] = '+';
+            }
+            else {
+              field[x2 + y2 * SOKOBAN_FIELD_WIDTH] = '@';
+            }    
+            if(byte3 == '.') {
+              field[x3 + y3 * SOKOBAN_FIELD_WIDTH] = '*';
+            }
+            else {
+              field[x3 + y3 * SOKOBAN_FIELD_WIDTH] = '$';
+            }    
+          }
+          break;
+        }
+      }
+      if(byte == '@' || byte == '+') break;
+    }
+
+    if(sokoban_is_win(field)) {
+      sokoban_draw_field(field);
+      delay(100);
+      drawInfo("You won!");
+      global_exit_flag = 1;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void sokoban_text_to_field(char *text, char *field) {
+  int x, y, offset;
+  char byte;
+
+  memset(field, ' ', SOKOBAN_FIELD_WIDTH * SOKOBAN_FIELD_HEIGHT);
+
+  y = 0;
+  x = 0;
+  offset = 0;
+
+  while(text[offset] != 0) {
+    byte = text[offset];
+    if(byte == '\n' && text[offset + 1] == '\r') {
+      offset++;
+    }
+    if(byte == '\r' && text[offset + 1] == '\n') {
+      offset++;
+    }
+    if(byte == '\n' || byte == '\r') {
+      x = 0;
+      y++;
+      if(y > 20) break;
+      offset++;
+      continue;
+    }
+    field[x + y * SOKOBAN_FIELD_WIDTH] = byte;
+
+    offset++;
+    x++;
+    if(x > 20) {
+      x = 20;
+    }
+  }
+}
+
+void sokoban_draw_field(char *field) {
+  char empty[] = {
+    12, 12,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+  };
+  char wall[] = {
+    12, 12,
+    B11111111, B11110000,
+    B11010101, B01010000,
+    B10101010, B10110000,
+    B11010101, B01010000,
+    B10101010, B10110000,
+    B11010101, B01010000,
+    B10101010, B10110000,
+    B11010101, B01010000,
+    B10101010, B10110000,
+    B11010101, B01010000,
+    B10101010, B10110000,
+    B11111111, B11110000,
+  };
+  char box[] = {
+    12, 12,
+    B11111111, B11110000,
+    B10000000, B00010000,
+    B11111111, B11110000,
+    B10100100, B00010000,
+    B10010011, B11110000,
+    B11111000, B00010000,
+    B10000100, B11110000,
+    B11111110, B10010000,
+    B10000001, B01010000,
+    B11111111, B11110000,
+    B10000000, B00010000,
+    B11111111, B11110000,
+  };
+  char goal[] = {
+    12, 12,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00001111, B00000000,
+    B00010000, B10000000,
+    B00010000, B10000000,
+    B00010000, B10000000,
+    B00010000, B10000000,
+    B00001111, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+  };
+  char box_goal[] = {
+    12, 12,
+    B11111111, B11110000,
+    B10000000, B00010000,
+    B11111111, B11110000,
+    B10101111, B00010000,
+    B10010000, B11110000,
+    B11110000, B10010000,
+    B10010000, B11110000,
+    B11110000, B10010000,
+    B10001111, B01010000,
+    B11111111, B11110000,
+    B10000000, B00010000,
+    B11111111, B11110000,
+  };
+  char player[] = {
+    12, 12,
+    B00000000, B00000000,
+    B00000110, B00000000,
+    B00001111, B00000000,
+    B00001111, B00000000,
+    B00000110, B00000000,
+    B00000110, B00000000,
+    B00111111, B11000000,
+    B00101111, B01000000,
+    B00001111, B00000000,
+    B00001001, B00000000,
+    B00001001, B00000000,
+    B00011001, B10000000,
+  };
+  char *sprite = NULL;
+  int x, y;
+  int fg, bg;
+  char byte;
+  int offset_left;
+  int level_width = 0;
+
+  for(y = 0; y < SOKOBAN_FIELD_HEIGHT; y++) {
+    for(x = 0; x < SOKOBAN_FIELD_WIDTH; x++) {
+      byte = field[x + y * SOKOBAN_FIELD_WIDTH];
+      if(byte == '#') level_width = max(level_width, x);
+    }
+  }
+
+  offset_left = (tft.width() - 12 * (level_width + 1)) / 2;
+
+  // Рисуем уровень
+  for(y = 0; y < SOKOBAN_FIELD_HEIGHT; y++) {
+    for(x = 0; x < SOKOBAN_FIELD_WIDTH; x++) {
+      byte = field[x + y * SOKOBAN_FIELD_WIDTH];
+      fg = color_scheme_fg;
+      bg = color_scheme_bg;
+      switch(byte) {
+        default:
+        case ' ': sprite = empty; break;
+        case '#': sprite = wall; fg = TFT_RED; break;
+        case '@': sprite = player; break;
+        case '+': sprite = player; break;
+        case '$': sprite = box; fg = TFT_BROWN; break;
+        case '.': sprite = goal; fg = TFT_LIGHTGREY; break;
+        case '*': sprite = box_goal; fg = TFT_GREEN; break;
+      }
+
+      image_from_bits(offset_left + x * tft.width() / 20, 32 + y * tft.width() / 20, sprite, fg, bg);
+    }
+  }
+}
+
+char sokoban_is_win(char *field) {
+  char no_boxes = 1;
+  char no_goals = 1;
+  char byte;
+  int x, y;
+  for(y = 0; y < SOKOBAN_FIELD_HEIGHT; y++) {
+    for(x = 0; x < SOKOBAN_FIELD_WIDTH; x++) {
+      byte = field[x + y * SOKOBAN_FIELD_WIDTH];
+      if(byte == '$') no_boxes = 0;
+      if(byte == '.' || byte == '+') no_goals = 0;
+    }
+  }
+
+  if(no_boxes || no_goals) return 1;
+  return 0;
+}
 
 void turkish_kerchief(char mode, char *io_buff) {
   char field[60];
@@ -15431,27 +16025,7 @@ void rss(char mode, char *io_buff) {
     B01111111, B11111110,
     B00000000, B00000000
   };
-/*
-  char app_icon[] = {
-    16, 16,
-    B00000000, B00000000,
-    B01111111, B11111110,
-    B01000000, B00000010,
-    B01000000, B00000010,
-    B01011111, B10000010,
-    B01000000, B01000010,
-    B01001111, B00100010,
-    B01000000, B10010010,
-    B01001100, B01010010,
-    B01000010, B01010010,
-    B01000001, B01010010,
-    B01011001, B01010010,
-    B01011000, B00000010,
-    B01000000, B00000010,
-    B01111111, B11111110,
-    B00000000, B00000000
-  };
-*/  
+
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "RSS");
     return;
@@ -17247,6 +17821,28 @@ char is_directory(char *filename) {
   file = Storage->open(filename);
   result = file.isDirectory();
   file.close();
+  return result;
+}
+
+// Пустая папка или нет
+char is_empty_directory(char *filename) {
+  fs::File file;
+  fs::File current_dir;
+  int bytes;
+  char result = 1;
+  current_dir = Storage->open(filename);
+  if(!current_dir.isDirectory()) return 0;
+
+  // Смотрим содержимое папки, пропускаем . и ..
+  // Любой другой элемент - непустая папка
+  while(file = current_dir.openNextFile()) {
+    if(strcmp(file.name(), ".") == 0) continue;
+    if(strcmp(file.name(), "..") == 0) continue;
+    result = 0;
+    break;
+  }
+  current_dir.close();
+
   return result;
 }
 
