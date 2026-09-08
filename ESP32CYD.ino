@@ -96,6 +96,7 @@
 - TOTP
 - Генератор сигналов
 - Wikipedia
+- Сокобан
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -256,33 +257,30 @@
 2026-09-03 hexview, перевернуть календарь 3 сентября, морзе на русском, morse в терминале, utf8<->1251 полное конвертирование,
   баг при выходе из IRC
 2026-09-04 Sokoban
+2026-09-07 Белорусские, украинские, македонские и прочие символы в клавиатуре, \n\r\t в терминале и бейсике,
+  сокобан номер уровня, число шагов, приложение всех настроек, меньше мигания в ханойских башнях
+2026-09-08 Неиспользуемые переменные, двойной вызов weather в терминале, settime, setdate, unixtime из терминала
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
-- (д) Меньше мигания в ханойских башнях
-- (д) Дополнительные символы в символьной клавиатуре по шифту
 - (б) Баг с копированием/перемещением файлов (сходу не воспроизвелось)
 - (д) Basic: сообщения об ошибках
 - (д) Basic: несколько команд в строке
-- (д) Basic поддержка \n\r\t хотя бы
-- (д) Терминал, парсинг строки, поддержка \n\r\t
 - (д) Приложение поиск
+- (д) Текущий путь в терминале
 - (д) Терминал переменные окружения
 - (д) /Terminal/Environment
+- (д) Прошлые команды в терминале по стрелке вверх
+- (д) Операции в терминале на основе текущего пути
 - (б) Форест файр - ранняя остановка пожара
 - (д) Мировое время (дашборд)
-- (д) Установка даты-времени из терминала
 - (д) Восход и закат
 - (д) Крутая калибровка
-- (д) Прошлые команды в терминале по стрелке вверх
-- (д) Текущий путь в терминале
-- (д) Операции в терминале на основе текущего пути
 - (д) Буфер обмена
 - (д) Выделение в просмотре, копирование
 - (д) Выделение в редактировании, копирование, вставка
 - (д) Автоопределение кодировки файла при просмотре
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор
-- (д) Категории для PIM
 - (д) Автосохранение позиции просмотра при неактивности
 - (д) Кастомные значки в заголовке вместо букв AFMSWT
 - (д) Ланучер-список
@@ -291,6 +289,7 @@
 - (д) Ещё один заход Bluetooth
 - (п) Просмотреть справку, может быть что-то добавить
 
+- (н) Категории для PIM
 - (н) Мини-калькулятор
 - (н) Конвертер валют, единиц измерения
 - (н) Терминал операции со строками ESC-кодами
@@ -359,6 +358,11 @@
 - (н) Кодирование-декодирование b32 из терминала
 - (н) Кодирование-декодирование b64 из терминала
 - (н) Шифрование-расшифрование AES в терминале
+- (н) xmodem отправка
+- (н) xmodem приём
+- (д) История/продолжить
+- (д) QR-код, штрих-код
+- (д) Переход к случайной функции (приложению)
 
 */
 
@@ -692,14 +696,14 @@ char change_keyboard[] = {
 
 // Клавиатуры
 char *keyboard_nocaps[] = {
-  "`",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
+  "`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
   " ", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "-",
   ":shift:", "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", ":enter:",
   ":change:", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", " ",
   NULL
 };
 char *keyboard_caps[] = {
-  "~",  "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", ":backspace:",
+  "~", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", ":backspace:",
   " ", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "_",
   ":shift:", "A", "S", "D", "F", "G", "H", "J", "K", "L", ":", ":enter:",
   ":change:", "Z", "X", "C", "V", "B", "N", "M", "<", ">", "?", " ",
@@ -712,8 +716,15 @@ char *keyboard_symbol[] = {
   ":change:", "{", "}", "+", "-", "*", "/", "\\", "~", "|", "?", " ",
   NULL
 };
+char *keyboard_symbol_caps[] = {
+  "\x80", "\x81", "\x8A", "\x8C", "\x8D", "\x8E", "\x8F", "\x85", "\xA7", "\x95", "\xB7", ":backspace:",
+  "\x90", "\x83", "\x9A", "\x9C", "\x9D", "\x9E", "\x9F", "\xAB", "\xBB", "\x84", "\x93", "\x94",
+  ":shift:", "\xA1", "\xA5", "\xAA", "\xAF", "\xB2", "\xA3", "\xBD", "\xB0", "\xB5", "\xB1", ":enter:",
+  ":change:", "\xA2", "\xB4", "\xBA", "\xBF", "\xB3", "\xBC", "\xBE", "\xB6", "\xAC", "\x88", " ",
+  NULL
+};
 char *keyboard_alt_nocaps[] = {
-  "\xB8",  "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
+  "\xB8", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", ":backspace:",
   "\xE9", "\xF6", "\xF3", "\xEA", "\xE5", "\xED", "\xE3", "\xF8", "\xF9", "\xE7", "\xF5", "\xFA",
   ":shift:", "\xF4", "\xFB", "\xE2", "\xE0", "\xEF", "\xF0", "\xEE", "\xEB", "\xE4", "\xE6", ":enter:",
   ":change:", "\xFF", "\xF7", "\xF1", "\xEC", "\xE8", "\xF2", "\xFC", "\xE1", "\xFE", "\xFD", " ",
@@ -886,6 +897,7 @@ int global_view_font_small = 0;
 char global_screen_color_read_extra_byte = 0;
 
 // Звук
+int global_silent_mode = 0;
 int global_is_beep_enabled = 1;
 int global_is_beep_hour_enabled = 1;
 int global_is_beep_quarter_enabled = 0;
@@ -1005,6 +1017,7 @@ void translate(char mode, char *io_buff);
 void voltmeter(char mode, char *io_buff);
 void generator(char mode, char *io_buff);
 void wikipedia(char mode, char *io_buff);
+void settings(char mode, char *io_buff);
 
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
@@ -1064,9 +1077,9 @@ function_application_pointer all_apps[] = {
   //screen_test,
   screensaver,
   user_manual,
-  security,
-  brightness_app,
-  touch_calibration,
+  //security,
+  //brightness_app,
+  //touch_calibration,
   //touch_calibration_test,
   oscilloscope,
   voltmeter,
@@ -1074,7 +1087,7 @@ function_application_pointer all_apps[] = {
   i2c_scanner,
   life,
   //set_clock,
-  view_font,
+  //view_font,
   fifteen,
   lights_off,
   snake,
@@ -1089,14 +1102,15 @@ function_application_pointer all_apps[] = {
   game2048,
   chip8,
   //color_settings,
-  screen_settings,
-  keyboard_control,
-  sound_control,
-  clock_control,
-  autorun,
-  select_storage_app,
+  //screen_settings,
+  //keyboard_control,
+  //sound_control,
+  //clock_control,
+  //autorun,
+  //select_storage_app,
   backups,
-  reboot,
+  settings,
+  //reboot,
   NULL
 };
 
@@ -1900,7 +1914,6 @@ void files(char mode, char *io_buff) {
   char redraw_required = 0;
   char rescan_files = 0;
   int current_op = -1;
-  char show_updir = 0;
   char path[80] = "/";
   char buff[80];
   char filename_to[80];
@@ -2463,8 +2476,38 @@ void terminal_execute_single(char *str) {
     sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
     terminal_println(buff);
   }
+  else if(strcmp(cmdline_params[0], "unixtime") == 0) {
+    //sprintf(buff, "%d", get_unixtime_from_datetime(global_year, global_month, global_day, global_timezone, global_hours, global_minutes, global_seconds));
+    sprintf(buff, "%d", global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000);
+    terminal_println(buff);
+  }
   else if(strcmp(cmdline_params[0], "cal") == 0) {
     terminal_cal();
+  }
+  else if(strcmp(cmdline_params[0], "settime") == 0) {
+    if(arg_count != 4) {
+      terminal_println("Usage: settime {hour} {minute} {second}");
+    }
+    else {
+      global_unixtime_retrieved += (strtol(cmdline_params[1], NULL, 10) - global_hours) * 3600
+        + (strtol(cmdline_params[2], NULL, 10) - global_minutes) * 60
+        + strtol(cmdline_params[3], NULL, 10) - global_seconds;
+      set_local_time_from_unix_timestamp();
+      sprintf(buff, "Current time: %d:%02d:%02d", global_hours, global_minutes, global_seconds);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "setdate") == 0) {
+    if(arg_count != 4) {
+      terminal_println("Usage: setdate {year} {month} {day}");
+    }
+    else {
+      global_unixtime_retrieved += get_unixtime_from_datetime(strtol(cmdline_params[1], NULL, 10), strtol(cmdline_params[2], NULL, 10), strtol(cmdline_params[3], NULL, 10), 0, 0, 0, 0)
+        - get_unixtime_from_datetime(global_year, global_month, global_day, 0, 0, 0, 0);
+      set_local_time_from_unix_timestamp();
+      sprintf(buff, "Current date: %04d-%02d-%02d", global_year, global_month, global_day);
+      terminal_println(buff);
+    }
   }
   else if(strcmp(cmdline_params[0], "history") == 0) {
     terminal_tail("/Terminal/History");
@@ -3283,13 +3326,12 @@ void terminal_execute_single(char *str) {
     if(arg_count == 3) {
       lat = strtod(cmdline_params[1], NULL);
       lon = strtod(cmdline_params[2], NULL);
-      result = weather_get(lat, lon, temp, wind, weather_text);
     }
     sprintf(buff, "Getting at: lat %g, lon %g", lat, lon);
     terminal_println(buff);
     terminal_show_screen();
 
-    result = weather_get(global_lat, global_lon, temp, wind, weather_text);
+    result = weather_get(lat, lon, temp, wind, weather_text);
     if(result) {
       sprintf(buff, "Temp: %s C, wind %s m/s", temp, wind);
       terminal_println(buff);
@@ -4191,7 +4233,12 @@ int terminal_input_char() {
 
   while(1) {
     if(symbol_flag) {
-      keyboard_current = keyboard_symbol;
+      if(caps_flag) {
+        keyboard_current = keyboard_symbol_caps;
+      }
+      else {
+        keyboard_current = keyboard_symbol;
+      }
     }
     else if(caps_flag) {
       if(alt_keyboard_flag) {
@@ -4309,7 +4356,6 @@ void terminal_parse_cmdline(char *cmdline, int *arg_count, char **parsed_cmdline
   char escape = 0;
   char space_flag = 1;
   int arg_index = 0;
-  int arg_symbol = 0;
   int write_index = 0;
   int read_index = 0;
   int cmdlen = strlen(cmdline);
@@ -4355,7 +4401,18 @@ void terminal_parse_cmdline(char *cmdline, int *arg_count, char **parsed_cmdline
       cmdline[write_index] = 0;
     }
     else {
-      cmdline[write_index] = cmdline[read_index];
+      if(escape && cmdline[read_index] == 'n') {
+        cmdline[write_index] = '\n';
+      }
+      else if(escape && cmdline[read_index] == 'r') {
+        cmdline[write_index] = '\r';
+      }
+      else if(escape && cmdline[read_index] == 't') {
+        cmdline[write_index] = '\t';
+      }
+      else {
+        cmdline[write_index] = cmdline[read_index];
+      }
     }
     write_index++;
     escape = 0;
@@ -4752,7 +4809,6 @@ void terminal_wc(char *filename) {
   long total_words = 0;
   long total_bytes = 0;
   int chars = 0;
-  int visible_lines = 0;
   int i;
   int byte;
   char buff[80];
@@ -5549,7 +5605,18 @@ void unquote_string(char *str) {
   int write_offset = 0;
   while(str[read_offset] != '"' && str[read_offset] != 0) {
     if(escape) {
-      str[write_offset] = str[read_offset];
+      if(str[read_offset] == 'n') {
+        str[write_offset] = '\n';
+      }
+      else if(str[read_offset] == 'r') {
+        str[write_offset] = '\r';
+      }
+      else if(str[read_offset] == 't') {
+        str[write_offset] = '\t';
+      }
+      else {
+          str[write_offset] = str[read_offset];
+      }
       write_offset++;
       read_offset++;
       escape = 0;
@@ -6159,7 +6226,7 @@ void terminal_cal() {
   terminal_println("Mo Tu We Th Fr Sa Su");
 
   // Високосный год?
-  if(global_year % 4 == 0 && (global_year % 100 == 0 || global_year % 400 != 0)) {
+  if(is_lap_year(global_year)) {
     month_to_days[1] = 29;
   }
 
@@ -8117,7 +8184,7 @@ void chip8_run(char *filename) {
     // FX18	sound_timer(Vx)
     else if(ia == 0xF && ic == 0x1 && id == 0x8) {
       st = v[ib];
-      if(st > 0 && global_is_beep_enabled) {
+      if(st > 0 && global_is_beep_enabled && !global_silent_mode) {
         tone(BUZZER_PIN, 1000);
       }
       pc += 2;
@@ -8387,7 +8454,6 @@ int passwords_file_to_list(fs::File file, char *buff) {
   char left[82];
   char right[80];
   char byte;
-  int is_binary = 0;
   int offset;
   // Левая колонка - первая строчка файла
   offset = 0;
@@ -9344,8 +9410,6 @@ void draw_edit(char *title, char *filename) {
   int x, y;
   int prev_touch_x;
   int prev_touch_y;
-  int prev2_touch_x;
-  int prev2_touch_y;
   char touch_started = 0;
   char byte;
   int pixel_color;
@@ -9606,7 +9670,6 @@ void pim_app(char *title, char *path, function_conversion_pointer file_to_list_f
   char right[80];
   char byte;
   char update_list_flag = 1;
-  char rename_file_flag = 0;
   char **files_list = NULL;
   char **visible_list = NULL;
 
@@ -9816,7 +9879,7 @@ void schedule(char mode, char *io_buff) {
   char redraw_flag;
   char prev_month_dow;
   char next_month_dow;
-  char is_lap_year;
+  char lap_year_flag;
   char touch_check_flag;
   char record_present = 0;
   int cell_height = 24;
@@ -9913,9 +9976,9 @@ void schedule(char mode, char *io_buff) {
       // Календарь на текущий месяц
       cal_day = 1;
       cal_dow = day_of_week;
-      is_lap_year = 0;
-      if(year % 4 == 0 && (year % 100 == 0 || year % 400 != 0)) {
-        is_lap_year = 1;
+      lap_year_flag = 0;
+      if(is_lap_year(year)) {
+        lap_year_flag = 1;
       }
 
       prev_month_dow = 0;
@@ -9947,8 +10010,8 @@ void schedule(char mode, char *io_buff) {
             if(month == 4 || month == 6 || month == 9 || month == 11) {
               if(cal_day > 30) break;
             }
-            if(is_lap_year && month == 2 && cal_day > 29) break;
-            if(!is_lap_year && month == 2 && cal_day > 28) break;
+            if(lap_year_flag && month == 2 && cal_day > 29) break;
+            if(!lap_year_flag && month == 2 && cal_day > 28) break;
             cal_day++;
           }
           // Проверяем касание
@@ -10035,7 +10098,7 @@ void schedule(char mode, char *io_buff) {
           day_of_week = (day_of_week + 35 - 30) % 7;
         }
         if(month == 2) {
-          if(is_lap_year) {
+          if(lap_year_flag) {
             day_of_week = (day_of_week + 35 - 29) % 7;
           }
           else {
@@ -10051,7 +10114,7 @@ void schedule(char mode, char *io_buff) {
           day_of_week = (day_of_week + 30) % 7;
         }
         if(month == 2) {
-          if(is_lap_year) {
+          if(lap_year_flag) {
             day_of_week = (day_of_week + 29) % 7;
           }
           else {
@@ -11778,7 +11841,7 @@ void snake(char mode, char *io_buff) {
         snake_set_cell(x, 0, field, 1);
         snake_set_cell(x, SNAKE_FIELD_HEIGHT_CELLS - 1, field, 1);
       }
-      for(y = 0; y < SNAKE_FIELD_WIDTH_CELLS; y++) {
+      for(y = 0; y < SNAKE_FIELD_HEIGHT_CELLS; y++) {
         snake_set_cell(0, y, field, 1);
         snake_set_cell(SNAKE_FIELD_WIDTH_CELLS - 1, y, field, 1);
       }
@@ -12033,7 +12096,8 @@ void sokoban(char mode, char *io_buff) {
       "# $  $          ..#\n"
       "##### ### #@##  ..#\n"
       "    #     #########\n"
-      "    #######\n"
+      "    #######\n",
+      1
     );
     return;
   }
@@ -12164,9 +12228,14 @@ void sokoban_select_level(char *filename) {
       continue;
     }
 
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "Level: %d", level_offset + 1);
+    tft.drawString(buff, 1, 20, FONT_DEFAULT);
+
     // Показать уровень
     sokoban_text_to_field(level_text, level_field);
-    tft.fillRect(0, 32, tft.width(), tft.width(), color_scheme_bg);
+    tft.fillRect(0, 48, tft.width(), tft.width(), color_scheme_bg);
     sokoban_draw_field(level_field);
 
     // Кнопки + и -
@@ -12181,7 +12250,7 @@ void sokoban_select_level(char *filename) {
       }
       if(button_pressed == 1) {
         sprintf(buff, "%s %d", filename, level_offset + 1);
-        sokoban_play_level(buff, level_text);
+        sokoban_play_level(buff, level_text, level_offset + 1);
 
         clearScreen();
         drawAppTitle(filename);
@@ -12201,7 +12270,7 @@ void sokoban_select_level(char *filename) {
   }
 }
 
-void sokoban_play_level(char *title, char *text) {
+void sokoban_play_level(char *title, char *text, int level) {
   char buff[80];
   char field[SOKOBAN_FIELD_WIDTH * SOKOBAN_FIELD_HEIGHT];
   int touch_x, touch_y;
@@ -12209,6 +12278,7 @@ void sokoban_play_level(char *title, char *text) {
   char direction;
   char byte, byte2, byte3;
   int x2, y2, x3, y3;
+  int steps = 0;
   char restart_flag = 0;
 
   clearScreen();
@@ -12231,6 +12301,13 @@ void sokoban_play_level(char *title, char *text) {
       sokoban_text_to_field(text, field);
       restart_flag = 0;
     }
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "Level: %d", level);
+    tft.drawString(buff, 1, 20, FONT_DEFAULT);
+
+    sprintf(buff, "Steps: %d", steps);
+    tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
+
     sokoban_draw_field(field);
 
     touchWaitPress();
@@ -12309,6 +12386,7 @@ void sokoban_play_level(char *title, char *text) {
             else {
               field[x2 + y2 * SOKOBAN_FIELD_WIDTH] = '@';
             }
+            steps++;
           }
 
           // Толкание ящика
@@ -12330,7 +12408,8 @@ void sokoban_play_level(char *title, char *text) {
             }
             else {
               field[x3 + y3 * SOKOBAN_FIELD_WIDTH] = '$';
-            }    
+            }
+            steps++;
           }
           break;
         }
@@ -12515,7 +12594,7 @@ void sokoban_draw_field(char *field) {
         case '*': sprite = box_goal; fg = TFT_GREEN; break;
       }
 
-      image_from_bits(offset_left + x * tft.width() / 20, 32 + y * tft.width() / 20, sprite, fg, bg);
+      image_from_bits(offset_left + x * tft.width() / 20, 48 + y * tft.width() / 20, sprite, fg, bg);
     }
   }
 }
@@ -13225,8 +13304,6 @@ void screensaver_forest_fire() {
   char *trees;
   char *fires;
   int x, y, i;
-  int offset_byte;
-  int offset_bit;
   int pixel;
   int fire_left, total_fire_left, active_fire_left;
   int fire_right, total_fire_right, active_fire_right;
@@ -13350,6 +13427,7 @@ void screensaver_forest_fire() {
           break;
         }
       }
+
       // Cleanup fire
       for(y = total_fire_top; y <= total_fire_bottom; y++) {
         for(x = total_fire_left; x <= total_fire_right; x++) {
@@ -14546,7 +14624,6 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
   char query[80];
 
   char line_type;
-  char reset_line_type;
   char line_skip_to_end;
   char new_line_flag;
   char line_shown;
@@ -14778,10 +14855,6 @@ void weather(char mode, char *io_buff) {
   char weather_text[80];
   char weather_code[80];
   int weather_code_number;
-  char temp_flag;
-  char wind_flag;
-  char weather_flag;
-  char from_offset = 0;
   char update_flag;
   char *buttons[] = {
     "Update now",
@@ -16684,7 +16757,12 @@ int irc_input_char() {
 
   while(1) {
     if(symbol_flag) {
-      keyboard_current = keyboard_symbol;
+      if(caps_flag) {
+        keyboard_current = keyboard_symbol_caps;
+      }
+      else {
+        keyboard_current = keyboard_symbol;
+      }
     }
     else if(caps_flag) {
       if(alt_keyboard_flag) {
@@ -17796,18 +17874,21 @@ int is_correct_utf8_string(char *str) {
 }
 
 // Двоичный файл или нет (содержит нули)
+// Если есть символы 0-8, 11-12, 14-19, то двочиный
 char is_binary_file(char *filename) {
   fs::File file;
-  int bytes;
+  int offset;
+  int byte;
   char result = 0;
   file = Storage->open(filename);
   while(file.available()) {
-    if(file.read() == 0) {
+    byte = file.read();
+    if(byte >= 0 && byte <= 8 || byte == 11 || byte == 12 || byte >= 14 && byte <= 19) {
       result = 1;
       break;
     }
-    bytes++;
-    if(bytes >= 1024) break;
+    offset++;
+    if(offset >= 1024) break;
   }
   file.close();
   return 0;
@@ -19500,6 +19581,153 @@ void autorun(char mode, char *io_buff) {
 }
 
 // ====================================================
+// Настройки
+// ====================================================
+
+void settings(char mode, char *io_buff) {
+  int button_pressed;
+  char *buttons[] = {
+    "Calibration",
+    "Brightness",
+    "Keyboard Settings",
+    "View Font",
+    "Set Clock",
+    "Clock Sound",
+    "Security",
+    "Screen Settings",
+    "Sound",
+    "Autorun",
+    "Storage",
+    "Test Screen",
+    "Color Scheme",
+    "Manual",
+    "Power",
+    "Wi-Fi",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000001, B01000010,
+    B01000011, B11000010,
+    B01001100, B00100010,
+    B01000100, B00110010,
+    B01001100, B00100010,
+    B01000100, B00110010,
+    B01000011, B11000010,
+    B01000010, B10000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Settings");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Sett");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Settings");
+  
+  while(1) {
+    drawButtonMatrix(0, 20, tft.width(), 300, buttons, 2, 10);
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, 20, tft.width(), 300, buttons, 2, 10);
+    if(button_pressed != -1) {
+      // Calibration
+      if(button_pressed == 0) {
+        touch_calibration(APP_MODE_LAUNCH, NULL);
+      }
+      // Brightness
+      if(button_pressed == 1) {
+        brightness_app(APP_MODE_LAUNCH, NULL);
+      }
+      // Keyboard settings
+      if(button_pressed == 2) {
+        keyboard_control(APP_MODE_LAUNCH, NULL);
+      }
+      // View Font
+      if(button_pressed == 3) {
+        view_font(APP_MODE_LAUNCH, NULL);
+      }
+      // Set Clock
+      if(button_pressed == 4) {
+        set_clock(APP_MODE_LAUNCH, NULL);
+      }
+      // Clock Sound
+      if(button_pressed == 5) {
+        clock_control(APP_MODE_LAUNCH, NULL);
+      }
+      // Security
+      if(button_pressed == 6) {
+        security(APP_MODE_LAUNCH, NULL);
+      }
+      // Screen Settings
+      if(button_pressed == 7) {
+        screen_settings(APP_MODE_LAUNCH, NULL);
+      }
+      // Sound
+      if(button_pressed == 8) {
+        sound_control(APP_MODE_LAUNCH, NULL);
+      }
+      // Autorun
+      if(button_pressed == 9) {
+        autorun(APP_MODE_LAUNCH, NULL);
+      }
+      // storage_set
+      if(button_pressed == 10) {
+        select_storage_app(APP_MODE_LAUNCH, NULL);
+      }
+      // Test Screen
+      if(button_pressed == 11) {
+        screen_test(APP_MODE_LAUNCH, NULL);
+      }
+      // Color Scheme
+      if(button_pressed == 12) {
+        color_settings(APP_MODE_LAUNCH, NULL);
+      }
+      // Manual
+      if(button_pressed == 13) {
+        user_manual(APP_MODE_LAUNCH, NULL);
+      }
+      // Power & reboot
+      if(button_pressed == 14) {
+        reboot(APP_MODE_LAUNCH, NULL);
+      }
+      if(button_pressed == 15) {
+        wifi(APP_MODE_LAUNCH, NULL);
+      }
+      
+      clearScreen();
+      drawAppTitle("Dashboards");
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+
+}
+
+// ====================================================
 // Перезагрузка
 // ====================================================
 
@@ -20038,7 +20266,7 @@ void set_local_time_from_unix_timestamp() {
   int day;
   int hour;
   int minute;
-  char is_lap_year;
+  char lap_year_flag;
   char retry_retrieve = 0;
   int prev_day;
 
@@ -20060,17 +20288,17 @@ void set_local_time_from_unix_timestamp() {
   day = 1;
   while(days_remain > 0) {
     // Високосные годы
-    is_lap_year = 0;
-    if(year % 4 == 0 && (year % 100 == 0 || year % 400 != 0)) {
-      is_lap_year = 1;
+    lap_year_flag = 0;
+    if(is_lap_year(year)) {
+      lap_year_flag = 1;
     }
-    if(is_lap_year && days_remain >= 366) {
+    if(lap_year_flag && days_remain >= 366) {
       days_remain -= 366;
       year++;
       continue;
     }
     // Обычные годы
-    if(!is_lap_year && days_remain >= 365) {
+    if(!lap_year_flag && days_remain >= 365) {
       days_remain -= 365;
       year++;
       continue;
@@ -20086,12 +20314,12 @@ void set_local_time_from_unix_timestamp() {
       month++;
       continue;
     }
-    if(month == 2 && days_remain >= 29 & is_lap_year) {
+    if(month == 2 && days_remain >= 29 & lap_year_flag) {
       days_remain -= 29;
       month++;
       continue;
     }
-    if(month == 2 && days_remain >= 28 & !is_lap_year) {
+    if(month == 2 && days_remain >= 28 & !lap_year_flag) {
       days_remain -= 28;
       month++;
       continue;
@@ -20110,7 +20338,7 @@ void set_local_time_from_unix_timestamp() {
   global_year = year;
   global_month = month;
   global_day = day;
-  global_is_lap_year = is_lap_year;
+  global_is_lap_year = lap_year_flag;
 
   hour = ((unix_timestamp + global_timezone) / 3600) % 24;
   minute = ((unix_timestamp + global_timezone) / 60) % 60;
@@ -20135,11 +20363,56 @@ void set_local_time_from_unix_timestamp() {
   global_moon_day = fmod(25 + days_since_epoch, 29.53059);
 }
 
+time_t get_unixtime_from_datetime(int year, int month, int day, long timezone, int hour, int minute, int second) {
+  time_t result = 0;
+  int i;
+  // Учитываем годы
+  for(i = 1970; i < year; i++) {
+    // Добавялем 365 дней на каждый год
+    result += 86400 * 365;
+    // И ещё сутки на високосный
+    if(is_lap_year(i)) {
+      result += 86400;
+    }
+  }
+  // Учитываем месяцы
+  for(i = 1; i < month; i++) {
+    if(i == 1 || i == 3 || i == 5 || i == 7 || i == 8 || i == 10 || i == 12) {
+      result += 86400 * 31;
+    }
+    else if(i == 4 || i == 6 || i == 9 || i == 11) {
+      result += 86400 * 30;
+    }
+    else if(i == 2) {
+      result += 86400 * 28;
+      // Добавяем ещё день если год високосный
+      if(is_lap_year(year)) {
+        result += 86400;
+      }
+    }
+  }
+  // Учитываем дни
+  for(i = 1; i < day; i++) {
+    result += 86400;
+  }
+
+  // Часы, минуты, секунды, МИНУС таймзона
+  result += hour * 3600 + minute * 60 + second - timezone;
+
+  // Возвращаем результат
+  return result;
+}
+
+// Високосный ли год
+char is_lap_year(int year) {
+  if(year % 4 == 0 && (year % 100 == 0 || year % 400 != 0)) return 1;
+  return 0;
+}
+
 // Сохранить текущую дату в ФС
 void store_current_timestamp() {
   char buff[80];
   unsigned long current_timestamp;
-  unsigned long saved_timestamp;
 
   Serial.println("store_current_timestamp");
   current_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
@@ -20309,7 +20582,6 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
   char new_line_flag_word = 0;
   char new_line_flag_line = 0;
   char byte;
-  int offset_bytes;
   int word_offset = 0;
   int line_index = 0;
   int text_offset = 0;
@@ -20983,7 +21255,12 @@ void edit_file(char *title, char *filename) {
     tft.fillRect(cursor_screen_pos_x, cursor_screen_pos_y, 2, 16, color_scheme_selection_bg);
 
     if(symbol_flag) {
-      keyboard_current = keyboard_symbol;
+      if(caps_flag) {
+        keyboard_current = keyboard_symbol_caps;
+      }
+      else {
+        keyboard_current = keyboard_symbol;
+      }
     }
     else if(caps_flag) {
       if(alt_flag) {
@@ -21440,7 +21717,6 @@ void edit_csv_show(char *contents, int offset_cell_x, int offset_cell_y) {
   char buff[80];
   char line[80];
   char *line_ptr, *buff_ptr;
-  int current_cell_x = 0;
   int current_cell_y = 0;
   long offset;
 
@@ -23518,10 +23794,6 @@ void mental_math(char mode, char *io_buff) {
   char empty[] = "";
   char *tmp = NULL;
   char tap[] = "*tap*";
-  char add_flag = 0;
-  char sub_flag = 0;
-  char mul_flag = 0;
-  char div_flag = 0;
   char user_ans[80];
   char *buttons[] = {
     "7", "8", "9",
@@ -23665,6 +23937,8 @@ void hanoi_towers(char mode, char *io_buff) {
   int steps = 0;
   int item_selected = -1;
   int column1, column2;
+  int center;
+  int width;
   char restart_flag = 1;
   char won_flag = 0;
   char buff[80];
@@ -23738,10 +24012,14 @@ void hanoi_towers(char mode, char *io_buff) {
     tft.drawLine(0, tft.height() - 16, tft.width(), tft.height() - 16, TFT_BLACK);
     for(j = 0; j < 3; j++) {
       for(i = 0; i < HANOI_TOWERS_MAX_LEVEL; i++) {
-        tft.fillRect(j * tft.width() / 3 + tft.width() / 6 - 8 - HANOI_TOWERS_MAX_LEVEL * 2, tft.height() - i * 16 - 32, 16 + HANOI_TOWERS_MAX_LEVEL * 4, 16, TFT_WHITE);
+        // Стираем блок
+        center = j * tft.width() / 3 + tft.width() / 6;
+        width = towers[i + j * HANOI_TOWERS_MAX_LEVEL] * 2 + 1;
+        //tft.fillRect(center - 8 - HANOI_TOWERS_MAX_LEVEL * 2, tft.height() - i * 16 - 32, 16 + HANOI_TOWERS_MAX_LEVEL * 4, 16, TFT_WHITE);
+        // Рисуем пластинку
         if(towers[i + j * HANOI_TOWERS_MAX_LEVEL] > 0) {
-          tft.drawRect(j * tft.width() / 3 + tft.width() / 6 - 8 - towers[i + j * HANOI_TOWERS_MAX_LEVEL] * 2, tft.height() - i * 16 - 32, 16 + towers[i + j * HANOI_TOWERS_MAX_LEVEL] * 4, 17, TFT_BLACK);
-          tft.fillRect(j * tft.width() / 3 + tft.width() / 6 - 8 - towers[i + j * HANOI_TOWERS_MAX_LEVEL] * 2 + 1, tft.height() - i * 16 - 32 + 1, 16 + towers[i + j * HANOI_TOWERS_MAX_LEVEL] * 4 - 2, 17 - 2, colors[towers[i + j * HANOI_TOWERS_MAX_LEVEL]]);
+          tft.drawRect(center - 8 - width - 1, tft.height() - i * 16 - 32, 16 + width * 2 + 2, 17, TFT_BLACK);
+          tft.fillRect(center - 8 - width, tft.height() - i * 16 - 32 + 1, 16 + width * 2, 17 - 2, colors[towers[i + j * HANOI_TOWERS_MAX_LEVEL]]);
           if(colors[towers[i + j * HANOI_TOWERS_MAX_LEVEL]] == TFT_BLACK) {
             tft.setTextColor(TFT_WHITE, colors[towers[i + j * HANOI_TOWERS_MAX_LEVEL]]);
           }
@@ -23749,10 +24027,21 @@ void hanoi_towers(char mode, char *io_buff) {
             tft.setTextColor(TFT_BLACK, colors[towers[i + j * HANOI_TOWERS_MAX_LEVEL]]);
           }
           sprintf(buff, "%d", towers[i + j * HANOI_TOWERS_MAX_LEVEL]);
-          tft.drawCentreString(buff, j * tft.width() / 3 + tft.width() / 6 + 1, tft.height() - i * 16 - 32 + 5, FONT_MONOSPACE);
+          tft.drawCentreString(buff, center + 1, tft.height() - i * 16 - 32 + 5, FONT_MONOSPACE);
+
+          // Зачистка по краям
+          //delay(500);
+          tft.fillRect(center - 8 - HANOI_TOWERS_MAX_LEVEL * 2, tft.height() - i * 16 - 32, HANOI_TOWERS_MAX_LEVEL * 2 - width - 1, 16, TFT_WHITE);
+          tft.fillRect(center + width + 8 + 1, tft.height() - i * 16 - 32, HANOI_TOWERS_MAX_LEVEL * 2 - width - 1, 16, TFT_WHITE);
         }
+        // Пустой блок
         else {
-          tft.fillRect(j * tft.width() / 3 + tft.width() / 6 - 2, tft.height() - i * 16 - 32, 4, 17, TFT_BLACK);
+          // Ось в серединке
+          tft.fillRect(center - 2, tft.height() - i * 16 - 32, 4, 17, TFT_BLACK);
+
+          // Зачистка по краям
+          tft.fillRect(center - 8 - HANOI_TOWERS_MAX_LEVEL * 2, tft.height() - i * 16 - 32, 8 + HANOI_TOWERS_MAX_LEVEL * 2 - 2, 16, TFT_WHITE);
+          tft.fillRect(center + 2, tft.height() - i * 16 - 32, 8 + HANOI_TOWERS_MAX_LEVEL * 2 - 2, 16, TFT_WHITE);
         }
       }
     }
@@ -24985,6 +25274,141 @@ void drawAppTitleRight() {
   char wifi_connection_flag = 0;
   int right_offset = 0;
 
+  char icon_space[] = {
+    2, 16,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000,
+    B00000000
+  };
+  char icon_a[] = {
+    10, 16,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00100001, B00000000,
+    B01000000, B10000000,
+    B00011110, B00000000,
+    B00100001, B00000000,
+    B01000100, B10000000,
+    B01000100, B10000000,
+    B01000100, B10000000,
+    B01000010, B10000000,
+    B00100001, B00000000,
+    B00011110, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000
+  };
+  char icon_s[] = {
+    10, 16,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B01111110, B00000000,
+    B01010101, B00000000,
+    B01010100, B10000000,
+    B01000000, B10000000,
+    B01000000, B10000000,
+    B01000000, B10000000,
+    B01000000, B10000000,
+    B01000000, B10000000,
+    B01000000, B10000000,
+    B01000000, B10000000,
+    B01111111, B10000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000
+  };
+  char icon_f[] = {
+    10, 16,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00111111, B00000000,
+    B01100001, B10000000,
+    B00100001, B00000000,
+    B01100001, B10000000,
+    B00100001, B00000000,
+    B01100001, B10000000,
+    B00100001, B00000000,
+    B01100001, B10000000,
+    B00100001, B00000000,
+    B01100001, B10000000,
+    B00111111, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000
+  };
+  char icon_m[] = {
+    10, 16,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000001, B10000000,
+    B00000010, B10000000,
+    B00000100, B10000000,
+    B01111000, B10000000,
+    B01001000, B10000000,
+    B01001000, B10000000,
+    B01111000, B10000000,
+    B00000100, B10000000,
+    B00000010, B10000000,
+    B00000001, B10000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000
+  };
+  char icon_w[] = {
+    10, 16,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B01111111, B10000000,
+    B10000000, B01000000,
+    B00000000, B00000000,
+    B00111111, B00000000,
+    B01000000, B10000000,
+    B00000000, B00000000,
+    B00011110, B00000000,
+    B00100001, B00000000,
+    B00000000, B00000000,
+    B00001100, B00000000,
+    B00001100, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000
+  };
+  char icon_t[] = {
+    10, 16,
+    B00000000, B00000000,
+    B01111111, B00000000,
+    B00000010, B00000000,
+    B00000100, B00000000,
+    B01111111, B00000000,
+    B00000000, B00000000,
+    B00000001, B00000000,
+    B01111111, B00000000,
+    B00000001, B00000000,
+    B00000000, B00000000,
+    B01111111, B00000000,
+    B00001001, B00000000,
+    B00001001, B00000000,
+    B00000110, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000
+  };
+
+
   if(!app_title_enabled) return;
   // Не обновлять слишком часто
   if(millis() - app_title_updated_millis < 1000) return;
@@ -25000,7 +25424,7 @@ void drawAppTitleRight() {
   tft.fillRect(tft.width() - 8, 0, 8, 16, color_scheme_title_bg);
   right_offset += 8;
 
-  sprintf(buff, "%s%s%s%s%s%s %d:%02d",
+  /*sprintf(buff, "%s%s%s%s%s%s %d:%02d",
     global_alarm_set ? "A" : "",
     storage_type == STORAGE_TYPE_SD? "S" : "",
     storage_type == STORAGE_TYPE_FFAT? "F" : "",
@@ -25008,13 +25432,40 @@ void drawAppTitleRight() {
     wifi_connection_flag ? "W" : "",
     global_unixtime_synced ? "T" : "",
     global_hours, global_minutes
+  );*/
+  sprintf(buff, " %d:%02d",
+    global_hours, global_minutes
   );
 
   // Рисуем время и статус
   tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
   tft.drawRightString(buff, tft.width() - right_offset, 0, FONT_DEFAULT);
   right_offset += tft.textWidth(buff, FONT_DEFAULT);
-
+  if(global_unixtime_synced) {
+    image_from_bits(tft.width() - right_offset - 10, 0, icon_t, color_scheme_title_fg, color_scheme_title_bg);
+    right_offset += 10;
+  }
+  if(wifi_connection_flag) {
+    image_from_bits(tft.width() - right_offset - 10, 0, icon_w, color_scheme_title_fg, color_scheme_title_bg);
+    right_offset += 10;
+  }
+  if(AudioTaskHandle != NULL) {
+    image_from_bits(tft.width() - right_offset - 10, 0, icon_m, color_scheme_title_fg, color_scheme_title_bg);
+    right_offset += 10;
+  }
+  if(storage_type == STORAGE_TYPE_SD) {
+    image_from_bits(tft.width() - right_offset - 10, 0, icon_s, color_scheme_title_fg, color_scheme_title_bg);
+    right_offset += 10;
+  }
+  if(storage_type == STORAGE_TYPE_FFAT) {
+    image_from_bits(tft.width() - right_offset - 10, 0, icon_f, color_scheme_title_fg, color_scheme_title_bg);
+    right_offset += 10;
+  }
+  if(global_alarm_set) {
+    image_from_bits(tft.width() - right_offset - 10, 0, icon_a, color_scheme_title_fg, color_scheme_title_bg);
+    right_offset += 10;
+  }
+  
   // Рисуем название, правую часть
   strcpy(buff, current_app_title);
   //Serial.printf("tft.textWidth(%s) = %d, ro = %d\n", buff, tft.textWidth(buff, FONT_DEFAULT), right_offset);
@@ -25112,7 +25563,12 @@ int drawPrompt(char *message, char *user_input) {
     drawButtonMatrix(8, PROMPT_OFFSET_Y + 180, tft.width() - 8 * 2, 32, buttons, 3, 1);
 
     if(symbol_flag) {
-      keyboard_current = keyboard_symbol;
+      if(caps_flag) {
+        keyboard_current = keyboard_symbol_caps;
+      }
+      else {
+        keyboard_current = keyboard_symbol;
+      }
     }
     else if(caps_flag) {
       if(alt_flag) {
@@ -25561,7 +26017,6 @@ void drawList(int left_x, int top_y, int width, int height, char **str, int rows
 
 void getListItemParts(char *item, char *left, char *right) {
   char *tab_ptr;
-  int left_flag = 1;
   strcpy(left, item);
   strcpy(right, "");
   tab_ptr = strchr(left, '\t');
@@ -25677,14 +26132,12 @@ int show_system_menu() {
     rotate_screen_image();
   }
   else if(selected == 3) {
-    if(global_is_beep_enabled == 1) {
-      global_is_beep_tap_enabled = 0;
-      global_is_beep_enabled = 0;
+    if(global_silent_mode == 1) {
+      global_silent_mode = 0;
+      beep_morse_if_enabled("E");
     }
     else {
-      global_is_beep_tap_enabled = 1;
-      global_is_beep_enabled = 1;
-      beep_morse_if_enabled("E");
+      global_silent_mode = 1;
     }
   }
   else if(selected == 4) {
@@ -26322,7 +26775,7 @@ void beep_morse_perform(char c) {
 }
 
 void beep_morse_if_enabled(char *str) {
-  if(global_is_beep_enabled) {
+  if(global_is_beep_enabled && !global_silent_mode) {
     beep_morse(str);
   }
 }
@@ -26341,25 +26794,25 @@ void beep_morse(char *str) {
 }
 
 void beep_if_enabled() {
-  if(global_is_beep_enabled) {
+  if(global_is_beep_enabled && !global_silent_mode) {
     tone(BUZZER_PIN, 1000, 100);
   }
 }
 
 void beep_tap_if_enabled() {
-  if(global_is_beep_tap_enabled) {
+  if(global_is_beep_tap_enabled && !global_silent_mode) {
     tone(BUZZER_PIN, 8000, 12);
   }
 }
 
 void beep_hour() {
-  if(global_is_beep_hour_enabled) {
+  if(global_is_beep_hour_enabled && !global_silent_mode) {
     beep_morse("H");
   }
 }
 
 void beep_quarter() {
-  if(global_is_beep_quarter_enabled) {
+  if(global_is_beep_quarter_enabled && !global_silent_mode) {
     beep_morse("Q");
   }
 }
@@ -26369,7 +26822,6 @@ void beep_alarm() {
   int i;
   char *buff = NULL;
   char bl_flag = 1;
-  long touch_millis_start;
   int brightness = global_brightness;
   int x0 = tft.width() / 2 - 100 / 2;
   int y0 = tft.height() / 2 - 32 / 2;
