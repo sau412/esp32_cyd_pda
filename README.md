@@ -128,6 +128,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Weather
 * Network
 * Wi-Fi Channels Monitor
+* World Time
 
 ## Screensavers
 * Stars
