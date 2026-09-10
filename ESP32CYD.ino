@@ -259,35 +259,39 @@
 2026-09-04 Sokoban
 2026-09-07 Белорусские, украинские, македонские и прочие символы в клавиатуре, \n\r\t в терминале и бейсике,
   сокобан номер уровня, число шагов, приложение всех настроек, меньше мигания в ханойских башнях
-2026-09-08 Неиспользуемые переменные, двойной вызов weather в терминале, settime, setdate, unixtime из терминала
+2026-09-08 Неиспользуемые переменные, двойной вызов weather в терминале, settime, setdate, unixtime из терминала,
+  режим тишины, значки в заголовке
+2026-09-09 Значок NTP только если есть вай-фай, автосохранение позиции просмотра по таймеру,
+  преждевременное завершение пожара в forest fire
+2026-09-10 Меньше мигания в Mental Math, меньше мигания в вольтметре, инструкция в вольтметре, инструкция в генераторе, частота ШИМ генератора,
+  настройка NTP не зависит от Wi-Fi, название настроек будильника, редактирование в памяти, редактирование шифрованного без расшифровки,
+  basic сообщения об ошибках синтаксиса, мировое время
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (б) Баг с копированием/перемещением файлов (сходу не воспроизвелось)
-- (д) Basic: сообщения об ошибках
-- (д) Basic: несколько команд в строке
 - (д) Приложение поиск
-- (д) Текущий путь в терминале
-- (д) Терминал переменные окружения
-- (д) /Terminal/Environment
-- (д) Прошлые команды в терминале по стрелке вверх
-- (д) Операции в терминале на основе текущего пути
-- (б) Форест файр - ранняя остановка пожара
-- (д) Мировое время (дашборд)
 - (д) Восход и закат
 - (д) Крутая калибровка
-- (д) Буфер обмена
-- (д) Выделение в просмотре, копирование
-- (д) Выделение в редактировании, копирование, вставка
-- (д) Автоопределение кодировки файла при просмотре
-- (д) Не прокручивать при редактировании дальше конца файла
-- (д) Prompt - возможность переставлять курсор
-- (д) Автосохранение позиции просмотра при неактивности
-- (д) Кастомные значки в заголовке вместо букв AFMSWT
 - (д) Ланучер-список
 - (д) Лаунчер с более крупными значками
 - (д) Выбор вида лаунчера
 - (д) Ещё один заход Bluetooth
 - (п) Просмотреть справку, может быть что-то добавить
+Терминал
+- (д) Текущий путь в терминале
+- (д) Терминал переменные окружения
+- (д) /Terminal/Environment
+- (д) Прошлые команды в терминале по стрелке вверх
+- (д) Файловые операции в терминале на основе текущего пути
+Буфер обмена
+- (д) Буфер обмена
+- (д) Выделение в просмотре, копирование
+- (д) Выделение в редактировании, копирование, вставка
+- (д) Выделение в prompt, копирование, вставка
+- (д) Автоопределение кодировки файла при просмотре
+- (д) Не прокручивать при редактировании дальше конца файла
+- (д) Prompt - возможность переставлять курсор, выделять
+
 
 - (н) Категории для PIM
 - (н) Мини-калькулятор
@@ -2387,34 +2391,56 @@ void terminal(char mode, char *io_buff) {
 }
 
 // ====================================================
-// Выполнить командную строку, в которой могут быть несколько команд через ; 
+// Выполнить командную строку, в которой могут быть несколько команд через ; (учитывая кавычки и эскейпы)
 // ====================================================
 void terminal_execute(char *str) {
   int byte;
-  char *next_cmd_start;
+  char *cmd_start;
   int i;
-  while(*(str) == ' ') str++;
-  // Если несколько команд, разделённых точкой с запятой, то выполняем их последовательно
-  next_cmd_start = strchr(str, ';');
-  if(!next_cmd_start) {
-    terminal_execute_single(str);
-  }
-  else {
-    while(next_cmd_start) {
-      // Вместо точки с запятой подставить конец строки
-      *(next_cmd_start) = 0;
-      terminal_execute_single(str);
-      // Вернуть точку с запятой
-      *(next_cmd_start) = ';';
-      // Переставить указатель выполняемой команды на после точки с запятой
-      str = next_cmd_start + 1;
-      // Найти следующую точку с запятой
-      next_cmd_start = strchr(str, ';');
-      if(!next_cmd_start) {
-        while(*(str) == ' ') str++;
-        terminal_execute_single(str);
+  char escape_flag = 0;
+  char quote_flag = 0;
+
+  i = 0;
+  while(str[i] == ' ') i++;
+
+  cmd_start = str + i;
+
+  while(1) {
+    byte = str[i];
+    if(escape_flag && byte != 0) {
+      escape_flag = 0;
+      i++;
+      continue;
+    }
+    if(byte == '\\') {
+      escape_flag = 1;
+    }
+    else {
+      if(byte == '"') {
+        if(quote_flag) {
+          quote_flag = 0;
+        }
+        else {
+          quote_flag = 1;
+        }
+      }
+      if((quote_flag == 0 && byte == ';') || byte == 0) {
+        str[i] = 0;
+        Serial.println(cmd_start);
+        terminal_execute_single(cmd_start);
+        if(byte != 0) {
+          // Возвращаем точку с запятой
+          str[i] = ';';
+          // Ищем первый символ, который не пробел
+          i++;
+          while(str[i] == ' ') i++;
+          cmd_start = str + i;
+          continue;
+        }
       }
     }
+    if(byte == 0) break;
+    i++;
   }
 }
 
@@ -5249,18 +5275,44 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     // Метка - ничего не делаем
   }
   else if(strcmp(cmdline_params[0], "stop") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: stop");
+      *cont_flag = 0;
+      return;
+    }
     *cont_flag = 0;
   }
   else if(strcmp(cmdline_params[0], "end") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: end");
+      *cont_flag = 0;
+      return;
+    }
     *cont_flag = 0;
   }
   else if(strcmp(cmdline_params[0], "rem") == 0) {
     // Комментарий - ничего не делаем
   }
   else if(strcmp(cmdline_params[0], "cls") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: cls");
+      *cont_flag = 0;
+      return;
+    }
     terminal_clear_screen();
   }
   else if(strcmp(cmdline_params[0], "let") == 0) {
+    if(arg_count < 4) {
+      terminal_println("Invalid syntax: let");
+      *cont_flag = 0;
+      return;
+    }
+    if(strcmp(cmdline_params[2], "=")) {
+      terminal_println("Invalid syntax: let =");
+      *cont_flag = 0;
+      return;
+    }
+
     index = basic_get_variable_index(cmdline_params[1]);
     if(index >= 0) {
       buff[0] = 0;
@@ -5281,6 +5333,11 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     }
   }
   else if(strcmp(cmdline_params[0], "cursor") == 0) {
+    if(arg_count < 3) {
+      terminal_println("Invalid syntax: cursor");
+      *cont_flag = 0;
+      return;
+    }
     error_flag = 0;
     expr_offset = 0;
     left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
@@ -5291,6 +5348,11 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     terminal_ansi_set_cursor(left, right);
   }
   else if(strcmp(cmdline_params[0], "print") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Invalid syntax: print");
+      *cont_flag = 0;
+      return;
+    }
     for(i = 1; i < arg_count; i++) {
       if(cmdline_params[i][0] == '"') {
         unquote_string(cmdline_params[i]);
@@ -5307,6 +5369,12 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     terminal_println("");
   }
   else if(strcmp(cmdline_params[0], "input") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Invalid syntax: input");
+      *cont_flag = 0;
+      return;
+    }
+
     for(i = 1; i < arg_count; i++) {
       if(cmdline_params[i][0] == '"') {
         unquote_string(cmdline_params[i]);
@@ -5332,6 +5400,11 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     }
   }
   else if(strcmp(cmdline_params[0], "if") == 0) {
+    if(arg_count < 5) {
+      terminal_println("Invalid syntax: if");
+      *cont_flag = 0;
+      return;
+    }
     is_true = 0;
     expr_offset = 0;
     error_flag = 0;
@@ -5342,14 +5415,20 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     right = parse_expression(cmdline_params[3], basic_get_variable_by_name, &error_flag, &expr_offset);
     //Serial.printf("right (%s) = %g\n", cmdline_params[3], right);
 
-    if(strcmp(cmdline_params[2], "=") == 0 && left == right) is_true = 1;
-    if(strcmp(cmdline_params[2], "==") == 0 && left == right) is_true = 1;
-    if(strcmp(cmdline_params[2], ">") == 0 && left > right) is_true = 1;
-    if(strcmp(cmdline_params[2], ">=") == 0 && left >= right) is_true = 1;
-    if(strcmp(cmdline_params[2], "<") == 0 && left < right) is_true = 1;
-    if(strcmp(cmdline_params[2], "<=") == 0 && left <= right) is_true = 1;
-    if(strcmp(cmdline_params[2], "<>") == 0 && left != right) is_true = 1;
-    if(strcmp(cmdline_params[2], "!=") == 0 && left != right) is_true = 1;
+    if(strcmp(cmdline_params[2], "=") == 0) { if(left == right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], "==") == 0) { if(left == right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], ">") == 0) { if(left > right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], ">=") == 0) { if(left >= right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], "<") == 0) { if(left < right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], "<=") == 0) { if(left <= right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], "<>") == 0) { if(left != right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], "!=") == 0) { if(left != right) is_true = 1; }
+    else {
+      terminal_println("Invalid syntax: if expression");
+      terminal_println(cmdline_params[2]);
+      *cont_flag = 0;
+      return;
+    }
     if(is_true) {
       //Serial.printf("true\n");
       // Формируем команду
@@ -5370,6 +5449,11 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     }
   }
   else if(strcmp(cmdline_params[0], "goto") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Invalid syntax: goto");
+      *cont_flag = 0;
+      return;
+    }
     strcat(cmdline_params[1], ":");
     // Ищем в файле метку
     file->seek(0);
@@ -5382,6 +5466,11 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     }
   }
   else if(strcmp(cmdline_params[0], "gosub") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Invalid syntax: gosub");
+      *cont_flag = 0;
+      return;
+    }
     if(basic_stack_pointer >= BASIC_STACK_LEN) {
       terminal_println("Out of stack memory");
       *cont_flag = 0;
@@ -5403,6 +5492,26 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
   }
   // for var = a to b [step c]
   else if(strcmp(cmdline_params[0], "for") == 0) {
+    if(arg_count != 6 && arg_count != 8) {
+      terminal_println("Invalid syntax: for");
+      *cont_flag = 0;
+      return;
+    }
+    if(strcmp(cmdline_params[2], "=")) {
+      terminal_println("Invalid syntax: for =");
+      *cont_flag = 0;
+      return;
+    }
+    if(strcmp(cmdline_params[4], "to")) {
+      terminal_println("Invalid syntax: for to");
+      *cont_flag = 0;
+      return;
+    }
+    if(arg_count == 8 && strcmp(cmdline_params[6], "step")) {
+      terminal_println("Invalid syntax: for step");
+      *cont_flag = 0;
+      return;
+    }
     if(basic_stack_pointer >= BASIC_STACK_LEN) {
       terminal_println("Out of stack memory");
       *cont_flag = 0;
@@ -5442,6 +5551,11 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     }
   }
   else if(strcmp(cmdline_params[0], "next") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: next");
+      *cont_flag = 0;
+      return;
+    }
     if(basic_stack_pointer == 0) {
       terminal_println("Next without for");
       *cont_flag = 0;
@@ -5486,6 +5600,11 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     }
   }
   else if(strcmp(cmdline_params[0], "return") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: return");
+      *cont_flag = 0;
+      return;
+    }
     if(basic_stack_pointer == 0) {
       terminal_println("Return without gosub");
       *cont_flag = 0;
@@ -5495,9 +5614,20 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     file->seek(basic_stack[basic_stack_pointer]);
   }
   else if(strcmp(cmdline_params[0], "pause") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: pause");
+      *cont_flag = 0;
+      return;
+    }
     while(terminal_input_char() == -1);
   }
   else if(strcmp(cmdline_params[0], "delay") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Invalid syntax: delay");
+      *cont_flag = 0;
+      return;
+    }
+
     right = millis();
     expr_offset = 0;
     error_flag = 0;
@@ -5512,43 +5642,62 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     }
   }
   else if(strcmp(cmdline_params[0], "pin_mode") == 0) {
-    if(arg_count == 3) {
-        expr_offset = 0;
-        error_flag = 0;
-        left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-        expr_offset = 0;
-        error_flag = 0;
-        right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
-        pinMode(left, right);
+    if(arg_count != 3) {
+      terminal_println("Invalid syntax: pin_mode");
+      *cont_flag = 0;
+      return;
     }
+    expr_offset = 0;
+    error_flag = 0;
+    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+    expr_offset = 0;
+    error_flag = 0;
+    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
+    pinMode(left, right);
   }
   else if(strcmp(cmdline_params[0], "digital_write") == 0) {
-    if(arg_count == 3) {
-        expr_offset = 0;
-        error_flag = 0;
-        left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-        expr_offset = 0;
-        error_flag = 0;
-        right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
-        digitalWrite(left, right);
+    if(arg_count != 3) {
+      terminal_println("Invalid syntax: digital_write");
+      *cont_flag = 0;
+      return;
     }
+    expr_offset = 0;
+    error_flag = 0;
+    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+    expr_offset = 0;
+    error_flag = 0;
+    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
+    digitalWrite(left, right);
   }
   else if(strcmp(cmdline_params[0], "analog_write") == 0) {
-    if(arg_count == 3) {
-        expr_offset = 0;
-        error_flag = 0;
-        left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-        expr_offset = 0;
-        error_flag = 0;
-        right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
-        analogWrite(left, right);
+    if(arg_count != 3) {
+      terminal_println("Invalid syntax: analog_write");
+      *cont_flag = 0;
+      return;
     }
+    expr_offset = 0;
+    error_flag = 0;
+    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+    expr_offset = 0;
+    error_flag = 0;
+    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
+    analogWrite(left, right);
   }
   else if(strcmp(cmdline_params[0], "beep") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: beep");
+      *cont_flag = 0;
+      return;
+    }
     beep_if_enabled();
   }
   else if(strcmp(cmdline_params[0], "tone") == 0) {
-    if(global_is_beep_enabled) {
+    if(arg_count != 2 && arg_count != 3) {
+      terminal_println("Invalid syntax: tone");
+      *cont_flag = 0;
+      return;
+    }
+    if(global_is_beep_enabled && !global_silent_mode) {
       if(arg_count == 3) {
         expr_offset = 0;
         error_flag = 0;
@@ -5573,6 +5722,11 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     }
   }
   else if(strcmp(cmdline_params[0], "notone") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Invalid syntax: notone");
+      *cont_flag = 0;
+      return;
+    }
     expr_offset = 0;
     error_flag = 0;
     val = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
@@ -5584,13 +5738,13 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     *cont_flag = 0;
     return;
   }
-  //delay(1000);
-  // Ctrl+C break;
+
   if(terminal_input_char() == 0x3) {
     terminal_println("Break");
     *cont_flag = 0;
     return;
   }
+
   // Exit
   if(global_exit_flag) {
     terminal_println("Break");
@@ -8282,7 +8436,6 @@ char aes_encryption_key[32] __attribute__((aligned(4)));
 void passwords_action(int action_index, char *filename) {
   fs::File file;
   char filename_with_path[80];
-  char filename_with_path_new[80];
   char *data_in;
   char *data_out;
   int data_length;
@@ -8292,70 +8445,24 @@ void passwords_action(int action_index, char *filename) {
 
   if(action_index == 0) {
     // Редактируем новый файл
-    sprintf(filename_with_path_new, "%s/%s", PASSWORDS_PATH, "__New");
-    edit_file("New password", filename_with_path_new);
-
-    file = Storage->open(filename_with_path_new);
-    if(!file) {
-      return;
-    }
-    else if(file.size() == 0) {
-      file.close();
-      Storage->remove(filename_with_path_new);
-    }
-    else {
-      file.close();
-      // Меняем название на первое свободное число
-      index = 1;
-      while(1) {
-        sprintf(filename_with_path, "%s/%d", PASSWORDS_PATH, index);
-        file = Storage->open(filename_with_path);
-        if(file) {
-          file.close();
-        }
-        else {
-          break;
-        }
-        index++;
+    index = 1;
+    while(1) {
+      sprintf(filename_with_path, "%s/%d", PASSWORDS_PATH, index);
+      file = Storage->open(filename_with_path);
+      if(file) {
+        file.close();
       }
-
-      passwords_file_encrypt(filename_with_path);
+      else {
+        break;
+      }
+      index++;
     }
+    passwords_edit_file(filename, filename_with_path);
   }
   else if(action_index == 1) {
     // Редактируем существующий файл
-    sprintf(filename_with_path_new, "%s/%s", PASSWORDS_PATH, "__New");
     sprintf(filename_with_path, "%s/%s", PASSWORDS_PATH, filename);
-
-    // Расшифровываем если не __New
-    if(strcmp(filename_with_path, filename_with_path_new)) {
-      passwords_file_decrypt(filename_with_path);
-    }
-    // Придумываем новое название если __New
-    else {
-      // Меняем название на первое свободное число
-      index = 1;
-      while(1) {
-        sprintf(filename_with_path, "%s/%d", PASSWORDS_PATH, index);
-        file = Storage->open(filename_with_path);
-        if(file) {
-          file.close();
-        }
-        else {
-          break;
-        }
-        index++;
-      }
-    }
-
-    // Редактируем
-    edit_file("Edit password", filename_with_path_new);
-
-    // Шифруем обратно
-    passwords_file_encrypt(filename_with_path);
-
-    free(data_out);
-    free(data_in);
+    passwords_edit_file(filename, filename_with_path);
   }
   else if(action_index == 2) {
     if(drawConfirm("Delete this password?") == 0) {
@@ -8364,6 +8471,72 @@ void passwords_action(int action_index, char *filename) {
       Storage->remove(filename_with_path);
     }
   }
+}
+
+void passwords_edit_file(char *title, char *filename_with_path) {
+  int file_offset_bytes = 0;
+  char changes_present = 0;
+  char *contents;
+  char *data = NULL;
+  fs::File file;
+  long file_size = 0;
+  
+  contents = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
+  if(!contents) {
+    drawError("Cannot allocate memory");
+    return;
+  }
+
+  file = Storage->open(filename_with_path);
+  if(file) {
+    if(file.isDirectory()) {
+      drawError("Cannot edit directory");
+      free(contents);
+      return;
+    }
+
+    file_size = file.size();
+    data = (char *)malloc(file_size * sizeof(char));
+
+    if(!data) {
+      drawError("Cannot allocate memory");
+      return;
+    }
+
+    file.read((unsigned char*)data, file_size);
+    file.close();
+  
+    // Расшифровываем
+    decryptAES((uint8_t*) data, file_size, (uint8_t*) contents);
+    free(data);
+  }
+  else {
+    contents[0] = 0;
+  }
+
+  changes_present = edit_text(title, contents, EDIT_FILE_LENGTH_MAX);
+  if(changes_present) {
+    // Спрашиваем о сохранении, сохраняем если да
+    if(drawConfirm("Save changes?") == 0) {
+      // Шифруем и записываем
+      file_size = 16 + (((strlen(contents) + 1) / 16) + 1) * 16;
+      data = (char *)malloc(file_size * sizeof(char));
+
+      if(!data) {
+        drawError("Cannot allocate memory");
+        return;
+      }
+
+      encryptAES((uint8_t*) contents, strlen(contents) + 1, (uint8_t*) data, (((strlen(contents) + 1) / 16) + 1) * 16);
+
+      // Записываем двочиный файл
+      file = Storage->open(filename_with_path, FILE_WRITE);
+      file.write((const uint8_t *)data, 16 + (((strlen(contents) + 1) / 16) + 1) * 16);
+      file.close();
+      free(data);
+    }
+  }
+  free(contents);
 }
 
 void passwords_file_encrypt(char *filename_with_path) {
@@ -13303,7 +13476,10 @@ void screensaver_matrix() {
 void screensaver_forest_fire() {
   char *trees;
   char *fires;
-  int x, y, i;
+  char *fires_next;
+  char *tmp;
+  int x, y;
+  long i;
   int pixel;
   int fire_left, total_fire_left, active_fire_left;
   int fire_right, total_fire_right, active_fire_right;
@@ -13312,8 +13488,10 @@ void screensaver_forest_fire() {
   int width = tft.width();
   int height = tft.height();
   char fire_present;
+
   trees = (char*)malloc(width * height / 8);
   fires = (char*)malloc(width * height / 8);
+  fires_next = (char*)malloc(width * height / 8);
 
   disableAppTitle();
   tft.fillScreen(TFT_BLACK);
@@ -13321,6 +13499,14 @@ void screensaver_forest_fire() {
   for(i = 0; i < width * height / 8; i++) {
     trees[i] = 0;
     fires[i] = 0;
+    fires_next[i] = 0;
+  }
+
+  for(i = 0; i < (width * height * 0.8); i++) {
+    x = random(0, width);
+    y = random(0, height);
+    array_set_bit(trees, x, y, width, height, 1);
+    tft.drawPixel(x, y, TFT_GREEN);
   }
 
   while(1) {
@@ -13330,115 +13516,73 @@ void screensaver_forest_fire() {
       y = random(0, height);
     } while(array_get_bit(trees, x, y, width, height));
 
-    tft.drawPixel(x, y, TFT_GREEN);
-
     array_set_bit(trees, x, y, width, height, 1);
+    tft.drawPixel(x, y, TFT_GREEN);
   
     if(random(0, 100) == 0) {
+      fire_present = 0;
       // Lightening
       x = random(0, width);
       y = random(0, height);
-      if(tft.readPixel(x, y) != TFT_BLACK) {
-        tft.drawPixel(x, y, TFT_RED);
-
+      if(array_get_bit(trees, x, y, width, height)) {
         array_set_bit(fires, x, y, width, height, 1);
-
-        fire_left = x - 1;
-        fire_right = x + 1;
-        fire_top = y - 1;
-        fire_bottom = y + 1;
-
-        total_fire_left = fire_left;
-        total_fire_right = fire_right;
-        total_fire_top = fire_top;
-        total_fire_bottom = fire_bottom;
+        tft.drawPixel(x, y, TFT_RED);
       }
-      //Serial.printf("Fire start left %d right %d top %d bottom %d\n", fire_left, fire_right, fire_top, fire_bottom);
-      fire_present = 1;
-      while(fire_present) {
-        fire_present = 0;
+    }
 
-        active_fire_left = -1;
-        active_fire_right = -1;
-        active_fire_top = -1;
-        active_fire_bottom = -1;
+    fire_present = 0;
+    memcpy(fires_next, fires, width * height / 8);
+    for(y = 0; y < height; y++) {
+      for(x = 0; x < width; x++) {
+        // Если в байте пожара нет, то пропускаем его
+        if(fires[(x + y * width) / 8] == 0) {
+          // Ещё единицу добавил цикл
+          x += 7;
+          continue;
+        }
 
-        for(y = fire_top; y <= fire_bottom; y++) {
-          for(x = fire_left; x <= fire_right; x++) {
-            if(array_get_bit(fires, x, y, width, height)) {
-              array_set_bit(fires, x, y, width, height, 0);
-              tft.drawPixel(x, y, TFT_BLACK);
-              if(array_get_bit(trees, x - 1, y, width, height)) {
-                if(active_fire_left == -1) active_fire_left = x;
-                else active_fire_left = min(x, active_fire_left);
-                total_fire_left = min(total_fire_left, x - 1);
-                tft.drawPixel(x - 1, y, TFT_RED);
-                array_set_bit(fires, x - 1, y, width, height, 1);
-                array_set_bit(trees, x - 1, y, width, height, 0);
-                fire_present = 1;
-              }
-              if(array_get_bit(trees, x + 1, y, width, height)) {
-                if(active_fire_right == -1) active_fire_right = x;
-                else active_fire_right = max(x, active_fire_right);
-                total_fire_right = max(total_fire_right, x + 1);
-                tft.drawPixel(x + 1, y, TFT_RED);
-                array_set_bit(fires, x + 1, y, width, height, 1);
-                array_set_bit(trees, x + 1, y, width, height, 0);
-                fire_present = 1;
-              }
-              if(array_get_bit(trees, x, y - 1, width, height)) {
-                if(active_fire_top == -1) active_fire_top = y;
-                else active_fire_top = min(y, active_fire_top);
-                total_fire_top = min(total_fire_top, y - 1);
-                tft.drawPixel(x, y - 1, TFT_RED);
-                array_set_bit(fires, x, y - 1, width, height, 1);
-                array_set_bit(trees, x, y - 1, width, height, 0);
-                fire_present = 1;
-              }
-              if(array_get_bit(trees, x, y + 1, width, height)) {
-                if(active_fire_bottom == -1) active_fire_bottom = y;
-                else active_fire_bottom = max(y, active_fire_bottom);
-                total_fire_bottom = max(total_fire_bottom, y + 1);
-                tft.drawPixel(x, y + 1, TFT_RED);
-                array_set_bit(fires, x, y + 1, width, height, 1);
-                array_set_bit(trees, x, y + 1, width, height, 0);
-                fire_present = 1;
-              }
+        // Если тут есть пожар, то он распространяется
+        if(array_get_bit(fires, x, y, width, height)) {
+          fire_present = 1;
+          if(array_get_bit(trees, x, y, width, height)) {
+            // Пожар распространяется
+            if(array_get_bit(trees, x - 1, y, width, height)) {
+              array_set_bit(fires_next, x - 1, y, width, height, 1);
+              tft.drawPixel(x, y, TFT_RED);
             }
+            if(array_get_bit(trees, x + 1, y, width, height)) {
+              array_set_bit(fires_next, x + 1, y, width, height, 1);
+              tft.drawPixel(x, y, TFT_RED);
+            }
+            if(array_get_bit(trees, x, y - 1, width, height)) {
+              array_set_bit(fires_next, x, y - 1, width, height, 1);
+              tft.drawPixel(x, y, TFT_RED);
+            }
+            if(array_get_bit(trees, x, y + 1, width, height)) {
+              array_set_bit(fires_next, x, y + 1, width, height, 1);
+              tft.drawPixel(x, y, TFT_RED);
+            }
+            // Пожар уничтожает дерево
+            array_set_bit(trees, x, y, width, height, 0);
+            tft.drawPixel(x, y, TFT_YELLOW);
           }
-        }
-
-        fire_left = active_fire_left - 1;
-        if(fire_left < 0) fire_left = 0;
-
-        fire_right = active_fire_right + 1;
-        if(fire_right >= width) fire_right = width - 1;
-
-        fire_top = active_fire_top - 1;
-        if(fire_top < 0) fire_top = 0;
-
-        fire_bottom = active_fire_bottom + 1;
-        if(fire_bottom >= height) fire_bottom = height - 1;
-
-        if(fire_present) delayOrTouchWait(10);
-
-        if(touchCheckNowait()) {
-          touchWaitRelease();
-          break;
-        }
-      }
-
-      // Cleanup fire
-      for(y = total_fire_top; y <= total_fire_bottom; y++) {
-        for(x = total_fire_left; x <= total_fire_right; x++) {
-          if(array_get_bit(fires, x, y, width, height)) {
+          else {
+            // Пожар без деревьев гаснет
+            array_set_bit(fires_next, x, y, width, height, 0);
             tft.drawPixel(x, y, TFT_BLACK);
-            array_set_bit(fires, x, y, width, height, 0);
           }
         }
       }
     }
-    delayOrTouchWait(1);
+
+    memcpy(fires, fires_next, width * height / 8);
+
+    if(fire_present) {
+      delayOrTouchWait(50);
+    }
+    else {
+      delayOrTouchWait(1);
+    }
     if(touchCheckNowait()) {
       touchWaitRelease();
       break;
@@ -18179,6 +18323,7 @@ void dashboard(char mode, char *io_buff) {
     "Analog Time",
     "Network",
     "Wi-Fi Monitor",
+    "World Time",
     NULL
   };
   char app_icon[] = {
@@ -18254,6 +18399,10 @@ void dashboard(char mode, char *io_buff) {
       // Wi-Fi channel monitor
       if(button_pressed == 7) {
         dashboard_channel_monitor();
+      }
+      // World time
+      if(button_pressed == 8) {
+        dashboard_world_time();
       }
       
       clearScreen();
@@ -18437,6 +18586,7 @@ void dashboard_calendar(char mode, char *io_buff) {
       tft.setTextColor(color_scheme_fg, color_scheme_bg);
       sprintf(buff, "Moon day: %d", moon_day);
       tft.drawCentreString(buff, tft.width() / 2, 242, FONT_DEFAULT);
+
     }
     
     if(!touchCheckNowait()) continue;
@@ -18458,7 +18608,6 @@ void dashboard_unixtime() {
   int x, y;
   time_t unix_timestamp;
   long prev_update_millis = 0;
-  long prev_update_data_millis = -CLOCK_UPDATE_DATA_INTERVAL;
 
   clearScreen();
   drawAppTitle("Unixtime");
@@ -18595,7 +18744,6 @@ void dashboard_network() {
   int result;
   time_t unix_timestamp;
   long prev_update_millis = 0;
-  long prev_update_data_millis = -CLOCK_UPDATE_DATA_INTERVAL;
   int base_offset = 75;
 
   clearScreen();
@@ -18854,6 +19002,78 @@ void dashboard_internet_time() {
     }
     
     if(!touchCheckNowait()) continue;
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void dashboard_world_time() {
+  char buff[80];
+  int i;
+  int touch_y;
+  int hour, minute, second;
+  long timezone[4] = {0, 3 * 3600, 7 * 3600, 8 * 3600};
+  char name[4][80] = {
+    "UTC", "Moscow", "Vietnam", "China"
+  };
+  unsigned long day_millis;
+  long prev_update_millis = 0;
+  long prev_update_data_millis = -CLOCK_UPDATE_SCREEN_INTERVAL;
+
+  clearScreen();
+  drawAppTitle("World Time");
+
+  while(1) {
+    if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
+      prev_update_millis = millis();
+      
+      // Выводим всё
+      for(i = 0; i < 4; i++)  {
+        if(timezone[i] % 3600 == 0) {
+          sprintf(buff, "%s (%s%d h)", name[i], timezone[i] >= 0 ? "+" : "-", abs(timezone[i] / 3600));
+        }
+        else {
+          sprintf(buff, "%s (%s%d s)", name[i], timezone[i] >= 0 ? "+" : "-", abs(timezone[i]));
+        }
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
+        //tft.setTextColor(color_scheme_fg, TFT_LIGHTGREY);
+        tft.drawCentreString(buff, tft.width() / 2, 20 + ((tft.height() - 16) / 4) * i, FONT_DEFAULT);
+
+        day_millis = ((global_unixtime_retrieved % 86400) + (millis() - global_unixtime_retrieved_millis) / 1000 + timezone[i] + 86400) % 86400;
+  
+        hour = day_millis / 3600;
+        minute = (day_millis / 60) % 60;
+        second = day_millis % 60;
+
+        sprintf(buff, " %d:%02d:%02d ", hour, minute, second);
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
+        //tft.setTextColor(color_scheme_fg, TFT_LIGHTGREY);
+        tft.drawCentreString(buff, tft.width() / 2, 36 + ((tft.height() - 16) / 4) * i, FONT_BIGGER);
+      }
+    }
+    
+    if(!touchCheckNowait()) continue;
+
+    touch_y = (global_touch_y - 16) / ((tft.height() - 16) / 4);
+    if(global_touch_y >= 16 && touch_y >= 0 && touch_y < 4) {
+      touchWaitRelease();
+      strcpy(buff, name[touch_y]);
+      if(drawPrompt("Enter name", buff) == 0) {
+        strcpy(name[touch_y], buff);
+        sprintf(buff, "%d", timezone[touch_y]);
+        if(drawPrompt("Enter timezone in seconds", buff) == 0) {
+          timezone[touch_y] = strtol(buff, NULL, 10);
+        }
+      }
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+    }
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
@@ -19592,7 +19812,7 @@ void settings(char mode, char *io_buff) {
     "Keyboard Settings",
     "View Font",
     "Set Clock",
-    "Clock Sound",
+    "Alarm & Sound",
     "Security",
     "Screen Settings",
     "Sound",
@@ -20409,6 +20629,57 @@ char is_lap_year(int year) {
   return 0;
 }
 
+void get_sunrise_sunset(int month, int day, double lat, double lon, double *sunrise, double *sunset) {
+  // Восход и закат
+  double N, v, delta, E, h0, w0, solar_noon;
+  int i;
+  // Номер дня года
+  N = 0;
+  for(i = 1; i < month; i++) {
+    if(i == 1 || i == 3 || i == 5 || i == 7 || i == 8 || i == 10 || i == 12) {
+      N += 31;
+    }
+    else if(i == 2) {
+      N += 28;
+    }
+    else {
+      N += 30;
+    }
+  }
+  N += day;
+
+  // Какие-то параметры
+  v = 2 * PI / 365 * (N - 1);
+  delta =
+    0.006918
+    - 0.399912 * cos(v)
+    + 0.070257 * sin(v)
+    - 0.006758 * cos(2 * v)
+    + 0.000907 * sin(2 * v)
+    - 0.002697 * cos(3 * v)
+    + 0.001480 * sin(3 * v);
+  E =
+    229.18 * (
+      0.000075
+      + 0.001868 * cos(v)
+      - 0.032077 * sin(v)
+      - 0.014615 * cos(2 * v)
+      - 0.040849 * sin(2 * v)
+    );
+  h0 = -0.833;
+  w0 = acos(
+    (sin(h0) - sin(PI * lat / 90) *sin(delta))
+    / (cos(PI * lat / 90) * cos(delta))
+  );
+  solar_noon =
+    720 - 4 * lon - E;
+  
+  *sunrise = solar_noon - 4 * w0 * 180 / PI;
+  *sunset  = solar_noon + 4 * w0 * 180 / PI;
+
+  Serial.printf("month %d day %d sunrise %d:%02d noon %d:%02d sunset %d:%02d\n",
+    month, day, (int)(*sunrise / 60), (int)(*sunrise) % 60, (int)(solar_noon / 60), (int)(solar_noon) % 60, (int)(*sunset / 60), (int)(*sunset) % 60);
+}
 // Сохранить текущую дату в ФС
 void store_current_timestamp() {
   char buff[80];
@@ -20743,6 +21014,7 @@ void view_file(char *title, char *filename) {
   int history_index = 0;
   int skipped_pages = 0;
   char *buff;
+  long millis_last_action = millis();
 
   clearScreen();
   drawAppTitle(title);
@@ -20784,9 +21056,21 @@ void view_file(char *title, char *filename) {
     else {
       visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, (tft.height() / 16) - 1, FONT_DEFAULT, 1);
     }
-    //
+
+    // Раз в пять минут сохраняем положение, если оно изменилось
+    while(!touchCheckNowait()) {
+      if(millis() - millis_last_action > 300000) {
+        if(initial_file_offset != file_offset) {
+          sprintf(buff, "%d", file_offset);
+          write_key_value_to_file("/Settings/View", filename, buff);
+          initial_file_offset = file_offset;
+        }
+        millis_last_action = millis();
+      }
+    }
 
     touchWaitPress();
+
     // Смотрим куда нажатие, двигаемся либо вперёд по файлу, либо назад
     touch_x = global_touch_x;
     touch_y = global_touch_y;
@@ -21039,8 +21323,8 @@ void hexview_file(char *title, char *filename) {
   }
 }
 
-// Редактирование небольшого файла
-void edit_file(char *title, char *filename) {
+// Редактирование текста в буфере
+char edit_text(char *title, char *contents, long max_len) {
   int file_offset_bytes = 0;
   // Позиция курсора в байтах, перед каким символом стоит курсор
   int cursor_offset_bytes = 0;
@@ -21064,7 +21348,6 @@ void edit_file(char *title, char *filename) {
   char byte;
   char buff[80];
   char current_string[80];
-  char *contents;
   char caps_flag = 0;
   char symbol_flag = 0;
   char alt_flag = 0;
@@ -21073,38 +21356,10 @@ void edit_file(char *title, char *filename) {
   int indent_width = (keyboard_indent_left ? KEYBOARD_INDENT_SIZE : 0) + (keyboard_indent_right ? KEYBOARD_INDENT_SIZE : 0);
   TouchPoint p;
   char **keyboard_current = keyboard_nocaps;
-  fs::File file;
-
-  contents = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
 
   clearScreen();
   drawAppTitle(title);
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
-
-  contents[0] = 0;
-  file = Storage->open(filename);
-  if(file) {
-    if(file.isDirectory()) {
-      drawError("Cannot edit directory");
-      return;
-    }
-
-    // Читаем файл в буфер, но не более 8191 байт
-    file_offset_bytes = 0;
-    while(file.available()) {
-      contents[file_offset_bytes] = file.read();
-      contents[file_offset_bytes + 1] = 0;
-      file_offset_bytes++;
-      if(file_offset_bytes >= (EDIT_FILE_LENGTH_MAX - 1)) break;
-    }
-    // Если файл ещё не кончился - сообщаем об ошибке
-    if(file.available()) {
-      drawError("File too large to edit");
-      return;
-    }
-
-    file.close();
-  }
 
   file_skip_lines = 0;
   while(1) {
@@ -21304,7 +21559,7 @@ void edit_file(char *title, char *filename) {
         }
         // Печатаемые символы
         else if(byte >= 0x20 && byte != 0x7F || byte == '\n') {
-          if(strlen(contents) < (EDIT_FILE_LENGTH_MAX - 1)) {
+          if(strlen(contents) < (max_len - 1)) {
             for(file_offset_bytes = strlen(contents); file_offset_bytes >= cursor_offset_bytes; file_offset_bytes--) {
               contents[file_offset_bytes + 1] = contents[file_offset_bytes];
             }
@@ -21351,7 +21606,7 @@ void edit_file(char *title, char *filename) {
         }
       }
       else {
-        if(strlen(contents) < (EDIT_FILE_LENGTH_MAX - 1)) {
+        if(strlen(contents) < (max_len - 1)) {
           for(file_offset_bytes = strlen(contents); file_offset_bytes >= cursor_offset_bytes; file_offset_bytes--) {
             contents[file_offset_bytes + 1] = contents[file_offset_bytes];
           }
@@ -21382,24 +21637,61 @@ void edit_file(char *title, char *filename) {
       drawAppTitle("Exit");
       touchWaitRelease();
       drawAppTitle(title);
-      if(changes_present) {
-        // Спрашиваем о сохранении, сохраняем если да
-        if(drawConfirm("Save changes?") == 0) {
-          file = Storage->open(filename, FILE_WRITE);
-          file_offset_bytes = 0;
-          //while(contents[file_offset_bytes] != 0) {
-            file.print(contents);
-            //file_offset_bytes++;
-          //}
-          file.close();
-        }
-      }
-      free(contents);
       touchExitActionReset();
-      return;
+      return changes_present;
     }
     touchWaitRelease();
   }
+}
+
+// Редактирование небольшого файла
+void edit_file(char *title, char *filename) {
+  int file_offset_bytes = 0;
+  char changes_present = 0;
+  char *contents;
+  fs::File file;
+
+  contents = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
+
+  contents[0] = 0;
+  file = Storage->open(filename);
+  if(file) {
+    if(file.isDirectory()) {
+      drawError("Cannot edit directory");
+      return;
+    }
+
+    // Читаем файл в буфер, но не более 8191 байт
+    file_offset_bytes = 0;
+    while(file.available()) {
+      contents[file_offset_bytes] = file.read();
+      contents[file_offset_bytes + 1] = 0;
+      file_offset_bytes++;
+      if(file_offset_bytes >= (EDIT_FILE_LENGTH_MAX - 1)) break;
+    }
+    // Если файл ещё не кончился - сообщаем об ошибке
+    if(file.available()) {
+      drawError("File too large to edit");
+      return;
+    }
+
+    file.close();
+  }
+
+  changes_present = edit_text(title, contents, EDIT_FILE_LENGTH_MAX);
+  if(changes_present) {
+    // Спрашиваем о сохранении, сохраняем если да
+    if(drawConfirm("Save changes?") == 0) {
+      file = Storage->open(filename, FILE_WRITE);
+      file_offset_bytes = 0;
+      //while(contents[file_offset_bytes] != 0) {
+        file.print(contents);
+        //file_offset_bytes++;
+      //}
+      file.close();
+    }
+  }
+  free(contents);
 }
 
 // Редактирование небольшого файла CSV
@@ -22751,6 +23043,12 @@ void voltmeter(char mode, char *io_buff) {
     B01111111, B11111110,
     B00000000, B00000000
   };
+  char message[] =
+    "Measure voltage from 0 to 3 volts\n"
+    "Do not overvoltage\n"
+    "Change multiplier if you use voltage divider\n"
+    "V = millivolts * multiplier\n"
+    "Update every 0.1 second\n";
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Voltmeter");
@@ -22768,7 +23066,8 @@ void voltmeter(char mode, char *io_buff) {
   clearScreen();
   drawAppTitle("Voltmeter");
 
-  pinMode(pin, INPUT_PULLUP);
+  update_flag = 1;
+  pinMode(pin, INPUT);
   while(1) {
     value = analogReadMilliVolts(pin);
     voltage = (float)value * multiplier;
@@ -22776,13 +23075,18 @@ void voltmeter(char mode, char *io_buff) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.drawCentreString(buff, tft.width() / 2, 35, FONT_BIGGER);
 
-    drawButtonMatrix(0, tft.height() - 64, tft.width() / 2, 64, buttons, 1, 2);
-    tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    sprintf(buff, "   %f   ", multiplier);
-    tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 64 + 32 * 0 + 8, FONT_DEFAULT);
-    sprintf(buff, "   %d   ", pin);
-    tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 64 + 32 * 1 + 8, FONT_DEFAULT);
+    if(update_flag) {
+      draw_text_formatted(message, 1, 85, tft.width() - 2, 8, FONT_DEFAULT, 1);
 
+      drawButtonMatrix(0, tft.height() - 64, tft.width() / 2, 64, buttons, 1, 2);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      sprintf(buff, "   %f   ", multiplier);
+      tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 64 + 32 * 0 + 8, FONT_DEFAULT);
+      sprintf(buff, "   %d   ", pin);
+      tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 64 + 32 * 1 + 8, FONT_DEFAULT);
+
+      update_flag = 0;
+    }
 
     if(!touchCheckNowait()) {
       delayOrTouchWait(100);
@@ -22808,6 +23112,7 @@ void voltmeter(char mode, char *io_buff) {
         }
         clearPrompt();
       }
+      update_flag = 1;
     }
 
     touchWaitReleaseOrExit();
@@ -22829,7 +23134,16 @@ void generator(char mode, char *io_buff) {
   float amplitude = 1;
   int value;
   int pin = -1;
-
+  long pwm_frequency = 10000;
+  char message[] =
+    "Generates PWM signal\n"
+    "PWM frequency 10 kHz\n"
+    "Amplitude: 1 is full range\n"
+    "Signal from 0 to 3 volts\n"
+    "S = A*(1+sin(2*PI*freq*t))/2\n"
+    "Pin -1 is serial output\n"
+    "Output pins: 21 (BL), 22, 27\n"
+    "LED: R 4, G 16, B 17\n";
   char update_flag;
   char *buttons[] = {
     "Type",
@@ -22875,6 +23189,7 @@ void generator(char mode, char *io_buff) {
   drawAppTitle("Signal Generator");
 
   if(pin >= 0) {
+    analogWriteFrequency(pin, pwm_frequency);
     pinMode(pin, OUTPUT);
   }
 
@@ -22900,6 +23215,8 @@ void generator(char mode, char *io_buff) {
     }
     tft.drawCentreString(buff, 3 * tft.width() / 4, tft.height() - 32 * 4 + 32 * 3 + 8, FONT_DEFAULT);
 
+    draw_text_formatted(message, 1, 32, tft.width() - 2, 8, FONT_DEFAULT, 1);
+
     while(touchCheckNowait() == 0) {
       switch(type) {
         case TYPE_SIN:
@@ -22916,6 +23233,7 @@ void generator(char mode, char *io_buff) {
       if(value > 255) value = 255;
       if(pin == -1) {
         Serial.println(value);
+        delay(20 / frequency);
       }
       else {
         analogWrite(pin, value);
@@ -22952,7 +23270,10 @@ void generator(char mode, char *io_buff) {
         sprintf(buff, "%d", pin);
         if(drawPrompt("Pin", buff) == 0) {
           sscanf(buff, "%d", &pin);
-          if(pin >= 0) pinMode(pin, OUTPUT);
+          if(pin >= 0) {
+            analogWriteFrequency(pin, pwm_frequency);
+            pinMode(pin, OUTPUT);
+          }
         }
         clearPrompt();
       }
@@ -23851,7 +24172,8 @@ void mental_math(char mode, char *io_buff) {
   show_flag = 1;
   while(1) {
     if(show_flag) {
-      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+      //tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+      tft.fillRect(0, 16, tft.width(), 72 - 16, color_scheme_bg);
       switch(random(0, 2)) {
         case 0: op = '+'; break;
         case 1: op = '-'; break;
@@ -23909,6 +24231,7 @@ void mental_math(char mode, char *io_buff) {
         if(strcmp(buff, user_ans) != 0) {
           sprintf(buff, "Error: %d %c %d = %d", a, op, b, ans);
           drawInfo(buff);
+          clearPopupWindow();
         }
         show_flag = 1;
       }
@@ -23933,7 +24256,7 @@ void hanoi_towers(char mode, char *io_buff) {
   int button_pressed;
   int i;
   int j;
-  int level = 3;
+  static int level = 3;
   int steps = 0;
   int item_selected = -1;
   int column1, column2;
@@ -25391,22 +25714,22 @@ void drawAppTitleRight() {
   char icon_t[] = {
     10, 16,
     B00000000, B00000000,
-    B01111111, B00000000,
-    B00000010, B00000000,
-    B00000100, B00000000,
-    B01111111, B00000000,
     B00000000, B00000000,
-    B00000001, B00000000,
-    B01111111, B00000000,
-    B00000001, B00000000,
     B00000000, B00000000,
-    B01111111, B00000000,
-    B00001001, B00000000,
-    B00001001, B00000000,
-    B00000110, B00000000,
+    B00011110, B00000000,
+    B00100001, B00000000,
+    B01000100, B10000000,
+    B01000100, B10000000,
+    B01000100, B10000000,
+    B01000010, B10000000,
+    B00100001, B00000000,
+    B00011110, B00000000,
+    B00000000, B00000000,
+    B01101101, B10000000,
+    B01101101, B10000000,
     B00000000, B00000000,
     B00000000, B00000000
-  };
+   };
 
 
   if(!app_title_enabled) return;
@@ -25441,7 +25764,7 @@ void drawAppTitleRight() {
   tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
   tft.drawRightString(buff, tft.width() - right_offset, 0, FONT_DEFAULT);
   right_offset += tft.textWidth(buff, FONT_DEFAULT);
-  if(global_unixtime_synced) {
+  if(!global_unixtime_synced && wifi_connection_flag && global_ntp_enabled) {
     image_from_bits(tft.width() - right_offset - 10, 0, icon_t, color_scheme_title_fg, color_scheme_title_bg);
     right_offset += 10;
   }
@@ -27516,8 +27839,8 @@ double parse_expression(char *expr, function_expr_value_by_name_pointer expr_val
   double left, right;
   char op;
 
-  Serial.printf("parse_expression: %s\n", expr + *expr_offset);
-  Serial.printf("*expr_offset = %d\n", *expr_offset);
+  //Serial.printf("parse_expression: %s\n", expr + *expr_offset);
+  //Serial.printf("*expr_offset = %d\n", *expr_offset);
   // Вычисляем левую часть
   left = parse_factor(expr, expr_value_by_name, error_flag, expr_offset);
   while(*expr_offset < strlen(expr)) {
@@ -27529,7 +27852,7 @@ double parse_expression(char *expr, function_expr_value_by_name_pointer expr_val
       op = *(expr + *expr_offset);
       (*expr_offset)++;
       right = parse_factor(expr, expr_value_by_name, error_flag, expr_offset);
-      Serial.printf("parse_expression right = %g\n", right);
+      //Serial.printf("parse_expression right = %g\n", right);
       if(op == '+') {
         left = left + right;
       }
@@ -27541,8 +27864,8 @@ double parse_expression(char *expr, function_expr_value_by_name_pointer expr_val
       break;
     }
   }
-  Serial.printf("parse_expression result = %g\n", left);
-  Serial.printf("*expr_offset = %d\n", *expr_offset);
+  //Serial.printf("parse_expression result = %g\n", left);
+  //Serial.printf("*expr_offset = %d\n", *expr_offset);
   // Результат
   return left;
 }
@@ -27550,8 +27873,8 @@ double parse_expression(char *expr, function_expr_value_by_name_pointer expr_val
 double parse_factor(char *expr, function_expr_value_by_name_pointer expr_value_by_name, char *error_flag, int *expr_offset) {
   double left, right;
   char op;
-  Serial.printf("parse_factor: %s\n", expr + *expr_offset);
-  Serial.printf("*expr_offset = %d\n", *expr_offset);
+  //Serial.printf("parse_factor: %s\n", expr + *expr_offset);
+  //Serial.printf("*expr_offset = %d\n", *expr_offset);
   // Вычисляем левую часть
   left = parse_term(expr, expr_value_by_name, error_flag, expr_offset);
   //Serial.printf("parse_factor left = %g\n", left);
@@ -27579,8 +27902,8 @@ double parse_factor(char *expr, function_expr_value_by_name_pointer expr_value_b
       break;
     }
   }
-  Serial.printf("parse_factor result = %g\n", left);
-  Serial.printf("*expr_offset = %d\n", *expr_offset);
+  //Serial.printf("parse_factor result = %g\n", left);
+  //Serial.printf("*expr_offset = %d\n", *expr_offset);
   return left;  
 }
 
@@ -27589,8 +27912,8 @@ double parse_term(char *expr, function_expr_value_by_name_pointer expr_value_by_
   char *expr_ptr;
   int i;
   expr_ptr = expr + *expr_offset;
-  Serial.printf("parse_term: %s\n", expr + *expr_offset);
-  Serial.printf("*expr_offset = %d\n", *expr_offset);
+  //Serial.printf("parse_term: %s\n", expr + *expr_offset);
+  //Serial.printf("*expr_offset = %d\n", *expr_offset);
 
   // Пропускаем пробелы
   while(*(expr + *expr_offset) == ' ') {
@@ -27779,17 +28102,17 @@ double parse_term(char *expr, function_expr_value_by_name_pointer expr_value_by_
         if(expr_ptr[i] == '%') { expr_ptr[i] = 0; break; }
         if(expr_ptr[i] == ')') { expr_ptr[i] = 0; break; }
       }
-      Serial.printf("expr_offset before: %d\n", (*expr_offset));
+      //Serial.printf("expr_offset before: %d\n", (*expr_offset));
       
       (*expr_offset) += i;
-      Serial.printf("expr_offset after: %d\n", (*expr_offset));
-      Serial.printf("expr_ptr: %s\n", expr_ptr);
+      //Serial.printf("expr_offset after: %d\n", (*expr_offset));
+      //Serial.printf("expr_ptr: %s\n", expr_ptr);
       left = (*expr_value_by_name)(expr_ptr);
       free(expr_ptr);
     }
   }
-  Serial.printf("parse_term result = %g\n", left);
-  Serial.printf("*expr_offset = %d\n", *expr_offset);
+  //Serial.printf("parse_term result = %g\n", left);
+  //Serial.printf("*expr_offset = %d\n", *expr_offset);
   return left;
 }
 
@@ -28342,25 +28665,26 @@ void setup() {
       sscanf(buff, "%d", &global_alarm_minute);
     }
 
-  //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
-  #ifdef IS_WIFI_ENABLED
-  if(low_power_flag == 0) {
-    // Hostname
-    if(read_file_to_buff("/Settings/Hostname", 79, buff)) {
-      WiFi.setHostname(buff);
-    }
+    //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+    #ifdef IS_WIFI_ENABLED
+    if(low_power_flag == 0) {
+      // Hostname
+      if(read_file_to_buff("/Settings/Hostname", 79, buff)) {
+        WiFi.setHostname(buff);
+      }
 
-    WiFi.begin();
-    WiFi.onEvent(WiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
+      WiFi.begin();
+      WiFi.onEvent(WiFiConnected, ARDUINO_EVENT_WIFI_STA_CONNECTED);
+
+    }
+    #endif
 
     // NTP
     global_ntp_enabled = 1;
     if(read_file_to_buff("/Settings/NTP", 79, buff)) {
       sscanf(buff, "%d", &global_ntp_enabled);
     }
-  }
-  #endif
-  //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+    //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
     // Получить текущее время из сохранённого в ФС
     get_current_timestamp_fs();
@@ -28400,6 +28724,16 @@ void setup() {
   }
 
   Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+
+  /*
+  int day, month;
+  double sunrise, sunset;
+  for(month = 1; month <= 12; month++) {
+    for(day = 1; day <= 30; day++) {
+      get_sunrise_sunset(month, day, global_lat, global_lon, &sunrise, &sunset);
+    }
+  }
+  */
 }
 
 void loop() {
