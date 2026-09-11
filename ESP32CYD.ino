@@ -266,11 +266,11 @@
 2026-09-10 Меньше мигания в Mental Math, меньше мигания в вольтметре, инструкция в вольтметре, инструкция в генераторе, частота ШИМ генератора,
   настройка NTP не зависит от Wi-Fi, название настроек будильника, редактирование в памяти, редактирование шифрованного без расшифровки,
   basic сообщения об ошибках синтаксиса, мировое время
+2026-09-11 Восход и закат, восход и закат в погоде, восход и закат в календаре, супер-калибровка
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (б) Баг с копированием/перемещением файлов (сходу не воспроизвелось)
 - (д) Приложение поиск
-- (д) Восход и закат
 - (д) Крутая калибровка
 - (д) Ланучер-список
 - (д) Лаунчер с более крупными значками
@@ -876,15 +876,19 @@ float ay = 19840 / d;
 float by = -1109440 / d;
 float cy = 325691200 / d;
 
-#define CALIBRATION_QUANT 80
-int calibration_x[240 / CALIBRATION_QUANT];
-int calibration_y[320 / CALIBRATION_QUANT];
+#define CALIBRATION_QUANT (240 / 6)
+#define CALIBRATION_POINTS_X (240 / CALIBRATION_QUANT + 1)
+#define CALIBRATION_POINTS_Y (320 / CALIBRATION_QUANT + 1)
+#define CALIBRATION_POINTS_TOTAL (CALIBRATION_POINTS_X * CALIBRATION_POINTS_Y)
+int calibration_x[CALIBRATION_POINTS_TOTAL];
+int calibration_y[CALIBRATION_POINTS_TOTAL];
 
 unsigned long global_touch_begin;
 unsigned long global_touch_length;
 TouchPoint global_touch_p;
 int global_touch_x;
 int global_touch_y;
+char calibration_multipoint = 0;
 char global_touch_present_flag;
 char global_menu_visible_flag = 0;
 char global_exit_flag;
@@ -961,7 +965,7 @@ void ble(char mode, char *io_buff);
 void screen_test(char mode, char *io_buff);
 void screensaver(char mode, char *io_buff);
 void touch_calibration(char mode, char *io_buff);
-void touch_calibration_test(char mode, char *io_buff);
+void touch_calibration_multipoint(char mode, char *io_buff);
 void fifteen(char mode, char *io_buff);
 void security(char mode, char *io_buff);
 void counter(char mode, char *io_buff);
@@ -1084,7 +1088,7 @@ function_application_pointer all_apps[] = {
   //security,
   //brightness_app,
   //touch_calibration,
-  //touch_calibration_test,
+  touch_calibration_multipoint,
   oscilloscope,
   voltmeter,
   generator,
@@ -3379,6 +3383,9 @@ void terminal_execute_single(char *str) {
 #endif
 #endif
   // Обычные приложения
+  else if(strcmp(cmdline_params[0], "calibration_multipoint") == 0) {
+    calibration_multipoint = 1;
+  }
   else if(strcmp(cmdline_params[0], "app") == 0) {
     if(strcmp(cmdline_params[1], "calculator") == 0) {
       calculator(APP_MODE_LAUNCH, NULL);
@@ -3501,6 +3508,9 @@ void terminal_execute_single(char *str) {
     }
     else if(strcmp(cmdline_params[1], "touch_calibration") == 0) {
       touch_calibration(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "touch_calibration_multipoint") == 0) {
+      touch_calibration_multipoint(APP_MODE_LAUNCH, NULL);
     }
     else if(strcmp(cmdline_params[1], "oscilloscope") == 0) {
       oscilloscope(APP_MODE_LAUNCH, NULL);
@@ -14998,6 +15008,7 @@ void weather(char mode, char *io_buff) {
   char wind[80];
   char weather_text[80];
   char weather_code[80];
+  double sunrise, sunset, solar_noon;
   int weather_code_number;
   char update_flag;
   char *buttons[] = {
@@ -15063,10 +15074,28 @@ void weather(char mode, char *io_buff) {
         tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
         tft.setTextColor(color_scheme_fg, color_scheme_bg);
         tft.drawCentreString(temp, tft.width() / 2, 35, FONT_BIGGER);
-        tft.drawString("o", tft.width() / 2 + tft.textWidth(temp, FONT_BIGGER) / 2, 30, FONT_BIG);
+        tft.drawString("o", tft.width() / 2 + tft.textWidth(temp, FONT_BIGGER) / 2 + 2, 30, FONT_BIG);
 
-        tft.drawCentreString(wind, tft.width() / 2, 100, FONT_BIG);
-        tft.drawCentreString(weather_text, tft.width() / 2, 150, FONT_DEFAULT);
+        tft.drawCentreString(wind, tft.width() / 2, 80, FONT_BIG);
+        tft.drawCentreString(weather_text, tft.width() / 2, 110, FONT_DEFAULT);
+
+        // Лунный день
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
+        sprintf(buff, "Moon day: %d", global_moon_day);
+        tft.drawCentreString(buff, tft.width() / 2, 130 + 16 * 0, FONT_DEFAULT);
+
+        // Восход и закат
+        get_sunrise_sunset(global_month, global_day, global_lat, global_lon, &sunrise, &solar_noon, &sunset);
+        sunrise += global_timezone / 60;
+        solar_noon += global_timezone / 60;
+        sunset += global_timezone / 60;
+
+        sprintf(buff, "Sunrise: %d:%02d", ((int)sunrise) / 60, ((int)sunrise) % 60);
+        tft.drawCentreString(buff, tft.width() / 2, 130 + 16 * 1, FONT_DEFAULT);
+        sprintf(buff, "Solar noon: %d:%02d", ((int)solar_noon) / 60, ((int)solar_noon) % 60);
+        tft.drawCentreString(buff, tft.width() / 2, 130 + 16 * 2, FONT_DEFAULT);
+        sprintf(buff, "Sunset: %d:%02d", ((int)sunset) / 60, ((int)sunset) % 60);
+        tft.drawCentreString(buff, tft.width() / 2, 130 + 16 * 3, FONT_DEFAULT);
       }
       update_flag = 0;
     }
@@ -15088,7 +15117,7 @@ void weather(char mode, char *io_buff) {
           ((prev_update_data_millis + WEATHER_AUTO_UPDATE_INTERVAL - millis()) / 1000) % 60
         );
 
-        tft.drawCentreString(buff, tft.width() / 2, tft.height() - 128, FONT_DEFAULT);
+        tft.drawCentreString(buff, tft.width() / 2, tft.height() - 120, FONT_DEFAULT);
       }
       if(millis() - prev_update_data_millis > WEATHER_AUTO_UPDATE_INTERVAL) {
         update_flag = 1;
@@ -18448,6 +18477,7 @@ void dashboard_calendar(char mode, char *io_buff) {
   int cal_day;
   int cal_row;
   int cal_col;
+  double sunrise, sunset, solar_noon;
   long prev_update_millis = 0;
   long prev_update_data_millis = -CLOCK_UPDATE_DATA_INTERVAL;
   char *day_of_week_name[] = {
@@ -18585,8 +18615,20 @@ void dashboard_calendar(char mode, char *io_buff) {
       // Лунный день
       tft.setTextColor(color_scheme_fg, color_scheme_bg);
       sprintf(buff, "Moon day: %d", moon_day);
-      tft.drawCentreString(buff, tft.width() / 2, 242, FONT_DEFAULT);
+      tft.drawCentreString(buff, tft.width() / 2, 242 + 16 * 0, FONT_DEFAULT);
 
+      // Восход и закат
+      get_sunrise_sunset(global_month, global_day, global_lat, global_lon, &sunrise, &solar_noon, &sunset);
+      sunrise += global_timezone / 60;
+      solar_noon += global_timezone / 60;
+      sunset += global_timezone / 60;
+
+      sprintf(buff, "Sunrise: %d:%02d", ((int)sunrise) / 60, ((int)sunrise) % 60);
+      tft.drawCentreString(buff, tft.width() / 2, 242 + 16 * 1, FONT_DEFAULT);
+      sprintf(buff, "Solar noon: %d:%02d", ((int)solar_noon) / 60, ((int)solar_noon) % 60);
+      tft.drawCentreString(buff, tft.width() / 2, 242 + 16 * 2, FONT_DEFAULT);
+      sprintf(buff, "Sunset: %d:%02d", ((int)sunset) / 60, ((int)sunset) % 60);
+      tft.drawCentreString(buff, tft.width() / 2, 242 + 16 * 3, FONT_DEFAULT);
     }
     
     if(!touchCheckNowait()) continue;
@@ -20629,9 +20671,9 @@ char is_lap_year(int year) {
   return 0;
 }
 
-void get_sunrise_sunset(int month, int day, double lat, double lon, double *sunrise, double *sunset) {
+void get_sunrise_sunset(int month, int day, double lat, double lon, double *sunrise, double *solar_noon, double *sunset) {
   // Восход и закат
-  double N, v, delta, E, h0, w0, solar_noon;
+  double N, v, delta, E, h0, w0;
   int i;
   // Номер дня года
   N = 0;
@@ -20668,18 +20710,19 @@ void get_sunrise_sunset(int month, int day, double lat, double lon, double *sunr
     );
   h0 = -0.833;
   w0 = acos(
-    (sin(h0) - sin(PI * lat / 90) *sin(delta))
-    / (cos(PI * lat / 90) * cos(delta))
+    (sin(PI * h0 / 180) - sin(PI * lat / 180) *sin(delta))
+    / (cos(PI * lat / 180) * cos(delta))
   );
-  solar_noon =
+  *solar_noon =
     720 - 4 * lon - E;
   
-  *sunrise = solar_noon - 4 * w0 * 180 / PI;
-  *sunset  = solar_noon + 4 * w0 * 180 / PI;
+  *sunrise = *solar_noon - 4 * w0 * 180 / PI;
+  *sunset  = *solar_noon + 4 * w0 * 180 / PI;
 
-  Serial.printf("month %d day %d sunrise %d:%02d noon %d:%02d sunset %d:%02d\n",
-    month, day, (int)(*sunrise / 60), (int)(*sunrise) % 60, (int)(solar_noon / 60), (int)(solar_noon) % 60, (int)(*sunset / 60), (int)(*sunset) % 60);
+  //Serial.printf("month %d day %d sunrise %d:%02d noon %d:%02d sunset %d:%02d\n",
+  //  month, day, (int)(*sunrise / 60), (int)(*sunrise) % 60, (int)(solar_noon / 60), (int)(solar_noon) % 60, (int)(*sunset / 60), (int)(*sunset) % 60);
 }
+
 // Сохранить текущую дату в ФС
 void store_current_timestamp() {
   char buff[80];
@@ -22296,7 +22339,7 @@ double csv_get_variable_by_name(char *var_name) {
   }
 }
 
-void touch_calibration_test(char mode, char *io_buff) {
+void touch_calibration_multipoint(char mode, char *io_buff) {
   char buff[80];
   TouchPoint p;
   int i;
@@ -22339,31 +22382,34 @@ void touch_calibration_test(char mode, char *io_buff) {
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
   clearScreen();
-  for(y = 0; y < tft.height() / CALIBRATION_QUANT; y++) {
-    for(x = 0; x < tft.width() / CALIBRATION_QUANT; x++) {
+  for(y = 0; y < CALIBRATION_POINTS_Y; y++) {
+    for(x = 0; x < CALIBRATION_POINTS_X; x++) {
       tft.setTextColor(color_scheme_fg, color_scheme_bg);
       tft.drawCentreString("Touch cross center", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
       tft.drawLine(
-        x * CALIBRATION_QUANT - 5 + CALIBRATION_QUANT / (2),
-        y * CALIBRATION_QUANT - 5 + CALIBRATION_QUANT / (2),
-        x * CALIBRATION_QUANT + 5 + CALIBRATION_QUANT / (2),
-        y * CALIBRATION_QUANT + 5 + CALIBRATION_QUANT / (2),
+        x * CALIBRATION_QUANT - 5,
+        y * CALIBRATION_QUANT - 5,
+        x * CALIBRATION_QUANT + 5,
+        y * CALIBRATION_QUANT + 5,
         color_scheme_fg
       );
       tft.drawLine(
-        x * CALIBRATION_QUANT - 5 + CALIBRATION_QUANT / (2),
-        y * CALIBRATION_QUANT + 5 + CALIBRATION_QUANT / (2),
-        x * CALIBRATION_QUANT + 5 + CALIBRATION_QUANT / (2),
-        y * CALIBRATION_QUANT - 5 + CALIBRATION_QUANT / (2),
+        x * CALIBRATION_QUANT - 5,
+        y * CALIBRATION_QUANT + 5,
+        x * CALIBRATION_QUANT + 5,
+        y * CALIBRATION_QUANT - 5,
         color_scheme_fg
       );
 
       touchWaitPress();
       delay(200);
-      p = touchscreen.getTouch();
-      calibration_x[x] = p.x;
-      calibration_y[y] = p.y;
+      do {
+        p = touchscreen.getTouch();
+        calibration_x[x + y * CALIBRATION_POINTS_X] = p.xRaw;
+        calibration_y[x + y * CALIBRATION_POINTS_X] = p.yRaw;
+      } while(calibration_x[x + y * CALIBRATION_POINTS_X] == 0);
 
+      Serial.printf("Point %d x_raw = %d y_raw = %d\n", x + y * CALIBRATION_POINTS_X, (int)p.xRaw, (int)p.yRaw);
       clearScreen();
       tft.setTextColor(color_scheme_fg, color_scheme_bg);
       tft.drawCentreString("Release", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
@@ -22376,20 +22422,33 @@ void touch_calibration_test(char mode, char *io_buff) {
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
   tft.drawCentreString("Done!", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
   touchWaitRelease();
-  touch_calibration_save_test();
+  touch_calibration_save_multipoint();
   
   clearScreen();
+  calibration_multipoint = 1;
+/*
+  int x1, y1;
+  int x2, y2;
   while(1) {
-    tft.drawPixel(x + CALIBRATION_QUANT / (2), y + CALIBRATION_QUANT / (2), TFT_WHITE);
-    touchWaitPress();
-    p = touchscreen.getTouch();
-    x = touchMapX_test(p.xRaw, p.yRaw);
-    y = touchMapY_test(p.xRaw, p.yRaw);
-    Serial.printf("px = %d, py = %d, x=%d, y=%d\n", p.xRaw, p.yRaw, x, y);
+    global_touch_p = touchscreen.getTouch();
+    if(digitalRead(XPT2046_IRQ) == LOW) {
+      //Serial.printf("xRaw = %d yRaw = %d zRaw = %d IRQ = %d\n", global_touch_p.xRaw, global_touch_p.yRaw, global_touch_p.zRaw, digitalRead(XPT2046_IRQ) == HIGH ? 1 : 0);
+      if(global_touch_p.zRaw > 0) {
+        touchMapXY_multipoint(global_touch_p.xRaw, global_touch_p.yRaw, &x2, &y2);
 
-    tft.drawPixel(x + CALIBRATION_QUANT / (2), y + CALIBRATION_QUANT / (2), TFT_BLACK);
-    delay(10);
+        Serial.printf("Point: new x = %d y = %d\n", x2, y2);
+
+        tft.drawPixel(x2, y2, TFT_BLACK);
+      }
+      else {
+        clearScreen();
+      }
+    }
+    else {
+      clearScreen();
+    }
   }
+  */
 }
 
 #define CALIBRATION_SMOOTH_POINTS 100
@@ -22528,6 +22587,8 @@ void touch_calibration(char mode, char *io_buff) {
   touchWaitRelease();
   touch_calibration_save();
   delay(1000);
+
+  calibration_multipoint = 0;
 }
 
 // Сохранение данных калибровки в ФС
@@ -22536,6 +22597,12 @@ void touch_calibration_save() {
   char buff[80];
   if(storage_type == STORAGE_TYPE_NONE) return;
   
+  if(!Storage) return;
+
+  if(!Storage->exists("/Settings")) {
+    Storage->mkdir("/Settings");
+  }
+
   file = Storage->open("/Settings/Calibration", FILE_WRITE);
   if(file) {
     sprintf(buff, "%f %f %f %f %f %f", ax, bx, cx, ay, by, cy);
@@ -22545,20 +22612,15 @@ void touch_calibration_save() {
 }
 
 // Сохранение данных калибровки в ФС
-void touch_calibration_save_test() {
+void touch_calibration_save_multipoint() {
   fs::File file;
   char buff[80];
-  int x, y;
+  int i;
 
-  file = Storage->open("/Settings/Calibration2", FILE_WRITE);
+  file = Storage->open("/Settings/CalibrationMultipoint", FILE_WRITE);
   if(file) {
-    for(x = 0; x < tft.width() / CALIBRATION_QUANT; x++) {
-      sprintf(buff, "%d\n", calibration_x[x]);
-      file.print(buff);
-    }
-    
-    for(y = 0; y < tft.height() / CALIBRATION_QUANT; y++) {
-      sprintf(buff, "%d\n", calibration_y[y]);
+    for(i = 0; i < CALIBRATION_POINTS_TOTAL; i++) {
+      sprintf(buff, "%d %d\n", calibration_x[i], calibration_y[i]);
       file.print(buff);
     }
     file.close();
@@ -22566,23 +22628,20 @@ void touch_calibration_save_test() {
 }
 
 // Загрузка данных калибровки из ФС
-void touch_calibration_load_test() {
+void touch_calibration_load_multipoint() {
   fs::File file;
-  char *buff;
+  char buff[80];
   int i;
-  int x, y;
 
-  file = Storage->open("/Settings/Calibration2");
+  file = Storage->open("/Settings/CalibrationMultipoint");
   if(file) {
-    for(x = 0; x < tft.width() / 16; x++) {
-      buff = (char*)file.readStringUntil('\n').c_str();
-      sscanf(buff, "%d", calibration_x + x);
-    }
-    for(y = 0; y < tft.height() / 16; y++) {
-      buff = (char*)file.readStringUntil('\n').c_str();
-      sprintf(buff, "%d", calibration_y + y);
+    for(i = 0; i < CALIBRATION_POINTS_TOTAL; i++) {
+      strcpy(buff, file.readStringUntil('\n').c_str());
+      sscanf(buff, "%d %d\n", &calibration_x[i], &calibration_y[i]);
     }
     file.close();
+
+    calibration_multipoint = 1;
   }
 }
 
@@ -26513,44 +26572,201 @@ int show_menu(int x0, int y0, int width, int height, char **items) {
 }
 
 // Простые функции тач-скрина
-int touchMapX_test(int px, int py) {
+void touchMapXY_multipoint(int x_raw, int y_raw, int *out_x, int *out_y) {
   int x, y;
   int x_min = -1;
   int y_min = -1;
   float d_min = 100000;
   float d_current;
-  // Ищем ближайшую точку
-  for(y = 0; y < tft.height() / CALIBRATION_QUANT; y++) {
-    for(x = 0; x < tft.width() / CALIBRATION_QUANT; x++) {
-      d_current = abs(px - calibration_x[x]) + abs(py - calibration_y[y]);
-      if(d_current < d_min) {
-        x_min = x;
-        y_min = y;
-        d_min = d_current;
-      }
-    }
-  }
-  return x_min * CALIBRATION_QUANT;
-}
+  int i, best1, best2, best3;
+  int offset_best_x, offset_best_y;
+  double x_raw_1, x_raw_2, x_raw_3;
+  double y_raw_1, y_raw_2, y_raw_3;
+  double x_offset_1, x_offset_2, x_offset_3;
+  double y_offset_1, y_offset_2, y_offset_3;
+  double ax, bx, cx;
+  double ay, by, cy;
+  double d;
+  char x_inc_flag = 0;
+  char y_inc_flag = 0;
+  char xy_swap = 0;
 
-int touchMapY_test(int px, int py) {
-  int x, y;
-  int x_min = -1;
-  int y_min = -1;
-  float d_min = 100000;
-  float d_current;
+  // Если при росте индекса с 0 на 1 растёт не x, а y, то нужно поменять оси местами
+  if(abs(calibration_x[0] - calibration_x[1]) < abs(calibration_y[0] - calibration_y[1])) {
+    //Serial.println("X-Y swap");
+    xy_swap = 1;
+  }
+
+  // Смотрим в какую сторону рост значений, в направлении роста индексов
+  if(calibration_x[0] < calibration_x[xy_swap ? CALIBRATION_POINTS_X : 1]) {
+    //Serial.println("X inc");
+    x_inc_flag = 1;
+  }
+  if(calibration_y[0] < calibration_y[xy_swap ? 1 : CALIBRATION_POINTS_X]) {
+    //Serial.println("Y inc");
+    y_inc_flag = 1;
+  }
+
   // Ищем ближайшую точку
-  for(y = 0; y < tft.height() / CALIBRATION_QUANT; y++) {
-    for(x = 0; x < tft.width() / CALIBRATION_QUANT; x++) {
-      d_current = abs(px - calibration_x[x]) + abs(py - calibration_y[y]);
+  d_min = 100000;
+  for(y = 0; y < CALIBRATION_POINTS_Y; y++) {
+    for(x = 0; x < CALIBRATION_POINTS_X; x++) {
+      i = x + CALIBRATION_POINTS_X * y;
+      d_current = abs(x_raw - calibration_x[i]) + abs(y_raw - calibration_y[i]);
       if(d_current < d_min) {
-        x_min = x;
-        y_min = y;
+        best1 = i;
+        offset_best_x = x_raw - calibration_x[i];
+        offset_best_y = y_raw - calibration_y[i];
+        x_offset_1 = x * CALIBRATION_QUANT;
+        y_offset_1 = y * CALIBRATION_QUANT;
         d_min = d_current;
       }
     }
   }
-  return y_min * CALIBRATION_QUANT;
+  //Serial.printf("Best1: %d x=%d y=%d\n", best1, best1 % CALIBRATION_POINTS_X, best1 / CALIBRATION_POINTS_X);
+  //Serial.printf("offset_best_x %d offset_best_y %d\n", offset_best_x, offset_best_y);
+
+  // Ищем ближайшую точку по оси x, исключая текущую
+  d_min = 10000;
+  y = best1 / CALIBRATION_POINTS_X;
+  for(x = 0; x < CALIBRATION_POINTS_X; x++) {
+    i = x + CALIBRATION_POINTS_X * y;
+    if(i == best1) continue;
+    d_current = abs(x_raw - calibration_x[i]) + abs(y_raw - calibration_y[i]);
+    if(d_current < d_min) {
+      best2 = i;
+      x_offset_2 = x * CALIBRATION_QUANT;
+      y_offset_2 = y * CALIBRATION_QUANT;
+      d_min = d_current;
+    }
+  }
+
+  // Ищем ближайшую точку по оси y, исключая текущую
+  d_min = 10000;
+  x = best1 % CALIBRATION_POINTS_X;
+  for(y = 0; y < CALIBRATION_POINTS_Y; y++) {
+    i = x + CALIBRATION_POINTS_X * y;
+    if(i == best1) continue;
+    d_current = abs(x_raw - calibration_x[i]) + abs(y_raw - calibration_y[i]);
+    if(d_current < d_min) {
+      best3 = i;
+      x_offset_3 = x * CALIBRATION_QUANT;
+      y_offset_3 = y * CALIBRATION_QUANT;
+      d_min = d_current;
+    }
+  }
+/*
+  //Serial.printf("Best1: %d\n", best1); delay(100);
+  // Вторая - если касание выше, то точка выше, если ниже - то точкой ниже
+  if((y_inc_flag && offset_best_y >= 0) || (!y_inc_flag && offset_best_y < 0)) {
+    best2 = best1 + (xy_swap? 1 : CALIBRATION_POINTS_X);
+    // Если y1 == макс, то может быть только точка выше
+    if(best1 / CALIBRATION_POINTS_X == CALIBRATION_POINTS_Y - 1) {
+      //best2 = best1 - (xy_swap? 1 : CALIBRATION_POINTS_X);
+    }
+  }
+  else {
+    best2 = best1 - (xy_swap? 1 : CALIBRATION_POINTS_X);
+    // Если y1 == 0, то может быть только точка ниже
+    if(best1 / CALIBRATION_POINTS_X == 0) {
+      //best2 = best1 + (xy_swap? 1 : CALIBRATION_POINTS_X);
+    }
+  }
+  x = best2 % CALIBRATION_POINTS_X;
+  y = best2 / CALIBRATION_POINTS_X;
+  Serial.printf("Best2: %d x=%d y=%d\n", best2, best2 % CALIBRATION_POINTS_X, best2 / CALIBRATION_POINTS_X);
+  x_offset_2 = x * CALIBRATION_QUANT;
+  y_offset_2 = y * CALIBRATION_QUANT;
+
+  // Третье - если касание левее, то точка левее, если правее - то точкой правее
+  if((x_inc_flag && offset_best_x >= 0) || (!x_inc_flag && offset_best_x < 0)) {
+    best3 = best1 + (xy_swap? CALIBRATION_POINTS_X : 1);
+    // Если x1 == макс, то может быть только точка левее
+    if(best1 % CALIBRATION_POINTS_X == CALIBRATION_POINTS_X - 1) {
+      best3 = best1 - (xy_swap? CALIBRATION_POINTS_X : 1);
+    }
+  }
+  else {
+    best3 = best1 - (xy_swap? CALIBRATION_POINTS_X : 1);
+    // Если x1 == 0 то может быть только точка правее
+    if(best1 % CALIBRATION_POINTS_X == 0) {
+      best3 = best1 + (xy_swap? CALIBRATION_POINTS_X : 1);
+    }
+  }
+  x = best3 % CALIBRATION_POINTS_X;
+  y = best3 / CALIBRATION_POINTS_X;
+  Serial.printf("Best3: %d x=%d y=%d\n", best3, best3 % CALIBRATION_POINTS_X, best3 / CALIBRATION_POINTS_X);
+  x_offset_3 = x * CALIBRATION_QUANT;
+  y_offset_3 = y * CALIBRATION_QUANT;
+*/
+  //tft.drawLine(x_offset_1, y_offset_1, x_offset_2, y_offset_2, TFT_BLACK);
+  //tft.drawLine(x_offset_1, y_offset_1, x_offset_3, y_offset_3, TFT_BLACK);
+  //tft.drawLine(x_offset_3, y_offset_3, x_offset_2, y_offset_2, TFT_BLACK);
+
+  // Считаем коэффициенты
+  x_raw_1 = calibration_x[best1];
+  y_raw_1 = calibration_y[best1];
+  x_raw_2 = calibration_x[best2];
+  y_raw_2 = calibration_y[best2];
+  x_raw_3 = calibration_x[best3];
+  y_raw_3 = calibration_y[best3];
+
+  // Вычисление коэффициентов ax, bx, cx, ay, by, cy методом Крамера
+  // d - определитель матрицы
+  d = det3(
+    x_raw_1, y_raw_1, 1,
+    x_raw_2, y_raw_2, 1,
+    x_raw_3, y_raw_3, 1
+  );
+  //Serial.printf("d: %g\n", d); delay(100);
+
+  ax = det3(
+    x_offset_1, y_raw_1, 1,
+    x_offset_2, y_raw_2, 1,
+    x_offset_3, y_raw_3, 1
+  ) / d;
+  bx = det3(
+    x_raw_1, x_offset_1, 1,
+    x_raw_2, x_offset_2, 1,
+    x_raw_3, x_offset_3, 1
+  ) / d;
+  cx = det3(
+    x_raw_1, y_raw_1, x_offset_1,
+    x_raw_2, y_raw_2, x_offset_2,
+    x_raw_3, y_raw_3, x_offset_3
+  ) / d;
+
+  ay = det3(
+    y_offset_1, y_raw_1, 1,
+    y_offset_2, y_raw_2, 1,
+    y_offset_3, y_raw_3, 1
+  ) / d;
+  by = det3(
+    x_raw_1, y_offset_1, 1,
+    x_raw_2, y_offset_2, 1,
+    x_raw_3, y_offset_3, 1
+  ) / d;
+  cy = det3(
+    x_raw_1, y_raw_1, y_offset_1,
+    x_raw_2, y_raw_2, y_offset_2,
+    x_raw_3, y_raw_3, y_offset_3
+  ) / d;
+
+  //Serial.printf("ax: %g, bx: %g, cx %g\n", ax, bx, cx); delay(100);
+  //Serial.printf("ay: %g, by: %g, cy %g\n", ay, by, cy); delay(100);
+
+  *out_x = ax * x_raw + bx * y_raw + cx;
+  *out_y = ay * x_raw + by * y_raw + cy;
+  
+  if(*out_x < 0) *out_x = 0;
+  if(*out_x >= tft.width()) *out_x = tft.width() - 1;
+
+  if(*out_y < 0) *out_y = 0;
+  if(*out_y >= tft.height()) *out_y = tft.height() - 1;
+
+  //tft.drawLine(x_offset_1, y_offset_1, *out_x, *out_y, TFT_BLACK);
+  //tft.drawLine(x_offset_2, y_offset_2, *out_x, *out_y, TFT_BLACK);
+  //tft.drawLine(x_offset_3, y_offset_3, *out_x, *out_y, TFT_BLACK);
 }
 
 int touchMapX(int x_raw, int y_raw) {
@@ -26570,7 +26786,7 @@ int touchMapY(int x_raw, int y_raw) {
 }
 
 char touchIsMenuAction() {
-  if(global_touch_present_flag && global_touch_y < 16 && global_touch_x >= tft.width() - 16 && global_menu_visible_flag == 0) {
+  if(app_title_enabled && global_touch_present_flag && global_touch_y < 16 && global_touch_x >= tft.width() - 16 && global_menu_visible_flag == 0) {
     show_system_menu();
     return 1;
   }
@@ -26635,25 +26851,29 @@ void touchExitActionReset() {
 void touchWaitPress() {
   long boot_low_begin;
   //Serial.println("touchWaitPress begin");
-  while(!touchPollTouchStatus()) {
-    drawAppTitleRight();
-    global_exit_flag_touch_begin = 0;
-    if(global_exit_flag) return;
-    if(digitalRead(BOOT_BUTTON_PIN) == LOW) {
-      // Защита от помех
-      boot_low_begin = millis();
-      while(digitalRead(BOOT_BUTTON_PIN) == LOW);
-      if(Storage && millis() - boot_low_begin > 100) {
-        saveScreenshot();
+  while(1) {
+    while(!touchPollTouchStatus()) {
+      drawAppTitleRight();
+      global_exit_flag_touch_begin = 0;
+      if(global_exit_flag) return;
+      if(digitalRead(BOOT_BUTTON_PIN) == LOW) {
+        // Защита от помех
+        boot_low_begin = millis();
+        while(digitalRead(BOOT_BUTTON_PIN) == LOW);
+        if(Storage && millis() - boot_low_begin > 100) {
+          saveScreenshot();
+        }
       }
     }
-  }
-  global_touch_begin = millis();
-  delay(20);
+    delay(20);
+    if(touchPollTouchStatus()) {
+      break;
+    }
+  }  
   //global_touch_p = touchscreen.getTouch();
-  global_touch_x = touchMapX(global_touch_p.xRaw, global_touch_p.yRaw);
-  global_touch_y = touchMapY(global_touch_p.xRaw, global_touch_p.yRaw);
-  global_touch_present_flag = 1;
+  //global_touch_x = touchMapX(global_touch_p.xRaw, global_touch_p.yRaw);
+  //global_touch_y = touchMapY(global_touch_p.xRaw, global_touch_p.yRaw);
+  //global_touch_present_flag = 1;
 
   //Serial.println("touchWaitPress end");
 }
@@ -26709,21 +26929,34 @@ int delayOrTouchWait(long milliseconds) {
 #define TOUCH_SMOOTH_POINTS 10
 
 char touchPollTouchStatus() {
+  int touch_x, touch_y;
+
   global_touch_p = touchscreen.getTouch();
   if(digitalRead(XPT2046_IRQ) == LOW) {
     //Serial.printf("xRaw = %d yRaw = %d zRaw = %d IRQ = %d\n", global_touch_p.xRaw, global_touch_p.yRaw, global_touch_p.zRaw, digitalRead(XPT2046_IRQ) == HIGH ? 1 : 0);
     if(global_touch_p.zRaw > 0) {
       // Запоминаем начало касания
       if(!global_touch_present_flag) {
+        global_touch_length = 0;
         global_touch_present_flag = 1;
         global_touch_begin = millis();
         global_touch_x = touchMapX(global_touch_p.xRaw, global_touch_p.yRaw);
         global_touch_y = touchMapY(global_touch_p.xRaw, global_touch_p.yRaw);
+        if(calibration_multipoint) {
+          touchMapXY_multipoint(global_touch_p.xRaw, global_touch_p.yRaw, &global_touch_x, &global_touch_y);
+        }
       }
       else {
         // Небольшое сглаживание от дребезга
-        global_touch_x = (touchMapX(global_touch_p.xRaw, global_touch_p.yRaw) + (TOUCH_SMOOTH_POINTS - 1) * global_touch_x) / TOUCH_SMOOTH_POINTS;
-        global_touch_y = (touchMapY(global_touch_p.xRaw, global_touch_p.yRaw) + (TOUCH_SMOOTH_POINTS - 1) * global_touch_y) / TOUCH_SMOOTH_POINTS;
+        if(calibration_multipoint) {
+          touchMapXY_multipoint(global_touch_p.xRaw, global_touch_p.yRaw, &touch_x, &touch_y);
+          global_touch_x = (touchMapX(global_touch_p.xRaw, global_touch_p.yRaw) + (TOUCH_SMOOTH_POINTS - 1) * touch_x) / TOUCH_SMOOTH_POINTS;
+          global_touch_y = (touchMapY(global_touch_p.xRaw, global_touch_p.yRaw) + (TOUCH_SMOOTH_POINTS - 1) * touch_y) / TOUCH_SMOOTH_POINTS;
+        }
+        else {
+          global_touch_x = (touchMapX(global_touch_p.xRaw, global_touch_p.yRaw) + (TOUCH_SMOOTH_POINTS - 1) * global_touch_x) / TOUCH_SMOOTH_POINTS;
+          global_touch_y = (touchMapY(global_touch_p.xRaw, global_touch_p.yRaw) + (TOUCH_SMOOTH_POINTS - 1) * global_touch_y) / TOUCH_SMOOTH_POINTS;
+        }
       }
       //Serial.printf("x = %d, y = %d\n", global_touch_x, global_touch_y);
       global_touch_length = millis() - global_touch_begin;
@@ -26731,10 +26964,11 @@ char touchPollTouchStatus() {
       return 1;
     }
   }
-  if(global_touch_present_flag) {
-    global_touch_present_flag = 0;
+  else {
+    if(global_touch_present_flag) {
+      global_touch_present_flag = 0;
+    }
   }
-  global_touch_length = 0;
   return 0;
 }
 
@@ -28579,6 +28813,7 @@ void setup() {
   }
 
   if(calibration_required) {
+    //touch_calibration_multipoint(APP_MODE_LAUNCH, NULL);
     touch_calibration(APP_MODE_LAUNCH, NULL);
   }
 
@@ -28725,15 +28960,8 @@ void setup() {
 
   Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
-  /*
-  int day, month;
-  double sunrise, sunset;
-  for(month = 1; month <= 12; month++) {
-    for(day = 1; day <= 30; day++) {
-      get_sunrise_sunset(month, day, global_lat, global_lon, &sunrise, &sunset);
-    }
-  }
-  */
+  // Загружаем многоточечную калибровку если есть
+  touch_calibration_load_multipoint();
 }
 
 void loop() {
