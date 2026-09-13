@@ -1,0 +1,11 @@
+irc.386.su
+host=irc.386.su
+port=6688
+pass=
+nick=
+ident=
+realname=
+join=#usue
+ssl=0
+utf8_decode=1
+---
