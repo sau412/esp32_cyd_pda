@@ -1,0 +1,11 @@
+irc.libera.chat
+host=irc.libera.chat
+port=6667
+pass=
+nick=
+ident=
+realname=
+join=
+ssl=0
+utf8_decode=1
+---
