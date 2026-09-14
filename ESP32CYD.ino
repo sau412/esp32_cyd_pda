@@ -97,6 +97,7 @@
 - Генератор сигналов
 - Wikipedia
 - Сокобан
+- Сапёр
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -267,11 +268,15 @@
   настройка NTP не зависит от Wi-Fi, название настроек будильника, редактирование в памяти, редактирование шифрованного без расшифровки,
   basic сообщения об ошибках синтаксиса, мировое время
 2026-09-11 Восход и закат, восход и закат в погоде, восход и закат в календаре, супер-калибровка
+2026-09-12 Другой значок музыки (нотка)
+2026-09-13 Баг со стиранием звёздочек при вводе пароля, примеры файлов на гитхаб
+2026-09-14 Баг со слишком длинной строкой в заметках, выбор вида калибровки, сапёр, ещё пимеры на гитхаб,
+  сохранять счётчик в приложении counter, sun и moon в терминале, баг в часом в stopwatch
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
+- (б) Баг про 47 секунд в чате
 - (б) Баг с копированием/перемещением файлов (сходу не воспроизвелось)
 - (д) Приложение поиск
-- (д) Крутая калибровка
 - (д) Ланучер-список
 - (д) Лаунчер с более крупными значками
 - (д) Выбор вида лаунчера
@@ -965,7 +970,6 @@ void ble(char mode, char *io_buff);
 void screen_test(char mode, char *io_buff);
 void screensaver(char mode, char *io_buff);
 void touch_calibration(char mode, char *io_buff);
-void touch_calibration_multipoint(char mode, char *io_buff);
 void fifteen(char mode, char *io_buff);
 void security(char mode, char *io_buff);
 void counter(char mode, char *io_buff);
@@ -1019,6 +1023,7 @@ void flashcards(char mode, char *io_buff);
 void oscilloscope(char mode, char *io_buff);
 void select_storage_app(char mode, char *io_buff);
 void game2048(char mode, char *io_buff);
+void minesweeper(char mode, char *io_buff);
 void chip8(char mode, char *io_buff);
 void clock_control(char mode, char *io_buff);
 void translate(char mode, char *io_buff);
@@ -1088,7 +1093,7 @@ function_application_pointer all_apps[] = {
   //security,
   //brightness_app,
   //touch_calibration,
-  touch_calibration_multipoint,
+  //touch_calibration_multipoint,
   oscilloscope,
   voltmeter,
   generator,
@@ -1108,6 +1113,7 @@ function_application_pointer all_apps[] = {
   n_back,
   mental_math,
   game2048,
+  minesweeper,
   chip8,
   //color_settings,
   //screen_settings,
@@ -2539,6 +2545,25 @@ void terminal_execute_single(char *str) {
       terminal_println(buff);
     }
   }
+  else if(strcmp(cmdline_params[0], "sun") == 0) {
+    double sunrise, solar_noon, sunset;
+
+    get_sunrise_sunset(global_month, global_day, global_lat, global_lon, &sunrise, &solar_noon, &sunset);
+    sunrise += global_timezone / 60;
+    solar_noon += global_timezone / 60;
+    sunset += global_timezone / 60;
+
+    sprintf(buff, "Sunrise: %d:%02d", ((int)sunrise) / 60, ((int)sunrise) % 60);
+    terminal_println(buff);
+    sprintf(buff, "Solar noon: %d:%02d", ((int)solar_noon) / 60, ((int)solar_noon) % 60);
+    terminal_println(buff);
+    sprintf(buff, "Sunset: %d:%02d", ((int)sunset) / 60, ((int)sunset) % 60);
+    terminal_println(buff);
+  }
+  else if(strcmp(cmdline_params[0], "moon") == 0) {
+    sprintf(buff, "Moon day: %d", global_moon_day);
+    terminal_println(buff);
+  }
   else if(strcmp(cmdline_params[0], "history") == 0) {
     terminal_tail("/Terminal/History");
   }
@@ -3508,6 +3533,9 @@ void terminal_execute_single(char *str) {
     }
     else if(strcmp(cmdline_params[1], "touch_calibration") == 0) {
       touch_calibration(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "touch_calibration_3point") == 0) {
+      touch_calibration_3point(APP_MODE_LAUNCH, NULL);
     }
     else if(strcmp(cmdline_params[1], "touch_calibration_multipoint") == 0) {
       touch_calibration_multipoint(APP_MODE_LAUNCH, NULL);
@@ -6779,7 +6807,7 @@ void notes_action(int action_index, char *filename) {
 }
 
 int notes_file_to_list(fs::File file, char *buff) {
-  stream_get_line_by_index(file, 0, buff);
+  stream_get_line_by_index(file, 0, buff, 80);
   return 1;
 }
 
@@ -7109,7 +7137,7 @@ void flashcards_learn() {
   fs::File file;
   fs::File current_dir;
   char filename[80];
-  char buff[80];
+  char buff[240];
   char *tmp;
   int offset, i, j;
 
@@ -7146,7 +7174,7 @@ void flashcards_learn() {
     for(i = 0; i < offset; i++) {
       // Показываем
       sprintf(filename, "%s/%s", FLASHCARDS_PATH, cards[i]);
-      file_get_line_by_index(filename, 0, buff);
+      file_get_line_by_index(filename, 0, buff, 240);
       tft.fillRect(0, 16, tft.width(), (tft.height() - 16) / 2, color_scheme_bg);
       tft.drawRect(
         FLASHCARDS_SCREEN_OFFSET,
@@ -7161,7 +7189,7 @@ void flashcards_learn() {
 
       touchWaitPress();
 
-      file_get_line_by_index(filename, 1, buff);
+      file_get_line_by_index(filename, 1, buff, 240);
       tft.fillRect(0, (tft.height() - 16) / 2 + 16, tft.width(), (tft.height() - 16) / 2, color_scheme_bg);
       tft.drawRect(
         FLASHCARDS_SCREEN_OFFSET,
@@ -7185,7 +7213,7 @@ void flashcards_learn() {
 }
 
 int flashcards_file_to_list(fs::File file, char *buff) {
-  stream_get_line_by_index(file, 0, buff);
+  stream_get_line_by_index(file, 0, buff, 80);
   return 1;
 }
 
@@ -7286,7 +7314,7 @@ void tunes_action(int action_index, char *filename) {
 }
 
 int tunes_file_to_list(fs::File file, char *buff) {
-  stream_get_line_by_index(file, 0, buff);
+  stream_get_line_by_index(file, 0, buff, 80);
   return 1;
 }
 
@@ -7820,7 +7848,7 @@ void webradio_action(int action_index, char *filename) {
 }
 
 int webradio_file_to_list(fs::File file, char *buff) {
-  stream_get_line_by_index(file, 0, buff);
+  stream_get_line_by_index(file, 0, buff, 80);
   return 1;
 }
 
@@ -7831,7 +7859,7 @@ void webradio_play_task(void *pvParameters) {
 }
 
 void webradio_play(char *filename) {
-  char url[80];
+  char url[240];
   AudioGeneratorMP3 *mp3;
   AudioFileSourceICYStream *file;
   AudioOutputI2SNoDAC *out;
@@ -7841,7 +7869,7 @@ void webradio_play(char *filename) {
   if(xPortGetCoreID() != 0) {
     drawProcessWindow("Connecting...");
   }
-  file_get_line_by_index(filename, 1, url);
+  file_get_line_by_index(filename, 1, url, 240);
   Serial.println(url);
   file = new AudioFileSourceICYStream(url);
   buff = new AudioFileSourceBuffer(file, 2048);
@@ -8734,6 +8762,10 @@ void passwords(char mode, char *io_buff) {
 
   buff[0] = 0;
   if(drawPrompt("Enter password:", buff) == 0) {
+    if(strcmp(buff, "") == 0) {
+      drawError("Password cannot be empty");
+      return;
+    }
     // Пароль - первые 16 символов, дополненные нулями 
     memset(aes_encryption_key, 0, 32);
     for(i = 0; i < 32; i++) {
@@ -8800,7 +8832,7 @@ void totp_action(int action_index, char *filename) {
 }
 
 int totp_file_to_list(fs::File file, char *buff) {
-  stream_get_line_by_index(file, 0, buff);
+  stream_get_line_by_index(file, 0, buff, 80);
   return 1;
 }
 
@@ -8822,9 +8854,9 @@ void totp_show(char *filename) {
   }
   file = Storage->open(filename);
   if(file) {
-    stream_get_line_by_index(file, 0, name);
-    stream_get_line_by_index(file, 0, key);
-    stream_get_line_by_index(file, 0, other);
+    stream_get_line_by_index(file, 0, name, 80);
+    stream_get_line_by_index(file, 0, key, 80);
+    stream_get_line_by_index(file, 0, other, 80);
     file.close();
 
     drawPopupWindow(name, other, buttons);
@@ -8980,8 +9012,8 @@ void contacts_action(int action_index, char *filename) {
 int contacts_file_to_list(fs::File file, char *buff) {
   char left[80];
   char right[80];
-  stream_get_line_by_index(file, 0, left);
-  stream_get_line_by_index(file, 0, right);
+  stream_get_line_by_index(file, 0, left, 80);
+  stream_get_line_by_index(file, 0, right, 80);
   sprintf(buff, "%s\t%s", left, right);
   return 1;
 }
@@ -9101,8 +9133,8 @@ int todo_file_to_list(fs::File file, char *buff) {
   if(file.name()[0] == '1') {
     check = 1;
   }
-  stream_get_line_by_index(file, 0, left);
-  stream_get_line_by_index(file, 0, right);
+  stream_get_line_by_index(file, 0, left, 80);
+  stream_get_line_by_index(file, 0, right, 80);
   sprintf(buff, "[%c] %s\t%s", check ? 'X' : ' ', left, strlen(right) > 0 ? "+" : "");
   return 1;
 }
@@ -9207,11 +9239,11 @@ int expenses_file_to_list(fs::File file, char *buff) {
   float item;
   float summ = 0;
   // Левая колонка - первая непустая строчка файла (название категории)
-  stream_get_line_by_index(file, 0, left);
+  stream_get_line_by_index(file, 0, left, 80);
 
   // Суммируем последующие строки
   while(file.available()) {
-    stream_get_line_by_index(file, 0, right);
+    stream_get_line_by_index(file, 0, right, 80);
     item = 0;
     sscanf(right, "%f", &item);
     if(item) {
@@ -9997,14 +10029,12 @@ void pim_rename_file(char *path, char *old_filename, char *prefix) {
     if(byte == '\n' || byte == '\r') break;
   }
   file.close();
-  cp1251_to_translit(new_filename, new_filename);
 
+  cp1251_to_translit(new_filename, new_filename);
   // Проверяем что такого названия нет
   if(strcmp("", new_filename) != 0) {
     sprintf(new_path_filename, "%s/%s%s", path, prefix ? prefix : "", new_filename);
-    file = Storage->open(new_path_filename);
-    if(file) {
-      file.close();
+    if(Storage->exists(new_path_filename)) {
       strcpy(new_filename, "");
     }
   }
@@ -10523,7 +10553,7 @@ void security(char mode, char *io_buff) {
 
 void counter(char mode, char *io_buff) {
   int button_pressed;
-  long counter = 0;
+  static long counter = 0;
   int prev_touch_millis = 0;
   char buff[80] = "";
   float bpm = 0;
@@ -11267,7 +11297,7 @@ void stopwatch(char mode, char *io_buff) {
       millis_prev = millis_value;
     }
     sprintf(buff, "%02d:%02d:%02d.%02d",
-        millis_from_start / 36000000,
+        millis_from_start / 3600000,
         (millis_from_start / 60000) % 60,
         (millis_from_start / 1000) % 60,
         (millis_from_start / 10) % 100);
@@ -11311,7 +11341,7 @@ void stopwatch(char mode, char *io_buff) {
         if(stopwatch_run && current_lap < 99) {
           beep_morse_if_enabled("L");
           sprintf(buff, "%02d:%02d:%02d.%02d",
-            millis_from_lap / 36000000,
+            millis_from_lap / 3600000,
             (millis_from_lap / 60000) % 60,
             (millis_from_lap / 1000) % 60,
             (millis_from_lap / 10) % 100);
@@ -15863,7 +15893,7 @@ void rss_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
   char name[80];
-  char url[80];
+  char url[240];
   char *data;
   char name_line_flag;
   char byte;
@@ -15900,8 +15930,8 @@ Serial.printf("%d\n", __LINE__);
     // Получить ссылку
     sprintf(buff, "%s/%s", RSS_PATH, filename);
 //Serial.printf("%d\n", __LINE__);
-    file_get_line_by_index(buff, 0, name);
-    file_get_line_by_index(buff, 1, url);
+    file_get_line_by_index(buff, 0, name, 80);
+    file_get_line_by_index(buff, 1, url, 240);
 //Serial.printf("%d\n", __LINE__);
 
     rss_view_source(name, url);
@@ -16243,7 +16273,7 @@ Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
 }
 
 int rss_file_to_list(fs::File file, char *buff) {
-  stream_get_line_by_index(file, 0, buff);
+  stream_get_line_by_index(file, 0, buff, 80);
   return 1;
 }
 
@@ -17021,7 +17051,7 @@ int irc_input_char() {
 }
 
 int irc_file_to_list(fs::File file, char *buff) {
-  stream_get_line_by_index(file, 0, buff);
+  stream_get_line_by_index(file, 0, buff, 80);
   return 1;
 }
 
@@ -22455,6 +22485,83 @@ void touch_calibration_multipoint(char mode, char *io_buff) {
 
 void touch_calibration(char mode, char *io_buff) {
   char buff[80];
+  int button_pressed;
+  char message[] =
+    "There are two types of calibration:\n\n"
+    "Three-point calibration is faster, but less accurate. Used by default. Suits if touch works well.\n\n"
+    "Multipoint calibration requires 63 points, and can solve problem with glithy touch-screens (dead zones, nonlinears, etc.).";
+  char *buttons[] = {
+    "Three-point calibration",
+    "Multipoint calibration",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00111010,
+    B01000000, B01110010,
+    B01000000, B11100010,
+    B01000001, B11000010,
+    B01000011, B10000010,
+    B01000111, B00000010,
+    B01010100, B00000010,
+    B01001000, B00000010,
+    B01010100, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Calibration");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Clbr");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Calibration");
+
+  while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    draw_text_formatted(message, 1, 20, tft.width() - 2, 13, FONT_DEFAULT, 1);
+
+    drawButtonMatrix(0, tft.height() - 32 * 2, tft.width(), 32 * 2, buttons, 1, 2);
+
+    touchWaitPress();
+
+    button_pressed = touchCheckMatrix(0, tft.height() - 32 * 2, tft.width(), 32 * 2, buttons, 1, 2);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        touch_calibration_3point(APP_MODE_LAUNCH, NULL);
+      }
+      if(button_pressed == 1) {
+        touch_calibration_multipoint(APP_MODE_LAUNCH, NULL);
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void touch_calibration_3point(char mode, char *io_buff) {
+  char buff[80];
   TouchPoint p;
   long x_raw_1, x_raw_2, x_raw_3;
   long y_raw_1, y_raw_2, y_raw_3;
@@ -23473,6 +23580,8 @@ void fifteen(char mode, char *io_buff) {
       if(buttons_won[i] != buttons[i]) won_flag = 0;
     }
     if(won_flag) {
+      fifteen_show_tiles(64, buttons);
+      delay(100);
       beep_morse_if_enabled("W");
       drawInfo("You won!");
       tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
@@ -24173,7 +24282,6 @@ void mental_math(char mode, char *io_buff) {
   char buff[80];
   char empty[] = "";
   char *tmp = NULL;
-  char tap[] = "*tap*";
   char user_ans[80];
   char *buttons[] = {
     "7", "8", "9",
@@ -25227,6 +25335,435 @@ void lights_off_show_tiles(int offset_y, char **tiles) {
   }
 }
 
+#define MINESWEEPER_TILE_SIZE 16
+#define MINESWEEPER_FIELD_SIZE_X (240 / MINESWEEPER_TILE_SIZE)
+#define MINESWEEPER_FIELD_SIZE_Y (272 / MINESWEEPER_TILE_SIZE)
+#define MINESWEEPER_FIELD_TOTAL (MINESWEEPER_FIELD_SIZE_X * MINESWEEPER_FIELD_SIZE_Y)
+#define MINESWEEPER_MINES_TOTAL (40)
+
+void minesweeper(char mode, char *io_buff) {
+  char field[MINESWEEPER_FIELD_TOTAL];
+  int button_pressed;
+  int mines_count_current;
+  int mines_count_total;
+  int i;
+  int x, y;
+  int touch_x, touch_y;
+  long start_millis = 0;
+  char won_flag = 0;
+  char lose_flag = 0;
+  char restart_flag = 0;
+  char init_field_flag = 0;
+  char empty_tiles_flag = 0;
+  char flag_flag = 0;
+  char buff[80];
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01001001, B10010010,
+    B01011101, B10111010,
+    B01001111, B11110010,
+    B01000111, B11100010,
+    B01011111, B11111010,
+    B01011111, B11111010,
+    B01000111, B11100010,
+    B01001111, B11110010,
+    B01011101, B10111010,
+    B01001001, B10010010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Minesweeper");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "MnSw");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Minesweeper");
+
+  restart_flag = 1;
+  init_field_flag = 1;
+
+  while(1) {
+    if(restart_flag) {
+      lose_flag = 0;
+      won_flag = 0;
+      start_millis = millis();
+    }
+
+    if(init_field_flag) {
+      // Обнуляем поле
+      mines_count_total = 40;
+      for(i = 0; i < MINESWEEPER_FIELD_TOTAL; i++) {
+        field[i] = 0;
+      }
+      minesweeper_draw_field(field, 0);
+      init_field_flag = 0;
+    }
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "Mines: %d    ", mines_count_total);
+    tft.drawString(buff, 8, 20, FONT_DEFAULT);
+    
+    sprintf(buff, "Time: %d    ", (millis() - start_millis) / 1000);
+    tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
+
+    if(touchCheckNowait() == 0) {
+      continue;
+    }
+
+    // Ждём нажатий
+    //touchWaitPress();
+    if(global_touch_present_flag == 1 && global_touch_y >= 48) {
+      x = global_touch_x / MINESWEEPER_TILE_SIZE;
+      y = (global_touch_y - 48) / MINESWEEPER_TILE_SIZE;
+
+      if(restart_flag) {
+        field[x + y * MINESWEEPER_FIELD_SIZE_X] = '0';
+
+        // Ставим нужное количество мин
+        mines_count_total = 0;
+        for(i = 0; i < MINESWEEPER_MINES_TOTAL; i++) {
+          do {
+            x = random(0, MINESWEEPER_FIELD_SIZE_X);
+            y = random(0, MINESWEEPER_FIELD_SIZE_Y);
+          } while(field[x + y * MINESWEEPER_FIELD_SIZE_X] != 0);
+          field[x + y * MINESWEEPER_FIELD_SIZE_X] = 'm';
+          mines_count_total++;
+        }
+        restart_flag = 0;
+
+        x = global_touch_x / MINESWEEPER_TILE_SIZE;
+        y = (global_touch_y - 48) / MINESWEEPER_TILE_SIZE;
+        field[x + y * MINESWEEPER_FIELD_SIZE_X] = 0;
+      }
+
+      flag_flag = 0; 
+      while(touchCheckNowait()) {
+        if(global_touch_length > 500) {
+          flag_flag = 1;
+          break;
+        }
+      }
+
+      if(minesweeper_get_cell(x, y, field) == 'm') {
+        if(flag_flag == 0) {
+          field[x + y * MINESWEEPER_FIELD_SIZE_X] = 'M';
+          Serial.printf("Mine!\n");
+          lose_flag = 1;
+        }
+        else {
+          field[x + y * MINESWEEPER_FIELD_SIZE_X] = 'F';
+          mines_count_total--;
+        }
+      }
+      else if(flag_flag && minesweeper_get_cell(x, y, field) == 0) {
+        field[x + y * MINESWEEPER_FIELD_SIZE_X] = 'f';
+        //minesweeper_draw_field(field, 0);
+        mines_count_total--;
+      }
+      else if(minesweeper_get_cell(x, y, field) == 'F') {
+        if(flag_flag) {
+          field[x + y * MINESWEEPER_FIELD_SIZE_X] = 'm';
+          //minesweeper_draw_field(field, 0);
+          mines_count_total++;
+        }
+      }
+      else if(minesweeper_get_cell(x, y, field) == 'f') {
+        if(flag_flag) {
+          field[x + y * MINESWEEPER_FIELD_SIZE_X] = 0;
+          //minesweeper_draw_field(field, 0);
+          mines_count_total++;
+        }
+      }
+      else {
+        mines_count_current = minesweeper_count_tile(x, y, field);
+ 
+        // Заполняем число мин
+        Serial.printf("Mines count: %d\n", mines_count_current);
+        field[x + y * MINESWEEPER_FIELD_SIZE_X] = '0' + mines_count_current;
+
+        // Если в текущей клетке мин нет, открываем смежные клетки
+        empty_tiles_flag = 0;
+        if(mines_count_current == 0) empty_tiles_flag = 1;
+        while(empty_tiles_flag == 1) {
+          empty_tiles_flag = 0;
+          for(y = 0; y < MINESWEEPER_FIELD_SIZE_Y; y++) {
+            for(x = 0; x < MINESWEEPER_FIELD_SIZE_X; x++) {
+              if(minesweeper_get_cell(x, y, field) == '0') {
+                if(minesweeper_get_cell(x - 1, y - 1, field) == 0) {
+                  Serial.printf("x = %d, y = %d\n", x, y);
+                  field[x - 1 + (y - 1) * MINESWEEPER_FIELD_SIZE_X] = '0' + minesweeper_count_tile(x - 1, y - 1, field);
+                  empty_tiles_flag = 1;
+                }
+                if(minesweeper_get_cell(x - 1, y + 0, field) == 0) {
+                  Serial.printf("x = %d, y = %d\n", x, y);
+                  field[x - 1 + (y + 0) * MINESWEEPER_FIELD_SIZE_X] = '0' + minesweeper_count_tile(x - 1, y + 0, field);
+                  empty_tiles_flag = 1;
+                }
+                if(minesweeper_get_cell(x - 1, y + 1, field) == 0) {
+                  Serial.printf("x = %d, y = %d\n", x, y);
+                  field[x - 1 + (y + 1) * MINESWEEPER_FIELD_SIZE_X] = '0' + minesweeper_count_tile(x - 1, y + 1, field);
+                  empty_tiles_flag = 1;
+                }
+                if(minesweeper_get_cell(x + 0, y - 1, field) == 0) {
+                  Serial.printf("x = %d, y = %d\n", x, y);
+                  field[x + (y - 1) * MINESWEEPER_FIELD_SIZE_X] = '0' + minesweeper_count_tile(x + 0, y - 1, field);
+                  empty_tiles_flag = 1;
+                }
+                if(minesweeper_get_cell(x + 0, y + 1, field) == 0) {
+                  Serial.printf("x = %d, y = %d\n", x, y);
+                  field[x + (y + 1) * MINESWEEPER_FIELD_SIZE_X] = '0' + minesweeper_count_tile(x + 0, y + 1, field);
+                  empty_tiles_flag = 1;
+                }
+                if(minesweeper_get_cell(x + 1, y - 1, field) == 0) {
+                  Serial.printf("x = %d, y = %d\n", x, y);
+                  field[x + 1 + (y - 1) * MINESWEEPER_FIELD_SIZE_X] = '0' + minesweeper_count_tile(x + 1, y - 1, field);
+                  empty_tiles_flag = 1;
+                }
+                if(minesweeper_get_cell(x + 1, y + 0, field) == 0) {
+                  Serial.printf("x = %d, y = %d\n", x, y);
+                  field[x + 1 + (y + 0) * MINESWEEPER_FIELD_SIZE_X] = '0' + minesweeper_count_tile(x + 1, y + 0, field);
+                  empty_tiles_flag = 1;
+                }
+                if(minesweeper_get_cell(x + 1, y + 1, field) == 0) {
+                  Serial.printf("x = %d, y = %d\n", x, y);
+                  field[x + 1 + (y + 1) * MINESWEEPER_FIELD_SIZE_X] = '0' + minesweeper_count_tile(x + 1, y + 1, field);
+                  empty_tiles_flag = 1;
+                }
+              }
+            }
+          }
+        } // while(empty_tiles_flag == 1)
+
+      }
+    }
+
+    if(lose_flag) {
+      minesweeper_draw_field(field, 1);
+      delay(100);
+      drawInfo("You lose");
+      clearPopupWindow();
+      restart_flag = 1;
+      init_field_flag = 1;
+      continue;
+    }
+
+    won_flag = 1;
+    for(y = 0; y < MINESWEEPER_FIELD_SIZE_Y; y++) {
+      for(x = 0; x < MINESWEEPER_FIELD_SIZE_X; x++) {
+        if(minesweeper_get_cell(x, y, field) == 0) won_flag = 0;
+        if(minesweeper_get_cell(x, y, field) == 'f') won_flag = 0;
+      }
+    }
+    if(won_flag) {
+      minesweeper_draw_field(field, 1);
+      sprintf(buff, "You won in %d seconds!", (millis() - start_millis) / 1000);
+      delay(100);
+      drawInfo(buff);
+      clearPopupWindow();
+      restart_flag = 1;
+      init_field_flag = 1;
+      continue;
+    }
+
+    // Показываем поле
+    minesweeper_draw_field(field, 0);
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+int minesweeper_count_tile(int x, int y, char *field) {
+  int mines_count_current = 0;
+  char t;
+
+  if(x < 0) return 0;
+  if(y < 0) return 0;
+  if(x >= MINESWEEPER_FIELD_SIZE_X) return 0;
+  if(y >= MINESWEEPER_FIELD_SIZE_Y) return 0;
+
+  t = minesweeper_get_cell(x - 1, y - 1, field);
+  if(t == 'm' || t == 'F') mines_count_current++;
+  t = minesweeper_get_cell(x - 1, y + 0, field);
+  if(t == 'm' || t == 'F') mines_count_current++;
+  t = minesweeper_get_cell(x - 1, y + 1, field);
+  if(t == 'm' || t == 'F') mines_count_current++;
+
+  t = minesweeper_get_cell(x + 0, y - 1, field);
+  if(t == 'm' || t == 'F') mines_count_current++;
+  t = minesweeper_get_cell(x + 0, y + 1, field);
+  if(t == 'm' || t == 'F') mines_count_current++;
+  
+  t = minesweeper_get_cell(x + 1, y - 1, field);
+  if(t == 'm' || t == 'F') mines_count_current++;
+  t = minesweeper_get_cell(x + 1, y + 0, field);
+  if(t == 'm' || t == 'F') mines_count_current++;
+  t = minesweeper_get_cell(x + 1, y + 1, field);
+  if(t == 'm' || t == 'F') mines_count_current++;
+
+  return mines_count_current;
+}
+
+char minesweeper_get_cell(int x, int y, char *field) {
+  if(x < 0) return -1;
+  if(y < 0) return -1;
+  if(x >= MINESWEEPER_FIELD_SIZE_X) return -1;
+  if(y >= MINESWEEPER_FIELD_SIZE_Y) return -1;
+  return field[x + y * MINESWEEPER_FIELD_SIZE_X];
+}
+
+void minesweeper_draw_field(char *field, char draw_mines_flag) {
+  int fg, bg;
+  int text_fg;
+  char icon_closed[] = {
+    16, 16,
+    B11111111, B11111111,
+    B10000000, B00000001,
+    B10000000, B00000011,
+    B10000000, B00000011,
+    B10000000, B00000011,
+    B10000000, B00000011,
+    B10000000, B00000011,
+    B10000000, B00000011,
+    B10000000, B00000011,
+    B10000000, B00000011,
+    B10000000, B00000011,
+    B10000000, B00000011,
+    B10000000, B00000011,
+    B10000000, B00000011,
+    B10111111, B11111111,
+    B11111111, B11111111,
+  };
+  char icon_empty[] = {
+    16, 16,
+    B10101010, B10101010,
+    B00000000, B00000001,
+    B10000000, B00000000,
+    B00000000, B00000001,
+    B10000000, B00000000,
+    B00000000, B00000001,
+    B10000000, B00000000,
+    B00000000, B00000001,
+    B10000000, B00000000,
+    B00000000, B00000001,
+    B10000000, B00000000,
+    B00000000, B00000001,
+    B10000000, B00000000,
+    B00000000, B00000001,
+    B10000000, B00000000,
+    B01010101, B01010101,
+  };
+  char icon_mine[] = {
+    16, 16,
+    B10101010, B10101010,
+    B00000000, B00000001,
+    B10000000, B00000000,
+    B00001001, B10010001,
+    B10011101, B10111000,
+    B00001111, B11110001,
+    B10000111, B11100000,
+    B00011111, B11111001,
+    B10011111, B11111000,
+    B00000111, B11100001,
+    B10001111, B11110000,
+    B00011101, B10111001,
+    B10001001, B10010000,
+    B00000000, B00000001,
+    B10000000, B00000000,
+    B01010101, B01010101
+  };
+  char icon_flag[] = {
+    16, 16,
+    B11111111, B11111111,
+    B10000000, B00000001,
+    B10000001, B10000011,
+    B10000111, B10000011,
+    B10011111, B10000011,
+    B10000111, B10000011,
+    B10000001, B10000011,
+    B10000000, B10000011,
+    B10000000, B10000011,
+    B10000000, B10000011,
+    B10000000, B10000011,
+    B10000000, B10000011,
+    B10000111, B11110011,
+    B10000000, B00000011,
+    B10111111, B11111111,
+    B11111111, B11111111,
+  };
+  char icon_flag_miss[] = {
+    16, 16,
+    B10101010, B10101010,
+    B00000000, B00000001,
+    B10100000, B00000100,
+    B00010000, B00001001,
+    B10001000, B00010000,
+    B00000100, B00100001,
+    B10000010, B01000000,
+    B00000001, B10000001,
+    B10000001, B10000000,
+    B00000010, B01000001,
+    B10000100, B00100000,
+    B00001000, B00010001,
+    B10010000, B00001000,
+    B00100000, B00000101,
+    B10000000, B00000000,
+    B01010101, B01010101,
+  };
+  char *icon = NULL;
+  int x, y;
+  char buff[10];
+  for(y = 0; y < MINESWEEPER_FIELD_SIZE_Y; y++) {
+    for(x = 0; x < MINESWEEPER_FIELD_SIZE_X; x++) {
+      text_fg = color_scheme_fg;
+      fg = color_scheme_fg;
+      bg = color_scheme_bg;
+      switch(field[x + y * MINESWEEPER_FIELD_SIZE_X]) {
+        // Если draw_mines_flag, то выполяются оба case
+        case 'm': strcpy(buff, ""); icon = icon_mine; if(draw_mines_flag) break;
+        default: strcpy(buff, ""); icon = icon_closed; bg = TFT_LIGHTGREY; break;
+        // Если draw_mines_flag, то выполяются оба case
+        case 'f': strcpy(buff, ""); icon = icon_flag_miss; if(draw_mines_flag) break;
+        case 'F': strcpy(buff, ""); icon = icon_flag; bg = TFT_LIGHTGREY; break;
+        // Остальные обрабатываются как обычно
+        case '0': strcpy(buff, ""); icon = icon_empty; break;
+        case '1': strcpy(buff, "1"); icon = icon_empty; text_fg = TFT_BLUE; break;
+        case '2': strcpy(buff, "2"); icon = icon_empty; text_fg = TFT_GREEN; break;
+        case '3': strcpy(buff, "3"); icon = icon_empty; text_fg = TFT_RED; break;
+        case '4': strcpy(buff, "4"); icon = icon_empty; text_fg = TFT_NAVY; break;
+        case '5': strcpy(buff, "5"); icon = icon_empty; text_fg = TFT_MAROON; break;
+        case '6': strcpy(buff, "6"); icon = icon_empty; text_fg = TFT_CYAN; break;
+        case '7': strcpy(buff, "7"); icon = icon_empty; text_fg = TFT_BLACK; break;
+        case '8': strcpy(buff, "8"); icon = icon_empty; text_fg = TFT_DARKGREY; break;
+        case 'M': strcpy(buff, ""); icon = icon_mine; bg = TFT_RED; break;
+      }
+      image_from_bits(x * MINESWEEPER_TILE_SIZE, 48 + y * MINESWEEPER_TILE_SIZE, icon, fg, bg);
+      tft.setTextColor(text_fg, color_scheme_bg);
+      tft.drawCentreString(buff, x * MINESWEEPER_TILE_SIZE + MINESWEEPER_TILE_SIZE / 2, 48 + y * MINESWEEPER_TILE_SIZE + 4, FONT_MONOSPACE);
+    }
+  }
+}
+
 void piano(char mode, char *io_buff) {
   TouchPoint p;
   int touch_x, touch_y;
@@ -25736,17 +26273,17 @@ void drawAppTitleRight() {
     10, 16,
     B00000000, B00000000,
     B00000000, B00000000,
-    B00000001, B10000000,
-    B00000010, B10000000,
-    B00000100, B10000000,
-    B01111000, B10000000,
-    B01001000, B10000000,
-    B01001000, B10000000,
-    B01111000, B10000000,
-    B00000100, B10000000,
-    B00000010, B10000000,
-    B00000001, B10000000,
-    B00000000, B00000000,
+    B00011111, B10000000,
+    B00010000, B10000000,
+    B00011111, B10000000,
+    B00010000, B10000000,
+    B00010000, B10000000,
+    B00010000, B10000000,
+    B00010000, B10000000,
+    B00010000, B10000000,
+    B00110001, B10000000,
+    B01110011, B10000000,
+    B01100011, B00000000,
     B00000000, B00000000,
     B00000000, B00000000,
     B00000000, B00000000
@@ -26140,12 +26677,12 @@ void checkPasswordUntilCorrect(char *correct_password) {
 
   while(1) {
     // Нарисовать звёздочки по числу символов
-    tft.fillRect(0, 16, tft.width(), 60, color_scheme_bg);
+    //tft.fillRect(0, 16, tft.width(), 60, color_scheme_bg);
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.drawString("Owner info:", 8, 20, FONT_DEFAULT);
     draw_text_formatted(owner_info, 8, 36, tft.width() - 2 * 8, 3, FONT_DEFAULT, 1);
-    //tft.drawString(owner_info, 8, 36, FONT_DEFAULT);
 
+    tft.fillRect(0, 36 + 16 * 3, tft.width(), 16, color_scheme_bg);
     for(i = 0; i < strlen(user_input); i++) {
       if(8 + i * tft.textWidth("*", FONT_DEFAULT) < tft.width()) {
         tft.setTextColor(color_scheme_fg, color_scheme_bg);
@@ -27102,7 +27639,7 @@ int write_key_value_to_file(char *filename, char *key, char *value) {
 }
 
 // Получить строку из файла по номеру строки (с нуля)
-int file_get_line_by_index(char *filename, int index, char *buff) {
+int file_get_line_by_index(char *filename, int index, char *buff, int maxlen) {
   fs::File file;
   int result = 0;
 
@@ -27110,14 +27647,14 @@ int file_get_line_by_index(char *filename, int index, char *buff) {
 
   file = Storage->open(filename);
   if(file) {
-    result = stream_get_line_by_index(file, index, buff);
+    result = stream_get_line_by_index(file, index, buff, maxlen);
     file.close();
   }
   return result;
 }
 
 // Получить строку из потока по номеру строки (с нуля)
-int stream_get_line_by_index(fs::File file, int index, char *buff) {
+int stream_get_line_by_index(fs::File file, int index, char *buff, int maxlen) {
   int str_index = 0;
   int byte;
   int buff_offset = 0;
@@ -27136,9 +27673,13 @@ int stream_get_line_by_index(fs::File file, int index, char *buff) {
       buff_offset = 0;
     }
     else {
-      buff[buff_offset] = byte;
-      buff_offset++;
-      buff[buff_offset] = 0;
+      // Добавляем данные в буфер если в нём есть место
+      // А если нет пропускаем байты до конча строки
+      if(buff_offset < maxlen - 1) {
+        buff[buff_offset] = byte;
+        buff_offset++;
+        buff[buff_offset] = 0;
+      }
     }
   }
 
@@ -28814,7 +29355,7 @@ void setup() {
 
   if(calibration_required) {
     //touch_calibration_multipoint(APP_MODE_LAUNCH, NULL);
-    touch_calibration(APP_MODE_LAUNCH, NULL);
+    touch_calibration_3point(APP_MODE_LAUNCH, NULL);
   }
 
   // Тут можно задавать вопросы - сенсор откалиброван
