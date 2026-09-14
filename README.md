@@ -118,6 +118,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * 2048 - see https://en.wikipedia.org/wiki/2048_(video_game) for details
 * CHIP-8 emulator - see https://en.wikipedia.org/wiki/CHIP-8 for details
 * Sokoban - see https://en.wikipedia.org/wiki/Sokoban for details
+* Minesweeper - see https://en.wikipedia.org/wiki/Minesweeper_(video_game) for details
 
 ## Dashboards
 * Clock and Calendar
