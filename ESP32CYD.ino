@@ -271,10 +271,12 @@
 2026-09-12 Другой значок музыки (нотка)
 2026-09-13 Баг со стиранием звёздочек при вводе пароля, примеры файлов на гитхаб
 2026-09-14 Баг со слишком длинной строкой в заметках, выбор вида калибровки, сапёр, ещё пимеры на гитхаб,
-  сохранять счётчик в приложении counter, sun и moon в терминале, баг в часом в stopwatch
+  сохранять счётчик в приложении counter, sun и moon в терминале, баг в часом в stopwatch, пятнашки уровень при победе
+2026-09-15 ГСЧ добавил 1 из 1000 и 1 из 10000, Возможность указать пин для музыки и для бибикания,
+  double вместо float с sscanf, меньше точек для сглаживания, баг в змейке, баг в ланучере с левой колонкой,
+  chat в терминале, bitcoin dashboard
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
-- (б) Баг про 47 секунд в чате
 - (б) Баг с копированием/перемещением файлов (сходу не воспроизвелось)
 - (д) Приложение поиск
 - (д) Ланучер-список
@@ -296,18 +298,30 @@
 - (д) Автоопределение кодировки файла при просмотре
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор, выделять
-
-
+Потом, но можно и не потом:
+- (н) Шахматы (доска)
 - (н) Категории для PIM
+- (н) Терминал операции со строками ESC-кодами
+- (н) Тетрис
+- (н) Дашборд Fun Fact / Random Useless Facts
+- (н) Чат - просмотр с прокруткой
+- (н) Распаковка zip
+- (н) Распаковка gz
+- (н) tar
+- (н) Кодирование-декодирование b32 из терминала
+- (н) Кодирование-декодирование b64 из терминала
+- (н) Шифрование-расшифрование AES в терминале
+- (н) xmodem отправка
+- (н) xmodem приём
+- (д) QR-код
+- (д) Приложение для отображения штрих-кодов: EAN8, EAN13, QR
+
 - (н) Мини-калькулятор
 - (н) Конвертер валют, единиц измерения
-- (н) Терминал операции со строками ESC-кодами
 - (н) /Terminal/Aliases (а что это должно делать?)
-- (н) chat
-- (н) passwd
+- (н) passwd - установка и сброс пароля
 - (н) Генератор сигналов в фоне
 - (н) Таймер в фоне
-- (н) Дашборд криптовалюты
 - (н) Дашборд валюты
 - (н) Дашборд акции
 - (н) Дашборд фотографии
@@ -319,10 +333,8 @@
 - (н) Шахматы (задачи)
 - (н) Шахматы (игра)
 - (н) Бегающий динозавр (как в Chrome)
-- (н) Тетрис
 - (н) Арканоид
 - (н) Судоку
-- (н) Сапёр
 - (н) Убирать значки в лаунчере
 - (н) Соединение через HTTP прокси
 - (н) Вебсервер в фоне
@@ -331,7 +343,7 @@
 - (н) Переделать мп3-плеер в сторону мп3, а не просто пим (мп3 не выдаёт прерываний)
 - (н) Автояркость - нужно определять вход резистора
 - (н) Определять инверсию экрана
-- (н) Флаг автосохранения файла при редактировании и неактивности
+- (н) Автосохранение файла при редактировании в отдельную папку
 - (н) Значок приложения в заголовке (а что когда нет значка?)
 - (н) Возможность выбрать звук для событий
 - (н) ssh - Debug exception reason: BREAK instr
@@ -345,17 +357,14 @@
 - (н) Другое погодное апи или выбор из нескольких
 - (н) В файлах слушать музыку
 - (н) Заставка двойной маятник (сложно)
-- (н) Fun Fact / Random Useless Facts
-- (н) Чат - просмотр с прокруткой
 - (н) Многозадачность в консоли через FreeRTOS
 - (н) Обновление по OTA
 - (н) CHIP-8 ускорение работы вывода спрайта
 - (н) CHIP-8 рисовать только изменённые части экрана
 - (н) Информация по валютам и криптовалютам (курсы)
 - (н) Информация по криптовалютам (блокчейн) - последний блок, время с последнего блока, транзакции в mempool
-- (н) управление через веб
+- (н) Управление через веб
 - (н) I2C чтение распространённых датчиков
-- (н) Разархиватор zip
 - (н) Basic рисование: plot, draw, rect, fillrect, triangle, fillscreen, drawString, drawCentreString, drawCircle, fillCircle
 - (н) Basic строки
 - (н) Basic работа с файлами
@@ -363,14 +372,7 @@
 - (н) Заставка Boids
 - (н) Заставка DLA
 - (н) tftp
-- (н) tar
-- (н) Кодирование-декодирование b32 из терминала
-- (н) Кодирование-декодирование b64 из терминала
-- (н) Шифрование-расшифрование AES в терминале
-- (н) xmodem отправка
-- (н) xmodem приём
 - (д) История/продолжить
-- (д) QR-код, штрих-код
 - (д) Переход к случайной функции (приложению)
 
 */
@@ -873,13 +875,13 @@ public:
 };
 
 // Калибровка тач-скрина
-float d = -12314407;
-float ax = -852720 / d;
-float bx = 14880 / d;
-float cx = 254777760 / d; 
-float ay = 19840 / d;
-float by = -1109440 / d;
-float cy = 325691200 / d;
+double global_d = -12314407;
+double global_ax = -852720 / global_d;
+double global_bx = 14880 / global_d;
+double global_cx = 254777760 / global_d; 
+double global_ay = 19840 / global_d;
+double global_by = -1109440 / global_d;
+double global_cy = 325691200 / global_d;
 
 #define CALIBRATION_QUANT (240 / 6)
 #define CALIBRATION_POINTS_X (240 / CALIBRATION_QUANT + 1)
@@ -900,8 +902,8 @@ char global_exit_flag;
 unsigned long global_exit_flag_touch_begin;
 unsigned long global_exit_flag_touch_length;
 
-float global_lat = 0;
-float global_lon = 0;
+double global_lat = 0;
+double global_lon = 0;
 
 int global_brightness = 255;
 int global_inversion = 0;
@@ -927,6 +929,9 @@ int global_ntp_enabled = 0;
 int global_alarm_set = 0;
 int global_alarm_hour = 0;
 int global_alarm_minute = 0;
+
+int global_beeper_pin = BUZZER_PIN;
+int global_music_pin = BUZZER_PIN;
 
 // Переменные для человекочитаемых параметров времени
 int global_year = 0;
@@ -1195,9 +1200,10 @@ void launcher(char mode, char *io_buff) {
     if(global_touch_y >= 16) {
       app_selected_col = global_touch_x / (tft.width() / 8);
       app_selected_row = (global_touch_y - 16) / (tft.height() / 10);
+      //Serial.printf("app_selected_col %d, app_selected_row %d\n", app_selected_col, app_selected_row);
       app_selected = app_selected_row * 8 + app_selected_col + 1;
     }
-    if(global_touch_present_flag == 0 || global_touch_x < 16) {
+    if(global_touch_present_flag == 0 || global_touch_y < 16) {
       app_selected_row = -1;
       app_selected_col = -1;
       app_selected = -1;
@@ -3222,7 +3228,7 @@ void terminal_execute_single(char *str) {
     beep_if_enabled();
   }
   else if(strcmp(cmdline_params[0], "notone") == 0) {
-    noTone(BUZZER_PIN);
+    noTone(global_beeper_pin);
   }
   else if(strcmp(cmdline_params[0], "tone") == 0) {
     if(arg_count != 2) {
@@ -3230,7 +3236,7 @@ void terminal_execute_single(char *str) {
     }
     else {
       sscanf(cmdline_params[1], "%d", &freq);
-      tone(BUZZER_PIN, freq);
+      tone(global_beeper_pin, freq);
     }
   }
   else if(strcmp(cmdline_params[0], "bc") == 0) {
@@ -3396,6 +3402,71 @@ void terminal_execute_single(char *str) {
       terminal_println("Unable to get weather");
     }
   }
+  else if(strcmp(cmdline_params[0], "chat") == 0) {
+    if(arg_count == 1) {
+      // Чтение чата
+      char *messages;
+      messages = (char*)malloc(2048 * sizeof(char));
+      if(messages) {
+        if(get_file_https("https://arikado.ru/cyd/chat_data.txt", messages, 2048) == 200) {
+          i = 0;
+          j = 0;
+
+          for(i1 = 0; i1 < strlen(messages); i1++) {
+            byte = messages[i1];
+            if(byte == '\n' && messages[i1 + 1] == '\r') {
+              i1++;
+            }
+            else if(byte == '\r' && messages[i1 + 1] == '\n') {
+              i1++;
+            }
+            
+            if(byte == '\r' || byte == '\n') {
+              terminal_println("");
+              i = 0;
+              j++;
+              if(j > 15) break;
+              continue;
+            }
+            else {
+              terminal_print_char(byte);
+            }
+            i++;
+            if(i == 40) {
+              i = 0;
+              j++;
+              if(j > 15) break;
+            }
+          }
+        }
+        else {
+          terminal_println("Unable to get messages");
+        }
+        free(messages);
+      }
+      else {
+        terminal_println("Unable to reserve memory");
+      }
+    }
+    else if(arg_count == 3) {
+      error = chat_send_message(cmdline_params[1], cmdline_params[2], buff);
+      if(error == 200) {
+        terminal_println("Message sent");
+      }
+      else {
+        if(error > 0) {
+          sprintf(buff, "HTTP code %s", error);
+        }
+        else {
+          http_get_error_text(error, buff);
+        }
+        terminal_println(buff);
+      }
+    }
+    else {
+      terminal_println("chat [{nick} {message}]");
+    }
+  }
 #ifdef IS_SSH_ENABLED
   else if(strcmp(cmdline_params[0], "ssh") == 0) {
     if(arg_count == 1) {
@@ -3405,8 +3476,8 @@ void terminal_execute_single(char *str) {
       terminal_ssh(cmdline_params[0] + 4);
     }
   }
-#endif
-#endif
+#endif // IS_SSH_ENABLED
+#endif // IS_WIFI_ENABLED
   // Обычные приложения
   else if(strcmp(cmdline_params[0], "calibration_multipoint") == 0) {
     calibration_multipoint = 1;
@@ -7457,7 +7528,7 @@ void tunes_play(char *filename) {
 //delay(100);
 
     if(freq > 0) {
-      tone(BUZZER_PIN, freq, length);
+      tone(global_beeper_pin, freq, length);
     }
     delay(length);
 
@@ -7685,7 +7756,7 @@ void music_play(char *filename) {
 
     out = new AudioOutputI2SNoDAC();
     out->SetGain((float)global_volume / 100);
-    out->SetPinout(-1, -1, BUZZER_PIN);
+    out->SetPinout(-1, -1, global_music_pin);
     if(xPortGetCoreID() != 0) {
       drawProcessWindow("Playing...");
     }
@@ -7707,7 +7778,7 @@ void music_play(char *filename) {
   else if(is_wav_file(filename)) {
     out = new AudioOutputI2SNoDAC();
     out->SetGain((float)global_volume / 100);
-    out->SetPinout(-1, -1, BUZZER_PIN);
+    out->SetPinout(-1, -1, global_music_pin);
     if(xPortGetCoreID() != 0) {
       drawProcessWindow("Playing...");
     }
@@ -7875,7 +7946,7 @@ void webradio_play(char *filename) {
   buff = new AudioFileSourceBuffer(file, 2048);
   out = new AudioOutputI2SNoDAC();
   out->SetGain((float)global_volume / 100);
-  out->SetPinout(-1, -1, BUZZER_PIN);
+  out->SetPinout(-1, -1, global_music_pin);
 
   mp3 = new AudioGeneratorMP3();
   mp3->begin(buff, out);
@@ -8116,7 +8187,7 @@ void chip8_run(char *filename) {
         st--;
       }
       if(st == 0) {
-        noTone(BUZZER_PIN);
+        noTone(global_beeper_pin);
       }
     }
 
@@ -8377,7 +8448,7 @@ void chip8_run(char *filename) {
     else if(ia == 0xF && ic == 0x1 && id == 0x8) {
       st = v[ib];
       if(st > 0 && global_is_beep_enabled && !global_silent_mode) {
-        tone(BUZZER_PIN, 1000);
+        tone(global_beeper_pin, 1000);
       }
       pc += 2;
     }
@@ -9190,7 +9261,7 @@ void expenses_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
   char name[80];
-  float item;
+  double item;
 
   if(action_index && !filename) return;
 
@@ -9236,8 +9307,8 @@ int expenses_file_to_list(fs::File file, char *buff) {
   char right[80];
   char byte;
   int offset;
-  float item;
-  float summ = 0;
+  double item;
+  double summ = 0;
   // Левая колонка - первая непустая строчка файла (название категории)
   stream_get_line_by_index(file, 0, left, 80);
 
@@ -9653,7 +9724,7 @@ void draw_edit(char *title, char *filename) {
     while(global_touch_present_flag) {
       touch_x = global_touch_x;
       touch_y = global_touch_y;
-
+      //Serial.printf("Draw x = %d y = %d\n", touch_x, touch_y);
       if(touch_x >= 0 && touch_x < tft.width() && touch_y >= 16 && touch_y < 304) {
         // Если линия движется медленно, рисовать линию
         // Нужно для избегания рывков линии при подъёме стилуса
@@ -10659,6 +10730,7 @@ void random_numbers(char mode, char *io_buff) {
     "1/6", "1/8",
     "1/10", "1/12",
     "1/20", "1/100",
+    "1/1000", "1/10000",
     NULL
   };
   char app_icon[] = {
@@ -10699,10 +10771,10 @@ void random_numbers(char mode, char *io_buff) {
   drawAppTitle("Random Numbers");
 
   while(1) {
-    drawButtonMatrix(0, 52, tft.width(), tft.height() - 52, buttons, 2, 4);
+    drawButtonMatrix(0, 54, tft.width(), tft.height() - 54, buttons, 2, 5);
 
     touchWaitPress();
-    button_pressed = touchCheckMatrix(0, 52, tft.width(), tft.height() - 52, buttons, 2, 4);
+    button_pressed = touchCheckMatrix(0, 54, tft.width(), tft.height() - 54, buttons, 2, 5);
     if(button_pressed != -1) {
       tft.fillRect(0, 16, tft.width(), 34, color_scheme_bg);
       tft.setTextColor(color_scheme_fg, color_scheme_bg);
@@ -10731,6 +10803,12 @@ void random_numbers(char mode, char *io_buff) {
       }
       else if(button_pressed == 7) {
         result = random(0, 100) + 1;
+      }
+      else if(button_pressed == 8) {
+        result = random(0, 1000) + 1;
+      }
+      else if(button_pressed == 9) {
+        result = random(0, 10000) + 1;
       }
       sprintf(buff, "%ld", result);
       if(button_pressed == 0) {
@@ -12165,7 +12243,7 @@ void snake(char mode, char *io_buff) {
       continue;
     }
 
-    touchWaitPress();
+    //touchWaitPress();
     // Смотрим, нет ли попадания в поле
     // Относительные единицы!
     touch_x = global_touch_x * 100 / tft.width();
@@ -13521,10 +13599,6 @@ void screensaver_forest_fire() {
   int x, y;
   long i;
   int pixel;
-  int fire_left, total_fire_left, active_fire_left;
-  int fire_right, total_fire_right, active_fire_right;
-  int fire_top, total_fire_top, active_fire_top;
-  int fire_bottom, total_fire_bottom, active_fire_bottom;
   int width = tft.width();
   int height = tft.height();
   char fire_present;
@@ -15308,7 +15382,6 @@ void chat(char mode, char *io_buff) {
   int buff_offset;
   char buff[80];
   char nickname[80];
-  char *query = NULL;
   char message[80];
   char *messages = NULL;
   char *prev_messages = NULL;
@@ -15382,7 +15455,6 @@ void chat(char mode, char *io_buff) {
   
   messages = (char*)malloc(2048 * sizeof(char));
   prev_messages = (char*)malloc(2048 * sizeof(char));
-  query = (char*)malloc(1000 * sizeof(char));
 
   messages[0] = 0;
   prev_messages[0] = 0;
@@ -15453,14 +15525,7 @@ void chat(char mode, char *io_buff) {
         drawPrompt("Message to send", message);
         if(strlen(message) > 0) {
           if(strlen(message) < 80) {
-            sprintf(query, "https://arikado.ru/cyd/chat_post.php?nickname=%s&message=", nickname);
-            // URLencode message
-            for(i = 0; i < strlen(message); i++) {
-              sprintf(buff, "%%%02X", message[i]);
-              strcat(query, buff);
-            }
-            Serial.println(query);
-            httpResponseCode = get_file_https(query, buff, 80);
+            httpResponseCode = chat_send_message(nickname, message, buff);
             if(httpResponseCode == 200) {
               strcpy(message, "");
             }
@@ -15489,12 +15554,29 @@ void chat(char mode, char *io_buff) {
       touchWaitRelease();
       free(messages);
       free(prev_messages);
-      free(query);
       touchExitActionReset();
       return;
     }
     touchWaitRelease();
   }
+}
+
+int chat_send_message(char *nickname, char *message, char *response) {
+  char *query;
+  char buff[10];
+  int i;
+  int httpResponseCode;
+  query = (char*)malloc(1000 * sizeof(char));
+  sprintf(query, "https://arikado.ru/cyd/chat_post.php?nickname=%s&message=", nickname);
+  // URLencode message
+  for(i = 0; i < strlen(message); i++) {
+    sprintf(buff, "%%%02X", message[i]);
+    strcat(query, buff);
+  }
+  Serial.println(query);
+  httpResponseCode = get_file_https(query, response, 80);
+  free(query);
+  return httpResponseCode;
 }
 
 WebServer httpServer(80);
@@ -18383,6 +18465,7 @@ void dashboard(char mode, char *io_buff) {
     "Network",
     "Wi-Fi Monitor",
     "World Time",
+    "Bitcoin",
     NULL
   };
   char app_icon[] = {
@@ -18462,6 +18545,10 @@ void dashboard(char mode, char *io_buff) {
       // World time
       if(button_pressed == 8) {
         dashboard_world_time();
+      }
+      // Bitcoin
+      if(button_pressed == 9) {
+        dashboard_bitcoin();
       }
       
       clearScreen();
@@ -19146,6 +19233,69 @@ void dashboard_world_time() {
       }
       tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
     }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void dashboard_bitcoin() {
+  char buff[80];
+  int i;
+  int x, y;
+  float val;
+  int result;
+  time_t unix_timestamp;
+  long prev_update_millis = 0;
+  long prev_update_price = -60000;
+  int base_offset = 75;
+
+  clearScreen();
+  drawAppTitle("Bitcoin");
+
+  while(1) {
+    if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
+      prev_update_millis = millis();
+
+      unix_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
+      // Выводим всё
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      sprintf(buff, " %d:%02d:%02d ", global_hours, global_minutes, global_seconds);
+      tft.drawCentreString(buff, tft.width() / 2, 27, FONT_BIGGER);
+
+      // Текущий блок
+      if(millis() - prev_update_price > 60000) {
+        i = 0;
+        if(get_file_https("https://blockchain.info/q/getblockcount", buff, 80) == 200) {
+          tft.setTextColor(color_scheme_fg, color_scheme_bg);
+          tft.drawCentreString("Block number:", tft.width() / 2, 80 + i * 70, FONT_DEFAULT);
+          tft.drawCentreString(buff, tft.width() / 2, 100 + i * 70, FONT_BIGGER);
+        }
+        i++;
+        if(get_file_https("https://blockchain.info/q/unconfirmedcount", buff, 80) == 200) {
+          tft.setTextColor(color_scheme_fg, color_scheme_bg);
+          tft.drawCentreString("Unconfirmed transactions:", tft.width() / 2, 80 + i * 70, FONT_DEFAULT);
+          tft.drawCentreString(buff, tft.width() / 2, 100 + i * 70, FONT_BIGGER);
+        }
+        i++;
+        if(get_file_https("https://blockchain.info/q/24hrprice", buff, 80) == 200) {
+          tft.setTextColor(color_scheme_fg, color_scheme_bg);
+          tft.drawCentreString("24 hour weighted price, USD:", tft.width() / 2, 80 + i * 70, FONT_DEFAULT);
+          tft.drawCentreString(buff, tft.width() / 2, 100 + i * 70, FONT_BIGGER);
+        }
+        prev_update_price = millis();
+      }
+      // Цена
+      // Неподтверждённые транзакции
+    }
+    
+    if(!touchCheckNowait()) continue;
 
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
@@ -20259,6 +20409,8 @@ void sound_control(char mode, char *io_buff) {
     "Beep on hour",
     "Beep on quarter",
     "Music volume",
+    "Music pin",
+    "Beeper pin",
     NULL
   };
   char app_icon[] = {
@@ -20300,7 +20452,7 @@ void sound_control(char mode, char *io_buff) {
   while(1) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
-    drawButtonMatrix(0, 20, tft.width() / 2, 32 * 5, buttons, 1, 5);
+    drawButtonMatrix(0, 20, tft.width() / 2, 32 * 7, buttons, 1, 7);
 
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     sprintf(buff, "  %s  ", global_is_beep_enabled ? "on" : "off");
@@ -20313,10 +20465,14 @@ void sound_control(char mode, char *io_buff) {
     tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 3, FONT_DEFAULT);
     sprintf(buff, "  %d  ", global_volume);
     tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 4, FONT_DEFAULT);
+    sprintf(buff, "  %d  ", global_music_pin);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 5, FONT_DEFAULT);
+    sprintf(buff, "  %d  ", global_beeper_pin);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 28 + 32 * 6, FONT_DEFAULT);
 
     touchWaitPress();
 
-    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32 * 5, buttons, 1, 5);
+    button_pressed = touchCheckMatrix(0, 20, tft.width() / 2, 32 * 7, buttons, 1, 7);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
         if(global_is_beep_enabled) {
@@ -20357,6 +20513,23 @@ void sound_control(char mode, char *io_buff) {
         }
         clearPrompt();
       }
+      else if(button_pressed == 5) {
+        buff[0] = 0;
+        if(drawPrompt("Music pin", buff) == 0) {
+          sscanf(buff, "%d", &global_music_pin);
+          pinMode(global_music_pin, OUTPUT);
+        }
+        clearPrompt();
+      }
+      else if(button_pressed == 6) {
+        buff[0] = 0;
+        if(drawPrompt("Beeper pin", buff) == 0) {
+          noTone(global_beeper_pin);
+          sscanf(buff, "%d", &global_beeper_pin);
+          pinMode(global_beeper_pin, OUTPUT);
+        }
+        clearPrompt();
+      }
       changes_flag = 1;
     }
 
@@ -20373,6 +20546,10 @@ void sound_control(char mode, char *io_buff) {
           write_key_value_to_file("/Settings/Sound", "beep_quarter_enabled_flag", (char*)(global_is_beep_quarter_enabled ? "1" : "0"));
           sprintf(buff, "%d", global_volume);
           write_key_value_to_file("/Settings/Sound", "volume", buff);
+          sprintf(buff, "%d", global_beeper_pin);
+          write_key_value_to_file("/Settings/Sound", "beeper_pin", buff);
+          sprintf(buff, "%d", global_music_pin);
+          write_key_value_to_file("/Settings/Sound", "music_pin", buff);
         }
       }
       touchExitActionReset();
@@ -22456,29 +22633,6 @@ void touch_calibration_multipoint(char mode, char *io_buff) {
   
   clearScreen();
   calibration_multipoint = 1;
-/*
-  int x1, y1;
-  int x2, y2;
-  while(1) {
-    global_touch_p = touchscreen.getTouch();
-    if(digitalRead(XPT2046_IRQ) == LOW) {
-      //Serial.printf("xRaw = %d yRaw = %d zRaw = %d IRQ = %d\n", global_touch_p.xRaw, global_touch_p.yRaw, global_touch_p.zRaw, digitalRead(XPT2046_IRQ) == HIGH ? 1 : 0);
-      if(global_touch_p.zRaw > 0) {
-        touchMapXY_multipoint(global_touch_p.xRaw, global_touch_p.yRaw, &x2, &y2);
-
-        Serial.printf("Point: new x = %d y = %d\n", x2, y2);
-
-        tft.drawPixel(x2, y2, TFT_BLACK);
-      }
-      else {
-        clearScreen();
-      }
-    }
-    else {
-      clearScreen();
-    }
-  }
-  */
 }
 
 #define CALIBRATION_SMOOTH_POINTS 100
@@ -22547,6 +22701,8 @@ void touch_calibration(char mode, char *io_buff) {
       if(button_pressed == 1) {
         touch_calibration_multipoint(APP_MODE_LAUNCH, NULL);
       }
+      clearScreen();
+      drawAppTitle("Calibration");
     }
 
     touchWaitReleaseOrExit();
@@ -22679,15 +22835,15 @@ void touch_calibration_3point(char mode, char *io_buff) {
 
   // Вычисление коэффициентов ax, bx, cx, ay, by, cy методом Крамера
   // d - определитель матрицы
-  d = det3(x_raw_1, y_raw_1, 1, x_raw_2, y_raw_2, 1, x_raw_3, y_raw_3, 1);
+  global_d = det3(x_raw_1, y_raw_1, 1, x_raw_2, y_raw_2, 1, x_raw_3, y_raw_3, 1);
 
-  ax = det3(offset, y_raw_1, 1, offset, y_raw_2, 1, tft.width() - offset - 1, y_raw_3, 1) / d;
-  bx = det3(x_raw_1, offset, 1, x_raw_2, offset, 1, x_raw_3, tft.width() - offset - 1, 1) / d;
-  cx = det3(x_raw_1, y_raw_1, offset, x_raw_2, y_raw_2, offset, x_raw_3, y_raw_3, tft.width() - offset - 1) / d;
+  global_ax = det3(offset, y_raw_1, 1, offset, y_raw_2, 1, tft.width() - offset - 1, y_raw_3, 1) / global_d;
+  global_bx = det3(x_raw_1, offset, 1, x_raw_2, offset, 1, x_raw_3, tft.width() - offset - 1, 1) / global_d;
+  global_cx = det3(x_raw_1, y_raw_1, offset, x_raw_2, y_raw_2, offset, x_raw_3, y_raw_3, tft.width() - offset - 1) / global_d;
 
-  ay = det3(offset, y_raw_1, 1, tft.height() - offset - 1, y_raw_2, 1, offset, y_raw_3, 1) / d;
-  by = det3(x_raw_1, offset, 1, x_raw_2, tft.height() - offset - 1, 1, x_raw_3, offset, 1) / d;
-  cy = det3(x_raw_1, y_raw_1, offset, x_raw_2, y_raw_2, tft.height() - offset - 1, x_raw_3, y_raw_3, offset) / d;
+  global_ay = det3(offset, y_raw_1, 1, tft.height() - offset - 1, y_raw_2, 1, offset, y_raw_3, 1) / global_d;
+  global_by = det3(x_raw_1, offset, 1, x_raw_2, tft.height() - offset - 1, 1, x_raw_3, offset, 1) / global_d;
+  global_cy = det3(x_raw_1, y_raw_1, offset, x_raw_2, y_raw_2, tft.height() - offset - 1, x_raw_3, y_raw_3, offset) / global_d;
 
   clearScreen();
   tft.drawCentreString("Done!", tft.width() / 2, tft.height() / 2 - 16, FONT_DEFAULT);
@@ -22712,7 +22868,7 @@ void touch_calibration_save() {
 
   file = Storage->open("/Settings/Calibration", FILE_WRITE);
   if(file) {
-    sprintf(buff, "%f %f %f %f %f %f", ax, bx, cx, ay, by, cy);
+    sprintf(buff, "%f %f %f %f %f %f", global_ax, global_bx, global_cx, global_ay, global_by, global_cy);
     file.print(buff);
     file.close();
   }
@@ -22843,7 +22999,6 @@ void oscilloscope(char mode, char *io_buff) {
 
 void oscilloscope_show(char *name, int input_index) {
   int values[240];
-  int current_value;
   int value_min;
   int value_max;
   int window_min;
@@ -23180,8 +23335,8 @@ int oscilloscope_get_value(int input_index) {
 void voltmeter(char mode, char *io_buff) {
   int button_pressed;
   char buff[80];
-  float multiplier = 1.0 / 1000;
-  float voltage = 0;
+  double multiplier = 1.0 / 1000;
+  double voltage = 0;
   int value;
   int pin = 35;
   char update_flag;
@@ -23236,7 +23391,7 @@ void voltmeter(char mode, char *io_buff) {
   pinMode(pin, INPUT);
   while(1) {
     value = analogReadMilliVolts(pin);
-    voltage = (float)value * multiplier;
+    voltage = multiplier * value;
     sprintf(buff, "   %0.3f   ", voltage);
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.drawCentreString(buff, tft.width() / 2, 35, FONT_BIGGER);
@@ -23296,8 +23451,8 @@ void generator(char mode, char *io_buff) {
   int button_pressed;
   char buff[80];
   enum {TYPE_UNKNOWN, TYPE_SIN, TYPE_SQUARE, TYPE_PWM, TYPE_TRIANGLE, TYPE_SAW_RISING, TYPE_SAW_FALLING, TYPE_SERVO} type = TYPE_SQUARE;
-  float frequency = 1;
-  float amplitude = 1;
+  double frequency = 1;
+  double amplitude = 1;
   int value;
   int pin = -1;
   long pwm_frequency = 10000;
@@ -24624,7 +24779,6 @@ void hanoi_towers(char mode, char *io_buff) {
 void match_three(char mode, char *io_buff) {
   TouchPoint p;
   int touch_x, touch_y;
-  int touch_x_start, touch_y_start;
   int row1, col1;
   int row2, col2;
   int button_pressed;
@@ -25832,7 +25986,7 @@ void piano(char mode, char *io_buff) {
   }
   while(1) {
     if(touchCheckNowait() == 0) {
-      noTone(BUZZER_PIN);
+      noTone(global_beeper_pin);
       active_note_index = -1;
       continue;
     }
@@ -25845,7 +25999,7 @@ void piano(char mode, char *io_buff) {
         if(touch_y >= 240 && touch_y < 272) {
           note_index = touch_x / (tft.width() / 16);
           if(note_index != active_note_index) {
-            tone(BUZZER_PIN, note_to_freq_white[note_index]);
+            tone(global_beeper_pin, note_to_freq_white[note_index]);
             active_note_index = note_index;
           }
         }
@@ -25853,12 +26007,12 @@ void piano(char mode, char *io_buff) {
         else if(touch_y >= 240 - 32 && touch_y < 240) {
           note_index = (touch_x + 8)/ (tft.width() / 16);
           if(note_index != active_note_index - 32) {
-            tone(BUZZER_PIN, note_to_freq_black[note_index]);
+            tone(global_beeper_pin, note_to_freq_black[note_index]);
             active_note_index = note_index + 32;
           }
         }
         else {
-          noTone(BUZZER_PIN);
+          noTone(global_beeper_pin);
           active_note_index = -1;
         }
         if(global_exit_flag) {
@@ -25957,7 +26111,7 @@ void metronome(char mode, char *io_buff) {
       interval = 60000 / tempo;
       if(millis() - prev_beep_millis > interval) {
         prev_beep_millis = millis();
-        tone(BUZZER_PIN, 8000, 12);
+        tone(global_beeper_pin, 8000, 12);
       }
     }
 
@@ -27111,10 +27265,8 @@ int show_menu(int x0, int y0, int width, int height, char **items) {
 // Простые функции тач-скрина
 void touchMapXY_multipoint(int x_raw, int y_raw, int *out_x, int *out_y) {
   int x, y;
-  int x_min = -1;
-  int y_min = -1;
-  float d_min = 100000;
-  float d_current;
+  double d_min = 100000;
+  double d_current;
   int i, best1, best2, best3;
   int offset_best_x, offset_best_y;
   double x_raw_1, x_raw_2, x_raw_3;
@@ -27192,50 +27344,7 @@ void touchMapXY_multipoint(int x_raw, int y_raw, int *out_x, int *out_y) {
       d_min = d_current;
     }
   }
-/*
-  //Serial.printf("Best1: %d\n", best1); delay(100);
-  // Вторая - если касание выше, то точка выше, если ниже - то точкой ниже
-  if((y_inc_flag && offset_best_y >= 0) || (!y_inc_flag && offset_best_y < 0)) {
-    best2 = best1 + (xy_swap? 1 : CALIBRATION_POINTS_X);
-    // Если y1 == макс, то может быть только точка выше
-    if(best1 / CALIBRATION_POINTS_X == CALIBRATION_POINTS_Y - 1) {
-      //best2 = best1 - (xy_swap? 1 : CALIBRATION_POINTS_X);
-    }
-  }
-  else {
-    best2 = best1 - (xy_swap? 1 : CALIBRATION_POINTS_X);
-    // Если y1 == 0, то может быть только точка ниже
-    if(best1 / CALIBRATION_POINTS_X == 0) {
-      //best2 = best1 + (xy_swap? 1 : CALIBRATION_POINTS_X);
-    }
-  }
-  x = best2 % CALIBRATION_POINTS_X;
-  y = best2 / CALIBRATION_POINTS_X;
-  Serial.printf("Best2: %d x=%d y=%d\n", best2, best2 % CALIBRATION_POINTS_X, best2 / CALIBRATION_POINTS_X);
-  x_offset_2 = x * CALIBRATION_QUANT;
-  y_offset_2 = y * CALIBRATION_QUANT;
 
-  // Третье - если касание левее, то точка левее, если правее - то точкой правее
-  if((x_inc_flag && offset_best_x >= 0) || (!x_inc_flag && offset_best_x < 0)) {
-    best3 = best1 + (xy_swap? CALIBRATION_POINTS_X : 1);
-    // Если x1 == макс, то может быть только точка левее
-    if(best1 % CALIBRATION_POINTS_X == CALIBRATION_POINTS_X - 1) {
-      best3 = best1 - (xy_swap? CALIBRATION_POINTS_X : 1);
-    }
-  }
-  else {
-    best3 = best1 - (xy_swap? CALIBRATION_POINTS_X : 1);
-    // Если x1 == 0 то может быть только точка правее
-    if(best1 % CALIBRATION_POINTS_X == 0) {
-      best3 = best1 + (xy_swap? CALIBRATION_POINTS_X : 1);
-    }
-  }
-  x = best3 % CALIBRATION_POINTS_X;
-  y = best3 / CALIBRATION_POINTS_X;
-  Serial.printf("Best3: %d x=%d y=%d\n", best3, best3 % CALIBRATION_POINTS_X, best3 / CALIBRATION_POINTS_X);
-  x_offset_3 = x * CALIBRATION_QUANT;
-  y_offset_3 = y * CALIBRATION_QUANT;
-*/
   //tft.drawLine(x_offset_1, y_offset_1, x_offset_2, y_offset_2, TFT_BLACK);
   //tft.drawLine(x_offset_1, y_offset_1, x_offset_3, y_offset_3, TFT_BLACK);
   //tft.drawLine(x_offset_3, y_offset_3, x_offset_2, y_offset_2, TFT_BLACK);
@@ -27292,8 +27401,8 @@ void touchMapXY_multipoint(int x_raw, int y_raw, int *out_x, int *out_y) {
   //Serial.printf("ax: %g, bx: %g, cx %g\n", ax, bx, cx); delay(100);
   //Serial.printf("ay: %g, by: %g, cy %g\n", ay, by, cy); delay(100);
 
-  *out_x = ax * x_raw + bx * y_raw + cx;
-  *out_y = ay * x_raw + by * y_raw + cy;
+  *out_x = (int)(ax * x_raw + bx * y_raw + cx);
+  *out_y = (int)(ay * x_raw + by * y_raw + cy);
   
   if(*out_x < 0) *out_x = 0;
   if(*out_x >= tft.width()) *out_x = tft.width() - 1;
@@ -27301,13 +27410,19 @@ void touchMapXY_multipoint(int x_raw, int y_raw, int *out_x, int *out_y) {
   if(*out_y < 0) *out_y = 0;
   if(*out_y >= tft.height()) *out_y = tft.height() - 1;
 
+  if(global_rotation) {
+    *out_x = tft.width() - *out_x;
+    *out_y = tft.height() - *out_y;
+  }
   //tft.drawLine(x_offset_1, y_offset_1, *out_x, *out_y, TFT_BLACK);
   //tft.drawLine(x_offset_2, y_offset_2, *out_x, *out_y, TFT_BLACK);
   //tft.drawLine(x_offset_3, y_offset_3, *out_x, *out_y, TFT_BLACK);
+
+  //Serial.printf("Point int x = %d, y = %d\n", *out_x, *out_y);
 }
 
 int touchMapX(int x_raw, int y_raw) {
-  int x = ax * x_raw + bx * y_raw + cx;
+  int x = global_ax * x_raw + global_bx * y_raw + global_cx;
   if(x < 0) x = 0;
   if(x >= tft.width()) x = tft.width() - 1;
   if(global_rotation) x = tft.width() - x;
@@ -27315,7 +27430,7 @@ int touchMapX(int x_raw, int y_raw) {
 }
 
 int touchMapY(int x_raw, int y_raw) {
-  int y = ay * x_raw + by * y_raw + cy;
+  int y = global_ay * x_raw + global_by * y_raw + global_cy;
   if(y < 0) y = 0;
   if(y >= tft.height()) y = tft.height() - 1;
   if(global_rotation) y = tft.height() - y;
@@ -27463,7 +27578,7 @@ int delayOrTouchWait(long milliseconds) {
   return 0;
 }
 
-#define TOUCH_SMOOTH_POINTS 10
+#define TOUCH_SMOOTH_POINTS 1
 
 char touchPollTouchStatus() {
   int touch_x, touch_y;
@@ -27481,14 +27596,16 @@ char touchPollTouchStatus() {
         global_touch_y = touchMapY(global_touch_p.xRaw, global_touch_p.yRaw);
         if(calibration_multipoint) {
           touchMapXY_multipoint(global_touch_p.xRaw, global_touch_p.yRaw, &global_touch_x, &global_touch_y);
+          //Serial.printf("Point ext1 x = %d, y = %d\n", global_touch_x, global_touch_y);
         }
       }
       else {
         // Небольшое сглаживание от дребезга
         if(calibration_multipoint) {
           touchMapXY_multipoint(global_touch_p.xRaw, global_touch_p.yRaw, &touch_x, &touch_y);
-          global_touch_x = (touchMapX(global_touch_p.xRaw, global_touch_p.yRaw) + (TOUCH_SMOOTH_POINTS - 1) * touch_x) / TOUCH_SMOOTH_POINTS;
-          global_touch_y = (touchMapY(global_touch_p.xRaw, global_touch_p.yRaw) + (TOUCH_SMOOTH_POINTS - 1) * touch_y) / TOUCH_SMOOTH_POINTS;
+          //Serial.printf("Point ext2 x = %d, y = %d\n", touch_x, touch_y);
+          global_touch_x = (touch_x + (TOUCH_SMOOTH_POINTS - 1) * global_touch_x) / TOUCH_SMOOTH_POINTS;
+          global_touch_y = (touch_y + (TOUCH_SMOOTH_POINTS - 1) * global_touch_y) / TOUCH_SMOOTH_POINTS;
         }
         else {
           global_touch_x = (touchMapX(global_touch_p.xRaw, global_touch_p.yRaw) + (TOUCH_SMOOTH_POINTS - 1) * global_touch_x) / TOUCH_SMOOTH_POINTS;
@@ -27741,16 +27858,18 @@ void image_from_bits(int start_x, int start_y, char *image, int color, int bg_co
 #define MORSE_DOT_LEN 50
 
 void morse_dit() {
-  tone(BUZZER_PIN, MORSE_FREQ, MORSE_DOT_LEN);
+  //Serial.printf("morse_dit global_beeper_pin %d\n", global_beeper_pin);
+  tone(global_beeper_pin, MORSE_FREQ, MORSE_DOT_LEN);
   delay(MORSE_DOT_LEN);
-  noTone(BUZZER_PIN);
+  noTone(global_beeper_pin);
   delay(MORSE_DOT_LEN);
 }
 
 void morse_dah() {
-  tone(BUZZER_PIN, MORSE_FREQ, MORSE_DOT_LEN * 3);
+  //Serial.printf("morse_dah global_beeper_pin %d\n", global_beeper_pin);
+  tone(global_beeper_pin, MORSE_FREQ, MORSE_DOT_LEN * 3);
   delay(MORSE_DOT_LEN * 3);
-  noTone(BUZZER_PIN);
+  noTone(global_beeper_pin);
   delay(MORSE_DOT_LEN);
 }
 
@@ -27764,6 +27883,7 @@ void beep_morse_task(void *pvParameters) {
   char *str = (char*)pvParameters;
   int i;
   for(i = 0; i < strlen(str); i++) {
+    Serial.println(str[i]);
     beep_morse_perform(str[i]);
     morse_wait();
     morse_wait();
@@ -27893,13 +28013,14 @@ void beep_morse(char *str) {
 
 void beep_if_enabled() {
   if(global_is_beep_enabled && !global_silent_mode) {
-    tone(BUZZER_PIN, 1000, 100);
+    //Serial.printf("beep global_beeper_pin %d\n", global_beeper_pin);
+    tone(global_beeper_pin, 1000, 100);
   }
 }
 
 void beep_tap_if_enabled() {
   if(global_is_beep_tap_enabled && !global_silent_mode) {
-    tone(BUZZER_PIN, 8000, 12);
+    tone(global_beeper_pin, 8000, 12);
   }
 }
 
@@ -27949,13 +28070,13 @@ void beep_alarm() {
     }
 
     // Модифицированный А
-    tone(BUZZER_PIN, 2000, MORSE_DOT_LEN);
+    tone(global_beeper_pin, 2000, MORSE_DOT_LEN);
     delay(MORSE_DOT_LEN);
-    noTone(BUZZER_PIN);
+    noTone(global_beeper_pin);
     delay(MORSE_DOT_LEN);
-    tone(BUZZER_PIN, 3000, MORSE_DOT_LEN * 3);
+    tone(global_beeper_pin, 3000, MORSE_DOT_LEN * 3);
     delay(MORSE_DOT_LEN * 3);
-    noTone(BUZZER_PIN);
+    noTone(global_beeper_pin);
     delay(MORSE_DOT_LEN * 3);
 
     if(global_touch_present_flag && i > 1) {
@@ -28119,7 +28240,7 @@ int bmp_show_image(char *filename, int start_x, int start_y) {
     byte2 = file.read();
     byte3 = file.read();
     byte4 = file.read();
-    Serial.printf("Offset %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
+    //Serial.printf("Offset %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
     data_offset = byte4 << 24 | byte3 << 16 | byte2 << 8 | byte1;
     // Пропускаем 4 байта
     file.read();
@@ -28131,21 +28252,21 @@ int bmp_show_image(char *filename, int start_x, int start_y) {
     byte2 = file.read();
     byte3 = file.read();
     byte4 = file.read();
-    Serial.printf("width %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
+    //Serial.printf("width %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
     width = byte4 << 24 | byte3 << 16 | byte2 << 8 | byte1;
     // Height
     byte1 = file.read();
     byte2 = file.read();
     byte3 = file.read();
     byte4 = file.read();
-    Serial.printf("Height %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
+    //Serial.printf("Height %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
     height = byte4 << 24 | byte3 << 16 | byte2 << 8 | byte1;
     file.read();
     file.read();
     // BPP
     byte1 = file.read();
     byte2 = file.read();
-    Serial.printf("BPP %02X %02X\n", byte1, byte2, byte3, byte4);
+    //Serial.printf("BPP %02X %02X\n", byte1, byte2, byte3, byte4);
     bpp = byte2 << 8 | byte1;
     // Текущее смещение
     current_offset = 30;
@@ -29345,8 +29466,11 @@ void setup() {
     // Калибровка сенсора, если нужно
     if(read_file_to_buff("/Settings/Calibration", 79, buff)) {
       calibration_required = 0;
-      ax = 0;
-      sscanf(buff, "%f %f %f %f %f %f", &ax, &bx, &cx, &ay, &by, &cy);
+      global_ax = 0;
+      sscanf(buff, "%f %f %f %f %f %f", &global_ax, &global_bx, &global_cx, &global_ay, &global_by, &global_cy);
+      if(global_ax == 0) {
+        calibration_required = 1;
+      }
     }
     if(touchPollTouchStatus()) {
       calibration_required = 1;
@@ -29418,6 +29542,14 @@ void setup() {
     if(read_key_value_from_file("/Settings/Sound", "volume", buff)) {
       sscanf(buff, "%d", &global_volume);
     }
+    if(read_key_value_from_file("/Settings/Sound", "beeper_pin", buff)) {
+      sscanf(buff, "%d", &global_beeper_pin);
+    }
+    pinMode(global_beeper_pin, OUTPUT);
+    if(read_key_value_from_file("/Settings/Sound", "music_pin", buff)) {
+      sscanf(buff, "%d", &global_music_pin);
+    }
+    pinMode(global_music_pin, OUTPUT);
 
     // Настройки клавиатуры
     if(read_key_value_from_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", buff)) {
@@ -29499,10 +29631,9 @@ void setup() {
     }
   }
 
-  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
-
   // Загружаем многоточечную калибровку если есть
   touch_calibration_load_multipoint();
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 }
 
 void loop() {
