@@ -275,8 +275,11 @@
 2026-09-15 ГСЧ добавил 1 из 1000 и 1 из 10000, Возможность указать пин для музыки и для бибикания,
   double вместо float с sscanf, меньше точек для сглаживания, баг в змейке, баг в ланучере с левой колонкой,
   chat в терминале, bitcoin dashboard
+2026-09-16 Текущий путь в терминале, cd в терминале, поддержка текущего пути в терминале, заставка mood lamp,
+  base64_encode, base16_encode, base32_encode, баг сотен часов в stopwatch
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
+- (б) Stopwatch баг смещения времени после выхода
 - (б) Баг с копированием/перемещением файлов (сходу не воспроизвелось)
 - (д) Приложение поиск
 - (д) Ланучер-список
@@ -285,11 +288,9 @@
 - (д) Ещё один заход Bluetooth
 - (п) Просмотреть справку, может быть что-то добавить
 Терминал
-- (д) Текущий путь в терминале
 - (д) Терминал переменные окружения
 - (д) /Terminal/Environment
 - (д) Прошлые команды в терминале по стрелке вверх
-- (д) Файловые операции в терминале на основе текущего пути
 Буфер обмена
 - (д) Буфер обмена
 - (д) Выделение в просмотре, копирование
@@ -308,13 +309,20 @@
 - (н) Распаковка zip
 - (н) Распаковка gz
 - (н) tar
-- (н) Кодирование-декодирование b32 из терминала
-- (н) Кодирование-декодирование b64 из терминала
+- (н) Декодирование b16 из терминала
+- (н) Декодирование b32 из терминала
+- (н) Декодирование b64 из терминала
 - (н) Шифрование-расшифрование AES в терминале
 - (н) xmodem отправка
 - (н) xmodem приём
 - (д) QR-код
 - (д) Приложение для отображения штрих-кодов: EAN8, EAN13, QR
+- (н) Можно заменить millis на esp_timer_get_time, чтобы не было переполнения времени
+- (н) Хэш пароля в NVS
+- Примеры терминала
+- Баг при копировании файла в папку
+- Терминал Autoexec
+- Bitcoin проверка сети
 
 - (н) Мини-калькулятор
 - (н) Конвертер валют, единиц измерения
@@ -570,6 +578,7 @@ char *terminal_colors = terminal_primary_colors;
 char *terminal_attributes = terminal_primary_attributes;
 
 char terminal_output[80];
+char terminal_current_path[80] = "/";
 
 #define ATTRIBUTE_BOLD 1
 #define ATTRIBUTE_UNDERLINED 2
@@ -1934,7 +1943,7 @@ void files(char mode, char *io_buff) {
   char redraw_required = 0;
   char rescan_files = 0;
   int current_op = -1;
-  char path[80] = "/";
+  //char path[80] = "/";
   char buff[80];
   char filename_to[80];
   char user_input[80];
@@ -2000,7 +2009,7 @@ void files(char mode, char *io_buff) {
       redraw_required = 0;
     }
 
-    sprintf(buff, "Path: %s", path);
+    sprintf(buff, "Path: %s", terminal_current_path);
     utf8_to_cp1251(buff);
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.fillRect(0, 16, tft.width(), 16, color_scheme_bg);
@@ -2008,7 +2017,7 @@ void files(char mode, char *io_buff) {
 
     if(rescan_files) {
       // Список файлов
-      current_dir = Storage->open(path);
+      current_dir = Storage->open(terminal_current_path);
       file_index = 0;
 
       if (!current_dir) {
@@ -2017,7 +2026,7 @@ void files(char mode, char *io_buff) {
       }
       if (!current_dir.isDirectory()) {
         drawError("Not a directory");
-        if(!strcmp("/", path)) {
+        if(!strcmp("/", terminal_current_path)) {
           if(storage_type == STORAGE_TYPE_FFAT) {
             if(drawConfirm("Format storage?") == 0) {
               // Форматирование
@@ -2044,7 +2053,7 @@ void files(char mode, char *io_buff) {
       files = (char**)malloc(FILES_COUNT_MAX * sizeof(char*));
       files[0] = NULL;
       //delay(1000);
-      if(strcmp(path, "/")) {
+      if(strcmp(terminal_current_path, "/")) {
         sprintf(buff, "[u] ..");
         files[file_index] = (char*)malloc((strlen(buff) + 1) * sizeof(char));
         strcpy(files[file_index], buff);
@@ -2096,9 +2105,9 @@ void files(char mode, char *io_buff) {
 
     if(current_op != -1) {
       // Находим нужный файл
-      current_dir = Storage->open(path);
+      current_dir = Storage->open(terminal_current_path);
       file_index = 0;
-      if(strcmp(path, "/")) {
+      if(strcmp(terminal_current_path, "/")) {
         file_index++;
       }
       while(file = current_dir.openNextFile()) {
@@ -2111,7 +2120,7 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         if(drawPrompt("New file name", user_input) == 0) {
           if(strlen(user_input) > 0) {
-            sprintf(buff, "%s%s", path, user_input);
+            sprintf(buff, "%s/%s", terminal_current_path, user_input);
             file = Storage->open(buff, FILE_WRITE);
             if (!file) {
               drawError("Failed to create new file");
@@ -2126,13 +2135,10 @@ void files(char mode, char *io_buff) {
       // Просмотр или переход к папке
       if(current_op == 1) {
         // Если не корень, и был выбран нулевой элемент, то переход на уровень выше
-        if(strcmp(path, "/") && file_selected == 0) {
-          path[strlen(path) - 1] = 0;
-          while(path[strlen(path) - 1] != '/' && strlen(path) > 0) {
-            path[strlen(path) - 1] = 0;
-          }
-          if(strlen(path) == 0) {
-            strcpy(path, "/");
+        if(strcmp(terminal_current_path, "/") && file_selected == 0) {
+          terminal_cd("..");
+          if(strlen(terminal_current_path) == 0) {
+            strcpy(terminal_current_path, "/");
           }
           file_selected = 0;
           file_offset = 0;
@@ -2140,14 +2146,13 @@ void files(char mode, char *io_buff) {
         }
         else {
           if(file.isDirectory()) {
-            strcat(path, file.name());
-            strcat(path, "/");
+            strcat(terminal_current_path, file.name());
             file_selected = 0;
             file_offset = 0;
             rescan_files = 1;
           }
           else {
-            sprintf(buff, "%s%s", path, file.name());
+            sprintf(buff, "%s/%s", terminal_current_path, file.name());
             if(is_bmp_file(buff)) {
               disableAppTitle();
               clearScreen();
@@ -2172,11 +2177,11 @@ void files(char mode, char *io_buff) {
       }
       // Редактирование
       if(current_op == 2) {
-        if(strcmp(path, "/") && file_selected == 0) {
+        if(strcmp(terminal_current_path, "/") && file_selected == 0) {
           drawError("Unable to edit directory");
         }
         else {
-          sprintf(buff, "%s%s", path, file.name());
+          sprintf(buff, "%s/%s", terminal_current_path, file.name());
           edit_file(buff, buff);
         }
       }
@@ -2185,8 +2190,8 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         if(drawPrompt("Rename file name", user_input) == 0) {
           if(strlen(user_input) != 0) {
-            sprintf(buff, "%s%s", path, file.name());
-            sprintf(filename_to, "%s%s", path, user_input);
+            sprintf(buff, "%s/%s", terminal_current_path, file.name());
+            sprintf(filename_to, "%s/%s", terminal_current_path, user_input);
             if(!Storage->rename(buff, filename_to)) {
               drawError("Rename failed");
               drawInfo(buff);
@@ -2200,7 +2205,7 @@ void files(char mode, char *io_buff) {
       if(current_op == 4) {
         strcpy(user_input, "");
         if(drawPrompt("New directory name", user_input) == 0) {
-          sprintf(buff, "%s%s", path, user_input);
+          sprintf(buff, "%s/%s", terminal_current_path, user_input);
           if(!Storage->mkdir(buff)) {
             drawError("Failed to create new directory");
           }
@@ -2212,12 +2217,12 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         if(drawPrompt("Enter path to copy", user_input) == 0) {
           if(strlen(user_input) != 0) {
-            sprintf(buff, "%s%s", path, file.name());
+            sprintf(buff, "%s/%s", terminal_current_path, file.name());
             strcpy(filename_to, user_input);
             
             // Если путь без / в начале, то это относительный путь
             if(user_input[0] != '/') {
-              sprintf(filename_to, "%s%s", path, user_input);
+              sprintf(filename_to, "%s/%s", terminal_current_path, user_input);
             }
             strcpy(user_input, filename_to);
 
@@ -2262,12 +2267,12 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         if(drawPrompt("Enter path to move", user_input) == 0) {
           if(strlen(user_input) != 0) {
-            sprintf(buff, "%s%s", path, file.name());
+            sprintf(buff, "%s/%s", terminal_current_path, file.name());
             strcpy(filename_to, user_input);
 
             // Если путь без / в начале, то это относительный путь
             if(user_input[0] != '/') {
-              sprintf(filename_to, "%s%s", path, user_input);
+              sprintf(filename_to, "%s/%s", terminal_current_path, user_input);
             }
             strcpy(user_input, filename_to);
 
@@ -2296,7 +2301,7 @@ void files(char mode, char *io_buff) {
       // Удаление
       if(current_op == 7) {
         if(drawConfirm("Delete file?") == 0) {
-          sprintf(buff, "%s%s", path, file.name());
+          sprintf(buff, "%s/%s", terminal_current_path, file.name());
           if(file.isDirectory()) {
             if(!Storage->rmdir(buff)) {
               drawError("Remove directory failed");
@@ -2387,6 +2392,7 @@ void terminal(char mode, char *io_buff) {
     // Название может быть перезаписано, исправляем
     drawAppTitle("Terminal");
 
+    terminal_print(terminal_current_path);
     terminal_print(">");
     terminal_show_screen();
 
@@ -2465,6 +2471,7 @@ void terminal_execute(char *str) {
 // ====================================================
 void terminal_execute_single(char *str) {
   char buff[80];
+  char buff2[80];
   long i, j;
   int byte;
   int error;
@@ -2861,22 +2868,34 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: erase {ffat}");
     }
   }
-  else if(strcmp(cmdline_params[0], "ls") == 0) {
+  else if(strcmp(cmdline_params[0], "cd") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: ls {directory}");
+      terminal_cd_root();
     }
     else {
-      current_dir = Storage->open(cmdline_params[1]);
-      if(current_dir && current_dir.isDirectory()) {
-        while(file = current_dir.openNextFile()) {
-          strcpy(buff, file.name());
-          utf8_to_cp1251(buff);
-          terminal_println(buff);
-        }
+      terminal_cd(cmdline_params[1]);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "pwd") == 0) {
+    terminal_println(terminal_current_path);
+  }
+  else if(strcmp(cmdline_params[0], "ls") == 0) {
+    if(arg_count != 2) {
+      strcpy(buff, terminal_current_path);
+    }
+    else {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+    }
+    current_dir = Storage->open(buff);
+    if(current_dir && current_dir.isDirectory()) {
+      while(file = current_dir.openNextFile()) {
+        strcpy(buff, file.name());
+        utf8_to_cp1251(buff);
+        terminal_println(buff);
       }
-      else {
-        terminal_println("Unable to open directory");
-      }
+    }
+    else {
+      terminal_println("Unable to open directory");
     }
   }
   else if(strcmp(cmdline_params[0], "mkdir") == 0) {
@@ -2884,7 +2903,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: mkdir {directory}");
     }
     else {
-      if(Storage->mkdir(cmdline_params[1])) {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      if(Storage->mkdir(buff)) {
         terminal_println("OK");
       }
       else {
@@ -2897,7 +2917,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: rmdir {directory}");
     }
     else {
-      if(Storage->rmdir(cmdline_params[1])) {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      if(Storage->rmdir(buff)) {
         terminal_println("OK");
       }
       else {
@@ -2911,7 +2932,9 @@ void terminal_execute_single(char *str) {
     }
     else {
       if(Storage->exists(cmdline_params[1])) {
-        cp_recursive_between_storages(Storage, cmdline_params[1], Storage, cmdline_params[2]);
+        terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+        terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+        cp_recursive_between_storages(Storage, buff, Storage, buff2);
       }
       else {
         terminal_println("File not exists");
@@ -2924,7 +2947,9 @@ void terminal_execute_single(char *str) {
     }
     else {
       if(Storage->exists(cmdline_params[1])) {
-        cp_recursive_between_storages(Storage, cmdline_params[1], Storage, cmdline_params[2]);
+        terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+        terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+        cp_recursive_between_storages(Storage, buff, Storage, buff2);
         delete_recursive(Storage, cmdline_params[1]);
       }
       else {
@@ -2937,8 +2962,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: rm {path}");
     }
     else {
-      if(Storage->exists(cmdline_params[1])) {
-        delete_recursive(Storage, cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      if(Storage->exists(buff)) {
+        delete_recursive(Storage, buff);
       }
       else {
         terminal_println("File not exists");
@@ -2953,41 +2979,44 @@ void terminal_execute_single(char *str) {
       if(!Storage) {
         terminal_println("No storage");
       }
-      else if(!Storage->exists(cmdline_params[1])) {
-        terminal_println("File not exists");
-      }
-      else if(is_empty_directory(cmdline_params[1])) {
-        terminal_println("Empty directory");
-      }
-      else if(is_directory(cmdline_params[1])) {
-        terminal_println("Directory");
-      }
-      else if(is_empty_file(cmdline_params[1])) {
-        terminal_println("Empty file");
-      }
-      else if(is_bmp_file(cmdline_params[1])) {
-        terminal_println("BMP image");
-      }
-      else if(is_png_file(cmdline_params[1])) {
-        terminal_println("PNG image");
-      }
-      else if(is_jpeg_file(cmdline_params[1])) {
-        terminal_println("JPEG image");
-      }
-      else if(is_webp_file(cmdline_params[1])) {
-        terminal_println("WEBP image");
-      }
-      else if(is_mp3_file(cmdline_params[1])) {
-        terminal_println("MP3 sound");
-      }
-      else if(is_wav_file(cmdline_params[1])) {
-        terminal_println("WAV sound");
-      }
-      else if(is_binary_file(cmdline_params[1])) {
-        terminal_println("Binary file");
-      }
       else {
-        terminal_println("Text file");
+        terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+        if(!Storage->exists(buff)) {
+          terminal_println("File not exists");
+        }
+        else if(is_empty_directory(buff)) {
+          terminal_println("Empty directory");
+        }
+        else if(is_directory(buff)) {
+          terminal_println("Directory");
+        }
+        else if(is_empty_file(buff)) {
+          terminal_println("Empty file");
+        }
+        else if(is_bmp_file(buff)) {
+          terminal_println("BMP image");
+        }
+        else if(is_png_file(buff)) {
+          terminal_println("PNG image");
+        }
+        else if(is_jpeg_file(buff)) {
+          terminal_println("JPEG image");
+        }
+        else if(is_webp_file(buff)) {
+          terminal_println("WEBP image");
+        }
+        else if(is_mp3_file(buff)) {
+          terminal_println("MP3 sound");
+        }
+        else if(is_wav_file(buff)) {
+          terminal_println("WAV sound");
+        }
+        else if(is_binary_file(buff)) {
+          terminal_println("Binary file");
+        }
+        else {
+          terminal_println("Text file");
+        }
       }
     }
   }
@@ -2996,7 +3025,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: cat {file}");
     }
     else {
-      terminal_cat(cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_cat(buff);
     }
   }
   else if(strcmp(cmdline_params[0], "head") == 0) {
@@ -3004,7 +3034,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: head {file}");
     }
     else {
-      terminal_head(cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_head(buff);
     }
   }
   else if(strcmp(cmdline_params[0], "tail") == 0) {
@@ -3012,7 +3043,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: tail {file}");
     }
     else {
-      terminal_tail(cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_tail(buff);
     }
   }
   else if(strcmp(cmdline_params[0], "more") == 0) {
@@ -3020,7 +3052,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: more {file}");
     }
     else {
-      terminal_more(cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_more(buff);
     }
   }
   else if(strcmp(cmdline_params[0], "grep") == 0) {
@@ -3028,7 +3061,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: grep {text} {file}");
     }
     else {
-      terminal_grep(cmdline_params[1], cmdline_params[2]);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff);
+      terminal_grep(cmdline_params[1], buff);
     }
   }
   else if(strcmp(cmdline_params[0], "view") == 0) {
@@ -3036,7 +3070,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: view {file}\r");
     }
     else {
-      view_file(cmdline_params[1], cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      view_file(buff, buff);
     }
   }
   else if(strcmp(cmdline_params[0], "hexview") == 0) {
@@ -3044,7 +3079,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: hexview {file}\r");
     }
     else {
-      hexview_file(cmdline_params[1], cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      hexview_file(buff, buff);
     }
   }
   else if(strcmp(cmdline_params[0], "append") == 0) {
@@ -3052,8 +3088,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: append {file} {line} [line] ...");
     }
     else {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
       for(i = 2; i < arg_count; i++) {
-        file_append_line(cmdline_params[1], cmdline_params[i]);
+        file_append_line(buff, cmdline_params[i]);
       }
     }
   }
@@ -3062,7 +3099,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: edit {file}");
     }
     else {
-      edit_file(cmdline_params[1], cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      edit_file(buff, buff);
     }
   }
   else if(strcmp(cmdline_params[0], "csv") == 0) {
@@ -3070,7 +3108,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: csv {file}");
     }
     else {
-      edit_csv(cmdline_params[1], cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      edit_csv(buff, buff);
     }
   }
   else if(strcmp(cmdline_params[0], "hexdump") == 0) {
@@ -3078,7 +3117,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: hexdump {file}");
     }
     else {
-      terminal_hexdump(cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_hexdump(buff);
     }
   }
   else if(strcmp(cmdline_params[0], "wc") == 0) {
@@ -3086,7 +3126,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: wc {file}");
     }
     else {
-      terminal_wc(cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_wc(buff);
     }
   }
   else if(strcmp(cmdline_params[0], "crc") == 0) {
@@ -3094,7 +3135,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: crc {file}");
     }
     else {
-      terminal_checksum(cmdline_params[1], CHECKSUM_CRC);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_checksum(buff, CHECKSUM_CRC);
     }
   }
   else if(strcmp(cmdline_params[0], "md5sum") == 0) {
@@ -3102,7 +3144,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: md5sum {file}");
     }
     else {
-      terminal_checksum(cmdline_params[1], CHECKSUM_MD5);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_checksum(buff, CHECKSUM_MD5);
     }
   }
   else if(strcmp(cmdline_params[0], "sha256sum") == 0) {
@@ -3110,7 +3153,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: sha256sum {file}");
     }
     else {
-      terminal_checksum(cmdline_params[1], CHECKSUM_SHA256);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_checksum(buff, CHECKSUM_SHA256);
     }
   }
   else if(strcmp(cmdline_params[0], "brainfuck") == 0) {
@@ -3118,7 +3162,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: brainfuck {file}");
     }
     else {
-      terminal_brainfuck(cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_brainfuck(buff);
     }
   }
   else if(strcmp(cmdline_params[0], "basic") == 0) {
@@ -3126,7 +3171,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: basic {file}");
     }
     else {
-      terminal_basic(cmdline_params[1]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_basic(buff);
     }
   }
   else if(strcmp(cmdline_params[0], "touch") == 0) {
@@ -3134,7 +3180,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: touch {filename}");
     }
     else {
-      file = Storage->open(cmdline_params[1], FILE_APPEND);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      file = Storage->open(buff, FILE_APPEND);
       if(file) {
         file.close();
         terminal_println("OK");
@@ -3149,7 +3196,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: rm {filename}");
     }
     else {
-      if(Storage->remove(cmdline_params[1])) {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      if(Storage->remove(buff)) {
         terminal_println("OK");
       }
       else {
@@ -3167,7 +3215,9 @@ void terminal_execute_single(char *str) {
         FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
       }
 
-      cp_between_storages(&FFat, cmdline_params[1], &SD, cmdline_params[2]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      cp_between_storages(&FFat, buff, &SD, buff2);
 
       if(storage_type == STORAGE_TYPE_SD) {
         FFat.end();
@@ -3183,7 +3233,9 @@ void terminal_execute_single(char *str) {
         FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
       }
 
-      cp_between_storages(&SD, cmdline_params[1], &FFat, cmdline_params[2]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      cp_between_storages(&SD, buff, &FFat, buff2);
 
       if(storage_type == STORAGE_TYPE_SD) {
         FFat.end();
@@ -3195,7 +3247,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: utf8_to_cp1251 {input_filename} {output_filename}");
     }
     else {
-      file_utf8_to_cp1251(cmdline_params[1], cmdline_params[2]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      file_utf8_to_cp1251(buff, buff2);
     }
   }
   else if(strcmp(cmdline_params[0], "cp1251_to_utf8") == 0) {
@@ -3203,7 +3257,51 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: cp1251_to_utf8 {input_filename} {output_filename}");
     }
     else {
-      file_cp1251_to_utf8(cmdline_params[1], cmdline_params[2]);
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      file_cp1251_to_utf8(buff, buff2);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "base16_encode") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: base64_encode {input_filename} {output_filename}");
+    }
+    else if(arg_count == 2) {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      file_base16_encode(buff, NULL);
+    }
+    else {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      file_base16_encode(buff, buff2);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "base32_encode") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: base32_encode {input_filename} {output_filename}");
+    }
+    else if(arg_count == 2) {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      file_base32_encode(buff, NULL);
+    }
+    else {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      file_base32_encode(buff, buff2);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "base64_encode") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: base64_encode {input_filename} {output_filename}");
+    }
+    else if(arg_count == 2) {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      file_base64_encode(buff, NULL);
+    }
+    else {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      file_base64_encode(buff, buff2);
     }
   }
   // I2C
@@ -3347,7 +3445,8 @@ void terminal_execute_single(char *str) {
       terminal_wget(cmdline_params[1], NULL);
     }
     else {
-      terminal_wget(cmdline_params[1], cmdline_params[2]);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff);
+      terminal_wget(cmdline_params[1], buff);
     }
   }
   else if(strcmp(cmdline_params[0], "ipinfo") == 0) {
@@ -3479,9 +3578,6 @@ void terminal_execute_single(char *str) {
 #endif // IS_SSH_ENABLED
 #endif // IS_WIFI_ENABLED
   // Обычные приложения
-  else if(strcmp(cmdline_params[0], "calibration_multipoint") == 0) {
-    calibration_multipoint = 1;
-  }
   else if(strcmp(cmdline_params[0], "app") == 0) {
     if(strcmp(cmdline_params[1], "calculator") == 0) {
       calculator(APP_MODE_LAUNCH, NULL);
@@ -3712,6 +3808,105 @@ void terminal_execute_single(char *str) {
     else if(strcmp(cmdline_params[0], "")) {
       terminal_println("Unknown command");
     }
+  }
+}
+
+// Получить полный путь к файлу
+void terminal_get_file_path_with_current_path(char *filename, char *full_path) {
+  char buff[80];
+
+  // Если путь начинается с /, то текущий путь не учитывается
+  if(filename[0] == '/') {
+    strcpy(full_path, filename);
+    return;
+  }
+  strcpy(full_path, terminal_current_path);
+  // Если не корневая папка, то добавить слеш
+  if(strlen(full_path) != 1 || full_path[0] != '/') {
+    strcat(full_path, "/");
+  }  
+  strcat(full_path, filename);
+}
+
+// Переход к корневой папке
+void terminal_cd_root() {
+  strcpy(terminal_current_path, "/");
+}
+
+// Список папок через /
+void terminal_cd(char *next_path) {
+  char buff[80];
+  int i;
+  int read, write;
+
+  if(next_path[0] == '/') {
+    strcpy(buff, next_path);
+    strcat(buff, "/");
+  }
+  else {
+    strcpy(buff, terminal_current_path);
+    strcat(buff, "/");
+    strcat(buff, next_path);
+    strcat(buff, "/");
+  }
+
+  // Все одиночные точки убираем, такие "/./", заменяем на "/"
+  read = 0;
+  for(write = 0; write <= strlen(buff); write++) {
+    buff[write] = buff[read];
+    if(memcmp(buff + read, "/./", 3) == 0) {
+      read+=2;
+    }
+    read++;
+  }
+
+  // Многократные слеши убираем
+  read = 0;
+  for(write = 0; write <= strlen(buff); write++) {
+    buff[write] = buff[read];
+    while(memcmp(buff + read, "//", 2) == 0) {
+      read++;
+    }
+    read++;
+  }
+
+  // Нужно выполнить редукцию - каждый .. отменяет вышестоящую папку
+  read = 0;
+  for(write = 0; write <= strlen(buff); write++) {
+    buff[write] = buff[read];
+    if(memcmp(buff + read, "/../", 4) == 0) {
+      if(write == 0) {
+        read += 3;
+      }
+      else {
+        write--;
+        while(write > 0 && buff[write] != '/') write--; 
+        read += 3;
+      }
+    }
+    read++;
+  }
+
+  // Убираем последний слеш, если это не корень
+  if(strlen(buff) > 1) {
+    buff[strlen(buff) - 1] = 0;
+  }
+
+  // Если нужно - добавляем текущий путь
+  if(buff[0] == '/') {
+    if(Storage && Storage->exists(buff)) {
+      strcpy(terminal_current_path, buff);
+      terminal_print("Current path: ");
+      terminal_println(terminal_current_path);
+    }
+    else {
+      terminal_print("Path not exists: ");
+      terminal_println(buff);
+    }
+  }
+  else {
+    terminal_print("Path error: ");
+    terminal_println(buff);
   }
 }
 
@@ -11374,7 +11569,7 @@ void stopwatch(char mode, char *io_buff) {
       millis_from_lap += millis_value - millis_prev;
       millis_prev = millis_value;
     }
-    sprintf(buff, "%02d:%02d:%02d.%02d",
+    sprintf(buff, " %02d:%02d:%02d.%02d ",
         millis_from_start / 3600000,
         (millis_from_start / 60000) % 60,
         (millis_from_start / 1000) % 60,
@@ -13279,6 +13474,7 @@ void screensaver(char mode, char *io_buff) {
     "Noise",
     "Matrix",
     "Forest Fire Model",
+    "Mood Lamp",
     NULL
   };
   char app_icon[] = {
@@ -13346,6 +13542,10 @@ void screensaver(char mode, char *io_buff) {
       // Forest fire
       if(button_pressed == 5) {
         screensaver_forest_fire();
+      }
+      // Mood lamp
+      if(button_pressed == 6) {
+        screensaver_mood_lamp();
       }
       clearScreen();
       drawAppTitle("Screensavers");
@@ -13705,6 +13905,25 @@ void screensaver_forest_fire() {
 
   free(trees);
   free(fires);
+}
+
+void screensaver_mood_lamp() {
+  int red = 0, green = 0, blue = 0;
+  int color;
+  disableAppTitle();
+  while(1) {
+    red = B00011110 * (1 + sin(1.0 * millis() / 10000)) / 2;
+    green = B00111110 * (1 + sin(1.1 * millis() / 10000)) / 2;
+    blue = B00011110 * (1 + sin(1.3 * millis() / 10000)) / 2;
+    color = ((red) << (5 + 6)) | ((green) << (5)) | ((blue));
+    tft.fillScreen(color);
+    Serial.printf("r %d g %d b %d color %04X\n", red, green, blue, color);
+    delayOrTouchWait(50);
+    if(touchCheckNowait()) {
+      touchWaitRelease();
+      break;
+    }
+  }
 }
 
 char array_get_bit(char *arr, int x, int y, int width, int height) {
@@ -17733,6 +17952,163 @@ void ble(char mode, char *io_buff) {
 
 #endif
 // IS_BLE_ENABLED
+
+void file_base16_encode(char *from_filename, char *to_filename) {
+  char out_buff[4];
+  int byte;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  while(file_from.available()) {
+    byte = file_from.read();
+    sprintf(out_buff, "%02X", byte);
+    if(to_filename) file_to.print(out_buff); else terminal_print(out_buff);
+  }
+  
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
+
+void file_base32_encode(char *from_filename, char *to_filename) {
+  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  char byte_out;
+  char byte_in;
+  int bit_index_in = 0;
+  int bit_index_out = 0;
+  int index_out = 0;
+  int byte_index_out = 0;
+  int eof = 0;
+  int i;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  bit_index_in = 0;
+  byte_out = 0;
+  index_out = 0;
+  eof = 0;
+  byte_index_out = 0;
+  while(file_from.available() || bit_index_in > 0 || bit_index_out > 0) {
+    if(bit_index_in == 0) {
+      if(file_from.available()) {
+        byte_in = file_from.read();
+      }
+      else {
+        byte_in = 0;
+      }
+    }
+
+    index_out = index_out << 1 | ((byte_in >> (7 - bit_index_in)) & 1);
+    
+    bit_index_out++;
+    if(bit_index_out == 5) {
+      byte_out = alphabet[index_out];
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      bit_index_out = 0;
+      index_out = 0;
+      byte_index_out = (byte_index_out + 1) % 8;
+
+      if(!file_from.available() && eof) {
+        if(byte_index_out > 0) {
+          byte_out = '=';
+          for(i = byte_index_out; i < 8; i++) {
+            if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+          }
+        }
+        break;
+      }
+    }
+    bit_index_in++;
+    if(bit_index_in == 8) {
+      if(!file_from.available()) eof = 1;
+      bit_index_in = 0;
+    }
+  }
+
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
+
+void file_base64_encode(char *from_filename, char *to_filename) {
+  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  char in_buff[3];
+  char out_buff[4];
+  char byte_out;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  while(file_from.available()) {
+    in_buff[0] = file_from.read();
+    // xxxxxx00 00000000 00000000
+    out_buff[0] = in_buff[0] >> 2;
+    byte_out = alphabet[out_buff[0]];
+    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+    
+    if(!file_from.available()) {
+      out_buff[1] = ((in_buff[0] & B00000011) << 4);
+      byte_out = alphabet[out_buff[1]];
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      byte_out = '=';
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      break;
+    }
+
+    in_buff[1] = file_from.read();
+    // 000000xx xxxx0000 00000000
+    out_buff[1] = ((in_buff[0] & B00000011) << 4) | (in_buff[1] >> 4);
+    byte_out = alphabet[out_buff[1]];
+    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+    if(!file_from.available()) {
+      out_buff[2] = ((in_buff[1] & B00001111) << 2);
+      byte_out = alphabet[out_buff[2]];
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      byte_out = '=';
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      break;
+    }
+
+    in_buff[2] = file_from.read();
+    // 00000000 0000xxxx xx000000
+    out_buff[2] = ((in_buff[1] & B00001111) << 2) | (in_buff[2] >> 6);
+    byte_out = alphabet[out_buff[2]];
+    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+
+    // 00000000 00000000 00xxxxxx
+    out_buff[3] = (in_buff[2] & B00111111);
+    byte_out = alphabet[out_buff[3]];
+    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+  }
+  
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
 
 void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
   int byte1, byte2, byte3;
