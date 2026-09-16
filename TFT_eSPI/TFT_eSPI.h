@@ -450,6 +450,7 @@ class TFT_eSPI : public Print { friend class TFT_eSprite; // Sprite class has ac
 
                    // Read the colour of a pixel at x,y and return value in 565 format
   virtual uint16_t readPixel(int32_t x, int32_t y);
+  virtual void     setReadExtraByte(bool value);
 
   virtual void     setWindow(int32_t xs, int32_t ys, int32_t xe, int32_t ye);   // Note: start + end coordinates
 
@@ -947,6 +948,7 @@ class TFT_eSPI : public Print { friend class TFT_eSprite; // Sprite class has ac
 
   bool     _fillbg;    // Fill background flag (just for for smooth fonts at the moment)
 
+  bool     read_extra_byte;
 #if defined (SSD1963_DRIVER)
   uint16_t Cswap;      // Swap buffer for SSD1963
   uint8_t r6, g6, b6;  // RGB buffer for SSD1963

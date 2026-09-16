@@ -1128,6 +1128,14 @@ uint32_t TFT_eSPI::readcommand32(uint8_t cmd_function, uint8_t index)
   return reg;
 }
 
+/***************************************************************************************
+** Function name:           setReadExtraByte
+** Description:             Set the font for the print stream
+***************************************************************************************/
+void TFT_eSPI::setReadExtraByte(bool value)
+{
+  read_extra_byte = value;
+}
 
 /***************************************************************************************
 ** Function name:           read pixel (for SPI Interface II i.e. IM [3:0] = "1101")
@@ -1226,6 +1234,12 @@ uint16_t TFT_eSPI::readPixel(int32_t x0, int32_t y0)
     #else
       // Read the 3 RGB bytes, colour is actually only in the top 6 bits of each byte
       // as the TFT stores colours as 18 bits
+    //#ifdef ESP32_CYD_PDA
+      if(read_extra_byte) {
+        //Serial.println("+");
+        tft_Read_8();
+      }
+    //#endif
       uint8_t r = tft_Read_8();
       uint8_t g = tft_Read_8();
       uint8_t b = tft_Read_8();
@@ -5870,7 +5884,6 @@ int16_t TFT_eSPI::drawFloat(float floatNumber, uint8_t dp, int32_t poX, int32_t 
   // Finally we can plot the string and return pixel length
   return drawString(str, poX, poY, font);
 }
-
 
 /***************************************************************************************
 ** Function name:           setFreeFont
