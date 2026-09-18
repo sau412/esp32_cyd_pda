@@ -47,12 +47,12 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * You can set password in Security app. Password asked when power on. Password stored in a plaintext, no encryption
 
 # Status bar symbols
-* A - alarm enabled
-* W - connected to Wi-Fi
-* T - time synced with NTP
-* S - main storage is SD
-* F - main storage is FFat (internal storage)
-* M - music playing in progress
+* Alarm clock - alarm enabled
+* Wi-Fi symbol - connected to Wi-Fi
+* Clock with dots - waiting for sync with NTP
+* SD card - main storage is SD
+* Chip - main storage is FFat (internal storage)
+* Note - music playing in progress
 
 # Applications/Functions
 * File management (with viewing text, JPEG, PNG and editing text support)
@@ -100,9 +100,10 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Schedule
 * Passwords - AES-256 encrypted notes
 * Flashcards
-* Table editor (stored in CSV format)
+* Table editor (data stored in CSV format)
 * TOTP (like Google Authenticator)
 * Basic interpeter - advanced calculations
+* Barcode - linear barcode generator (EAN8, EAN13, Code128)
 
 ## Games
 * Fifteen puzzle game - see https://en.wikipedia.org/wiki/15_puzzle for details
@@ -119,6 +120,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * CHIP-8 emulator - see https://en.wikipedia.org/wiki/CHIP-8 for details
 * Sokoban - see https://en.wikipedia.org/wiki/Sokoban for details
 * Minesweeper - see https://en.wikipedia.org/wiki/Minesweeper_(video_game) for details
+* Chessboard - chessboard with chess figures. No rules.
 
 ## Dashboards
 * Clock and Calendar
@@ -130,6 +132,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Network
 * Wi-Fi Channels Monitor
 * World Time
+* Bitcoin block, price, pending transactions
 
 ## Screensavers
 * Stars
@@ -164,11 +167,13 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * reset - clear screen, reinit terminal
 * reboot - reboot CYD
 * host - resolve domain name
+* ipconfig - show all network information
 * ip - show current ip
 * gateway - show current gateway
 * dns - show current DNS
 * netmask - show current netmask
 * rssi - show current RSSI value
+* hostname {hostname} - set hostname
 * ping {host} - ping specified host continiously, touch screen to stop
 * serial [speed] - connect to serial port with specified speed, default is 115200
 * telnet {host} [port] - connect via telnet to specified host and port
@@ -176,6 +181,9 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * wget {url} [filename] - download file with http/https and show or store to file
 * tracert {host} - traceroute ho host
 * ipinfo {ip} - show IP information (via ipinfo.io)
+* translate {from} {to} {text} - translate with Google Translate
+* weather [lat] [lon] - show weather in specific location
+* chat [{nick} {message}] - show chat or send message to chat
 * sd_to_ffat {sd_path} {ffat_path} - copy file from SD to FFat
 * ffat_to_sd {ffat_path} {sd_path} - copy file from FFat to SD
 * utf8_to_cp1251 {from_file} {to_file} - convert file encoding from UTF-8 to CP1251
@@ -187,15 +195,27 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * uptime - shows uptime in days, hours, minutes, seconds
 * tracert {host} - traceroute host
 * random [from] [to] - random number
+* cd {path} - change directory
+* pwd - show current directory
 * mkdir {path} - create directory
 * rmdir {path} - remove empty directory
 * rm {path} - remove file
+* file {path} - show file type
 * touch {path} - create empty file
 * ls {path} - list directory files
 * cat {path} - show file contents
 * more {path} - show file page by page
 * head {path} - show beginning of the file
 * tail {path} - show ending of the file
+* grep {text} {path} - find lines with text
+* hexdump {path} - view file in hex
+* append {path} {text} - append text to file
+* crc {path} - calculate CRC of file
+* md5sum {path} - calculate MD5 of file
+* sha256sum {path} - calculate SHA256 of file
+* brainfuck {path} - run brainfuck code from file
+* touch {path} - create file
+* basic {path} - run BASIC code from file
 * echo {text} - show text and exit
 * caesar {text} - encodes text with Caesar encryption, https://en.wikipedia.org/wiki/Caesar_cipher
 * seq {from} {to} - generate number sequence
@@ -204,9 +224,22 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * lsmem - information about memory
 * lsblk - information about internal storage
 * brainfuck {path} - brainfuck interpretator
+* ffat_to_sd {path} {path} - copy between storages
+* sd_to_ffat {path} {path} - copy between storages
 * view {path} - view file (GUI viewer)
+* hexview {path} - view file in hex (GUI viewer)
 * edit {path} - edit file (GUI editor)
 * csv {path} - edit file in table editor
+* utf8_to_cp1251 {path} {path} - change enconding from utf-8 to cp1251
+* cp1251_to_utf8 {path} {path} - change enconding from cp1251 to utf-8
+* base16encode {path} [path] - encode file to base16
+* base16decode {path} [path] - decode file from base16
+* base32encode {path} [path] - encode file to base32
+* base32decode {path} [path] - decode file from base32
+* base64encode {path} [path] - encode file to base64
+* base64decode {path} [path] - decode file from base64
+* app {app_name} - launch app by name
+* Filename from /Terminal - run commands from file one-by-one
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
