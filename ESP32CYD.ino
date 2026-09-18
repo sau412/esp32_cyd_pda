@@ -98,6 +98,7 @@
 - Wikipedia
 - Сокобан
 - Сапёр
+- Генератор штрих-кодов EAN8, EAN13, Code128
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -277,19 +278,20 @@
   chat в терминале, bitcoin dashboard
 2026-09-16 Текущий путь в терминале, cd в терминале, поддержка текущего пути в терминале, заставка mood lamp,
   base64_encode, base16_encode, base32_encode, баг сотен часов в stopwatch
+2026-09-17 Stopwatch баг смещения времени после выхода, проблема с калибровкой после включения, 
+  баг с копированием/перемещением файлов, дашборд Bitcoin проверка наличия соединения, дашборд сеть проверка наличия соединения,
+  Autoexec в терминале, base16_decode, barcode приложение, код ean13, код ean8, контрольные цифры ean8 и ean13,
+  информация о том что процесс копирования-перемещения-удаления идёт
+2026-09-18 Поддержка штрих-кода Code128, баг переименования PIM, BASIC явное завершение программы в приложении,
+  base32decode, base64decode, шахматная доска
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
-- (б) Stopwatch баг смещения времени после выхода
-- (б) Баг с копированием/перемещением файлов (сходу не воспроизвелось)
 - (д) Приложение поиск
 - (д) Ланучер-список
 - (д) Лаунчер с более крупными значками
 - (д) Выбор вида лаунчера
 - (д) Ещё один заход Bluetooth
 - (п) Просмотреть справку, может быть что-то добавить
-Терминал
-- (д) Терминал переменные окружения
-- (д) /Terminal/Environment
 - (д) Прошлые команды в терминале по стрелке вверх
 Буфер обмена
 - (д) Буфер обмена
@@ -300,31 +302,25 @@
 - (д) Не прокручивать при редактировании дальше конца файла
 - (д) Prompt - возможность переставлять курсор, выделять
 Потом, но можно и не потом:
-- (н) Шахматы (доска)
-- (н) Категории для PIM
 - (н) Терминал операции со строками ESC-кодами
 - (н) Тетрис
 - (н) Дашборд Fun Fact / Random Useless Facts
-- (н) Чат - просмотр с прокруткой
-- (н) Распаковка zip
-- (н) Распаковка gz
 - (н) tar
-- (н) Декодирование b16 из терминала
-- (н) Декодирование b32 из терминала
-- (н) Декодирование b64 из терминала
 - (н) Шифрование-расшифрование AES в терминале
 - (н) xmodem отправка
 - (н) xmodem приём
-- (д) QR-код
-- (д) Приложение для отображения штрих-кодов: EAN8, EAN13, QR
 - (н) Можно заменить millis на esp_timer_get_time, чтобы не было переполнения времени
 - (н) Хэш пароля в NVS
-- Примеры терминала
-- Баг при копировании файла в папку
-- Терминал Autoexec
-- Bitcoin проверка сети
+- (н) Примеры терминала
 
-- (н) Мини-калькулятор
+В конце, сторонние библиотеки:
+- (д) QR-код
+- (д) Datamatrix
+- (н) Распаковка zip
+- (н) Распаковка gz
+
+Остальное:
+- (н) Мини-калькулятор в меню
 - (н) Конвертер валют, единиц измерения
 - (н) /Terminal/Aliases (а что это должно делать?)
 - (н) passwd - установка и сброс пароля
@@ -369,8 +365,7 @@
 - (н) Обновление по OTA
 - (н) CHIP-8 ускорение работы вывода спрайта
 - (н) CHIP-8 рисовать только изменённые части экрана
-- (н) Информация по валютам и криптовалютам (курсы)
-- (н) Информация по криптовалютам (блокчейн) - последний блок, время с последнего блока, транзакции в mempool
+- (н) Информация по акциям, валютам и криптовалютам (курсы)
 - (н) Управление через веб
 - (н) I2C чтение распространённых датчиков
 - (н) Basic рисование: plot, draw, rect, fillrect, triangle, fillscreen, drawString, drawCentreString, drawCircle, fillCircle
@@ -382,6 +377,10 @@
 - (н) tftp
 - (д) История/продолжить
 - (д) Переход к случайной функции (приложению)
+- (д) Терминал переменные окружения
+- (д) /Terminal/Environment
+- (н) Чат - просмотр с прокруткой
+- (н) Категории для PIM
 
 */
 
@@ -1003,6 +1002,7 @@ void expenses(char mode, char *io_buff);
 void schedule(char mode, char *io_buff);
 void passwords(char mode, char *io_buff);
 void totp(char mode, char *io_buff);
+void barcode(char mode, char *io_buff);
 void screenshots(char mode, char *io_buff);
 void tunes(char mode, char *io_buff);
 void music(char mode, char *io_buff);
@@ -1038,6 +1038,7 @@ void oscilloscope(char mode, char *io_buff);
 void select_storage_app(char mode, char *io_buff);
 void game2048(char mode, char *io_buff);
 void minesweeper(char mode, char *io_buff);
+void chess(char mode, char *io_buff);
 void chip8(char mode, char *io_buff);
 void clock_control(char mode, char *io_buff);
 void translate(char mode, char *io_buff);
@@ -1071,6 +1072,7 @@ function_application_pointer all_apps[] = {
   books,
   passwords,
   totp,
+  barcode,
   screenshots,
   tables,
   basic,
@@ -1128,6 +1130,7 @@ function_application_pointer all_apps[] = {
   mental_math,
   game2048,
   minesweeper,
+  chess,
   chip8,
   //color_settings,
   //screen_settings,
@@ -2120,7 +2123,7 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         if(drawPrompt("New file name", user_input) == 0) {
           if(strlen(user_input) > 0) {
-            sprintf(buff, "%s/%s", terminal_current_path, user_input);
+            terminal_get_file_path_with_current_path(user_input, buff);
             file = Storage->open(buff, FILE_WRITE);
             if (!file) {
               drawError("Failed to create new file");
@@ -2146,13 +2149,13 @@ void files(char mode, char *io_buff) {
         }
         else {
           if(file.isDirectory()) {
-            strcat(terminal_current_path, file.name());
+            terminal_cd((char *)file.name());
             file_selected = 0;
             file_offset = 0;
             rescan_files = 1;
           }
           else {
-            sprintf(buff, "%s/%s", terminal_current_path, file.name());
+            terminal_get_file_path_with_current_path((char *)file.name(), buff);
             if(is_bmp_file(buff)) {
               disableAppTitle();
               clearScreen();
@@ -2178,11 +2181,22 @@ void files(char mode, char *io_buff) {
       // Редактирование
       if(current_op == 2) {
         if(strcmp(terminal_current_path, "/") && file_selected == 0) {
-          drawError("Unable to edit directory");
+          terminal_cd("..");
+          file_selected = 0;
+          file_offset = 0;
+          rescan_files = 1;
         }
         else {
-          sprintf(buff, "%s/%s", terminal_current_path, file.name());
-          edit_file(buff, buff);
+          terminal_get_file_path_with_current_path((char *)file.name(), buff);
+          if(is_directory(buff)) {
+            terminal_cd(buff);
+            file_selected = 0;
+            file_offset = 0;
+            rescan_files = 1;
+          }
+          else {
+            edit_file(buff, buff);
+          }
         }
       }
       // Переименование
@@ -2190,14 +2204,19 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         if(drawPrompt("Rename file name", user_input) == 0) {
           if(strlen(user_input) != 0) {
-            sprintf(buff, "%s/%s", terminal_current_path, file.name());
-            sprintf(filename_to, "%s/%s", terminal_current_path, user_input);
-            if(!Storage->rename(buff, filename_to)) {
-              drawError("Rename failed");
-              drawInfo(buff);
-              drawInfo(filename_to);
+            terminal_get_file_path_with_current_path((char *)file.name(), buff);
+            if(Storage->exists(buff)) {
+              terminal_get_file_path_with_current_path(user_input, filename_to);
+              if(Storage->rename(buff, filename_to)) {
+                file_selected = 0;
+                rescan_files = 1;
+              }
+              else {
+                drawError("Rename failed");
+                drawInfo(buff);
+                drawInfo(filename_to);
+              }
             }
-          rescan_files = 1;
           }
         }
       }
@@ -2205,7 +2224,7 @@ void files(char mode, char *io_buff) {
       if(current_op == 4) {
         strcpy(user_input, "");
         if(drawPrompt("New directory name", user_input) == 0) {
-          sprintf(buff, "%s/%s", terminal_current_path, user_input);
+          terminal_get_file_path_with_current_path(user_input, buff);
           if(!Storage->mkdir(buff)) {
             drawError("Failed to create new directory");
           }
@@ -2215,48 +2234,13 @@ void files(char mode, char *io_buff) {
       // Копирование
       if(current_op == 5) {
         strcpy(user_input, "");
-        if(drawPrompt("Enter path to copy", user_input) == 0) {
+        if(drawPrompt("Enter destination path", user_input) == 0) {
           if(strlen(user_input) != 0) {
-            sprintf(buff, "%s/%s", terminal_current_path, file.name());
-            strcpy(filename_to, user_input);
-            
-            // Если путь без / в начале, то это относительный путь
-            if(user_input[0] != '/') {
-              sprintf(filename_to, "%s/%s", terminal_current_path, user_input);
-            }
-            strcpy(user_input, filename_to);
-
-            // Если путь не заканчивается на /, то надо проверить, папка это или файл, который нужно создать
-            if(user_input[strlen(user_input) - 1] == '/') {
-              sprintf(filename_to, "%s%s", user_input, file.name());
-            }
-            else {
-              // Если это папка нужно добавить '/' и имя файла
-              current_dir = Storage->open(user_input);
-              if(current_dir) {
-                if(current_dir.isDirectory()) {
-                  sprintf(filename_to, "%s/%s", user_input, file.name());
-                }
-                current_dir.close();
-              }
-              // А если нет, то ничего не трогать
-            }
-            // Копирование
-            file = Storage->open(buff);
-            file_copy = Storage->open(filename_to, FILE_WRITE);
-            if(!file) {
-              drawError("Cannot open source file");
-            }
-            else if(!file_copy) {
-              drawError("Cannot open destination file");
-            }
-            else {
-              while(file.available()) {
-                byte = file.read();
-                file_copy.print(byte);
-              }
-              file.close();
-              file_copy.close();
+            terminal_get_file_path_with_current_path((char *)file.name(), buff);
+            if(Storage->exists(buff)) {
+              terminal_get_file_path_with_current_path(user_input, filename_to);
+              drawProcessWindow("Copying...");
+              cp_recursive_between_storages(Storage, buff, Storage, filename_to);
             }
             rescan_files = 1;
           }
@@ -2265,34 +2249,17 @@ void files(char mode, char *io_buff) {
       // Перемещение
       if(current_op == 6) {
         strcpy(user_input, "");
-        if(drawPrompt("Enter path to move", user_input) == 0) {
+        if(drawPrompt("Enter destination path", user_input) == 0) {
           if(strlen(user_input) != 0) {
-            sprintf(buff, "%s/%s", terminal_current_path, file.name());
-            strcpy(filename_to, user_input);
-
-            // Если путь без / в начале, то это относительный путь
-            if(user_input[0] != '/') {
-              sprintf(filename_to, "%s/%s", terminal_current_path, user_input);
-            }
-            strcpy(user_input, filename_to);
-
-            // Если путь заканчивается без /, то надо проверить, папка это или файл, который нужно создать
-            if(user_input[strlen(user_input) - 1] == '/') {
-              sprintf(filename_to, "%s%s", user_input, file.name());
-            }
-            else {
-              // Если это папка нужно добавить '/' и имя файла
-              current_dir = Storage->open(user_input);
-              if(current_dir && current_dir.isDirectory()) {
-                sprintf(filename_to, "%s/%s", user_input, file.name());
+            terminal_get_file_path_with_current_path((char *)file.name(), buff);
+            if(Storage->exists(buff)) {
+              terminal_get_file_path_with_current_path(user_input, filename_to);
+              drawProcessWindow("Moving...");
+              cp_recursive_between_storages(Storage, buff, Storage, filename_to);
+              if(Storage->exists(filename_to)) {
+                drawProcessWindow("Deleting...");
+                delete_recursive(Storage, buff);
               }
-              current_dir.close();
-            }
-            sprintf(filename_to, "%s", user_input);
-            if(!Storage->rename(buff, filename_to)) {
-              drawError("Rename failed");
-              drawInfo(buff);
-              drawInfo(filename_to);
             }
             rescan_files = 1;
           }
@@ -2301,19 +2268,16 @@ void files(char mode, char *io_buff) {
       // Удаление
       if(current_op == 7) {
         if(drawConfirm("Delete file?") == 0) {
-          sprintf(buff, "%s/%s", terminal_current_path, file.name());
-          if(file.isDirectory()) {
-            if(!Storage->rmdir(buff)) {
-              drawError("Remove directory failed");
-            }
+          terminal_get_file_path_with_current_path((char *)file.name(), buff);
+          if(Storage->exists(buff)) {
+            drawProcessWindow("Deleting...");
+            delete_recursive(Storage, buff);
+            file_selected = 0;
+            rescan_files = 1;
           }
           else {
-            if(!Storage->remove(buff)) {
-              drawError("Remove failed");
-            }
+            drawError("Not exists");
           }
-          file_selected = 0;
-          rescan_files = 1;
         }
       }
       redraw_required = 1;
@@ -2387,6 +2351,20 @@ void terminal(char mode, char *io_buff) {
 
   terminal_output[0] = 0;
   terminal_clear_screen();
+
+  // Автозапуск в терминале
+  if(Storage && Storage->exists("/Terminal/Autoexec")) {
+    fs::File file;
+    file = Storage->open("/Terminal/Autoexec");
+    while(file.available()) {
+      // Читаем команду
+      strcpy(buff, file.readStringUntil('\n').c_str());
+      // Выполняем команду из строки
+      terminal_execute(buff);
+      Serial.println(buff);
+    }
+    file.close();
+  }
 
   while(1) {
     // Название может быть перезаписано, исправляем
@@ -3262,9 +3240,9 @@ void terminal_execute_single(char *str) {
       file_cp1251_to_utf8(buff, buff2);
     }
   }
-  else if(strcmp(cmdline_params[0], "base16_encode") == 0) {
+  else if(strcmp(cmdline_params[0], "base16encode") == 0) {
     if(arg_count == 1) {
-      terminal_println("Usage: base64_encode {input_filename} {output_filename}");
+      terminal_println("Usage: base16encode {input_filename} [output_filename]");
     }
     else if(arg_count == 2) {
       terminal_get_file_path_with_current_path(cmdline_params[1], buff);
@@ -3276,9 +3254,23 @@ void terminal_execute_single(char *str) {
       file_base16_encode(buff, buff2);
     }
   }
-  else if(strcmp(cmdline_params[0], "base32_encode") == 0) {
+  else if(strcmp(cmdline_params[0], "base16decode") == 0) {
     if(arg_count == 1) {
-      terminal_println("Usage: base32_encode {input_filename} {output_filename}");
+      terminal_println("Usage: base16decode {input_filename} [output_filename]");
+    }
+    else if(arg_count == 2) {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      file_base16_decode(buff, NULL);
+    }
+    else {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      file_base16_decode(buff, buff2);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "base32encode") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: base32encode {input_filename} [output_filename]");
     }
     else if(arg_count == 2) {
       terminal_get_file_path_with_current_path(cmdline_params[1], buff);
@@ -3290,9 +3282,23 @@ void terminal_execute_single(char *str) {
       file_base32_encode(buff, buff2);
     }
   }
-  else if(strcmp(cmdline_params[0], "base64_encode") == 0) {
+  else if(strcmp(cmdline_params[0], "base32decode") == 0) {
     if(arg_count == 1) {
-      terminal_println("Usage: base64_encode {input_filename} {output_filename}");
+      terminal_println("Usage: base32decode {input_filename} [output_filename]");
+    }
+    else if(arg_count == 2) {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      file_base32_decode(buff, NULL);
+    }
+    else {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      file_base32_decode(buff, buff2);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "base64encode") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: base64encode {input_filename} [output_filename]");
     }
     else if(arg_count == 2) {
       terminal_get_file_path_with_current_path(cmdline_params[1], buff);
@@ -3302,6 +3308,20 @@ void terminal_execute_single(char *str) {
       terminal_get_file_path_with_current_path(cmdline_params[1], buff);
       terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
       file_base64_encode(buff, buff2);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "base64decode") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: base64decode {input_filename} [output_filename]");
+    }
+    else if(arg_count == 2) {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      file_base64_decode(buff, NULL);
+    }
+    else {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      file_base64_decode(buff, buff2);
     }
   }
   // I2C
@@ -3612,6 +3632,9 @@ void terminal_execute_single(char *str) {
     else if(strcmp(cmdline_params[1], "totp") == 0) {
       totp(APP_MODE_LAUNCH, NULL);
     }
+    else if(strcmp(cmdline_params[1], "barcode") == 0) {
+      barcode(APP_MODE_LAUNCH, NULL);
+    }
     else if(strcmp(cmdline_params[1], "tables") == 0) {
       tables(APP_MODE_LAUNCH, NULL);
     }
@@ -3760,6 +3783,12 @@ void terminal_execute_single(char *str) {
     }
     else if(strcmp(cmdline_params[1], "game2048") == 0) {
       game2048(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "minesweeper") == 0) {
+      minesweeper(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "chess") == 0) {
+      chess(APP_MODE_LAUNCH, NULL);
     }
     else if(strcmp(cmdline_params[1], "sokoban") == 0) {
       sokoban(APP_MODE_LAUNCH, NULL);
@@ -6576,6 +6605,18 @@ void cp_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_
 
   buff = (char *)malloc(4096 * sizeof(char));
   file_from = Storage_from->open(path_from);
+  // Проверить существование файла назначения
+  if(Storage_to->exists(path_to)) {
+    file_to = Storage_to->open(path_to);
+    if(file_to) {
+      // Если это папка, то нужно копировать файл в эту папку с тем же названием файла
+      if(file_to.isDirectory()) {
+        strcat(path_to, "/");
+        strcat(path_to, file_from.name());
+      }
+      file_to.close();
+    }
+  }
   file_to = Storage_to->open(path_to, FILE_WRITE);
 
   while(file_from.available()) {
@@ -6600,7 +6641,7 @@ void cp_recursive_between_storages(fs::FS *Storage_from, char *path_from, fs::FS
   if(file_from) {
     // Если это папка
     if(file_from.isDirectory()) {
-      if(!file_to.isDirectory()) {
+      if(!Storage_to->exists(path_to)) {
         Storage_to->mkdir(path_to);
       }
       // Копировать содержимое
@@ -7267,6 +7308,9 @@ void basic_action(int action_index, char *filename) {
     terminal_basic(buff);
     if(!global_exit_flag) {
       terminal_show_screen();
+      tft.fillRect(0, 176, tft.width(), tft.height() - 176, color_scheme_bg);
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      tft.drawCentreString("Tap anywhere to exit", tft.width() / 2, 220, FONT_DEFAULT);
       touchWaitPress();
       touchWaitRelease();
     }
@@ -9225,6 +9269,640 @@ void totp(char mode, char *io_buff) {
 }
 
 // ====================================================
+// Одноразовые пароли TOTP
+// ====================================================
+
+#define BARCODE_PATH "/Barcode"
+
+void barcode_action(int action_index, char *filename) {
+  fs::File file;
+  char buff[80];
+
+  if(action_index && !filename) return;
+
+  if(action_index == 0) {
+    // Редактируем новый файл
+    sprintf(buff, "%s/%s", BARCODE_PATH, "__New");
+    //file = Storage->open(buff, FILE_WRITE);
+    //file.close();
+    edit_file("New barcode", buff);
+
+    file = Storage->open(buff);
+    if(!file) {
+      return;
+    }
+    else if(file.size() == 0) {
+      file.close();
+      Storage->remove(buff);
+    }
+    else {
+      file.close();
+      // Меняем название в соответствии с содержимым
+      pim_rename_file(BARCODE_PATH, "__New", NULL);
+    }
+  }
+  else if(action_index == 1) {
+    // Воспроизведение
+    sprintf(buff, "%s/%s", BARCODE_PATH, filename);
+    barcode_show(buff);
+  }
+  else if(action_index == 2) {
+    // Редактируем существующий файл
+    sprintf(buff, "%s/%s", BARCODE_PATH, filename);
+    edit_file("Edit barcode", buff);
+
+    // Меняем название в соответствии с содержимым
+    pim_rename_file(BARCODE_PATH, filename, NULL);
+  }
+  else if(action_index == 3) {
+    if(drawConfirm("Delete this barcode?") == 0) {
+      // Удаляем заметку с соответствующим названием
+      sprintf(buff, "%s/%s", BARCODE_PATH, filename);
+      Storage->remove(buff);
+    }
+  }
+}
+
+int barcode_file_to_list(fs::File file, char *buff) {
+  stream_get_line_by_index(file, 0, buff, 80);
+  return 1;
+}
+
+void barcode_show(char *filename) {
+  fs::File file;
+  char name[80];
+  char key[80];
+  char other[80];
+  char code[80];
+  char prev_code[80];
+  char control;
+  char control_correct_flag = 1;
+  int i;
+  int width;
+  unsigned long unix_timestamp;
+  int progress_len;
+  char *buttons[] = {NULL};
+
+  if(!Storage) {
+    drawError("Storage unavailable");
+    return;
+  }
+  file = Storage->open(filename);
+  if(file) {
+    stream_get_line_by_index(file, 0, name, 80);
+    stream_get_line_by_index(file, 0, key, 80);
+    stream_get_line_by_index(file, 0, other, 80);
+    file.close();
+
+    // Расчитываем контрольную цифру для кода
+    if(is_digit_string(key) && strlen(key) == 8) {
+      control = '0' + (1000 - (
+        (key[0] - '0') * 3
+        + (key[1] - '0') * 1
+        + (key[2] - '0') * 3
+        + (key[3] - '0') * 1
+        + (key[4] - '0') * 3
+        + (key[5] - '0') * 1
+        + (key[6] - '0') * 3
+      )) % 10;
+      if(key[7] != control) {
+        control_correct_flag = 0;
+      }
+    }
+    if(is_digit_string(key) && strlen(key) == 13) {
+      control = '0' + (1000 - (
+        (key[0] - '0') * 1
+        + (key[1] - '0') * 3
+        + (key[2] - '0') * 1
+        + (key[3] - '0') * 3
+        + (key[4] - '0') * 1
+        + (key[5] - '0') * 3
+        + (key[6] - '0') * 1
+        + (key[7] - '0') * 3
+        + (key[8] - '0') * 1
+        + (key[9] - '0') * 3
+        + (key[10] - '0') * 1
+        + (key[11] - '0') * 3
+      )) % 10;
+      if(key[12] != control) {
+        control_correct_flag = 0;
+      }
+    }
+
+    drawPopupWindow(name, other, buttons);
+    tft.fillRect(1, 120 + 16 + 25, tft.width() - 2, 48, TFT_WHITE);
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+    if(is_digit_string(key) && strlen(key) == 8 && control_correct_flag) {
+      width = barcode_ean8(key, code + 2);
+      code[0] = width;
+      code[1] = 1;
+      for(i = 0; i < 24; i++) {
+        image_from_bits_scaled(2, tft.width() / 2 - width, 120 + 16 + 25 + i * 2, code, TFT_BLACK, TFT_WHITE);
+      }
+    }
+    else if(is_digit_string(key) && strlen(key) == 13 && control_correct_flag) {
+      width = barcode_ean13(key, code + 2);
+      code[0] = width;
+      code[1] = 1;
+      for(i = 0; i < 24; i++) {
+        image_from_bits_scaled(2, tft.width() / 2 - width, 120 + 16 + 25 + i * 2, code, TFT_BLACK, TFT_WHITE);
+      }
+    }
+    else {
+      width = barcode_code128(key, code + 2);
+      code[0] = width;
+      code[1] = 1;
+      if(width >= 240) {
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
+        tft.drawCentreString("Code too wide to fit the screen", tft.width() / 2, 120 + 16 + 25, FONT_DEFAULT);
+      }
+      else if(width >= 110) {
+        for(i = 0; i < 48; i++) {
+          image_from_bits(tft.width() / 2 - width / 2, 120 + 16 + 25 + i, code, TFT_BLACK, TFT_WHITE);
+        }
+      }
+      else {
+        for(i = 0; i < 24; i++) {
+          image_from_bits_scaled(2, tft.width() / 2 - width, 120 + 16 + 25 + i * 2, code, TFT_BLACK, TFT_WHITE);
+        }
+      }
+    }
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.drawCentreString(key, tft.width() / 2, 120 + 16 + 25 + 50, FONT_DEFAULT);
+    do {
+      if(touchCheckNowait()) break;
+    } while(1);
+    touchWaitRelease();
+  }
+}
+
+char is_digit_string(char *str) {
+  int i;
+  for(i = 0; i < strlen(str); i++) {
+    if(str[i] < '0' || str[i] > '9') return 0;
+  }
+  return 1;
+}
+
+int barcode_ean8(char *input, char *output) {
+  int output_bit_offset;
+  int i, j;
+  char bits = 0;
+  char bits13 = 0;
+  char digit_l[] = {
+    B0001101, // 0
+    B0011001, // 1
+    B0010011, // 2
+    B0111101, // 3
+    B0100011, // 4
+    B0110001, // 5
+    B0101111, // 6
+    B0111011, // 7
+    B0110111, // 8
+    B0001011  // 9
+  };
+  char digit_r[] = {
+    B1110010, // 0
+    B1100110, // 1
+    B1101100, // 2
+    B1000010, // 3
+    B1011100, // 4
+    B1001110, // 5
+    B1010000, // 6
+    B1000100, // 7
+    B1001000, // 8
+    B1110100  // 9
+  };
+  // 67 бит это 9 байт
+  memset(output, 0, 9);
+  output_bit_offset = 0;
+
+  // Префикс 3 бит
+  bits = B101;
+  barcode_set_bit_row(output, output_bit_offset, bits, 3);
+  output_bit_offset += 3;
+
+  // Первая группа
+  for(i = 0; i < 4; i++) {
+    if(input[i] < '0' || input[i] > '9') continue;
+    bits = digit_l[input[i] - '0'];
+    barcode_set_bit_row(output, output_bit_offset, bits, 7);
+    output_bit_offset += 7;
+  }
+
+  // Середина 5 бит
+  bits = B01010;
+  barcode_set_bit_row(output, output_bit_offset, bits, 5);
+  output_bit_offset += 5;
+
+  // Вторая группа
+  for(i = 0; i < 4; i++) {
+    if(input[i + 4] < '0' || input[i + 4] > '9') continue;
+    bits = digit_r[input[i + 4] - '0'];
+    barcode_set_bit_row(output, output_bit_offset, bits, 7);
+    output_bit_offset += 7;
+  }
+
+  // Постфикс 3 бит
+  bits = B101;
+  barcode_set_bit_row(output, output_bit_offset, bits, 3);
+  output_bit_offset += 3;
+
+  return output_bit_offset;
+}
+
+int barcode_ean13(char *input, char *output) {
+  int output_byte_index;
+  int output_bit_index;
+  int output_bit_offset;
+  int i, j;
+  char bits = 0;
+  char bits13 = 0;
+  char digit_l[] = {
+    B0001101, // 0
+    B0011001, // 1
+    B0010011, // 2
+    B0111101, // 3
+    B0100011, // 4
+    B0110001, // 5
+    B0101111, // 6
+    B0111011, // 7
+    B0110111, // 8
+    B0001011  // 9
+  };
+  char digit_r[] = {
+    B1110010, // 0
+    B1100110, // 1
+    B1101100, // 2
+    B1000010, // 3
+    B1011100, // 4
+    B1001110, // 5
+    B1010000, // 6
+    B1000100, // 7
+    B1001000, // 8
+    B1110100  // 9
+  };
+  char digit_g[] = {
+    B0100111, // 0
+    B0110011, // 1
+    B0011011, // 2
+    B0100001, // 3
+    B0011101, // 4
+    B0111001, // 5
+    B0000101, // 6
+    B0010001, // 7
+    B0001001, // 8
+    B0010111  // 9
+  };
+  char digit_13[] = {
+    B000000, // 0
+    B001011, // 1
+    B001101, // 2
+    B001110, // 3
+    B010011, // 4
+    B011001, // 5
+    B011100, // 6
+    B010101, // 7
+    B010110, // 8
+    B011010  // 9
+  };
+  // 95 бит это 12 байт
+  memset(output, 0, 12);
+  output_bit_offset = 0;
+
+  // Префикс 3 бит
+  barcode_set_bit_row(output, output_bit_offset, bits, 3);
+  output_bit_offset += 3;
+
+  // Первая группа
+  bits13 = digit_13[input[0] - '0'];
+  for(i = 0; i < 6; i++) {
+    if(input[i + 1] < '0' || input[i + 1] > '9') continue;
+    if(bits13 & 1 << (5 - i)) {
+      bits = digit_g[input[i + 1] - '0'];
+    }
+    else {
+      bits = digit_l[input[i + 1] - '0'];
+    }
+    barcode_set_bit_row(output, output_bit_offset, bits, 7);
+    output_bit_offset += 7;
+  }
+
+  // Середина 5 бит
+  bits = B01010;
+  barcode_set_bit_row(output, output_bit_offset, bits, 5);
+  output_bit_offset += 5;
+
+  // Вторая группа
+  for(i = 0; i < 6; i++) {
+    if(input[i + 7] < '0' || input[i + 7] > '9') continue;
+    bits = digit_r[input[i + 7] - '0'];
+    barcode_set_bit_row(output, output_bit_offset, bits, 7);
+    output_bit_offset += 7;
+  }
+
+  // Постфикс 3 бит
+  bits = B101;
+  barcode_set_bit_row(output, output_bit_offset, bits, 3);
+  output_bit_offset += 3;
+
+  return output_bit_offset;
+}
+
+int barcode_code128(char *input, char *output) {
+  int alphabet[] = {
+    0b11011001100, // Пробел
+    0b11001101100,
+    0b11001100110,
+    0b10010011000,
+    0b10010001100,
+    0b10001001100,
+    0b10011001000,
+    0b10011000100,
+    0b10001100100,
+    0b11001001000,
+    0b11001000100,
+    0b11000100100,
+    0b10110011100,
+    0b10011011100,
+    0b10011001110,
+    0b10111001100,
+    0b10011101100, // 0
+    0b10011100110,
+    0b11001110010,
+    0b11001011100,
+    0b11001001110,
+    0b11011100100,
+    0b11001110100,
+    0b11101101110,
+    0b11101001100,
+    0b11100101100,
+    0b11100100110,
+    0b11101100100,
+    0b11100110100,
+    0b11100110010,
+    0b11011011000,
+    0b11011000110,
+    0b11000110110,
+    0b10100011000, // A
+    0b10001011000,
+    0b10001000110,
+    0b10110001000,
+    0b10001101000,
+    0b10001100010,
+    0b11010001000,
+    0b11000101000,
+    0b11000100010,
+    0b10110111000,
+    0b10110001110,
+    0b10001101110,
+    0b10111011000,
+    0b10111000110,
+    0b10001110110,
+    0b11101110110,
+    0b11010001110,
+    0b11000101110,
+    0b11011101000,
+    0b11011100010,
+    0b11011101110,
+    0b11101011000,
+    0b11101000110,
+    0b11100010110,
+    0b11101101000,
+    0b11101100010, // Z
+    0b11100011010,
+    0b11101111010,
+    0b11001000010,
+    0b11110001010,
+    0b10100110000,
+    0b10100001100,
+    0b10010110000, // a
+    0b10010000110,
+    0b10000101100,
+    0b10000100110,
+    0b10110010000,
+    0b10110000100,
+    0b10011010000,
+    0b10011000010,
+    0b10000110100,
+    0b10000110010,
+    0b11000010010,
+    0b11001010000,
+    0b11110111010,
+    0b11000010100,
+    0b10001111010,
+    0b10100111100,
+    0b10010111100,
+    0b10010011110,
+    0b10111100100,
+    0b10011110100,
+    0b10011110010,
+    0b11110100100,
+    0b11110010100,
+    0b11110010010,
+    0b11011011110,
+    0b11011110110, // z
+    0b11110110110,
+    0b10101111000,
+    0b10100011110,
+    0b10001011110,
+    0b10111101000,
+    0b10111100010,
+    0b11110101000,
+    0b11110100010, // 98 Shift A/B
+    0b10111011110, // 99 Switch C
+    0b10111101110, // 100 Switch B
+    0b11101011110, // 101 Switch A
+    0b11110101110, // ???
+    0b11010000100, // 103 Start code A
+    0b11010010000, // 104 Start code B
+    0b11010011100, // 105 Start code C
+    0b11000111010, // 106 Stop
+    0b11010111000  // 107 Reverse stop
+  };
+  int code_a = 0b11010000100;
+  int code_b = 0b11010010000;
+  int code_c = 0b11010011100;
+  int code_switch_a = 0b11101011110;
+  int code_switch_b = 0b10111101110;
+  int code_switch_c = 0b10111011110;
+  int stop_seq = 0b1100011101011;
+  int width = 0;
+  int offset = 0;
+  int i, j;
+  int output_bit_offset = 0;
+  int bits;
+  long checksum = 0;
+  int checksum_index = 0;
+  char current_mode = 0;
+
+  memset(output, 0, 78);
+
+  // Определяем алфавит
+  // Четыре цифры подряд - выгоднее C
+  if(barcode_is_digit(input[0]) && barcode_is_digit(input[1]) && barcode_is_digit(input[2]) && barcode_is_digit(input[3])) {
+    if(current_mode != 'c') {
+      bits = code_c;
+      current_mode = 'c';
+      checksum += 105;
+      checksum_index++;
+      barcode_set_bit_row(output, output_bit_offset, bits, 11);
+      output_bit_offset += 11;
+      Serial.printf("Start code C\n");
+    }
+  }
+  // Все символы от пробела до маленькой z
+  else {
+    if(current_mode != 'b') {
+      bits = code_b;
+      current_mode = 'b';
+      checksum += 104;
+      checksum_index++;
+      barcode_set_bit_row(output, output_bit_offset, bits, 11);
+      output_bit_offset += 11;
+      Serial.printf("Start code B\n");
+    }
+  }
+
+  // Добавляем символы
+  for(i = 0; i < strlen(input); i++) {
+    if(i > 0) {
+      // Определяем алфавит
+      // Четыре цифры подряд - переключаем на C
+      if(barcode_is_digit(input[i + 0]) && barcode_is_digit(input[i + 1]) && barcode_is_digit(input[i + 2]) && barcode_is_digit(input[i + 3])) {
+        if(current_mode != 'c') {
+          bits = code_switch_c;
+          current_mode = 'c';
+          checksum += 99 * checksum_index;
+          checksum_index++;
+          barcode_set_bit_row(output, output_bit_offset, bits, 11);
+          output_bit_offset += 11;
+          Serial.printf("Switch to C\n");
+        }
+      }
+      // Все символы от пробела до маленькой z
+      else {
+        // Если цифры две и сейчас C ничего не делаем
+        if(barcode_is_digit(input[i + 0]) && barcode_is_digit(input[i + 1]) && current_mode == 'c') {
+
+        }
+        else if(current_mode != 'b') {
+          bits = code_switch_b;
+          current_mode = 'b';
+          checksum += 100 * checksum_index;
+          checksum_index++;
+          barcode_set_bit_row(output, output_bit_offset, bits, 11);
+          output_bit_offset += 11;
+          Serial.printf("Switch to B\n");
+        }
+      }
+    }
+
+    if(current_mode == 'b') {
+      // B кодируются по одному
+      bits = alphabet[input[i] - ' '];
+      barcode_set_bit_row(output, output_bit_offset, bits, 11);
+      checksum += (input[i] - ' ') * checksum_index;
+      checksum_index++;
+      output_bit_offset += 11;
+      Serial.printf("Mode B symbol '%c' %d\n", input[i], input[i] - ' ');
+    }
+    else {
+      // Пары цифр кодируются группами по две
+      bits = alphabet[10 * (input[i] - '0') + input[i + 1] - '0'];
+      barcode_set_bit_row(output, output_bit_offset, bits, 11);
+      checksum += (10 * (input[i] - '0') + input[i + 1] - '0') * checksum_index;
+      checksum_index++;
+      output_bit_offset += 11;
+      Serial.printf("Mode C symbol '%02d'\n", 10 * (input[i] - '0') + input[i + 1] - '0', 10 * (input[i] - '0') + input[i + 1] - '0');
+      i++;
+    }
+    // Если заканчивается место в буфере - прекратить
+    if(output_bit_offset >= 76 * 8) {
+      break;
+    }
+  }
+
+  // Контрольная сумма
+  Serial.printf("Checksum %d %d %X\n", checksum, checksum % 103, alphabet[checksum % 103]);
+  checksum %= 103;
+  bits = alphabet[checksum];
+  barcode_set_bit_row(output, output_bit_offset, bits, 11);
+  output_bit_offset += 11;
+  Serial.printf("Checksum %d\n", checksum);
+
+  // Стоп-символ
+  bits = stop_seq;
+  barcode_set_bit_row(output, output_bit_offset, bits, 13);
+  output_bit_offset += 13;
+  Serial.printf("Stop\n");
+
+  return output_bit_offset;
+}
+
+char barcode_is_digit(char c) {
+  if(c >= '0' && c <= '9') return 1;
+  return 0;
+}
+
+void barcode_set_bit_row(char *code, int offset, int bits, int bits_count) {
+  int i;
+  for(i = 0; i < bits_count; i++) {
+    if(bits & (1 << (bits_count - 1 - i))) {
+      barcode_set_bit(code, offset + i);
+    }
+  }
+}
+
+void barcode_set_bit(char *code, int offset) {
+  int output_byte_index = offset / 8;
+  int output_bit_index = offset % 8;
+  code[output_byte_index] |= 1 << (7 - output_bit_index);
+}
+
+void barcode(char mode, char *io_buff) {
+  char *buttons[] = {
+    "New", "Show", "Edit", "Delete",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01010010, B11001010,
+    B01010010, B11001010,
+    B01010010, B11001010,
+    B01010010, B11001010,
+    B01010010, B11001010,
+    B01010010, B11001010,
+    B01010010, B11001010,
+    B01010010, B11001010,
+    B01010010, B11001010,
+    B01000000, B00000010,
+    B01011010, B10101010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Barcode");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Barc");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  pim_app("Barcode", BARCODE_PATH, barcode_file_to_list, buttons, barcode_action);
+}
+
+// ====================================================
 // Контакты
 // ====================================================
 
@@ -10297,8 +10975,8 @@ void pim_rename_file(char *path, char *old_filename, char *prefix) {
   file.close();
 
   cp1251_to_translit(new_filename, new_filename);
-  // Проверяем что такого названия нет
-  if(strcmp("", new_filename) != 0) {
+  // Проверяем если название изменилось, и такого названия нет
+  if(strcmp(old_filename, new_filename) != 0 && strcmp("", new_filename) != 0) {
     sprintf(new_path_filename, "%s/%s%s", path, prefix ? prefix : "", new_filename);
     if(Storage->exists(new_path_filename)) {
       strcpy(new_filename, "");
@@ -11502,7 +12180,7 @@ void stopwatch(char mode, char *io_buff) {
   int button_pressed;
   int i;
   static long millis_from_start = 0;
-  long millis_prev = 0;
+  static long millis_prev = 0;
   long millis_value = 0;
   long millis_from_lap = 0;
   static char stopwatch_run = 0;
@@ -17978,6 +18656,35 @@ void file_base16_encode(char *from_filename, char *to_filename) {
   file_from.close();
 }
 
+void file_base16_decode(char *from_filename, char *to_filename) {
+  char in_buff[4];
+  int byte, byte2;
+  int byte_out;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  memset(in_buff, 0, 4);
+  while(file_from.available()) {
+    byte_out = 0;
+    in_buff[0] = file_from.read();
+    in_buff[1] = file_from.read();
+    sscanf(in_buff, "%02X", &byte_out);
+    if(to_filename) file_to.print((char)byte_out); else terminal_print_char((char)byte_out);
+  }
+  
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
+
 void file_base32_encode(char *from_filename, char *to_filename) {
   char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   char byte_out;
@@ -18046,6 +18753,72 @@ void file_base32_encode(char *from_filename, char *to_filename) {
   file_from.close();
 }
 
+void file_base32_decode(char *from_filename, char *to_filename) {
+  char byte_out;
+  char byte_in;
+  int bit_index_in = 0;
+  int bit_index_out = 0;
+  int index_out = 0;
+  int byte_index_out = 0;
+  int eof = 0;
+  int i;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  bit_index_in = 0;
+  byte_out = 0;
+  index_out = 0;
+  eof = 0;
+  byte_index_out = 0;
+  while(file_from.available() || bit_index_in > 0 || bit_index_out > 0) {
+    if(bit_index_in == 0) {
+      if(file_from.available()) {
+        byte_in = file_from.read();
+        if(byte_in == '=') break;
+        byte_in = base32_get_bits(byte_in);
+      }
+      else {
+        byte_in = 0;
+      }
+    }
+
+    index_out = index_out << 1 | ((byte_in >> (4 - bit_index_in)) & 1);
+    
+    bit_index_out++;
+    if(bit_index_out == 8) {
+      byte_out = index_out;
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      bit_index_out = 0;
+      index_out = 0;
+    }
+    bit_index_in++;
+    if(bit_index_in == 5) {
+      if(!file_from.available()) eof = 1;
+      bit_index_in = 0;
+    }
+  }
+
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
+
+char base32_get_bits(char c) {
+  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  if(c >= 'A' && c <= 'Z') return c - 'A';
+  if(c >= '2' && c <= '7') return c - '2' + 26;
+
+  return -1;
+}
+
 void file_base64_encode(char *from_filename, char *to_filename) {
   char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   char in_buff[3];
@@ -18108,6 +18881,75 @@ void file_base64_encode(char *from_filename, char *to_filename) {
     terminal_println("");
   }
   file_from.close();
+}
+
+void file_base64_decode(char *from_filename, char *to_filename) {
+  char byte_out;
+  char byte_in;
+  int bit_index_in = 0;
+  int bit_index_out = 0;
+  int index_out = 0;
+  int byte_index_out = 0;
+  int eof = 0;
+  int i;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  bit_index_in = 0;
+  byte_out = 0;
+  index_out = 0;
+  eof = 0;
+  byte_index_out = 0;
+  while(file_from.available() || bit_index_in > 0 || bit_index_out > 0) {
+    if(bit_index_in == 0) {
+      if(file_from.available()) {
+        byte_in = file_from.read();
+        if(byte_in == '=') break;
+        byte_in = base64_get_bits(byte_in);
+      }
+      else {
+        byte_in = 0;
+      }
+    }
+
+    index_out = index_out << 1 | ((byte_in >> (5 - bit_index_in)) & 1);
+    
+    bit_index_out++;
+    if(bit_index_out == 8) {
+      byte_out = index_out;
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      bit_index_out = 0;
+      index_out = 0;
+    }
+    bit_index_in++;
+    if(bit_index_in == 6) {
+      if(!file_from.available()) eof = 1;
+      bit_index_in = 0;
+    }
+  }
+
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
+
+char base64_get_bits(char c) {
+  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  if(c >= 'A' && c <= 'Z') return c - 'A';
+  if(c >= 'a' && c <= 'z') return c - 'a' + 26;
+  if(c >= '0' && c <= '9') return c - '0' + 26 + 26;
+  if(c == '+') return 62;
+  if(c == '/') return 63;
+
+  return -1;
 }
 
 void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
@@ -19284,6 +20126,11 @@ void dashboard_network() {
   clearScreen();
   drawAppTitle("Network Stand");
 
+  if(WiFi.status() != WL_CONNECTED) {
+    drawError("Wi-Fi connection required");
+    return;
+  }
+
   while(1) {
     if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
       prev_update_millis = millis();
@@ -19635,6 +20482,10 @@ void dashboard_bitcoin() {
   clearScreen();
   drawAppTitle("Bitcoin");
 
+  if(WiFi.status() != WL_CONNECTED) {
+    drawError("Wi-Fi connection required");
+    return;
+  }
   while(1) {
     if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
       prev_update_millis = millis();
@@ -26294,6 +27145,300 @@ void minesweeper_draw_field(char *field, char draw_mines_flag) {
   }
 }
 
+#define CHESS_BOARD_CELL_SIZE (tft.width() / 8)
+#define CHESS_BOARD_CELLS_TOTAL (8 * 8)
+
+void chess(char mode, char *io_buff) {
+  char field[CHESS_BOARD_CELLS_TOTAL];
+  int button_pressed;
+  int i;
+  int x, y;
+  int touch_x, touch_y;
+  int x_select, y_select;
+  long start_millis = 0;
+  char won_flag = 0;
+  char lose_flag = 0;
+  char restart_flag = 0;
+  char init_field_flag = 0;
+  char field_changed_flag = 0;
+  char buff[80];
+  char tmp;
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01011001, B10011010,
+    B01011111, B11111010,
+    B01011111, B11111010,
+    B01001111, B11110010,
+    B01000111, B11100010,
+    B01000111, B11100010,
+    B01000111, B11100010,
+    B01000111, B11100010,
+    B01000111, B11100010,
+    B01000111, B11100010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Chessboard");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Chss");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Chessboard");
+
+  init_field_flag = 1;
+
+  for(i = 0; i < CHESS_BOARD_CELLS_TOTAL; i++) {
+    field[i] = 0;
+  }
+  // Black
+  field[0] = 'r';
+  field[1] = 'n';
+  field[2] = 'b';
+  field[3] = 'q';
+  field[4] = 'k';
+  field[5] = 'b';
+  field[6] = 'n';
+  field[7] = 'r';
+  for(i = 0; i < 8; i++) {
+    field[8 + i] = 'p';
+  }
+
+  // White
+  field[63 - 0] = 'R';
+  field[63 - 1] = 'N';
+  field[63 - 2] = 'B';
+  field[63 - 3] = 'K';
+  field[63 - 4] = 'Q';
+  field[63 - 5] = 'B';
+  field[63 - 6] = 'N';
+  field[63 - 7] = 'R';
+  for(i = 0; i < 8; i++) {
+    field[63 - 8 - i] = 'P';
+  }
+
+  field_changed_flag = 1;
+  x_select = -1;
+  y_select = -1;
+  start_millis = millis();
+  while(1) {
+    // Показываем поле
+    if(field_changed_flag) {
+      chess_draw_field(field);
+      field_changed_flag = 0;
+    }
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "Time: %d    ", (millis() - start_millis) / 1000);
+    tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
+
+    if(touchCheckNowait() == 0) {
+      continue;
+    }
+
+    // Ждём нажатий
+    //touchWaitPress();
+    if(global_touch_present_flag == 1 && global_touch_y >= 48) {
+      x = global_touch_x / CHESS_BOARD_CELL_SIZE;
+      y = (global_touch_y - 48) / CHESS_BOARD_CELL_SIZE;
+
+      if(y < 8) {
+        if(x_select == -1) {
+          if(field[x + y * 8]) {
+            x_select = x;
+            y_select = y;
+            tft.drawRect(x * CHESS_BOARD_CELL_SIZE, 48 + y * CHESS_BOARD_CELL_SIZE, CHESS_BOARD_CELL_SIZE, CHESS_BOARD_CELL_SIZE, TFT_YELLOW);
+          }
+        }
+        else {
+          // Если поле пустое или цвета фигур отличаются (6-й бит - регистр)
+          Serial.printf("%c %c %d %d %x %x\n", field[x + y * 8], field[x_select + y_select * 8], field[x + y * 8] & B00100000, field[x_select + y_select * 8] & B00100000, field[x + y * 8] & B00100000, field[x_select + y_select * 8] & B00100000);
+          if(field[x + y * 8] == 0 || (field[x + y * 8] & B00100000) != (field[x_select + y_select * 8] & B00100000)) {
+            field[x + y * 8] = field[x_select + y_select * 8];
+            field[x_select + y_select * 8] = 0;
+          }
+          x_select = -1;
+          y_select = -1;
+          field_changed_flag = 1;
+        }
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void chess_draw_field(char *field) {
+  char buff[3];
+  int x, y;
+  int fg, bg;
+  char *icon;
+  char icon_pawn[] = {
+    16, 16,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000001, B10000000,
+    B00000011, B11000000,
+    B00000111, B11100000,
+    B00000111, B11100000,
+    B00000011, B11000000,
+    B00000001, B10000000,
+    B00000001, B10000000,
+    B00000001, B10000000,
+    B00000011, B11000000,
+    B00000011, B11000000,
+    B00001111, B11110000,
+    B00011111, B11111000,
+    B00111111, B11111100,
+    B00111111, B11111100
+  };
+  char icon_rook[] = {
+    16, 16,
+    B01110011, B11001110,
+    B01110011, B11001110,
+    B01111111, B11111110,
+    B01111111, B11111110,
+    B00111111, B11111100,
+    B00001111, B11110000,
+    B00001111, B11110000,
+    B00001111, B11110000,
+    B00001111, B11110000,
+    B00001111, B11110000,
+    B00001111, B11110000,
+    B00001111, B11110000,
+    B00001111, B11110000,
+    B00011111, B11111000,
+    B01111111, B11111110,
+    B01111111, B11111110
+  };
+  char icon_knight[] = {
+    16, 16,
+    B00000011, B00000000,
+    B00000011, B00000000,
+    B00000111, B11100000,
+    B00011111, B11111000,
+    B00110111, B11111100,
+    B11111111, B11111110,
+    B11111100, B11111110,
+    B01111000, B11111110,
+    B00000001, B11111100,
+    B00000001, B11111000,
+    B00000001, B11110000,
+    B00000001, B11100000,
+    B00000011, B11100000,
+    B00011111, B11111000,
+    B00111111, B11111100,
+    B00111111, B11111100
+  };
+  char icon_bishop[] = {
+    16, 16,
+    B00000000, B00000000,
+    B00000001, B10000000,
+    B00000011, B11000000,
+    B00000001, B10000000,
+    B00000111, B11100000,
+    B00001111, B11110000,
+    B00001111, B11110000,
+    B00001111, B11110000,
+    B00000111, B11100000,
+    B00000011, B11000000,
+    B00000111, B11100000,
+    B00001111, B11110000,
+    B00000011, B11000000,
+    B11111111, B11111111,
+    B01111110, B01111110,
+    B11111000, B00011111,
+  };
+  char icon_queen[] = {
+    16, 16,
+    B00000001, B10000000,
+    B00000001, B10000000,
+    B00011001, B10011000,
+    B00011001, B10011000,
+    B11011001, B10011011,
+    B11001101, B10110011,
+    B11001101, B10110011,
+    B01101101, B10110110,
+    B01101111, B11110110,
+    B01111111, B11111110,
+    B00111111, B11111100,
+    B00111111, B11111100,
+    B00011111, B11111000,
+    B00011111, B11111000,
+    B00011111, B11111000,
+    B00011111, B11111000
+  };
+  char icon_king[] = {
+    16, 16,
+    B00000001, B10000000,
+    B00000011, B11000000,
+    B00000011, B11000000,
+    B00000001, B10000000,
+    B01110001, B10001110,
+    B11111001, B10011111,
+    B11111101, B10111111,
+    B11111111, B11111111,
+    B11111111, B11111111,
+    B01111111, B11111110,
+    B00111111, B11111100,
+    B00011111, B11111000,
+    B00011111, B11111000,
+    B00011111, B11111000,
+    B00111111, B11111100,
+    B01111111, B11111110
+  };
+
+  for(y = 0; y < 8; y++) {
+    for(x = 0; x < 8; x++) {
+      fg = color_scheme_fg;
+      bg = TFT_LIGHTGREY;
+      if((x + y) % 2) {
+        fg = color_scheme_bg;
+        bg = TFT_DARKGREY;
+      }
+      tft.fillRect(x * CHESS_BOARD_CELL_SIZE, 48 + y * CHESS_BOARD_CELL_SIZE, CHESS_BOARD_CELL_SIZE, CHESS_BOARD_CELL_SIZE, bg);
+      if(field[x + y * 8] == 0) continue;
+
+      buff[0] = field[x + y * 8];
+      buff[1] = 0;
+      if(field[x + y * 8] >= 'A' && field[x + y * 8] <= 'Z') {
+        fg = TFT_WHITE;
+      }
+      else {
+        fg = TFT_BLACK;
+      }
+      icon = icon_pawn;
+      if(field[x + y * 8] == 'R' || field[x + y * 8] == 'r') icon = icon_rook;
+      if(field[x + y * 8] == 'N' || field[x + y * 8] == 'n') icon = icon_knight;
+      if(field[x + y * 8] == 'B' || field[x + y * 8] == 'b') icon = icon_bishop;
+      if(field[x + y * 8] == 'Q' || field[x + y * 8] == 'q') icon = icon_queen;
+      if(field[x + y * 8] == 'K' || field[x + y * 8] == 'k') icon = icon_king;
+      image_from_bits(x * CHESS_BOARD_CELL_SIZE + CHESS_BOARD_CELL_SIZE / 2 - 8, 48 + y * CHESS_BOARD_CELL_SIZE + CHESS_BOARD_CELL_SIZE / 2 - 8, icon, fg, bg);
+      //tft.drawCentreString(buff, x * CHESS_BOARD_CELL_SIZE + CHESS_BOARD_CELL_SIZE / 2, 48 + y * CHESS_BOARD_CELL_SIZE + CHESS_BOARD_CELL_SIZE / 2 - 8, FONT_DEFAULT);
+    }
+  }
+}
+
 void piano(char mode, char *io_buff) {
   TouchPoint p;
   int touch_x, touch_y;
@@ -28218,14 +29363,21 @@ void image_from_bits(int start_x, int start_y, char *image, int color, int bg_co
   int height = (int)image[1];
 
   tft.drawBitmap(start_x, start_y, (uint8_t*)(image + 2), width, height, color, bg_color);
-  return;
+}
+
+void image_from_bits_scaled(int scale, int start_x, int start_y, char *image, int color, int bg_color) {
+  int byte_index, bit_index;
+  int x, y;
+  char bit;
+  int width = (int)image[0];
+  int height = (int)image[1];
 
   for(y = 0; y < height; y++) {
     for(x = 0; x < width; x++) {
-      byte_index = (width - x - 1 + y * width) / 8 + 2;
+      byte_index = (x + y * width) / 8 + 2;
       bit_index = (x + y * width) % 8;
-      bit = image[byte_index] & (1 << bit_index);
-      tft.drawPixel(start_x + width - x - 1, start_y + y, bit ? color : bg_color);
+      bit = image[byte_index] & (1 << (7 - bit_index));
+      tft.fillRect(start_x + x * scale, start_y + y * scale, scale, scale, bit ? color : bg_color);
     }
   }
 }
@@ -29843,7 +30995,7 @@ void setup() {
     if(read_file_to_buff("/Settings/Calibration", 79, buff)) {
       calibration_required = 0;
       global_ax = 0;
-      sscanf(buff, "%f %f %f %f %f %f", &global_ax, &global_bx, &global_cx, &global_ay, &global_by, &global_cy);
+      sscanf(buff, "%lf %lf %lf %lf %lf %lf", &global_ax, &global_bx, &global_cx, &global_ay, &global_by, &global_cy);
       if(global_ax == 0) {
         calibration_required = 1;
       }
@@ -29999,6 +31151,9 @@ void setup() {
 
   //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
+  // Загружаем многоточечную калибровку если есть
+  touch_calibration_load_multipoint();
+
   // Читаем информацию об автозапуске
   autorun_app_name[0] = 0;
   if(read_file_to_buff("/Settings/Autorun", 79, autorun_app_name)) {
@@ -30007,8 +31162,6 @@ void setup() {
     }
   }
 
-  // Загружаем многоточечную калибровку если есть
-  touch_calibration_load_multipoint();
   Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 }
 
