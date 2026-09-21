@@ -1,0 +1,2 @@
+echo "This is custom command file"
+ping 8.8.8.8
