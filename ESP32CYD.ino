@@ -284,40 +284,18 @@
   информация о том что процесс копирования-перемещения-удаления идёт
 2026-09-18 Поддержка штрих-кода Code128, баг переименования PIM, BASIC явное завершение программы в приложении,
   base32decode, base64decode, шахматная доска
+2026-09-20 Баг с 0 пакетов в мониторинге каналов вай-фай (деление на 0), при выходе из подраздела Settings заголовок был Dashboards,
+2026-09-21 Замена sscanf за strtol/strtod, улучшенные помехи, aes_encrypt и aes_decrypt в терминале, команда sizeof,
+  Random Useless Fact dashboard, заставка "сквозь вселенную", не показывать символ 127 в терминале в hexdump
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (д) Приложение поиск
-- (д) Ланучер-список
-- (д) Лаунчер с более крупными значками
-- (д) Выбор вида лаунчера
-- (д) Ещё один заход Bluetooth
 - (п) Просмотреть справку, может быть что-то добавить
 - (д) Прошлые команды в терминале по стрелке вверх
-Буфер обмена
-- (д) Буфер обмена
-- (д) Выделение в просмотре, копирование
-- (д) Выделение в редактировании, копирование, вставка
-- (д) Выделение в prompt, копирование, вставка
-- (д) Автоопределение кодировки файла при просмотре
-- (д) Не прокручивать при редактировании дальше конца файла
-- (д) Prompt - возможность переставлять курсор, выделять
-Потом, но можно и не потом:
-- (н) Терминал операции со строками ESC-кодами
 - (н) Тетрис
-- (н) Дашборд Fun Fact / Random Useless Facts
-- (н) tar
-- (н) Шифрование-расшифрование AES в терминале
-- (н) xmodem отправка
-- (н) xmodem приём
-- (н) Можно заменить millis на esp_timer_get_time, чтобы не было переполнения времени
 - (н) Хэш пароля в NVS
 - (н) Примеры терминала
 
-В конце, сторонние библиотеки:
-- (д) QR-код
-- (д) Datamatrix
-- (н) Распаковка zip
-- (н) Распаковка gz
 
 Остальное:
 - (н) Мини-калькулятор в меню
@@ -381,6 +359,80 @@
 - (д) /Terminal/Environment
 - (н) Чат - просмотр с прокруткой
 - (н) Категории для PIM
+- (н) Фракталы L system как на палме
+- (н) Случайное приложение
+- (н) Rainbow lamp
+- (н) Morse news Dashboard
+- (н) Quick launch лаунчер
+- (н) Заставка снег
+- (н) Заставка огонь
+- (н) Заставка гравитация
+- (н) Заставка бегущая строка
+- (н) Дашборд орбиты и положение планет
+- (н) Дашборд знаки зодиака
+- (н) Заставка точки вверх-вниз как в 3д-кубе
+- (н) Четыре в ряд
+- (н) Крестики-нолики
+- (н) Заставка множество мандельброта
+- (н) Заставка бассейны Ньютона
+- (н) Заставка идеальный газ - упругие шарики
+- (н) Папоротник Барнсли
+- (н) Морской бой
+- (н) Случайный дашборд
+- (н) Случайные настройки
+- (н) Случайная заставка
+- (н) Финансовые данные https://www.valueray.com/api/v1/symbolData?symbol=AAPL
+- (н) Тонкий клиент - отправка касаний на сервер, получение текста/картинки с сервера
+- (н) Удалённое управление - отправка картинки на сервер, получение касания с сервера
+- (н) Облачная фоторамка - картинка с сервера
+- (н) Таблица менделеева
+- (н) Приливы-отливы
+- (н) Конвертер валют
+- (н) Спирограф
+- (н) Летающие квадратики
+- (н) Четырёхмерный куб
+- (н) Общение с ИИ
+- (н) Курсы валют
+- (н) Flightradar
+- (н) Майнер
+- (н) Serial to web - управление RS-232 с веб-интерфейса
+- (н) Просмотр mjpeg с esp32cam
+- (н) Бомбер
+- (н) Гонки
+- (н) Линии (lines)
+- (н) Пасьянс косынка
+- (н) Лабиринт
+- (н) Светофор
+- (н) Косынка
+- (н) Marbles (правда это сложно)
+- (н) Дней с начала года
+- (н) Дней до конца года
+- (н) Время с/до событий
+- (н) Номер недели
+- (н) Терминал операции со строками ESC-кодами
+- (н) tar
+- (н) xmodem отправка
+- (н) xmodem приём
+- (н) Можно заменить millis на esp_timer_get_time, чтобы не было переполнения времени
+- (д) Ланучер-список
+- (д) Лаунчер с более крупными значками
+- (д) Выбор вида лаунчера
+- (д) Ещё один заход Bluetooth
+Буфер обмена
+- (д) Буфер обмена
+- (д) Выделение в просмотре, копирование
+- (д) Выделение в редактировании, копирование, вставка
+- (д) Выделение в prompt, копирование, вставка
+- (д) Автоопределение кодировки файла при просмотре
+- (д) Не прокручивать при редактировании дальше конца файла
+- (д) Prompt - возможность переставлять курсор
+- (д) Prompt - возможность выделять
+Сторонние библиотеки:
+- (д) QR-код
+- (д) Datamatrix
+- (н) Распаковка zip
+- (н) Распаковка gz
+
 
 */
 
@@ -1430,7 +1482,7 @@ void calculator(char mode, char *io_buff) {
               strcpy(screen, buttons[button_pressed]);
             }
           }
-          sscanf(screen, "%lf", &a);
+          a = strtod(screen, NULL);
         }
 
         // Операции
@@ -1498,7 +1550,7 @@ void calculator(char mode, char *io_buff) {
         if(strlen(screen) < 14) {
           strcat(screen, buttons[button_pressed]);
         }
-        sscanf(screen, "%lf", &a);
+        a = strtod(screen, NULL);
       }
     }
 
@@ -1558,7 +1610,7 @@ void system_info(char mode, char *io_buff) {
 
     i = 0;
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    sprintf(buff, "ESP32 CYD PDA v1.6 by sau412");
+    sprintf(buff, "ESP32 CYD PDA v1.7 by sau412");
     tft.drawString(buff, 2, 16 + i * 16, FONT_DEFAULT);
     i++;
 
@@ -2733,12 +2785,12 @@ void terminal_execute_single(char *str) {
       sprintf(buff, "Random number from 1 to 6: %d", random(1, 7));
     }
     if(arg_count == 2) {
-      sscanf(cmdline_params[1], "%d", &i1);
+      i1 = strtol(cmdline_params[1], NULL, 10);
       sprintf(buff, "Random number from 1 to %d: %d", i1, random(1, i1 + 1));
     }
     if(arg_count == 3) {
-      sscanf(cmdline_params[1], "%d", &i1);
-      sscanf(cmdline_params[2], "%d", &i2);
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      i2 = strtol(cmdline_params[2], NULL, 10);
       sprintf(buff, "Random number from %d to %d: %d", i1, i2, random(i1, i2 + 1));
     }
     terminal_println(buff);
@@ -2761,8 +2813,8 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: seq {start_number} {end_number}");
     }
     else {
-      sscanf(cmdline_params[1], "%d", &i1);
-      sscanf(cmdline_params[2], "%d", &i2);
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      i2 = strtol(cmdline_params[2], NULL, 10);
       for(i = i1; i <= i2; i++) {
         sprintf(buff, "%d", i);
         terminal_println(buff);
@@ -2775,7 +2827,7 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: sleep {seconds}");
     }
     else {
-      sscanf(cmdline_params[1], "%d", &i);
+      i = strtol(cmdline_params[1], NULL, 10);
       delay(1000 * i);
     }
   }
@@ -2784,7 +2836,7 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: delay {milliseconds}");
     }
     else {
-      sscanf(cmdline_params[1], "%d", &i);
+      i = strtol(cmdline_params[1], NULL, 10);
       delay(i);
     }
   }
@@ -3324,6 +3376,56 @@ void terminal_execute_single(char *str) {
       file_base64_decode(buff, buff2);
     }
   }
+  else if(strcmp(cmdline_params[0], "aes_encrypt") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: aes_encrypt {password} {input_filename} [output_filename]");
+    }
+    else if(arg_count == 3) {
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff);
+      file_aes_encrypt(cmdline_params[1], buff, NULL);
+    }
+    else {
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[3], buff2);
+      file_aes_encrypt(cmdline_params[1], buff, buff2);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "aes_decrypt") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: aes_decrypt {password} {input_filename} [output_filename]");
+    }
+    else if(arg_count == 3) {
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff);
+      file_aes_decrypt(cmdline_params[1], buff, NULL);
+    }
+    else {
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[3], buff2);
+      file_aes_decrypt(cmdline_params[1], buff, buff2);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "sizeof") == 0) {
+    sprintf(buff, "sizeof(char) = %d", sizeof(char));
+    terminal_println(buff);
+    sprintf(buff, "sizeof(short) = %d", sizeof(short));
+    terminal_println(buff);
+    sprintf(buff, "sizeof(int) = %d", sizeof(int));
+    terminal_println(buff);
+    sprintf(buff, "sizeof(long) = %d", sizeof(long));
+    terminal_println(buff);
+    sprintf(buff, "sizeof(long long) = %d", sizeof(long long));
+    terminal_println(buff);
+    sprintf(buff, "sizeof(float) = %d", sizeof(float));
+    terminal_println(buff);
+    sprintf(buff, "sizeof(double) = %d", sizeof(double));
+    terminal_println(buff);
+    sprintf(buff, "sizeof(long double) = %d", sizeof(long double));
+    terminal_println(buff);
+    sprintf(buff, "sizeof(time_t) = %d", sizeof(time_t));
+    terminal_println(buff);
+    sprintf(buff, "sizeof(void*) = %d", sizeof(void*));
+    terminal_println(buff);
+  }
   // I2C
   else if(strcmp(cmdline_params[0], "i2c") == 0) {
     found = 0;
@@ -3353,7 +3455,7 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: tone {freq}");
     }
     else {
-      sscanf(cmdline_params[1], "%d", &freq);
+      freq = strtol(cmdline_params[1], NULL, 10);
       tone(global_beeper_pin, freq);
     }
   }
@@ -3527,7 +3629,7 @@ void terminal_execute_single(char *str) {
       char *messages;
       messages = (char*)malloc(2048 * sizeof(char));
       if(messages) {
-        if(get_file_https("https://arikado.ru/cyd/chat_data.txt", messages, 2048) == 200) {
+        if(get_file_https("https://arikado.xyz/cyd/chat_data.txt", messages, 2048) == 200) {
           i = 0;
           j = 0;
 
@@ -3584,6 +3686,15 @@ void terminal_execute_single(char *str) {
     }
     else {
       terminal_println("chat [{nick} {message}]");
+    }
+  }
+  else if(strcmp(cmdline_params[0], "ruf") == 0) {
+    if(get_random_useless_fact(buff) == 200) {
+      utf8_to_cp1251(buff);
+      terminal_println(buff);
+    }
+    else {
+      terminal_println("Unable to get random useless fact");
     }
   }
 #ifdef IS_SSH_ENABLED
@@ -4805,16 +4916,16 @@ int terminal_serial(int arg_count, char **args) {
   int i;
   for(i = 1; i < arg_count; i++) {
     if(strcmp(args[i], "-tx") == 0 && i + 1 < arg_count) {
-      sscanf(args[i + 1], "%d", &tx_pin);
+      tx_pin = strtol(args[i + 1], NULL, 10);
       i++;
       continue;
     }
     if(strcmp(args[i], "-rx") == 0 && i + 1 < arg_count) {
-      sscanf(args[i + 1], "%d", &rx_pin);
+      rx_pin = strtol(args[i + 1], NULL, 10);
       i++;
       continue;
     }
-    sscanf(args[i], "%d", &speed);
+    speed = strtol(args[i], NULL, 10);
   }
   Serial.printf("Starting serial speed %d tx %d rx %d\n", speed, tx_pin, rx_pin);
   Serial2.begin(speed, SERIAL_8N1, rx_pin, tx_pin); 
@@ -5133,7 +5244,7 @@ void terminal_hexdump(char *filename) {
         if(file.available()) {
           byte = file.read();
           sprintf(buff, "%02X%c", byte, i < 7 ? ' ' : '|');
-          chars[i] = byte >= 0x20 ? byte : ' ';
+          chars[i] = byte >= 0x20 && byte != 127 ? byte : ' ';
         }
         else {
           sprintf(buff, "  %c", i < 7 ? ' ' : '|');
@@ -6146,7 +6257,7 @@ int terminal_telnet(int arg_count, char **args, char ssl_flag) {
     strcpy(host, args[1]);
   }
   if(arg_count == 3) {
-    sscanf(args[2], "%d", &port);
+    port = strtol(args[2], NULL, 10);
   }
 
   if(port == 0) {
@@ -8805,7 +8916,7 @@ void passwords_action(int action_index, char *filename) {
       }
       index++;
     }
-    passwords_edit_file(filename, filename_with_path);
+    passwords_edit_file("New", filename_with_path);
   }
   else if(action_index == 1) {
     // Редактируем существующий файл
@@ -8862,6 +8973,7 @@ void passwords_edit_file(char *title, char *filename_with_path) {
     contents[0] = 0;
   }
 
+  //Serial.printf("edit_text(%s, %s, %d)", title, contents, EDIT_FILE_LENGTH_MAX); delay(1000);
   changes_present = edit_text(title, contents, EDIT_FILE_LENGTH_MAX);
   if(changes_present) {
     // Спрашиваем о сохранении, сохраняем если да
@@ -10154,7 +10266,7 @@ void expenses_action(int action_index, char *filename) {
     // Добавить расход
     strcpy(name, "");
     if(drawPrompt("Expense amount", name) == 0) {
-      sscanf(name, "%f", &item);
+      item = strtod(name, NULL);
       if(item == 0) {
         drawError("Expense amount cannot be zero");
       }
@@ -10189,7 +10301,7 @@ int expenses_file_to_list(fs::File file, char *buff) {
   while(file.available()) {
     stream_get_line_by_index(file, 0, right, 80);
     item = 0;
-    sscanf(right, "%f", &item);
+    item = strtod(right, NULL);
     if(item) {
       summ += item;
     }
@@ -14153,6 +14265,7 @@ void screensaver(char mode, char *io_buff) {
     "Matrix",
     "Forest Fire Model",
     "Mood Lamp",
+    "Through Universe",
     NULL
   };
   char app_icon[] = {
@@ -14224,6 +14337,10 @@ void screensaver(char mode, char *io_buff) {
       // Mood lamp
       if(button_pressed == 6) {
         screensaver_mood_lamp();
+      }
+      // Through Universe
+      if(button_pressed == 7) {
+        screensaver_through_universe();
       }
       clearScreen();
       drawAppTitle("Screensavers");
@@ -14390,17 +14507,39 @@ void screensaver_squares() {
 }
 
 void screensaver_noise() {
-  char buff[8];
-  int i;
+  int i, j;
+  int offset = 0;
+  int offset_now = 0;
+  char color[tft.width() / 8];
   disableAppTitle();
 
-  while(1) {
-    for(i = 0; i < 8; i++) {
-      buff[i] = random(0, 256);
+  for(j = 0; j < tft.height(); j++) {
+    for(i = 0; i < tft.width() / 8; i++) {
+      color[i] = random(0, 256);
     }
-    tft.drawBitmap(random(0, tft.width() / 8) * 8, random(0, tft.height() / 8) * 8, (const uint8_t *)buff, 8, 8, TFT_WHITE, TFT_BLACK);
+    offset_now = (offset_now + 1) % tft.height();
+    tft.drawBitmap(0, offset_now, (uint8_t*)color, tft.width(), 1, TFT_WHITE, TFT_BLACK);
+  }
+
+  setupScrollArea(0, 0);
+  while(1) {
+    offset = (offset + tft.height() / 7 + random(0, tft.height() - 7)) % tft.height();
+    scrollAddress(offset);
+    for(i = 0; i < tft.width() / 8; i++) {
+      color[i] = random(0, 256);
+    }
+    offset_now = (offset_now + 1) % tft.height();
+    tft.drawBitmap(0, offset_now, (uint8_t*)color, tft.width(), 1, TFT_WHITE, TFT_BLACK);
+    /*
+    offset_now = (offset_now + 1) % tft.height();
+    for(i = 0; i < tft.width() / 4; i++) {
+      color = random(0, 2) ? TFT_WHITE : TFT_BLACK;
+      tft.drawFastHLine(i * 4, offset_now, 4, color);
+    }
+    */
     if(touchCheckNowait()) {
       touchWaitRelease();
+      scrollAddress(0);
       return;
     }
   }
@@ -14488,7 +14627,7 @@ void screensaver_forest_fire() {
   disableAppTitle();
   tft.fillScreen(TFT_BLACK);
 
-  for(i = 0; i < width * height / 8; i++) {
+  for(i = 0; i < width * height / 16; i++) {
     trees[i] = 0;
     fires[i] = 0;
     fires_next[i] = 0;
@@ -14596,6 +14735,47 @@ void screensaver_mood_lamp() {
     color = ((red) << (5 + 6)) | ((green) << (5)) | ((blue));
     tft.fillScreen(color);
     Serial.printf("r %d g %d b %d color %04X\n", red, green, blue, color);
+    delayOrTouchWait(50);
+    if(touchCheckNowait()) {
+      touchWaitRelease();
+      break;
+    }
+  }
+}
+
+#define THROUGH_UNIVERSE_STARS 50
+
+void screensaver_through_universe() {
+  double stars_x[THROUGH_UNIVERSE_STARS];
+  double stars_y[THROUGH_UNIVERSE_STARS];
+  int i;  
+  
+  disableAppTitle();
+  tft.fillScreen(TFT_BLACK);
+  for(i = 0; i < THROUGH_UNIVERSE_STARS; i++) {
+    stars_x[i] = random(0, tft.width());
+    stars_y[i] = random(0, tft.height());
+  }
+  
+  while(1) {
+    for(i = 0; i < THROUGH_UNIVERSE_STARS; i++) {
+      // Стираем старую
+      tft.drawPixel(stars_x[i], stars_y[i], TFT_BLACK);
+
+      // Сдвигаем звезду
+      stars_x[i] = stars_x[i] + 0.01 * (stars_x[i] - tft.width() / 2);
+      stars_y[i] = stars_y[i] + 0.01 * (stars_y[i] - tft.height() / 2);
+
+      // Если звезда ушла за экран - генерируем её где-то в центре
+      if(stars_x[i] < 0 || stars_x[i] >= tft.width() || stars_y[i] < 0 || stars_y[i] >= tft.height()) {
+        stars_x[i] = random(0, tft.width());
+        stars_y[i] = random(0, tft.height());
+      }
+
+      // Рисуем новую
+      tft.drawPixel(stars_x[i], stars_y[i], TFT_WHITE);
+    }
+
     delayOrTouchWait(50);
     if(touchCheckNowait()) {
       touchWaitRelease();
@@ -15701,7 +15881,7 @@ int gopher_get_page(char *address, char *buff_output, char *type) {
         port_flag = 0;
         type_flag = 1;
         str_offset = 0;
-        sscanf(buff, "%d", &port);
+        port = strtol(buff, NULL, 10);
       }
       buff[str_offset] = address[address_offset];
       str_offset++;
@@ -16069,7 +16249,7 @@ void weather(char mode, char *io_buff) {
       result = weather_get(global_lat, global_lon, temp, wind, weather_text);
 
       if(result) {
-        sscanf(wind, "%d", &wind_speed);
+        wind_speed = strtol(wind, NULL, 10);
         sprintf(wind, "%d m/s", wind_speed);
 
         tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
@@ -16141,7 +16321,7 @@ void weather(char mode, char *io_buff) {
         sprintf(buff, "%f", global_lat);
         drawPrompt("Enter latitude", buff);
         if(strlen(buff) > 0) {
-          sscanf(buff, "%f", &global_lat);
+          global_lat = strtod(buff, NULL);
           sprintf(buff, "%f %f", global_lat, global_lon);
           write_file_from_buff("/Settings/Coordinates", buff);
         }
@@ -16151,7 +16331,7 @@ void weather(char mode, char *io_buff) {
         sprintf(buff, "%f", global_lon);
         drawPrompt("Enter longitude", buff);
         if(strlen(buff) > 0) {
-          sscanf(buff, "%f", &global_lon);
+          global_lon = strtod(buff, NULL);
           sprintf(buff, "%f %f", global_lat, global_lon);
           write_file_from_buff("/Settings/Coordinates", buff);
         }
@@ -16224,7 +16404,7 @@ int weather_get(double lat, double lon, char *temp, char *wind, char *weather_te
     }
 
     weather_code_number = -1;
-    sscanf(weather_code, "%d", &weather_code_number);
+    weather_code_number = strtol(weather_code, NULL, 10);
     switch(weather_code_number) {
       default: strcpy(weather_text, "Unknown weather code"); break;
       case 0: strcpy(weather_text, "Clear sky"); break;
@@ -16359,7 +16539,7 @@ void chat(char mode, char *io_buff) {
   update_flag = 1;
   while(1) {
     if(update_flag) {
-      if(get_file_https("https://arikado.ru/cyd/chat_data.txt", messages, 2048) == 200) {
+      if(get_file_https("https://arikado.xyz/cyd/chat_data.txt", messages, 2048) == 200) {
         // Если сообщения изменились - бибикнуть
         if(strlen(prev_messages) > 0 && strcmp(messages, prev_messages)) {
           beep_if_enabled();
@@ -16464,7 +16644,7 @@ int chat_send_message(char *nickname, char *message, char *response) {
   int i;
   int httpResponseCode;
   query = (char*)malloc(1000 * sizeof(char));
-  sprintf(query, "https://arikado.ru/cyd/chat_post.php?nickname=%s&message=", nickname);
+  sprintf(query, "https://arikado.xyz/cyd/chat_post.php?nickname=%s&message=", nickname);
   // URLencode message
   for(i = 0; i < strlen(message); i++) {
     sprintf(buff, "%%%02X", message[i]);
@@ -17442,7 +17622,7 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
   terminal_show_screen();
 
   if(strcmp(port_text, "")) {
-    sscanf(port_text, "%d", &port);
+    port = strtol(port_text, NULL, 10);
   }
 
   terminal_clear_screen();
@@ -18952,6 +19132,122 @@ char base64_get_bits(char c) {
   return -1;
 }
 
+void file_aes_encrypt(char *password, char *from_filename, char *to_filename) {
+  char *data_in;
+  char *data_out;
+  long offset;
+  long in_file_size;
+  long out_file_size;
+  int i;
+  fs::File file_from;
+  fs::File file_to;
+
+  memset(aes_encryption_key, 0, 32);
+  for(i = 0; i < 32; i++) {
+    aes_encryption_key[i] = password[i];
+    if(password[i] == 0) break;
+  }
+
+  file_from = Storage->open(from_filename);
+  if(!file_from) {
+    terminal_println("Unable to open input file");
+    return;
+  }
+  in_file_size = file_from.size();
+  data_in = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
+  if(!data_in) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  offset = 0;
+  while(file_from.available()) {
+    data_in[offset] = file_from.read();
+    offset++;
+    data_in[offset] = 0;
+  }
+  file_from.close();
+
+  out_file_size = 16 + (((in_file_size + 1) / 16) + 1) * 16;
+  data_out = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
+  if(!data_out) {
+    terminal_println("Unable to reserve memory");
+    free(data_in);
+    return;
+  }
+
+  Serial.printf("encryptAES %s %d %d\n", data_in, in_file_size, out_file_size);
+  terminal_println("encryptAES before"); terminal_show_screen(); delay(1000);
+  encryptAES((uint8_t*) data_in, in_file_size + 1, (uint8_t*) data_out, out_file_size);
+  terminal_println("encryptAES after"); terminal_show_screen(); delay(1000);
+
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+    file_to.write((const uint8_t *)data_out, out_file_size);
+    file_to.close();
+  }
+  else {
+    for(offset = 0; offset < out_file_size; offset++) {
+      terminal_print_char(data_out[offset]);
+    }
+  }
+}
+
+void file_aes_decrypt(char *password, char *from_filename, char *to_filename) {
+  char *data_in;
+  char *data_out;
+  long offset;
+  long in_file_size;
+  long out_file_size;
+  int i;
+  fs::File file_from;
+
+  memset(aes_encryption_key, 0, 32);
+  for(i = 0; i < 32; i++) {
+    aes_encryption_key[i] = password[i];
+    if(password[i] == 0) break;
+  }
+
+  file_from = Storage->open(from_filename);
+  if(!file_from) {
+    terminal_println("Unable to open input file");
+    return;
+  }
+  in_file_size = file_from.size();
+  data_in = (char *)malloc(in_file_size * sizeof(char));
+  if(!data_in) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  offset = 0;
+  data_in[offset] = 0;
+  while(file_from.available()) {
+    data_in[offset] = file_from.read();
+    offset++;
+  }
+  file_from.close();
+
+  // Выход меньше на 16 байт (вектор инициализации)
+  out_file_size = in_file_size - 16;
+  data_out = (char *)malloc(out_file_size * sizeof(char));
+  if(!data_out) {
+    terminal_println("Unable to reserve memory");
+    free(data_in);
+    return;
+  }
+  
+  decryptAES((uint8_t*) data_in, in_file_size, (uint8_t*) data_out);
+  
+  if(to_filename) {
+    write_file_from_buff(to_filename, data_out);
+  }
+  else {
+    terminal_print(data_out);
+    terminal_println("");
+  }
+}
+
 void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
   int byte1, byte2, byte3;
   int byte_out;
@@ -19112,7 +19408,7 @@ char utf8_to_cp1251_byte(char byte1, char byte2) {
 void utf8_to_cp1251(char *buff) {
   int read_offset = 0;
   int write_offset = 0;
-  unsigned char byte;
+  unsigned char byte, byte2, byte3, byte4;
   int length = strlen(buff);
   while(read_offset < length) {
     byte = buff[read_offset];
@@ -19123,11 +19419,54 @@ void utf8_to_cp1251(char *buff) {
       read_offset++;
     }
     else if(utf8_is_triple_byte(byte)) {
-      //Serial.printf("3-byte: %02X %02X %02X\n", byte, buff[read_offset], buff[read_offset + 1]);
-      byte = '?';
+      byte2 = buff[read_offset + 0];
+      byte3 = buff[read_offset + 1];
+
+      // Трёхбайтовые символы
+      if(byte == 0xE2 && byte2 == 0x80) {
+        byte = '?';
+        if(byte3 == 0x90) byte = '-'; // дефис
+        else if(byte3 == 0x91) byte = '-'; // неразрывный дефис
+        else if(byte3 == 0x92) byte = '-'; // фигурное тире (по ширине цифры)
+        else if(byte3 == 0x93) byte = 0x96; // N dash
+        else if(byte3 == 0x94) byte = 0x97; // M dash
+        else if(byte3 == 0x95) byte = '-'; // Горизонтальная черта
+        else if(byte3 == 0x98) byte = 0x91; // Левая одинарная кавычка
+        else if(byte3 == 0x99) byte = 0x92; // Правая одинарная кавычка
+        else if(byte3 == 0x9A) byte = 0x83; // 
+        else if(byte3 == 0x9C) byte = 0x93; // Открывающая кавычка (верх)
+        else if(byte3 == 0x9D) byte = 0x94; // Правая двойная кавычка
+        else if(byte3 == 0x9E) byte = 0x84; // Нижняя открывающая двойная кавычка
+        else if(byte3 == 0xA0) byte = 0x86; // Типографский крестик
+        else if(byte3 == 0xA1) byte = 0x87; // Двойной типографский крестик
+        else if(byte3 == 0xA2) byte = 0x95; // Буллет
+        else if(byte3 == 0xA6) byte = 0x85; // Троеточие
+        else if(byte3 == 0xB0) byte = 0x89; // Промилле
+        else if(byte3 == 0xB9) byte = 0x8B; // Открывающая одиночная ёлочка
+        else if(byte3 == 0xBA) byte = 0x9B; // Закрывающая одиночная ёлочка
+        else {
+          sprintf(buff, "Unknown 3-byte symbol: %02X %02X %02X", byte, byte2, byte3);
+          terminal_println(buff);
+          Serial.println(buff);
+        }
+      }
+      else if(byte == 0xE2 && byte2 == 0x82) {
+        if(byte3 == 0xAC) byte = 0x88; // Евро
+      }
+      else if(byte == 0xE2 && byte2 == 0x84) {
+        if(byte3 == 0x96) byte = 0xB9; // №
+        if(byte3 == 0xA2) byte = 0x99; // TM
+      }
+      else {
+        Serial.printf("3-byte: %02X %02X %02X\n", byte, byte2, byte3);
+        byte = '?';
+      }
       read_offset += 2;
     }
     else if(utf8_is_quad_byte(byte)) {
+      byte2 = buff[read_offset + 0];
+      byte3 = buff[read_offset + 1];
+      byte4 = buff[read_offset + 2];
       //Serial.printf("4-byte: %02X %02X %02X %02X\n", byte, buff[read_offset], buff[read_offset + 1], buff[read_offset + 2]);
       byte = '?';
       read_offset += 3;
@@ -19684,6 +20023,7 @@ void dashboard(char mode, char *io_buff) {
     "Wi-Fi Monitor",
     "World Time",
     "Bitcoin",
+    "Useless Facts",
     NULL
   };
   char app_icon[] = {
@@ -19767,6 +20107,10 @@ void dashboard(char mode, char *io_buff) {
       // Bitcoin
       if(button_pressed == 9) {
         dashboard_bitcoin();
+      }
+      // Random Useless Facts
+      if(button_pressed == 10) {
+        dashboard_random_useless_facts();
       }
       
       clearScreen();
@@ -20297,9 +20641,9 @@ void dashboard_channel_monitor() {
   char buff[80];
   long packets_counts[WIFI_MAX_CHANNELS];
   long this_ch_count = 0;
-  long total_packets = 0;
+  long total_packets = 1;
 
-  total_packets = 0;
+  total_packets = 1;
   for(ch = 0; ch < WIFI_MAX_CHANNELS; ch++) {
     packets_counts[ch] = 0;
   }
@@ -20474,7 +20818,6 @@ void dashboard_bitcoin() {
   int x, y;
   float val;
   int result;
-  time_t unix_timestamp;
   long prev_update_millis = 0;
   long prev_update_price = -60000;
   int base_offset = 75;
@@ -20490,7 +20833,6 @@ void dashboard_bitcoin() {
     if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
       prev_update_millis = millis();
 
-      unix_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
       // Выводим всё
       tft.setTextColor(color_scheme_fg, color_scheme_bg);
       sprintf(buff, " %d:%02d:%02d ", global_hours, global_minutes, global_seconds);
@@ -20498,6 +20840,7 @@ void dashboard_bitcoin() {
 
       // Текущий блок
       if(millis() - prev_update_price > 60000) {
+        // Текущий блок
         i = 0;
         if(get_file_https("https://blockchain.info/q/getblockcount", buff, 80) == 200) {
           tft.setTextColor(color_scheme_fg, color_scheme_bg);
@@ -20505,12 +20848,24 @@ void dashboard_bitcoin() {
           tft.drawCentreString(buff, tft.width() / 2, 100 + i * 70, FONT_BIGGER);
         }
         i++;
+
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
+        sprintf(buff, " %d:%02d:%02d ", global_hours, global_minutes, global_seconds);
+        tft.drawCentreString(buff, tft.width() / 2, 27, FONT_BIGGER);
+
+        // Неподтверждённые транзакции
         if(get_file_https("https://blockchain.info/q/unconfirmedcount", buff, 80) == 200) {
           tft.setTextColor(color_scheme_fg, color_scheme_bg);
           tft.drawCentreString("Unconfirmed transactions:", tft.width() / 2, 80 + i * 70, FONT_DEFAULT);
           tft.drawCentreString(buff, tft.width() / 2, 100 + i * 70, FONT_BIGGER);
         }
         i++;
+
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
+        sprintf(buff, " %d:%02d:%02d ", global_hours, global_minutes, global_seconds);
+        tft.drawCentreString(buff, tft.width() / 2, 27, FONT_BIGGER);
+
+        // Средняя цена за 24 часа
         if(get_file_https("https://blockchain.info/q/24hrprice", buff, 80) == 200) {
           tft.setTextColor(color_scheme_fg, color_scheme_bg);
           tft.drawCentreString("24 hour weighted price, USD:", tft.width() / 2, 80 + i * 70, FONT_DEFAULT);
@@ -20518,8 +20873,6 @@ void dashboard_bitcoin() {
         }
         prev_update_price = millis();
       }
-      // Цена
-      // Неподтверждённые транзакции
     }
     
     if(!touchCheckNowait()) continue;
@@ -20533,6 +20886,105 @@ void dashboard_bitcoin() {
     }
     touchWaitRelease();
   }
+}
+
+void dashboard_random_useless_facts() {
+  char buff[500];
+  char ruf_list[2048];
+  int len;
+  int i;
+  int x, y;
+  float val;
+  int result;
+  time_t unix_timestamp;
+  long prev_update_millis = 0;
+  long prev_update_price = -60000;
+  int base_offset = 75;
+
+  clearScreen();
+  drawAppTitle("Random Useless Facts");
+
+  if(WiFi.status() != WL_CONNECTED) {
+    drawError("Wi-Fi connection required");
+    return;
+  }
+
+  strcpy(ruf_list, "");
+  //memcpy(ruf_list, 0, 2048);
+
+  while(1) {
+    if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
+      prev_update_millis = millis();
+
+      unix_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
+      // Выводим всё
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      sprintf(buff, " %d:%02d:%02d ", global_hours, global_minutes, global_seconds);
+      tft.drawCentreString(buff, tft.width() / 2, 27, FONT_BIGGER);
+
+      // Текущий блок
+      if(millis() - prev_update_price > 60000) {
+        if(get_random_useless_fact(buff) == 200) {
+          Serial.println(buff);
+          utf8_to_cp1251(buff);
+          Serial.println(buff);
+          len = strlen(buff);
+
+          for(i = 2047; i > len + 1; i--) {
+            ruf_list[i] = ruf_list[i - len - 2];
+          }
+          memcpy(ruf_list, buff, len);
+          ruf_list[len] = '\n';
+          ruf_list[len + 1] = '\n';
+          Serial.println(ruf_list);
+        }
+
+        draw_text_formatted(ruf_list, 1, 80, tft.width() - 2, 15, FONT_DEFAULT, 1);
+
+        prev_update_price = millis();
+      }
+    }
+    
+    if(!touchCheckNowait()) continue;
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+int get_random_useless_fact(char *buff) {
+  char *contents;
+  int read_offset;
+  int write_offset;
+  int result;
+  strcpy(buff, "");
+
+  contents = (char*)malloc(4096 * sizeof(char));
+  result = get_file_https("https://uselessfacts.jsph.pl/api/v2/facts/random", contents, 4096);
+  if(result == 200) {
+    read_offset = 49;
+    write_offset = 0;
+    while(contents[read_offset] != 0) {
+      if(memcmp(contents + read_offset, "\",\"", 3) == 0) {
+        buff[write_offset] = 0;
+        break;
+      }
+      if(contents[read_offset] == '\\') read_offset++;
+      buff[write_offset] = contents[read_offset];
+      read_offset++;
+      write_offset++;
+      buff[write_offset] = 0;
+    }
+  }
+  free(contents);
+
+  return result;
 }
 
 // ====================================================
@@ -20968,7 +21420,7 @@ void set_clock(char mode, char *io_buff) {
       if(button_pressed == 0) {
         sprintf(buff, "%ld", global_timezone);
         if(drawPrompt("Timezone in seconds", buff) == 0) {
-          sscanf(buff, "%ld", &global_timezone);
+          global_timezone = strtol(buff, NULL, 10);
           save_current_timezone();
         }
         tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
@@ -21381,7 +21833,7 @@ void settings(char mode, char *io_buff) {
       }
       
       clearScreen();
-      drawAppTitle("Dashboards");
+      drawAppTitle("Settings");
     }
 
     touchWaitReleaseOrExit();
@@ -21736,14 +22188,14 @@ void sound_control(char mode, char *io_buff) {
       else if(button_pressed == 4) {
         buff[0] = 0;
         if(drawPrompt("Volume level (0-100)", buff) == 0) {
-          sscanf(buff, "%d", &global_volume);
+          global_volume = strtol(buff, NULL, 10);
         }
         clearPrompt();
       }
       else if(button_pressed == 5) {
         buff[0] = 0;
         if(drawPrompt("Music pin", buff) == 0) {
-          sscanf(buff, "%d", &global_music_pin);
+          global_music_pin = strtol(buff, NULL, 10);
           pinMode(global_music_pin, OUTPUT);
         }
         clearPrompt();
@@ -21752,7 +22204,7 @@ void sound_control(char mode, char *io_buff) {
         buff[0] = 0;
         if(drawPrompt("Beeper pin", buff) == 0) {
           noTone(global_beeper_pin);
-          sscanf(buff, "%d", &global_beeper_pin);
+          global_beeper_pin = strtol(buff, NULL, 10);
           pinMode(global_beeper_pin, OUTPUT);
         }
         clearPrompt();
@@ -21879,13 +22331,13 @@ void clock_control(char mode, char *io_buff) {
       else if(button_pressed == 1) {
         sprintf(buff, "%d", global_alarm_hour);
         if(drawPrompt("Alarm hour", buff) == 0) {
-          sscanf(buff, "%d", &global_alarm_hour);
+          global_alarm_hour = strtol(buff, NULL, 10);
         }
       }
       else if(button_pressed == 2) {
         sprintf(buff, "%d", global_alarm_minute);
         if(drawPrompt("Alarm minute", buff) == 0) {
-          sscanf(buff, "%d", &global_alarm_minute);
+          global_alarm_minute = strtol(buff, NULL, 10);
         }
       }
       else if(button_pressed == 3) {
@@ -22171,7 +22623,7 @@ void store_current_timestamp() {
 void get_current_timestamp_fs() {
   char buff[80];
   if(read_file_to_buff("/Settings/Timestamp", 79, buff)) {
-    sscanf(buff, "%lu", &global_unixtime_retrieved);
+    global_unixtime_retrieved = strtol(buff, NULL, 10);
     global_unixtime_retrieved_millis = millis();
   }
 }
@@ -22179,7 +22631,7 @@ void get_current_timestamp_fs() {
 void get_current_timezone() {
   char buff[80];
   if(read_file_to_buff("/Settings/Timezone", 79, buff)) {
-    sscanf(buff, "%ld", &global_timezone);
+    global_timezone = strtol(buff, NULL, 10);
   }
 }
 
@@ -22516,7 +22968,7 @@ void view_file(char *title, char *filename) {
 
   // Нет ли сохранённого смещения для файла?
   if(read_key_value_from_file("/Settings/View", filename, buff)) {
-    sscanf(buff, "%d", &file_offset);
+    file_offset = strtol(buff, NULL, 10);
     initial_file_offset = file_offset;
   }
 
@@ -22721,7 +23173,7 @@ void hexview_file(char *title, char *filename) {
 
   // Нет ли сохранённого смещения для файла?
   if(read_key_value_from_file("/Settings/View", filename, buff)) {
-    sscanf(buff, "%d", &file_offset);
+    file_offset = strtol(buff, NULL, 10);
     initial_file_offset = file_offset;
   }
 
@@ -24553,7 +25005,7 @@ int oscilloscope_get_value(int input_index) {
         if(strlen(buff) >= 18) break;
       }
     }
-    sscanf(buff, "%d", &value);
+    value = strtol(buff, NULL, 10);
     return value;
   }
   return 0;
@@ -24648,14 +25100,14 @@ void voltmeter(char mode, char *io_buff) {
       if(button_pressed == 0) {
         sprintf(buff, "%f", multiplier);
         if(drawPrompt("Multiplier value", buff) == 0) {
-          sscanf(buff, "%f", &multiplier);
+          multiplier = strtod(buff, NULL);
         }
         clearPrompt();
       }
       else if(button_pressed == 1) {
         sprintf(buff, "%d", pin);
         if(drawPrompt("Input", buff) == 0) {
-          sscanf(buff, "%d", &pin);
+          pin = strtol(buff, NULL, 10);
           pinMode(pin, INPUT_PULLUP);
         }
         clearPrompt();
@@ -24803,21 +25255,21 @@ void generator(char mode, char *io_buff) {
       else if(button_pressed == 1) {
         sprintf(buff, "%g", frequency);
         if(drawPrompt("Frequency", buff) == 0) {
-          sscanf(buff, "%f", &frequency);
+          frequency = strtod(buff, NULL);
         }
         clearPrompt();
       }
       else if(button_pressed == 2) {
         sprintf(buff, "%g", amplitude);
         if(drawPrompt("Amplitude", buff) == 0) {
-          sscanf(buff, "%f", &amplitude);
+          amplitude = strtod(buff, NULL);
         }
         clearPrompt();
       }
       else if(button_pressed == 3) {
         sprintf(buff, "%d", pin);
         if(drawPrompt("Pin", buff) == 0) {
-          sscanf(buff, "%d", &pin);
+          pin = strtol(buff, NULL, 10);
           if(pin >= 0) {
             analogWriteFrequency(pin, pwm_frequency);
             pinMode(pin, OUTPUT);
@@ -25573,7 +26025,7 @@ void n_back(char mode, char *io_buff) {
 
   strcpy(buff, "");
   if(drawPrompt("Level: 0 - 19", buff) == 0) {
-    sscanf(buff, "%d", &level);
+    level = strtol(buff, NULL, 10);
     if(level < 0) level = 0;
     if(level >= N_BACK_MAX_LEVEL) level = N_BACK_MAX_LEVEL - 1;
   }
@@ -25710,7 +26162,7 @@ void mental_math(char mode, char *io_buff) {
 
   strcpy(buff, "");
   if(drawPrompt("Max number: 3 - 10000", buff) == 0) {
-    sscanf(buff, "%d", &level);
+    level = strtol(buff, NULL, 10);
     if(level < MENTAL_MATH_MIN_LEVEL) level = MENTAL_MATH_MIN_LEVEL;
     if(level >= MENTAL_MATH_MAX_LEVEL) level = MENTAL_MATH_MAX_LEVEL - 1;
   }
@@ -27672,7 +28124,7 @@ void metronome(char mode, char *io_buff) {
       if(button_pressed == 0) {
         sprintf(buff, "%d", tempo);
         if(drawPrompt("Enter tempo", buff) == 0) {
-          sscanf(buff, "%d", &tempo);
+          tempo = strtol(buff, NULL, 10);
         }
         clearPrompt();
       }
@@ -30633,6 +31085,26 @@ double parse_expr_constant_by_name(char *name) {
   return 0;
 }
 
+// Функция задает границы скроллинга (Команда 33h в даташите ILI9341)
+void setupScrollArea(uint16_t tfa, uint16_t bfa) {
+  uint16_t vsa = tft.height() - tfa - bfa; // Высота активной зоны скроллинга
+  
+  tft.writecommand(0x33); // VSCRDEF (Vertical Scrolling Definition)
+  tft.writedata(tfa >> 8);
+  tft.writedata(tfa & 0xFF);
+  tft.writedata(vsa >> 8);
+  tft.writedata(vsa & 0xFF);
+  tft.writedata(bfa >> 8);
+  tft.writedata(bfa & 0xFF);
+}
+
+// Функция сдвигает начальный адрес чтения памяти (Команда 37h в даташите ILI9341)
+void scrollAddress(uint16_t vsp) {
+  tft.writecommand(0x37); // VSCRSADD (Vertical Scrolling Start Address)
+  tft.writedata(vsp >> 8);
+  tft.writedata(vsp & 0xFF);
+}
+
 char * get_reset_reason_text(esp_reset_reason_t reason) {
   switch (reason) {
     case ESP_RST_UNKNOWN:   return "Unknown"; break;
@@ -30905,13 +31377,13 @@ void setup() {
       set_brightness(global_brightness);
     }
     else if(read_file_to_buff("/Settings/Brightness", 79, buff)) {
-      sscanf(buff, "%d", &global_brightness);
+      global_brightness = strtol(buff, NULL, 10);
       set_brightness(global_brightness);
     }
 
     // Инверсия
     if(read_file_to_buff("/Settings/Inversion", 79, buff)) {
-      sscanf(buff, "%d", &global_inversion);
+      global_inversion = strtol(buff, NULL, 10);
       tft.invertDisplay(global_inversion ? true : false);
     }
     else {
@@ -30920,7 +31392,7 @@ void setup() {
 
     // Поворот экрана
     if(read_file_to_buff("/Settings/Rotation", 79, buff)) {
-      sscanf(buff, "%d", &global_rotation);
+      global_rotation = strtol(buff, NULL, 10);
       tft.setRotation(global_rotation ? 0 : 2);
     }
     else {
@@ -30929,7 +31401,7 @@ void setup() {
 
     // Мелкий шрифт
     if(read_file_to_buff("/Settings/Font", 79, buff)) {
-      sscanf(buff, "%d", &global_view_font_small);
+      global_view_font_small = strtol(buff, NULL, 10);
     }
     else {
       global_view_font_small = 0;
@@ -30938,56 +31410,56 @@ void setup() {
     // Цветовая схема
     // Цвет фона и текста
     if(read_key_value_from_file("/Settings/Colors", "background", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_bg = colors[index];
     }
     if(read_key_value_from_file("/Settings/Colors", "foreground", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_fg = colors[index];
     }
     // Цвет заголовка и текста
     if(read_key_value_from_file("/Settings/Colors", "title_background", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_title_bg = colors[index];
     }
     if(read_key_value_from_file("/Settings/Colors", "title_foreground", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_title_fg = colors[index];
     }
     if(read_key_value_from_file("/Settings/Colors", "selection_background", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_selection_bg = colors[index];
     }
     if(read_key_value_from_file("/Settings/Colors", "selection_foreground", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_selection_fg = colors[index];
     }
     // Цвет кнопки и текста
     if(read_key_value_from_file("/Settings/Colors", "button_background", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_button_bg = colors[index];
     }
     if(read_key_value_from_file("/Settings/Colors", "button_foreground", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_button_fg = colors[index];
     }
     // Цвет нажатой кнопки и текста
     if(read_key_value_from_file("/Settings/Colors", "button_active_background", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_button_active_bg = colors[index];
     }
     if(read_key_value_from_file("/Settings/Colors", "button_active_foreground", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_button_active_fg = colors[index];
     }
     // Цвет неактивного текста
     if(read_key_value_from_file("/Settings/Colors", "inactive_foreground", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_inactive_fg = colors[index];
     }
     // Цвет ссылки
     if(read_key_value_from_file("/Settings/Colors", "link_foreground", buff)) {
-      sscanf(buff, "%d", &index);
+      index = strtol(buff, NULL, 10);
       color_scheme_link_fg = colors[index];
     }
 
@@ -31051,54 +31523,54 @@ void setup() {
     }
 
     if(read_file_to_buff("/Settings/Coordinates", 79, buff)) {
-      sscanf(buff, "%f %f", &global_lat, &global_lon);
+      sscanf(buff, "%lf %lf", &global_lat, &global_lon);
     }
 
     // Настройки звука
     if(read_key_value_from_file("/Settings/Sound", "beep_enabled_flag", buff)) {
-      sscanf(buff, "%d", &global_is_beep_enabled);
+      global_is_beep_enabled = strtol(buff, NULL, 10);
     }
     if(read_key_value_from_file("/Settings/Sound", "beep_tap_enabled_flag", buff)) {
-      sscanf(buff, "%d", &global_is_beep_tap_enabled);
+      global_is_beep_tap_enabled = strtol(buff, NULL, 10);
     }
     if(read_key_value_from_file("/Settings/Sound", "beep_hour_enabled_flag", buff)) {
-      sscanf(buff, "%d", &global_is_beep_hour_enabled);
+      global_is_beep_hour_enabled = strtol(buff, NULL, 10);
     }
     if(read_key_value_from_file("/Settings/Sound", "beep_quarter_enabled_flag", buff)) {
-      sscanf(buff, "%d", &global_is_beep_quarter_enabled);
+      global_is_beep_quarter_enabled = strtol(buff, NULL, 10);
     }
     if(read_key_value_from_file("/Settings/Sound", "volume", buff)) {
-      sscanf(buff, "%d", &global_volume);
+      global_volume = strtol(buff, NULL, 10);
     }
     if(read_key_value_from_file("/Settings/Sound", "beeper_pin", buff)) {
-      sscanf(buff, "%d", &global_beeper_pin);
+      global_beeper_pin = strtol(buff, NULL, 10);
     }
     pinMode(global_beeper_pin, OUTPUT);
     if(read_key_value_from_file("/Settings/Sound", "music_pin", buff)) {
-      sscanf(buff, "%d", &global_music_pin);
+      global_music_pin = strtol(buff, NULL, 10);
     }
     pinMode(global_music_pin, OUTPUT);
 
     // Настройки клавиатуры
     if(read_key_value_from_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", buff)) {
-      sscanf(buff, "%d", &alt_keyboard_enabled_flag);
+      alt_keyboard_enabled_flag = strtol(buff, NULL, 10);
     }
     if(read_key_value_from_file("/Settings/Keyboard", "keyboard_indent_left", buff)) {
-      sscanf(buff, "%d", &keyboard_indent_left);
+      keyboard_indent_left = strtol(buff, NULL, 10);
     }
     if(read_key_value_from_file("/Settings/Keyboard", "keyboard_indent_right", buff)) {
-      sscanf(buff, "%d", &keyboard_indent_right);
+      keyboard_indent_right = strtol(buff, NULL, 10);
     }
 
     // Настройки будильника
     if(read_key_value_from_file("/Settings/Alarm", "enabled", buff)) {
-      sscanf(buff, "%d", &global_alarm_set);
+      global_alarm_set = strtol(buff, NULL, 10);
     }
     if(read_key_value_from_file("/Settings/Alarm", "hour", buff)) {
-      sscanf(buff, "%d", &global_alarm_hour);
+      global_alarm_hour = strtol(buff, NULL, 10);
     }
     if(read_key_value_from_file("/Settings/Alarm", "minute", buff)) {
-      sscanf(buff, "%d", &global_alarm_minute);
+      global_alarm_minute = strtol(buff, NULL, 10);
     }
 
     //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
@@ -31118,7 +31590,7 @@ void setup() {
     // NTP
     global_ntp_enabled = 1;
     if(read_file_to_buff("/Settings/NTP", 79, buff)) {
-      sscanf(buff, "%d", &global_ntp_enabled);
+      global_ntp_enabled = strtol(buff, NULL, 10);
     }
     //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
