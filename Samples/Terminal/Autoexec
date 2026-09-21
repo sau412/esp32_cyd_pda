@@ -1,0 +1,2 @@
+echo "These commands run on terminal open"
+date
