@@ -65,28 +65,18 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Stopwatch
 * Timer
 * Breathing timer
-* Brightness
 * Life (cellular automaton) - see https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life for details
 * Counter
 * I2C Scanner
-* Set clock and timezone
-* View Fonts
 * Make screenshot with BOOT button
-* Application groups
-* Manual application
-* Select color scheme and inversion
-* Software reboot app
-* Enable/disable russian keyboard app
+* User's manual application
 * Terminal (with serial, ping, telnet)
 * Backup via web interface (very slow, ~40 minutes for download, upload is pretty fast)
-* Select autorun app
 * Oscilloscope
-* Select data storage
 * View Screenshots
 * Backup FFat to SD and restore from SD to FFat
 * Voltmeter
-* Clock settings
-* Screen settings
+* Settings app
 * Signal generator
 
 ## PIM apps
@@ -133,6 +123,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Wi-Fi Channels Monitor
 * World Time
 * Bitcoin block, price, pending transactions
+* Random Useless Fact
 
 ## Screensavers
 * Stars
@@ -141,6 +132,8 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Noise
 * Matrix
 * Forest Fire Simulator
+* Mood Lamp
+* Through the Universe
 
 ## Wi-Fi
 * Wi-Fi connection
@@ -223,7 +216,6 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * lscpu - information about CPU
 * lsmem - information about memory
 * lsblk - information about internal storage
-* brainfuck {path} - brainfuck interpretator
 * ffat_to_sd {path} {path} - copy between storages
 * sd_to_ffat {path} {path} - copy between storages
 * view {path} - view file (GUI viewer)
@@ -238,6 +230,8 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * base32decode {path} [path] - decode file from base32
 * base64encode {path} [path] - encode file to base64
 * base64decode {path} [path] - decode file from base64
+* aes_encrypt {password} {path} [path] - encrypt file with AES-256
+* aes_decrypt {password} {path} [path] - decrypt file with AES-256
 * app {app_name} - launch app by name
 * Filename from /Terminal - run commands from file one-by-one
 
