@@ -1,0 +1,26 @@
+Command history here:
+md5sum /Terminal/sample
+sha256sum /Terminal/sample
+wget http://example.com /Terminal/Example
+less /test.txt
+hexdump /text.txt
+history
+translate auto en привет
+bc 123+456+792
+append /test.txt "Another line hits the dust"
+ls /Basic
+basic /Basic/test.bas
+weather
+weather 60 30
+ipconfig
+rot13 suggestion
+rot13 fhttrfgvba
+cal
+telnet irc.libera.chat 6667
+uptime
+morse "Hello, world"
+app sokoban
+sun
+moon
+chat
+brainfuck test.b
