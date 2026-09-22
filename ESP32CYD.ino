@@ -287,15 +287,12 @@
 2026-09-20 Баг с 0 пакетов в мониторинге каналов вай-фай (деление на 0), при выходе из подраздела Settings заголовок был Dashboards,
 2026-09-21 Замена sscanf за strtol/strtod, улучшенные помехи, aes_encrypt и aes_decrypt в терминале, команда sizeof,
   Random Useless Fact dashboard, заставка "сквозь вселенную", не показывать символ 127 в терминале в hexdump
+2026-09-22 Заставка газ, настройка гаммы, использовать хэш пароля, пароль и owner в NVS, поиск
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
-- (д) Приложение поиск
 - (п) Просмотреть справку, может быть что-то добавить
 - (д) Прошлые команды в терминале по стрелке вверх
 - (н) Тетрис
-- (н) Хэш пароля в NVS
-- (н) Примеры терминала
-
 
 Остальное:
 - (н) Мини-калькулятор в меню
@@ -543,6 +540,9 @@ WiFiClient *global_client = NULL;
 
 // For JPEG
 #include <JPEGDEC.h>
+
+// NVS
+#include <Preferences.h>
 
 #define CHECKSUM_CRC 1
 #define CHECKSUM_MD5 2
@@ -839,7 +839,7 @@ public:
         NULL                             // Label name in your partition table
       );
       if(!partition) return;
-      buff = (char*)malloc(chunk_size * sizeof(char));
+      buff = (char *)malloc(chunk_size * sizeof(char));
       if(!buff) return;
       Serial.printf("Reading offset %d\n", offset);
       esp_partition_read(partition, offset, buff, chunk_size);
@@ -968,6 +968,7 @@ double global_lon = 0;
 int global_brightness = 255;
 int global_inversion = 0;
 int global_rotation = 0;
+int global_gamma = 1;
 int global_view_font_small = 0;
 char global_screen_color_read_extra_byte = 0;
 
@@ -1006,6 +1007,9 @@ char global_is_lap_year = 0;
 
 Ticker secondTicker;
 Ticker minuteTicker;
+
+#define PREFS_NAMESPACE "cyd-pda"
+Preferences preferences;
 
 // Параметры приложений
 char current_app_title[80];
@@ -1098,6 +1102,7 @@ void voltmeter(char mode, char *io_buff);
 void generator(char mode, char *io_buff);
 void wikipedia(char mode, char *io_buff);
 void settings(char mode, char *io_buff);
+void search(char mode, char *io_buff);
 
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
@@ -1193,6 +1198,7 @@ function_application_pointer all_apps[] = {
   //select_storage_app,
   backups,
   settings,
+  search,
   //reboot,
   NULL
 };
@@ -1746,9 +1752,14 @@ void user_manual(char mode, char *io_buff) {
   "\n"
   "== Tips & Tricks ==\n"
   "* Touch and hold app title more than 1 second to exit app.\n"
-  "* Press BOOT button to make screenshot. There is no way to view screenshot though.\n"
+  "* Press BOOT button to make screenshot.\n"
   "* To force perform calibration on start hold touchscreen during reboot\n"
   "* For screensavers touch and hold anywhere to exit\n"
+  "* Use multipoint calibration if you have touch nonlinears and glithes. Or use keyboard indent.\n"
+  "* Music and Webradio can play in background\n"
+  "* You can set beep and music pins separately\n"
+  "* Check Gamma correction if 24-bit images looks wrong\n"
+  "* You can run apps from launcher, autorun app or from terminal with \"app\" command. Also you can do terminal commands for specific apps.\n"
   "\n"
   "== Reader ==\n"
   "Touch left side of the screen to scroll back, right side to scroll forward.\n"
@@ -1772,6 +1783,15 @@ void user_manual(char mode, char *io_buff) {
   "== Passwords ==\n"
   "AES-256 encrypted notes. Shows garbage in case of wrong password.\n"
   "\n"
+  "== TOTP ==\n"
+  "Time based one time passwords. Like Google Authenticator. Second line is a key.\n"
+  "\n"
+  "== Barcode ==\n"
+  "Barcode generator. Support EAN8, EAN13 and Code128 codes. Second line is a key.\n"
+  "\n"
+  "== Basic ==\n"
+  "BASIC interpreter. Advanced serial calculations.\n"
+  "\n"
   "== Weather ==\n"
   "Uses api.open-meteo.com for data.\n"
   "\n"
@@ -1784,10 +1804,10 @@ void user_manual(char mode, char *io_buff) {
   "== Filesystem ==\n"
   "/Settings - settings folder\n"
   "/Settings/Calibration - touchscreen calibration data\n"
+  "/Settings/CalibrationMultipoint - touchscreen multipoint calibration data\n"
   "/Settings/View - books & files view offset\n"
   "/Settings/Timestamp - latest synced timestamp\n"
   "/Settings/Nickname - nickname for chat\n"
-  "/Settings/Password - prompt password after reset\n"
   "/Settings/Owner - owner info for password prompt\n"
   "/Settings/Brightness - brightness level\n"
   "/Settings/Timezone - timezone offset in seconds\n"
@@ -1801,6 +1821,9 @@ void user_manual(char mode, char *io_buff) {
   "/Settings/Keyboard - keyboard settings\n"
   "/Settings/Sound - sound settings\n"
   "/Settings/NTP - NTP settings\n"
+  "/Settings/Autorun - autorun settings\n"
+  "/Settings/Alarm - alarm settings\n"
+  "/Settings/Gamma - gamma correction settings\n"
   "/Notes - notes folder\n"
   "/Images - draw folder\n"
   "/Expenses - expenses folder\n"
@@ -1815,6 +1838,17 @@ void user_manual(char mode, char *io_buff) {
   "/Tunes - tunes folder\n"
   "/RSS - RSS channels folder\n"
   "/IRC - IRC settings folder\n"
+  "/Sokoban - Sokoban game levels folder\n"
+  "/Backups - Backups folder\n"
+  "/Music - Music folder\n"
+  "/Webradio - Web Radio folder\n"
+  "/Terminal - Terminal folder\n"
+  "/Terminal/Autoexec - terminal autoexec file\n"
+  "/Terminal/History - terminal history file\n"
+  "/TOTP - TOTP app folder\n"
+  "/Barcode - Barcode folder\n"
+  "/Basic - Basic folder\n"
+  "/Chip8 - CHIP-8 emulator folder\n"
   "\n"
   ;
   char app_icon[] = {
@@ -1866,31 +1900,46 @@ void terminal_manual() {
   "reset - clear terminal\n"
   "reboot - reboot device\n"
   "exit - exit terminal\n"
+  "cursor {col} {row} - set cursor position\n"
   "date - current date\n"
+  "unixtime - unix timestamp\n"
+  "cal - show current month\n"
+  "settime - set current time\n"
+  "setdate - set current date\n"
+  "sun - show sunrise, solar noon and sunset\n"
+  "moon - show moon day\n"
+  "history - show commands history\n"
   "sleep {seconds} - delay specified amount of seconds\n"
   "delay {milliseconds} - delay specified amount of milliseconds\n"
   "format ffat - erase all in FFat storage\n"
   "ls {full_path} - show directory listing\n"
   "mkdir {full_path} - create new directory\n"
   "rmdir {full_path} - remove empty directory\n"
-  "cat {full_path} - show file contents\n"
+  "cat {path} - show file contents\n"
+  "file {path} - detect file type\n"
+  "cp {from} {to} - copy file\n"
+  "mv {from} {to} - move file\n"
   "rm {full_path} - remove file\n"
+  "cd {full_path} - change path\n"
+  "pwd - current path\n"
   "touch {full_path} - create file\n"
   "i2c - scan I2C devices\n"
   "beep - beep as system event\n"
   "tone {frequency} - make sound tone\n"
   "notone - stop sound tone\n"
   "serial [speed] - connect to serial port\n"
-  "host {host} - lookup DNS host\n"
-  "ping {host} - ping host continiously\n"
-  "telnet {host} [port] - connect to host and port via telnet\n"
-  "telnets {host} [port] - connect to host and port via telnet using SSL\n"
-  "wget {url} [path] - download file from HTTP/HTTPS to local file\n"
-  "ipinfo {ip} - IP information from ipinfo.io\n"
-  "translate {lang_from|auto} {lang_to} {query} - translate via Google Translate\n"
   "sd_to_ffat {path_sd} {path_ffat} - copy file from SD to FFat\n"
   "ffat_to_sd {path_ffat} {path_sd} - copy file from FFat to SD\n"
   "utf8_to_cp1251 {input_file} {output_file} - change file encoding\n"
+  "cp1251_to_utf8 {input_file} {output_file} - change file encoding\n"
+  "base16encode {input_file} [output_file] - encode file to base16\n"
+  "base16decode {input_file} [output_file] - decode file from base16\n"
+  "base32encode {input_file} [output_file] - encode file to base32\n"
+  "base32decode {input_file} [output_file] - decode file from base32\n"
+  "base64encode {input_file} [output_file] - encode file to base64\n"
+  "base64decode {input_file} [output_file] - decode file from base64\n"
+  "aes_encrypt {password} {input_file} [output_file] - encrypt file with EAS256\n"
+  "aes_decrypt {password} {input_file} [output_file] - decrypt file from EAS256\n"
   "hexdump {path} - view files in hex codes\n"
   "uuidgen - generate uuid\n"
   "uptime - shows uptime in days, hours, minutes, seconds\n"
@@ -1900,19 +1949,44 @@ void terminal_manual() {
   "head {path} - show beginning of the file\n"
   "tail {path} - show ending of the file\n"
   "echo {text} - show text and exit\n"
+  "morse {text} - beep text in Morse code\n"
   "caesar {text} - encodes text with Caesar encryption\n"
+  "rot13 {text} - encodes text with rot13 encryption\n"
   "seq {from} {to} - generate number sequence\n"
   "wc {path} - calculate words, lines and bytes in file\n"
   "lscpu - information about CPU\n"
   "lsmem - information about memory\n"
   "lsblk - information about internal storage\n"
+  "df - information about current storage\n"
   "brainfuck {path} - brainfuck interpretator\n"
-  "basic {path} - BASIC interpretator"
+  "basic {path} - BASIC interpretator\n"
   "view {path} - view file\n"
+  "hexview {path} - view files in hex codes (GUI)\n"
   "edit {file} - edit file\n"
   "csv {file} - edit file in CSV editor\n"
+  "gamma {index} - apply gamma correction\n"
+  "sizeof - show data type sizes\n"
+  "ip - current IP\n"
+  "ipconfig - show network settings\n"
+  "ifconfig - show network settings\n"
+  "netmask - current netmask\n"
+  "gateway - current gateway\n"
+  "dns - current DNS\n"
+  "rssi - RSSI value\n"
+  "host {host} - lookup DNS host\n"
+  "ping {host} - ping host continiously\n"
+  "tracert {host} - traceroute host\n"
+  "telnet {host} [port] - connect to host and port via telnet\n"
+  "telnets {host} [port] - connect to host and port via telnet using SSL\n"
+  "wget {url} [path] - download file from HTTP/HTTPS to local file\n"
+  "ipinfo {ip} - IP information from ipinfo.io\n"
+  "translate {lang_from|auto} {lang_to} {query} - translate via Google Translate\n"
+  "weather [{lat} {lon}] - show weather\n"
+  "chat [{nick} {message}] - read and send messages to chat\n"
+  "ruf - random useless fact\n"
+  "Any other command - try to find file with that name in /Terminal and execute it.\n"
   "\n"
-  "== Running apps from termminal ==\n"
+  "== Running apps from terminal ==\n"
   "Type \"app {name}\" to launch:\n"
   "calculator - Calculator app\n"
   "files - File app\n"
@@ -1971,6 +2045,8 @@ void terminal_manual() {
   "mental_math - Mantal Math game\n"
   "game2048 - 2048 game\n"
   "chip8 - chip8 emulator\n"
+  "minesweeper - minesweeper game\n"
+  "chessboard - chessboard with no rules\n"
   "screen_settings - Screen Settings app\n"
   "keyboard_control - Keyboard Control app\n"
   "sound_control - Sound Control app\n"
@@ -1978,6 +2054,8 @@ void terminal_manual() {
   "autorun - Autorun app\n"
   "select_storage - Select Storage app\n"
   "backups - Backups app\n"
+  "search - Search app\n"
+  "totp - TOTP app\n"
   "\n"
   ;
 
@@ -2105,18 +2183,18 @@ void files(char mode, char *io_buff) {
         free(files);
       }
       // Занимаем память, сразу на FILES_COUNT_MAX элементов, с realloc глючит
-      files = (char**)malloc(FILES_COUNT_MAX * sizeof(char*));
+      files = (char**)malloc(FILES_COUNT_MAX * sizeof(char *));
       files[0] = NULL;
       //delay(1000);
       if(strcmp(terminal_current_path, "/")) {
         sprintf(buff, "[u] ..");
-        files[file_index] = (char*)malloc((strlen(buff) + 1) * sizeof(char));
+        files[file_index] = (char *)malloc((strlen(buff) + 1) * sizeof(char));
         strcpy(files[file_index], buff);
         files[file_index + 1] = NULL;
         file_index ++;
       }
       while(file = current_dir.openNextFile()) {
-        //realloc(files, (file_index + 2) * sizeof(char*));
+        //realloc(files, (file_index + 2) * sizeof(char *));
         if(file.isDirectory()) {
           sprintf(buff, "%s\t%s", file.name(), "[dir]");
         }
@@ -2129,7 +2207,7 @@ void files(char mode, char *io_buff) {
           }
         }
         utf8_to_cp1251(buff);
-        files[file_index] = (char*)malloc((strlen(buff) + 1) * sizeof(char));
+        files[file_index] = (char *)malloc((strlen(buff) + 1) * sizeof(char));
         strcpy(files[file_index], buff);
         files[file_index + 1] = NULL;
         file_index ++;
@@ -2223,6 +2301,9 @@ void files(char mode, char *io_buff) {
             }
             else if(is_webp_file(buff)) {
               drawError("WEBP is not supported");
+            }
+            else if(is_binary_file(buff)) {
+              hexview_file(buff, buff);
             }
             else {
               view_file(buff, buff);
@@ -3472,6 +3553,15 @@ void terminal_execute_single(char *str) {
       terminal_println(buff);
     }
   }
+  else if(strcmp(cmdline_params[0], "gamma") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: gamma {value 1-4}");
+    }
+    else {
+      global_gamma = strtol(cmdline_params[1], NULL, 10);
+      setGamma(global_gamma);
+    }
+  }
 #ifdef IS_WIFI_ENABLED
   else if(strcmp(cmdline_params[0], "ipconfig") == 0 || strcmp(cmdline_params[0], "ifconfig") == 0) {
     sprintf(buff, "Hostname: %s", WiFi.getHostname());
@@ -3627,7 +3717,7 @@ void terminal_execute_single(char *str) {
     if(arg_count == 1) {
       // Чтение чата
       char *messages;
-      messages = (char*)malloc(2048 * sizeof(char));
+      messages = (char *)malloc(2048 * sizeof(char));
       if(messages) {
         if(get_file_https("https://arikado.xyz/cyd/chat_data.txt", messages, 2048) == 200) {
           i = 0;
@@ -3924,6 +4014,9 @@ void terminal_execute_single(char *str) {
     }
     else if(strcmp(cmdline_params[1], "backups") == 0) {
       backups(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "search") == 0) {
+      search(APP_MODE_LAUNCH, NULL);
     }
     else {
       terminal_println("Unknown app name");
@@ -5423,7 +5516,7 @@ void terminal_brainfuck(char *filename) {
   char *mem;
   int stack[BRAINFUCK_STACK];
 
-  mem = (char*)malloc(BRAINFUCK_CELLS * sizeof(char));
+  mem = (char *)malloc(BRAINFUCK_CELLS * sizeof(char));
   for(i = 0; i < BRAINFUCK_CELLS; i++) {
     mem[i] = 0;
   }
@@ -5557,7 +5650,7 @@ void terminal_basic(char *filename) {
 
   basic_stack = (long*)malloc(BASIC_STACK_LEN * sizeof(long));
   basic_vars = (double*)malloc(BASIC_VARS_COUNT * sizeof(double));
-  basic_var_names = (char**)malloc(BASIC_VARS_COUNT * sizeof(char*));
+  basic_var_names = (char**)malloc(BASIC_VARS_COUNT * sizeof(char *));
   for(i = 0; i < BASIC_VARS_COUNT; i++) {
     basic_vars[i] = 0;
     basic_var_names[i] = NULL;
@@ -5609,7 +5702,7 @@ int basic_get_variable_index(char *var_name) {
   // Пробуем добавить
   for(i = 0; i < BASIC_VARS_COUNT; i++) {
     if(basic_var_names[i] == NULL) {
-      basic_var_names[i] = (char*)malloc(strlen(var_name) + 1);
+      basic_var_names[i] = (char *)malloc(strlen(var_name) + 1);
       strcpy(basic_var_names[i], var_name);
       //Serial.printf("new %s index %d\n", var_name, i);
       return i;
@@ -8491,7 +8584,7 @@ void chip8_run(char *filename) {
     return;
   }
   // Резервируем память
-  mem = (char*)malloc(4096 * sizeof(char));
+  mem = (char *)malloc(4096 * sizeof(char));
   for(i = 0; i < 4096; i++) {
     mem[i] = 0;
   }
@@ -10170,7 +10263,7 @@ void todo_action(int action_index, char *filename) {
     edit_file("Edit todo item", buff);
 
     // Меняем название в соответствии с содержимым
-    pim_rename_file(TODO_PATH, filename, (char*)(filename[0] == '1' ? "1_" : "0_"));
+    pim_rename_file(TODO_PATH, filename, (char *)(filename[0] == '1' ? "1_" : "0_"));
   }
   else if(action_index == 3) {
     if(drawConfirm("Delete this todo item?") == 0) {
@@ -10917,6 +11010,227 @@ void backups(char mode, char *io_buff) {
 }
 
 // ====================================================
+// Поиск файлов
+// ====================================================
+
+void search(char mode, char *io_buff) {
+  int button_pressed;
+  char byte;
+  char buff[80];
+  char query[80];
+  char perform_scan;
+  int file_offset;
+  int file_selected;
+  long offset;
+  char **files = NULL;
+  fs::File current_dir;
+  fs::File file;
+  int i;
+  char *buttons[] = {
+    "Search",
+    "View",
+    "Delete",
+    NULL
+  };
+  char *paths[] = {
+    "/Notes",
+    "/Todo",
+    "/Webradio",
+    "/Tunes",
+    "/Flashcards",
+    "/Terminal",
+    "/TOTP",
+    "/Tables",
+    "/Barcode",
+    "/Basic",
+    "/Music",
+    //"/Books",
+    "/Screenshots",
+    "/Sokoban",
+    "/Schedule",
+    "/RSS",
+    "/Chip8",
+    "/Settings",
+    "/Images",
+    "/Contacts",
+    "/Expenses",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01001111, B00000010,
+    B01010000, B10000010,
+    B01010000, B10000010,
+    B01010000, B10000010,
+    B01010000, B10000010,
+    B01001111, B10000010,
+    B01000000, B01000010,
+    B01000000, B00100010,
+    B01000000, B00010010,
+    B01000000, B00001010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Search");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Srch");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Search");
+
+  strcpy(query, "");
+  if(drawPrompt("Search", query) != 0) {
+    return;
+  }
+  clearPrompt();
+
+  files = (char **)malloc(1024 * sizeof(char *));
+  if(!files) {
+    drawError("Unable to reserve memory");
+    return;
+  }
+  for(i = 0; i < 1024; i++) {
+    files[i] = NULL;
+  }
+
+  // Показываем результат
+  perform_scan = 1;
+  while(1) {
+    if(perform_scan) {
+      drawProcessWindow("Searching...");
+      for(i = 0; i < 1024; i++) {
+        if(files[i]) free(files[i]);
+        files[i] = NULL;
+      }
+
+      file_offset = 0;
+      file_selected = 0;
+      // Ищем, перебирая папки
+      for(i = 0; paths[i] != NULL; i++) {
+        current_dir = Storage->open(paths[i]);
+        while(file = current_dir.openNextFile()) {
+          sprintf(buff, "%s/%s", paths[i], file.name());
+          Serial.println(buff);
+
+          if(strcasestr(file.name(), query)) {
+            Serial.println("Name match");
+            files[file_offset] = (char *)malloc((strlen(paths[i]) + 1 + strlen(file.name()) + 1) * sizeof(char));
+            sprintf(files[file_offset], "%s/%s", paths[i], file.name());
+            file_offset++;
+            continue;
+          }
+          // Пропускаем папки
+          if(file.isDirectory()) {
+            Serial.println("Skip directory");
+            continue;
+          }
+          
+          // Пропускаем двоичные файлы
+          if(is_binary_file(buff)) {
+            Serial.println("Skip binary");
+            continue;
+          }
+
+          // Ищем в содержимом
+          buff[0] = 0;
+          while(file.available()) {
+            byte = file.read();
+            for(offset = 79; offset > 0; offset--) {
+              buff[offset] = buff[offset - 1];
+            }
+            buff[0] = byte;
+            buff[79] = 0;
+            if(strcasestr(buff, query)) {
+              Serial.println("Contents match");
+              files[file_offset] = (char *)malloc((strlen(paths[i]) + 1 + strlen(file.name()) + 1) * sizeof(char));
+              sprintf(files[file_offset], "%s/%s", paths[i], file.name());
+              file_offset++;
+              break;
+            }
+          }
+
+          file.close();
+        }
+        current_dir.close();
+      }
+      file_offset = 0;
+      perform_scan = 0;
+    }
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+    touchCheckList(0, 16 + 4, tft.width(), 16 * 16, files, 16, &file_offset, &file_selected);
+    drawList(0, 16 + 4, tft.width(), 16 * 16, files, 16, &file_offset, &file_selected);
+
+    drawButtonMatrix(0, 280, tft.width(), 40, buttons, 3, 1);
+
+    touchWaitPress();
+
+    touchCheckList(0, 16 + 4, tft.width(), 16 * 16, files, 16, &file_offset, &file_selected);
+    button_pressed = touchCheckMatrix(0, 280, tft.width(), 40, buttons, 3, 1);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        if(drawPrompt("Search", query) == 0) {
+          perform_scan = 1;
+        }
+        clearPrompt();
+      }
+      if(button_pressed == 1) {
+        if(is_bmp_file(files[file_selected])) {
+          disableAppTitle();
+          clearScreen();
+          bmp_show_image(buff, 0, 0);
+          touchWaitPress();
+          touchWaitRelease();
+        }
+        else if(is_binary_file(files[file_selected])) {
+          hexview_file(files[file_selected], files[file_selected]);
+        }
+        else {
+          view_file(files[file_selected], files[file_selected]);
+        }
+        clearScreen();
+        drawAppTitle("Search");
+      }
+      if(button_pressed == 2) {
+        if(drawConfirm("Delete file?") == 0) {
+          Storage->remove(files[file_selected]);
+          perform_scan = 1;
+        }
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      for(i = 0; i < 1024; i++) {
+        if(files[i]) free(files[i]);
+      }
+      free(files);
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// ====================================================
 // Общие PIM-функции
 // ====================================================
 
@@ -11483,7 +11797,9 @@ void torch(char mode, char *io_buff) {
 void security(char mode, char *io_buff) {
   int button_pressed;
   char correct_password[80] = "";
+  char correct_password_hash[80] = "";
   char user_input[80] = "";
+  char user_input_hash[80];
   char owner_info[160] = "";
   char password_correct_flag;
   char *buttons[] = {
@@ -11534,8 +11850,17 @@ void security(char mode, char *io_buff) {
   }
 
   while(1) {
-    read_file_to_buff("/Settings/Owner", 79, owner_info);
-    read_file_to_buff("/Settings/Password", 79, correct_password);
+    // Читаем из NVS, если не вышло - из файла
+    strcpy(owner_info, preferences.getString("owner", "").c_str());
+    if(strcmp(owner_info, "") == 0) {
+      read_file_to_buff("/Settings/Owner", 79, owner_info);
+    }
+    // Читаем из NVS, если не вышло - из файла
+    strcpy(correct_password_hash, preferences.getString("password_sha256", "").c_str());
+    if(strcmp(correct_password_hash, "") == 0 && Storage->exists("/Settings/Password")) {
+      read_file_to_buff("/Settings/Password", 79, correct_password);
+      password_sha256(correct_password, correct_password_hash);
+    }
 
     tft.fillRect(0, 16, tft.width(), 100, color_scheme_bg);
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
@@ -11543,7 +11868,7 @@ void security(char mode, char *io_buff) {
     draw_text_formatted(owner_info, 8, 36, tft.width() - 2 * 8, 3, FONT_DEFAULT, 1);
     //tft.drawString(owner_info, 8, 20 + 16, FONT_DEFAULT);
     
-    if(strlen(correct_password) > 0) {
+    if(strlen(correct_password) > 0 || strlen(correct_password_hash) > 0) {
       tft.drawString("Password is set", 8, 20 + 16 * 4 + 8, FONT_DEFAULT);
     }
     else {
@@ -11557,11 +11882,13 @@ void security(char mode, char *io_buff) {
     if(button_pressed != -1) {
       // Проверяем пароль если он задан
       password_correct_flag = 0;
-      if(strlen(correct_password) > 0) {
+      if(strlen(correct_password) > 0 || strlen(correct_password_hash) > 0) {
         user_input[0] = 0;
-        drawPrompt("Enter password", user_input);
-        if(!strcmp(user_input, correct_password)) {
-          password_correct_flag = 1;
+        if(drawPrompt("Enter password", user_input) == 0) {
+          password_sha256(user_input, user_input_hash);
+          if(!strcmp(user_input_hash, correct_password_hash)) {
+            password_correct_flag = 1;
+          }
         }
       }
       else {
@@ -11577,6 +11904,7 @@ void security(char mode, char *io_buff) {
       // Смена информации о владельце
       if(button_pressed == 0) {
         if(drawPrompt("Enter owner info", owner_info) == 0) {
+          preferences.putString("owner", owner_info);
           write_file_from_buff("/Settings/Owner", owner_info);
         }
         tft.fillRect(0, 16, tft.width(), tft.height(), color_scheme_bg);
@@ -11584,12 +11912,21 @@ void security(char mode, char *io_buff) {
       // Смена пароля
       else if(button_pressed == 1) {
         if(drawPrompt("Enter new password (digits only)", user_input) == 0) {
-          write_file_from_buff("/Settings/Password", user_input);
+          if(is_digit_string(user_input)) {
+            //write_file_from_buff("/Settings/Password", user_input);
+            if(Storage->exists("/Settings/Password")) {
+              Storage->remove("/Settings/Password");
+            }
+            password_sha256(user_input, user_input_hash);
+            Serial.println(user_input_hash);
+            preferences.putString("password_sha256", user_input_hash);
+          }
         }
         tft.fillRect(0, 16, tft.width(), tft.height(), color_scheme_bg);
       }
       // Удаление пароля
       else if(button_pressed == 2) {
+        preferences.remove("password_sha256");
         Storage->remove("/Settings/Password");
         drawInfo("Password deleted");
         tft.fillRect(0, 16, tft.width(), tft.height(), color_scheme_bg);
@@ -12408,7 +12745,7 @@ void stopwatch(char mode, char *io_buff) {
             (millis_from_lap / 60000) % 60,
             (millis_from_lap / 1000) % 60,
             (millis_from_lap / 10) % 100);
-          stopwatch_laps[current_lap] = (char*)malloc(25 * sizeof(char));
+          stopwatch_laps[current_lap] = (char *)malloc(25 * sizeof(char));
           sprintf(stopwatch_laps[current_lap], "Lap %d - %s", current_lap + 1, buff);
           millis_from_lap = 0;
           current_lap++;
@@ -14266,6 +14603,7 @@ void screensaver(char mode, char *io_buff) {
     "Forest Fire Model",
     "Mood Lamp",
     "Through Universe",
+    "Gas",
     NULL
   };
   char app_icon[] = {
@@ -14341,6 +14679,10 @@ void screensaver(char mode, char *io_buff) {
       // Through Universe
       if(button_pressed == 7) {
         screensaver_through_universe();
+      }
+      // Gas
+      if(button_pressed == 8) {
+        screensaver_gas();
       }
       clearScreen();
       drawAppTitle("Screensavers");
@@ -14620,9 +14962,9 @@ void screensaver_forest_fire() {
   int height = tft.height();
   char fire_present;
 
-  trees = (char*)malloc(width * height / 8);
-  fires = (char*)malloc(width * height / 8);
-  fires_next = (char*)malloc(width * height / 8);
+  trees = (char *)malloc(width * height / 8);
+  fires = (char *)malloc(width * height / 8);
+  fires_next = (char *)malloc(width * height / 8);
 
   disableAppTitle();
   tft.fillScreen(TFT_BLACK);
@@ -14748,13 +15090,14 @@ void screensaver_mood_lamp() {
 void screensaver_through_universe() {
   double stars_x[THROUGH_UNIVERSE_STARS];
   double stars_y[THROUGH_UNIVERSE_STARS];
+  int prev_x, prev_y;
   int i;  
   
   disableAppTitle();
   tft.fillScreen(TFT_BLACK);
   for(i = 0; i < THROUGH_UNIVERSE_STARS; i++) {
-    stars_x[i] = random(0, tft.width());
-    stars_y[i] = random(0, tft.height());
+    stars_x[i] = random(0, tft.width()) + 0.1;
+    stars_y[i] = random(0, tft.height()) + 0.1;
   }
   
   while(1) {
@@ -14768,16 +15111,86 @@ void screensaver_through_universe() {
 
       // Если звезда ушла за экран - генерируем её где-то в центре
       if(stars_x[i] < 0 || stars_x[i] >= tft.width() || stars_y[i] < 0 || stars_y[i] >= tft.height()) {
-        stars_x[i] = random(0, tft.width());
-        stars_y[i] = random(0, tft.height());
+        stars_x[i] = random(0, tft.width()) + 0.1;
+        stars_y[i] = random(0, tft.height()) + 0.1;
       }
 
       // Рисуем новую
       tft.drawPixel(stars_x[i], stars_y[i], TFT_WHITE);
     }
 
-    delayOrTouchWait(50);
+    delayOrTouchWait(50 + 50 * sin(2 * PI * millis() / 60000));
     if(touchCheckNowait()) {
+      touchWaitRelease();
+      break;
+    }
+  }
+}
+
+#define GAS_PARTICLES 2000
+
+void screensaver_gas() {
+  float *x;
+  float *y;
+  float *dx;
+  float *dy;
+  float d;
+  int prev_x, prev_y;
+  int i;  
+  
+  x = (float *)malloc(GAS_PARTICLES * sizeof(float));
+  y = (float *)malloc(GAS_PARTICLES * sizeof(float));
+  dx = (float *)malloc(GAS_PARTICLES * sizeof(float));
+  dy = (float *)malloc(GAS_PARTICLES * sizeof(float));
+
+  if(!x || !y || !dx || !dy) {
+    if(x) free(x);
+    if(y) free(y);
+    if(dx) free(dx);
+    if(dy) free(dy);
+    drawError("Unable to reserve memory");
+    return;
+  }
+
+  disableAppTitle();
+  tft.fillScreen(TFT_BLACK);
+  for(i = 0; i < GAS_PARTICLES; i++) {
+    x[i] = tft.width() / 2; // random(0, tft.width());
+    y[i] =  tft.height() / 2; // random(0, tft.height());
+    do {  
+      dx[i] = 2.0 *(random(0, 1000000) - 500000) / 1000000;
+      dy[i] = 2.0 *(random(0, 1000000) - 500000) / 1000000;
+      d = sqrt(dx[i] * dx[i] + dy[i] * dy[i]);
+    } while(d < 0.001 || d > 1);
+  }
+  
+  while(1) {
+    for(i = 0; i < GAS_PARTICLES; i++) {
+      // Стираем старую
+      tft.drawPixel(x[i], y[i], TFT_BLACK);
+
+      // Сдвигаем звезду
+      x[i] = x[i] + dx[i];
+      y[i] = y[i] + dy[i];
+
+      // Если точка ушла за экран - отталкиваем её обратно
+      if(x[i] < 0 || x[i] >= tft.width()) {
+        dx[i] = -dx[i];
+      }
+      if(y[i] < 0 || y[i] >= tft.height()) {
+        dy[i] = -dy[i];
+      }
+
+      // Рисуем новую
+      tft.drawPixel(x[i], y[i], TFT_WHITE);
+    }
+
+    delayOrTouchWait(1);
+    if(touchCheckNowait()) {
+      if(x) free(x);
+      if(y) free(y);
+      if(dx) free(dx);
+      if(dy) free(dy);
       touchWaitRelease();
       break;
     }
@@ -15100,7 +15513,7 @@ void color_settings(char mode, char *io_buff) {
           sprintf(buff, "%d", global_inversion);
           write_file_from_buff("/Settings/Inversion", buff);
 
-          scheme_text = (char*)malloc(2000);
+          scheme_text = (char *)malloc(2000);
           scheme_text[0] = 0;
           sprintf(buff, "background=%d\n", color_to_index(color_scheme_bg));
           strcat(scheme_text, buff);
@@ -15152,6 +15565,7 @@ void screen_settings(char mode, char *io_buff) {
     "Calibration",
     "Color scheme",
     "Font for view",
+    "Gamma",
     NULL
   };
   char app_icon[] = {
@@ -15195,7 +15609,7 @@ void screen_settings(char mode, char *io_buff) {
       redraw_flag = 0;
     }
 
-    drawButtonMatrix(0, 32, tft.width() / 2, 32 * 7, buttons_settings, 1, 7);
+    drawButtonMatrix(0, 32, tft.width() / 2, 32 * 8, buttons_settings, 1, 8);
 
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     if(global_inversion) {
@@ -15225,8 +15639,11 @@ void screen_settings(char mode, char *io_buff) {
     }
     tft.drawCentreString(buff, 3 * tft.width() / 4, 40 + 32 * 6, FONT_DEFAULT);
 
+    sprintf(buff, "  %d  ", global_gamma);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 40 + 32 * 7, FONT_DEFAULT);
+
     touchWaitPress();
-    button_pressed = touchCheckMatrix(0, 32, tft.width() / 2, 32 * 7, buttons_settings, 1, 7);
+    button_pressed = touchCheckMatrix(0, 32, tft.width() / 2, 32 * 8, buttons_settings, 1, 8);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
         if(global_inversion) {
@@ -15264,6 +15681,7 @@ void screen_settings(char mode, char *io_buff) {
       if(button_pressed == 5) {
         color_settings(APP_MODE_LAUNCH, NULL);
       }
+      // Шрифт для просмотра
       if(button_pressed == 6) {
         if(global_view_font_small) {
           global_view_font_small = 0;
@@ -15271,6 +15689,13 @@ void screen_settings(char mode, char *io_buff) {
         else {
           global_view_font_small = 1;
         }
+        changes_flag = 1;
+      }
+      // Gamma
+      if(button_pressed == 7) {
+        global_gamma++;
+        if(global_gamma == 5) global_gamma = 1;
+        setGamma(global_gamma);
         changes_flag = 1;
       }
       redraw_flag = 1;
@@ -15291,6 +15716,9 @@ void screen_settings(char mode, char *io_buff) {
 
           sprintf(buff, "%d", global_view_font_small);
           write_file_from_buff("/Settings/Font", buff);
+
+          sprintf(buff, "%d", global_gamma);
+          write_file_from_buff("/Settings/Gamma", buff);
         }
       }
       touchExitActionReset();
@@ -16530,8 +16958,8 @@ void chat(char mode, char *io_buff) {
   write_file_from_buff(CHAT_NICKNAME_FILE, nickname);
   tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
   
-  messages = (char*)malloc(2048 * sizeof(char));
-  prev_messages = (char*)malloc(2048 * sizeof(char));
+  messages = (char *)malloc(2048 * sizeof(char));
+  prev_messages = (char *)malloc(2048 * sizeof(char));
 
   messages[0] = 0;
   prev_messages[0] = 0;
@@ -16643,7 +17071,7 @@ int chat_send_message(char *nickname, char *message, char *response) {
   char buff[10];
   int i;
   int httpResponseCode;
-  query = (char*)malloc(1000 * sizeof(char));
+  query = (char *)malloc(1000 * sizeof(char));
   sprintf(query, "https://arikado.xyz/cyd/chat_post.php?nickname=%s&message=", nickname);
   // URLencode message
   for(i = 0; i < strlen(message); i++) {
@@ -17182,7 +17610,7 @@ Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
 
   // Резервируем память
 //Serial.printf("%d\n", __LINE__);
-  data = (char*)malloc(RSS_MAX_LENGTH * sizeof(char));
+  data = (char *)malloc(RSS_MAX_LENGTH * sizeof(char));
   if(!data) {
     drawError("Unable to reserve memory");
     return;
@@ -17640,9 +18068,9 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
   out_message = (char *)malloc(1000 * sizeof(char));
 
   for(i = 0; i < IRC_MAX_CHATS; i++) {
-    chat_name[i] = (char*)malloc(80 * sizeof(char));
+    chat_name[i] = (char *)malloc(80 * sizeof(char));
     chat_name[i][0] = 0;
-    chat_history[i] = (char*)malloc(IRC_HISTORY_LENGTH * sizeof(char));
+    chat_history[i] = (char *)malloc(IRC_HISTORY_LENGTH * sizeof(char));
     memset(chat_history[i], 0, IRC_HISTORY_LENGTH);
   }
   strcpy(chat_name[0], "*");
@@ -18392,9 +18820,9 @@ int translate_perform(char *from_lang, char *to_lang, char *query, char *transla
   int httpResponseCode;
   int i;
 
-  url = (char*)malloc(3000 * sizeof(char));
-  query_utf8 = (char*)malloc(3000 * sizeof(char));
-  buff = (char*)malloc(3000 * sizeof(char));
+  url = (char *)malloc(3000 * sizeof(char));
+  query_utf8 = (char *)malloc(3000 * sizeof(char));
+  buff = (char *)malloc(3000 * sizeof(char));
 
   strcpy(translation, "");
 
@@ -18563,7 +18991,7 @@ void wikipedia_select_article(char *lang, char *query) {
     strcat(url, buff);
   }
 
-  data = (char*)malloc(5000 * sizeof(char));
+  data = (char *)malloc(5000 * sizeof(char));
   for(i = 0; i < 20; i++) {
     list[i] = NULL;
   }
@@ -18579,7 +19007,7 @@ void wikipedia_select_article(char *lang, char *query) {
     offset = 0;
     for(i = 0; i < strlen(data); i++) {
       if(memcmp(data + i, "title=\"", 7) == 0) {
-        list[offset] = (char*)malloc(80 * sizeof(char));
+        list[offset] = (char *)malloc(80 * sizeof(char));
         memcpy(list[offset], data + i + 7, 80);
         list[offset][79] = 0;
         Serial.println(list[offset]);
@@ -18656,7 +19084,7 @@ void wikipedia_show_artice(char *lang, char *title) {
     strcat(url, buff);
   }
 
-  data = (char*)malloc(50000 * sizeof(char));
+  data = (char *)malloc(50000 * sizeof(char));
   httpResponseCode = get_file_https(url, data, 50000);
   if(httpResponseCode == 200) {
     //Serial.println(data);
@@ -19733,7 +20161,7 @@ char is_binary_file(char *filename) {
     if(offset >= 1024) break;
   }
   file.close();
-  return 0;
+  return result;
 }
 
 // Папка или нет
@@ -19961,7 +20389,7 @@ void i2c_scanner(char mode, char *io_buff) {
         Wire.beginTransmission(device_index);
         error = Wire.endTransmission();
         if(error == 0) {
-          devices[device_found] = (char*)malloc(80 * sizeof(char));
+          devices[device_found] = (char *)malloc(80 * sizeof(char));
           sprintf(devices[device_found], "0x%02x", device_index);
           device_found++;
         }
@@ -20023,7 +20451,7 @@ void dashboard(char mode, char *io_buff) {
     "Wi-Fi Monitor",
     "World Time",
     "Bitcoin",
-    "Useless Facts",
+    "Random Facts",
     NULL
   };
   char app_icon[] = {
@@ -20965,7 +21393,7 @@ int get_random_useless_fact(char *buff) {
   int result;
   strcpy(buff, "");
 
-  contents = (char*)malloc(4096 * sizeof(char));
+  contents = (char *)malloc(4096 * sizeof(char));
   result = get_file_https("https://uselessfacts.jsph.pl/api/v2/facts/random", contents, 4096);
   if(result == 200) {
     read_offset = 49;
@@ -22219,10 +22647,10 @@ void sound_control(char mode, char *io_buff) {
 
       if(changes_flag) {
         if(drawConfirm("Save changes?") == 0) {
-          write_key_value_to_file("/Settings/Sound", "beep_enabled_flag", (char*)(global_is_beep_enabled ? "1" : "0"));
-          write_key_value_to_file("/Settings/Sound", "beep_tap_enabled_flag", (char*)(global_is_beep_tap_enabled ? "1" : "0"));
-          write_key_value_to_file("/Settings/Sound", "beep_hour_enabled_flag", (char*)(global_is_beep_hour_enabled ? "1" : "0"));
-          write_key_value_to_file("/Settings/Sound", "beep_quarter_enabled_flag", (char*)(global_is_beep_quarter_enabled ? "1" : "0"));
+          write_key_value_to_file("/Settings/Sound", "beep_enabled_flag", (char *)(global_is_beep_enabled ? "1" : "0"));
+          write_key_value_to_file("/Settings/Sound", "beep_tap_enabled_flag", (char *)(global_is_beep_tap_enabled ? "1" : "0"));
+          write_key_value_to_file("/Settings/Sound", "beep_hour_enabled_flag", (char *)(global_is_beep_hour_enabled ? "1" : "0"));
+          write_key_value_to_file("/Settings/Sound", "beep_quarter_enabled_flag", (char *)(global_is_beep_quarter_enabled ? "1" : "0"));
           sprintf(buff, "%d", global_volume);
           write_key_value_to_file("/Settings/Sound", "volume", buff);
           sprintf(buff, "%d", global_beeper_pin);
@@ -22386,8 +22814,8 @@ void clock_control(char mode, char *io_buff) {
           write_key_value_to_file("/Settings/Alarm", "hour", buff);
           sprintf(buff, "%d", global_alarm_minute);
           write_key_value_to_file("/Settings/Alarm", "minute", buff);
-          write_key_value_to_file("/Settings/Sound", "beep_hour_enabled_flag", (char*)(global_is_beep_hour_enabled ? "1" : "0"));
-          write_key_value_to_file("/Settings/Sound", "beep_quarter_enabled_flag", (char*)(global_is_beep_quarter_enabled ? "1" : "0"));
+          write_key_value_to_file("/Settings/Sound", "beep_hour_enabled_flag", (char *)(global_is_beep_hour_enabled ? "1" : "0"));
+          write_key_value_to_file("/Settings/Sound", "beep_quarter_enabled_flag", (char *)(global_is_beep_quarter_enabled ? "1" : "0"));
 
           sprintf(buff, "%d", global_ntp_enabled);
           write_file_from_buff("/Settings/NTP", buff);
@@ -22954,7 +23382,7 @@ void view_file(char *title, char *filename) {
   }
   history_index = -1;
 
-  buff = (char*)malloc(2050 * sizeof(char));
+  buff = (char *)malloc(2050 * sizeof(char));
 
   file = Storage->open(filename);
   if(!file) {
@@ -23657,7 +24085,7 @@ void edit_csv(char *title, char *filename) {
   csv_contents = contents;
   strcpy(contents, "");
 
-  csv_cache_vars = (char **)malloc(CSV_CACHE_COUNT * sizeof(char*));
+  csv_cache_vars = (char **)malloc(CSV_CACHE_COUNT * sizeof(char *));
   csv_cache_vals = (double*)malloc(CSV_CACHE_COUNT * sizeof(double));
   for(i = 0; i < CSV_CACHE_COUNT; i++) {
     csv_cache_vars[i] = NULL;
@@ -28757,12 +29185,13 @@ void drawPopupWindow(char *title, char *message, char **buttons) {
   drawButtonMatrix(8, 240 - 40, tft.width() - 8 * 2, 32, buttons, 3, 1);
 }
 
-void checkPasswordUntilCorrect(char *correct_password) {
+void checkPasswordUntilCorrect(char *correct_password, char is_sha256) {
   fs::File file;
   int i;
   int button;
   int button1, button2;
   char user_input[80] = "";
+  char user_input_hash[80];
   char owner_info[160] = "";
   int offset = 0;
   char *tmp;
@@ -28778,17 +29207,9 @@ void checkPasswordUntilCorrect(char *correct_password) {
   drawAppTitle("Enter Password");
 
   // Читаем информацию о владельце
-  file = Storage->open("/Settings/Owner");
-  if(file) {
-    offset = 0;
-    owner_info[0] = 0;
-    while(file.available()) {
-      owner_info[offset] = file.read();
-      offset++;
-      owner_info[offset] = 0;
-      if(offset == 79) break;
-    }
-    file.close();
+  strcpy(owner_info, preferences.getString("owner", "").c_str());
+  if(strcmp(owner_info, "") == 0) {
+    read_file_to_buff("/Settings/Owner", 79, owner_info);
   }
 
   // Перемешать кнопки (чтобы нельзя было узнать пароль по царапинам на экране)
@@ -28824,8 +29245,13 @@ void checkPasswordUntilCorrect(char *correct_password) {
     button = touchCheckMatrix(0, 108, tft.width(), tft.height() - 108, buttons, 3, 4);
     if(button != -1) {
       if(!strcmp(buttons[button], "OK")) {
-        if(!strcmp(correct_password, user_input)) {
-           return;
+        password_sha256(user_input, user_input_hash);
+        Serial.println(user_input_hash);
+        if(!is_sha256) {
+          strcpy(user_input_hash, user_input);
+        }
+        if(!strcmp(correct_password, user_input_hash)) {
+          return;
         }
         else {
           drawError("Wrong password!");
@@ -28844,6 +29270,24 @@ void checkPasswordUntilCorrect(char *correct_password) {
       }
     }
     touchWaitRelease();
+  }
+}
+
+void password_sha256(char *password, char *hash) {
+  mbedtls_sha256_context sha256_ctx;
+  unsigned char result[16];
+  char buff[10];
+  int i;
+
+  mbedtls_sha256_init(&sha256_ctx);
+  mbedtls_sha256_starts(&sha256_ctx, 0); // 0 for SHA-256 (not SHA-224)
+  mbedtls_sha256_update(&sha256_ctx, (const uint8_t*)password, strlen(password));
+  mbedtls_sha256_finish(&sha256_ctx, result);
+  mbedtls_sha256_free(&sha256_ctx);
+  strcpy(hash, "");
+  for(i = 0; i < 16; i++) {
+    sprintf(buff, "%02x", result[i]);
+    strcat(hash, buff);
   }
 }
 
@@ -29207,7 +29651,7 @@ int show_menu(int x0, int y0, int width, int height, char **items) {
   int in_menu = 0;
   char *buff = NULL;
   // Сохраняем часть экрана где будет меню
-  buff = (char*)malloc(width * height / 2 * sizeof(char));
+  buff = (char *)malloc(width * height / 2 * sizeof(char));
   screen_area_to_buffer(buff, x0, y0, width, height);
 
   // Рисуем рамку
@@ -29860,7 +30304,7 @@ void morse_wait() {
 TaskHandle_t MorseTaskHandle = NULL;
 
 void beep_morse_task(void *pvParameters) {
-  char *str = (char*)pvParameters;
+  char *str = (char *)pvParameters;
   int i;
   for(i = 0; i < strlen(str); i++) {
     Serial.println(str[i]);
@@ -30032,7 +30476,7 @@ void beep_alarm() {
   
 /* Работает асинхронно, возможны конфликты при обновлении экрана, поэтому экран не трогаем
   // Сохраняем часть экрана где будет сообщение
-  buff = (char*)malloc(width * height * sizeof(char));
+  buff = (char *)malloc(width * height * sizeof(char));
   screen_area_to_buffer(buff, x0, y0, width, height);
   tft.drawRect(x0, y0, width, height, color_scheme_fg);
   tft.fillRect(x0 + 1, y0 + 1, width - 2, height - 2, color_scheme_bg);
@@ -30113,7 +30557,7 @@ void encryptAES(uint8_t* input, int inputLen, uint8_t* output, int paddedLen) {
   Serial.print("paddedLen="); Serial.println(paddedLen);
   Serial.print("paddingValue="); Serial.println(paddingValue);
   Serial.print("inputLen="); Serial.println(inputLen);
-  Serial.print("input="); Serial.println((char*)input);
+  Serial.print("input="); Serial.println((char *)input);
   Serial.print("paddedInput=");
   for(i = 0; i < 16; i++) {
     Serial.print(paddedInput[i], HEX);
@@ -30966,7 +31410,7 @@ double parse_term(char *expr, function_expr_value_by_name_pointer expr_value_by_
     // Если не число - вызываем функцию подстановки константы
     else {
       //Serial.println("Not a number");
-      expr_ptr = (char*)malloc(80 * sizeof(char));
+      expr_ptr = (char *)malloc(80 * sizeof(char));
       memcpy(expr_ptr, expr + *expr_offset, 79);
       expr_ptr[79] = 0;
       for(i = 0; i < 79; i++) {
@@ -31103,6 +31547,11 @@ void scrollAddress(uint16_t vsp) {
   tft.writecommand(0x37); // VSCRSADD (Vertical Scrolling Start Address)
   tft.writedata(vsp >> 8);
   tft.writedata(vsp & 0xFF);
+}
+
+void setGamma(int gamma_value) {
+  tft.writecommand(0x26); // Gamma Set Command
+  tft.writedata(gamma_value);
 }
 
 char * get_reset_reason_text(esp_reset_reason_t reason) {
@@ -31390,6 +31839,16 @@ void setup() {
       tft.invertDisplay(false);
     }
 
+    // Гамма
+    if(read_file_to_buff("/Settings/Gamma", 79, buff)) {
+      global_gamma = strtol(buff, NULL, 10);
+      setGamma(global_gamma);
+    }
+    else {
+      global_gamma = 1;
+      setGamma(global_gamma);
+    }
+
     // Поворот экрана
     if(read_file_to_buff("/Settings/Rotation", 79, buff)) {
       global_rotation = strtol(buff, NULL, 10);
@@ -31488,7 +31947,6 @@ void setup() {
     select_storage_app(APP_MODE_SPECIAL, NULL);
   }
 #endif
-
   if(storage_type == STORAGE_TYPE_NONE) {
     drawError("FFat mount failed");
     if(drawConfirm("Format FFat?") == 0) {
@@ -31507,6 +31965,12 @@ void setup() {
   }
 
   //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+  // Берём пароль из NVS
+  preferences.begin(PREFS_NAMESPACE, false);
+  strcpy(buff, preferences.getString("password_sha256", "").c_str());
+  if(strcmp(buff, "") != 0) {
+    checkPasswordUntilCorrect(buff, 1);
+  }
 
   if(storage_type != STORAGE_TYPE_NONE) {
     // Тут можно спросить пароль
@@ -31518,7 +31982,7 @@ void setup() {
         }
       }
       if(password_present) {
-        checkPasswordUntilCorrect(buff);
+        checkPasswordUntilCorrect(buff, 0);
       }
     }
 
