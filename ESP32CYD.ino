@@ -287,12 +287,12 @@
 2026-09-20 Баг с 0 пакетов в мониторинге каналов вай-фай (деление на 0), при выходе из подраздела Settings заголовок был Dashboards,
 2026-09-21 Замена sscanf за strtol/strtod, улучшенные помехи, aes_encrypt и aes_decrypt в терминале, команда sizeof,
   Random Useless Fact dashboard, заставка "сквозь вселенную", не показывать символ 127 в терминале в hexdump
-2026-09-22 Заставка газ, настройка гаммы, использовать хэш пароля, пароль и owner в NVS, поиск
+2026-09-22 Заставка газ, настройка гаммы, использовать хэш пароля, пароль и owner в NVS, поиск, обновлена справка
+2026-09-23 Тетрис, комментарии в терминале
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (п) Просмотреть справку, может быть что-то добавить
 - (д) Прошлые команды в терминале по стрелке вверх
-- (н) Тетрис
 
 Остальное:
 - (н) Мини-калькулятор в меню
@@ -415,6 +415,12 @@
 - (д) Лаунчер с более крупными значками
 - (д) Выбор вида лаунчера
 - (д) Ещё один заход Bluetooth
+- (и) Найти API типа мой IP
+- (д) Тренажёр шахматных координат
+- (д) Ham radio info dashboard
+- (д) Тетрис - настройки Figures (Tetranimo, Pentamino), Speed (Slow, Medium, Fast, Max), Increase on (Figure, Time, Line, None), Next figure (Random, No repeat), Filled lines (0 - 10), Scroll, Colors (on/off)
+- (д) Tetris - зонтичное приложение для игр Brick Game
+
 Буфер обмена
 - (д) Буфер обмена
 - (д) Выделение в просмотре, копирование
@@ -1094,6 +1100,7 @@ void oscilloscope(char mode, char *io_buff);
 void select_storage_app(char mode, char *io_buff);
 void game2048(char mode, char *io_buff);
 void minesweeper(char mode, char *io_buff);
+void tetris(char mode, char *io_buff);
 void chess(char mode, char *io_buff);
 void chip8(char mode, char *io_buff);
 void clock_control(char mode, char *io_buff);
@@ -1188,6 +1195,7 @@ function_application_pointer all_apps[] = {
   game2048,
   minesweeper,
   chess,
+  tetris,
   chip8,
   //color_settings,
   //screen_settings,
@@ -2046,7 +2054,7 @@ void terminal_manual() {
   "game2048 - 2048 game\n"
   "chip8 - chip8 emulator\n"
   "minesweeper - minesweeper game\n"
-  "chessboard - chessboard with no rules\n"
+  "chess - chessboard with no rules\n"
   "screen_settings - Screen Settings app\n"
   "keyboard_control - Keyboard Control app\n"
   "sound_control - Sound Control app\n"
@@ -2602,7 +2610,10 @@ void terminal_execute_single(char *str) {
     return;
   }
 
-  if(strcmp(cmdline_params[0], "millis") == 0) {
+  if(cmdline_params[0][0] == '#') {
+    // Комментарий. Ничего не делаем
+  }
+  else if(strcmp(cmdline_params[0], "millis") == 0) {
     sprintf(buff, "%d", millis());
     terminal_println(buff);
   }
@@ -3990,6 +4001,9 @@ void terminal_execute_single(char *str) {
     }
     else if(strcmp(cmdline_params[1], "chess") == 0) {
       chess(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "tetris") == 0) {
+      tetris(APP_MODE_LAUNCH, NULL);
     }
     else if(strcmp(cmdline_params[1], "sokoban") == 0) {
       sokoban(APP_MODE_LAUNCH, NULL);
@@ -11061,17 +11075,16 @@ void search(char mode, char *io_buff) {
     B00000000, B00000000,
     B01111111, B11111110,
     B01000000, B00000010,
-    B01000000, B00000010,
-    B01001111, B00000010,
-    B01010000, B10000010,
-    B01010000, B10000010,
-    B01010000, B10000010,
-    B01010000, B10000010,
-    B01001111, B10000010,
-    B01000000, B01000010,
-    B01000000, B00100010,
-    B01000000, B00010010,
-    B01000000, B00001010,
+    B01000111, B10000010,
+    B01001000, B01000010,
+    B01010000, B00100010,
+    B01010000, B00100010,
+    B01010000, B00100010,
+    B01010000, B00100010,
+    B01001000, B01100010,
+    B01000111, B11110010,
+    B01000000, B00111010,
+    B01000000, B00011010,
     B01000000, B00000010,
     B01111111, B11111110,
     B00000000, B00000000
@@ -15155,8 +15168,10 @@ void screensaver_gas() {
   disableAppTitle();
   tft.fillScreen(TFT_BLACK);
   for(i = 0; i < GAS_PARTICLES; i++) {
-    x[i] = tft.width() / 2; // random(0, tft.width());
-    y[i] =  tft.height() / 2; // random(0, tft.height());
+    //x[i] = tft.width() / 2;
+    //y[i] = tft.height() / 2;
+    x[i] = random(0, tft.width());
+    y[i] = random(0, tft.height());
     do {  
       dx[i] = 2.0 *(random(0, 1000000) - 500000) / 1000000;
       dy[i] = 2.0 *(random(0, 1000000) - 500000) / 1000000;
@@ -27815,6 +27830,7 @@ void minesweeper(char mode, char *io_buff) {
     if(lose_flag) {
       minesweeper_draw_field(field, 1);
       delay(100);
+      beep_morse_if_enabled("L");
       drawInfo("You lose");
       clearPopupWindow();
       restart_flag = 1;
@@ -27833,6 +27849,7 @@ void minesweeper(char mode, char *io_buff) {
       minesweeper_draw_field(field, 1);
       sprintf(buff, "You won in %d seconds!", (millis() - start_millis) / 1000);
       delay(100);
+      beep_morse_if_enabled("W");
       drawInfo(buff);
       clearPopupWindow();
       restart_flag = 1;
@@ -28315,6 +28332,506 @@ void chess_draw_field(char *field) {
       if(field[x + y * 8] == 'K' || field[x + y * 8] == 'k') icon = icon_king;
       image_from_bits(x * CHESS_BOARD_CELL_SIZE + CHESS_BOARD_CELL_SIZE / 2 - 8, 48 + y * CHESS_BOARD_CELL_SIZE + CHESS_BOARD_CELL_SIZE / 2 - 8, icon, fg, bg);
       //tft.drawCentreString(buff, x * CHESS_BOARD_CELL_SIZE + CHESS_BOARD_CELL_SIZE / 2, 48 + y * CHESS_BOARD_CELL_SIZE + CHESS_BOARD_CELL_SIZE / 2 - 8, FONT_DEFAULT);
+    }
+  }
+}
+
+#define TETRIS_FIELD_WIDTH 10
+#define TETRIS_CELL_SIZE 13
+#define TETRIS_FIELD_HEIGHT 20
+#define TETRIS_FIELD_TOTAL (TETRIS_FIELD_WIDTH * TETRIS_FIELD_HEIGHT)
+
+void tetris(char mode, char *io_buff) {
+  char field[TETRIS_FIELD_TOTAL];
+  int button_pressed;
+  int lines_count_total;
+  int figures_count_total;
+  int i;
+  int tone_index;
+  int x, y;
+  int touch_x, touch_y;
+  int figure_x, figure_y;
+  int figure_index;
+  int figure_index_max;
+  char next_figure_flag = 1;
+  long start_millis = 0;
+  long tick_millis = 0;
+  char won_flag = 0;
+  char lose_flag = 0;
+  char restart_flag = 0;
+  char init_field_flag = 0;
+  char empty_tiles_flag = 0;
+  char fill_flag = 0;
+  char next = ' ';
+  char buff[80];
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01011000, B01111010,
+    B01011000, B01111010,
+    B01011110, B01111010,
+    B01011110, B01111010,
+    B01011000, B00000010,
+    B01011000, B00000010,
+    B01000001, B11100010,
+    B01000001, B11100010,
+    B01000111, B10000010,
+    B01000111, B10000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+  char figure_i[] = {
+    4, 4,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    1, 1, 1, 1,
+    0, 0, 0, 0
+  };
+  char figure_t[] = {
+    4, 4,
+    0, 0, 1, 0,
+    0, 1, 1, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 0
+  };
+  char figure_j[] = {
+    4, 4,
+    0, 0, 1, 0,
+    0, 0, 1, 0,
+    0, 1, 1, 0,
+    0, 0, 0, 0
+  };
+  char figure_l[] = {
+    4, 4,
+    0, 1, 0, 0,
+    0, 1, 0, 0,
+    0, 1, 1, 0,
+    0, 0, 0, 0
+  };
+  char figure_z[] = {
+    4, 4,
+    0, 0, 1, 0,
+    0, 1, 1, 0,
+    0, 1, 0, 0,
+    0, 0, 0, 0
+  };
+  char figure_s[] = {
+    4, 4,
+    0, 1, 0, 0,
+    0, 1, 1, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 0
+  };
+  char figure_o[] = {
+    4, 4,
+    0, 0, 0, 0,
+    0, 1, 1, 0,
+    0, 1, 1, 0,
+    0, 0, 0, 0
+  };
+  char *figures[] = {
+    figure_i,
+    figure_j,
+    figure_l,
+    figure_t,
+    figure_s,
+    figure_z,
+    figure_o,
+    NULL
+  };
+  char figure[80];
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Tetris");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Ttrs");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Tetris");
+
+  for(figure_index = 0; figures[figure_index] != NULL; figure_index++);
+  figure_index_max = figure_index;
+
+  restart_flag = 1;
+
+  while(1) {
+    if(restart_flag) {
+      lose_flag = 0;
+      won_flag = 0;
+      start_millis = millis();
+      tick_millis = millis();
+
+      // Обнуляем поле
+      lines_count_total = 0;
+      figures_count_total = 0;
+      for(i = 0; i < TETRIS_FIELD_TOTAL; i++) {
+        field[i] = 0;
+      }
+      tetris_draw_field(field);
+      next_figure_flag = 1;
+      restart_flag = 0;
+    }
+
+    if(lose_flag) {
+      delay(100);
+      beep_morse_if_enabled("L");
+      drawInfo("You lose!");
+      clearPopupWindow();
+      restart_flag = 1;
+      continue;
+    }
+
+    if(next_figure_flag) {
+      figure_index = random(0, figure_index_max);
+      memcpy(figure, figures[figure_index], figures[figure_index][0] * figures[figure_index][1] + 2);
+      
+      // С вероятностью 1/4 крутим один раз, 1/3 второй и 1/2 третий
+      if(random(0, 4) == 0) tetris_rotate_figure_cw(figure);
+      if(random(0, 3) == 0) tetris_rotate_figure_cw(figure);
+      if(random(0, 2) == 0) tetris_rotate_figure_cw(figure);
+
+      figure_x = TETRIS_FIELD_WIDTH / 2 - figure[0] / 2;
+      figure_y = - figure[1];
+
+      // Пытаемся разместить фигуру как можно выше
+      while(tetris_is_collision(field, figure, figure_x, figure_y)) {
+        figure_y++;
+        if(figure_y == 0) break;
+      }
+
+      if(tetris_is_collision(field, figure, figure_x, figure_y)) {
+        lose_flag = 1;
+        continue;
+      }
+      else {
+        figures_count_total++;
+      }
+      tetris_place_figure(field, figure, figure_x, figure_y, 0);
+      next_figure_flag = 0;
+
+      tetris_draw_field(field);
+    }
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    sprintf(buff, "Figures: %d    ", figures_count_total);
+    tft.drawString(buff, 8, 20, FONT_DEFAULT);
+    
+    sprintf(buff, "Lines: %d    ", lines_count_total);
+    tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
+
+    if(millis() - tick_millis > 500) {
+      //Serial.println(tick_millis);
+      //tick_millis = millis();
+      tetris_place_figure(field, figure, figure_x, figure_y, 1);
+      figure_y++;
+      if(tetris_is_collision(field, figure, figure_x, figure_y)) {
+        figure_y--;
+        next_figure_flag = 1;
+      }
+      tetris_place_figure(field, figure, figure_x, figure_y, 0);
+
+      // Показываем поле
+      tetris_draw_field(field);
+
+      // Ищем и убираем линии если фигура зафиксировалась
+      if(next_figure_flag) {
+        beep_if_enabled();
+        tone_index = 0;
+        for(y = 0; y < TETRIS_FIELD_HEIGHT; y++) {
+          fill_flag = 1;
+          for(x = 0; x < TETRIS_FIELD_WIDTH; x++) {
+            if(field[x + y * TETRIS_FIELD_WIDTH] == 0) {
+              fill_flag = 0;
+            }
+          }
+          if(fill_flag) {
+            //Serial.println("Remove line");
+            // Убираем линию
+            for(x = 0; x < TETRIS_FIELD_WIDTH; x++) {
+              field[x + y * TETRIS_FIELD_WIDTH] = 0;
+              tetris_draw_field(field);
+              if(global_is_beep_enabled && !global_silent_mode) {
+                tone(global_beeper_pin, 200 + 100 * tone_index, 10);
+                tone_index++;
+              }
+            }
+            if(global_is_beep_enabled && !global_silent_mode) {
+              noTone(global_beeper_pin);
+            }
+
+            //Serial.println("Move field");
+            // Сдвигаем поле вниз
+            for(i = y; i > 0; i--) {
+              for(x = 0; x < TETRIS_FIELD_WIDTH; x++) {
+                field[x + i * TETRIS_FIELD_WIDTH] = field[x + (i - 1) * TETRIS_FIELD_WIDTH];
+              }
+            }
+            //Serial.println("Cleanup first line");
+            // Зачистка первой линии
+            for(x = 0; x < TETRIS_FIELD_WIDTH; x++) {
+              field[x] = 0;
+            }
+            lines_count_total++;
+            tetris_draw_field(field);
+          }
+        }
+      }
+      // Ввод не предусмотрен
+      tick_millis = millis();
+      continue;
+    }
+    //Serial.println(millis() - tick_millis);
+
+    //tetris_draw_field(field);
+
+    if(touchCheckNowait() == 0) {
+      continue;
+    }
+
+    // Ждём нажатий
+    //touchWaitPress();
+    if(global_touch_present_flag == 1 && global_touch_y >= 16) {
+      // Верхняя часть экрана - перемещение
+      if(global_touch_y < tft.height() / 2) {
+        // Лево
+        if(global_touch_x < tft.width() / 2) {
+          tetris_place_figure(field, figure, figure_x, figure_y, 1);
+          figure_x--;
+          if(tetris_is_collision(field, figure, figure_x, figure_y)) {
+            figure_x++;
+          }
+          tetris_place_figure(field, figure, figure_x, figure_y, 0);
+        }
+        // Право
+        else {
+          tetris_place_figure(field, figure, figure_x, figure_y, 1);
+          figure_x++;
+          if(tetris_is_collision(field, figure, figure_x, figure_y)) {
+            figure_x--;
+          }
+          tetris_place_figure(field, figure, figure_x, figure_y, 0);
+        }
+      }
+      // Нижняя часть экрана - повороты
+      else {
+        // Против часовой
+        if(global_touch_x < tft.width() / 2) {
+          tetris_place_figure(field, figure, figure_x, figure_y, 1);
+          tetris_rotate_figure_cw(figure);
+          if(tetris_is_collision(field, figure, figure_x, figure_y)) {
+            tetris_rotate_figure_cw(figure);
+            tetris_rotate_figure_cw(figure);
+            tetris_rotate_figure_cw(figure);
+          }
+          tetris_place_figure(field, figure, figure_x, figure_y, 0);
+        }
+        // По часовой
+        else {
+          tetris_place_figure(field, figure, figure_x, figure_y, 1);
+          tetris_rotate_figure_cw(figure);
+          tetris_rotate_figure_cw(figure);
+          tetris_rotate_figure_cw(figure);
+          if(tetris_is_collision(field, figure, figure_x, figure_y)) {
+            tetris_rotate_figure_cw(figure);
+          }
+          tetris_place_figure(field, figure, figure_x, figure_y, 0);
+        }
+      }
+    }
+
+    tetris_draw_field(field);
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// Поворот фигуры
+void tetris_rotate_figure_cw(char *figure) {
+  int x, y;
+  int tmp;
+  int width = figure[0];
+  int height = figure[1];
+  char buff[80];
+
+  // Копируем в буфер
+  memcpy(buff, figure, width * height + 2);
+
+  // Поворот
+  for(y = 0; y < height; y++) {
+    for(x = 0; x < width; x++) {
+      //Serial.printf("x=%d y=%d to x=%d y=%d\n", x, y, height - y - 1, x);
+      figure[2 + x + y * width] = buff[2 + (height - y - 1) + x * width];
+    }
+  }
+
+  // Смена длины и ширины
+  figure[0] = height;
+  figure[1] = width;
+}
+
+// Проверяет столкновения фигурки тетриса
+char tetris_is_collision(char *field, char *figure, int place_x, int place_y) {
+  int x, y;
+  int width = figure[0];
+  int height = figure[1];
+  int result = 0;
+  for(y = 0; y < height; y++) {
+    for(x = 0; x < width; x++) {
+      if(figure[2 + x + y * width] != 0) {
+        if(place_x + x < 0) {
+          result = 1;
+        }
+        else if(place_x + x >= TETRIS_FIELD_WIDTH) {
+          result = 1;
+        }
+        else if((place_y + y) < 0) {
+          result = 1;
+        }
+        else if(place_y + y >= TETRIS_FIELD_HEIGHT) {
+          result = 1;
+        }
+        if(field[(place_x + x) + (place_y + y) * TETRIS_FIELD_WIDTH] != 0) {
+          result = 1;
+        }
+      }
+      if(result) break;
+    }
+    if(result) break;
+  }
+  return result;
+}
+
+
+// Располагает фигурку тетриса
+void tetris_place_figure(char *field, char *figure, int place_x, int place_y, char clear_flag) {
+  int x, y;
+  int width = figure[0];
+  int height = figure[1];
+  int result = 0;
+  for(y = 0; y < height; y++) {
+    for(x = 0; x < width; x++) {
+      if(figure[2 + x + y * width] != 0) {
+        field[(place_x + x) + (place_y + y) * TETRIS_FIELD_WIDTH] = clear_flag ? 0 : figure[2 + x + y * width];
+      }
+    }
+  }
+}
+
+void tetris_draw_field(char *field) {
+  char block_value;
+  char empty[] = {
+    12, 12,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000,
+    B00000000, B00000000
+  };
+  char block2[] = {
+    12, 12,
+    B11111111, B11110000,
+    B11000000, B00110000,
+    B10100000, B01010000,
+    B10011111, B10010000,
+    B10011111, B10010000,
+    B10011111, B10010000,
+    B10011111, B10010000,
+    B10011111, B10010000,
+    B10011111, B10010000,
+    B10100000, B01010000,
+    B11000000, B00110000,
+    B11111111, B11110000
+  };
+  char block3[] = {
+    12, 12,
+    B11111111, B11110000,
+    B11111111, B11110000,
+    B11000000, B00110000,
+    B11011111, B10110000,
+    B11010101, B10110000,
+    B11011010, B10110000,
+    B11010101, B10110000,
+    B11011010, B10110000,
+    B11011111, B10110000,
+    B11000000, B00110000,
+    B11111111, B11110000,
+    B11111111, B11110000
+  };
+  char block[] = {
+    12, 12,
+    B11111111, B11110000,
+    B11111111, B11110000,
+    B11010101, B01110000,
+    B11101010, B10110000,
+    B11010101, B01110000,
+    B11101010, B10110000,
+    B11010101, B01110000,
+    B11101010, B10110000,
+    B11010101, B01110000,
+    B11101010, B10110000,
+    B11111111, B11110000,
+    B11111111, B11110000
+  };
+  char *icon;
+  int x, y;
+
+  tft.drawLine(0, tft.height() / 2, 32, tft.height() / 2, color_scheme_fg);
+  tft.drawLine(tft.width() - 32 - 1, tft.height() / 2, tft.width() - 1, tft.height() / 2, color_scheme_fg);
+
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
+  tft.drawCentreString("Left", 24, tft.height() / 4, FONT_DEFAULT);
+  tft.drawCentreString("Right", tft.width() - 24 - 1, tft.height() / 4, FONT_DEFAULT);
+  tft.drawCentreString("CCW", 24, 3 * tft.height() / 4, FONT_DEFAULT);
+  tft.drawCentreString("CW", tft.width() - 24 - 1, 3 * tft.height() / 4, FONT_DEFAULT);
+
+  tft.drawRect(
+    tft.width() / 2 - TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE / 2 + x * TETRIS_CELL_SIZE - 2,
+    48 + y * TETRIS_CELL_SIZE - 2,
+    TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE + 5,
+    TETRIS_FIELD_HEIGHT * TETRIS_CELL_SIZE + 5,
+    color_scheme_fg
+  );
+  tft.drawRect(
+    tft.width() / 2 - TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE / 2 + x * TETRIS_CELL_SIZE - 3,
+    48 + y * TETRIS_CELL_SIZE - 3,
+    TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE + 7,
+    TETRIS_FIELD_HEIGHT * TETRIS_CELL_SIZE + 7,
+    color_scheme_fg
+  );
+
+  for(y = 0; y < TETRIS_FIELD_HEIGHT; y++) {
+    for(x = 0; x < TETRIS_FIELD_WIDTH; x++) {
+      block_value = field[x + y * TETRIS_FIELD_WIDTH];
+      icon = empty;
+      if(block_value) {
+        icon = block;
+      }
+      image_from_bits(tft.width() / 2 - TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE / 2 + x * TETRIS_CELL_SIZE + 1, 48 + y * TETRIS_CELL_SIZE + 1, icon, color_scheme_fg, color_scheme_bg);
     }
   }
 }
