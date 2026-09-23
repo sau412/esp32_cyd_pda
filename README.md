@@ -111,6 +111,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Sokoban - see https://en.wikipedia.org/wiki/Sokoban for details
 * Minesweeper - see https://en.wikipedia.org/wiki/Minesweeper_(video_game) for details
 * Chessboard - chessboard with chess figures. No rules.
+* Tetris - see https://en.wikipedia.org/wiki/Tetris for details
 
 ## Dashboards
 * Clock and Calendar
