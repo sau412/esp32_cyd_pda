@@ -99,6 +99,7 @@
 - Сокобан
 - Сапёр
 - Генератор штрих-кодов EAN8, EAN13, Code128
+- Тетрис
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -289,12 +290,14 @@
   Random Useless Fact dashboard, заставка "сквозь вселенную", не показывать символ 127 в терминале в hexdump
 2026-09-22 Заставка газ, настройка гаммы, использовать хэш пароля, пароль и owner в NVS, поиск, обновлена справка
 2026-09-23 Тетрис, комментарии в терминале
+2026-09-24 myextip - запросить внешний ip, баг доступности backups, команда bitcoin в терминале, команда hamqsl в терминале,
+  запуск случайного приложения/настроек/дашборда/заставки, пасхалка в случайном приложении
+
+- L System
+- ИИ
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (п) Просмотреть справку, может быть что-то добавить
-- (д) Прошлые команды в терминале по стрелке вверх
-
-Остальное:
 - (н) Мини-калькулятор в меню
 - (н) Конвертер валют, единиц измерения
 - (н) /Terminal/Aliases (а что это должно делать?)
@@ -332,7 +335,7 @@
 - (н) Выбирать SD или FFat для каждого приложения отдельно
 - (н) Прокрутка терминала
 - (н) Не отжимать кнопку если увод касания меньше 100 мс
-- (н) Использовать NVS для настроек, привязанных к устройству - инверсия, калибровка, предпочитаемое хранилище - но это дополнительная сущность
+- (н) Использовать NVS для настроек, привязанных к устройству - инверсия, калибровка, предпочитаемое хранилище
 - (н) Другое погодное апи или выбор из нескольких
 - (н) В файлах слушать музыку
 - (н) Заставка двойной маятник (сложно)
@@ -375,16 +378,13 @@
 - (н) Заставка идеальный газ - упругие шарики
 - (н) Папоротник Барнсли
 - (н) Морской бой
-- (н) Случайный дашборд
-- (н) Случайные настройки
-- (н) Случайная заставка
 - (н) Финансовые данные https://www.valueray.com/api/v1/symbolData?symbol=AAPL
 - (н) Тонкий клиент - отправка касаний на сервер, получение текста/картинки с сервера
 - (н) Удалённое управление - отправка картинки на сервер, получение касания с сервера
 - (н) Облачная фоторамка - картинка с сервера
 - (н) Таблица менделеева
 - (н) Приливы-отливы
-- (н) Конвертер валют
+- (н) Конвертер валют и единиц
 - (н) Спирограф
 - (н) Летающие квадратики
 - (н) Четырёхмерный куб
@@ -415,11 +415,14 @@
 - (д) Лаунчер с более крупными значками
 - (д) Выбор вида лаунчера
 - (д) Ещё один заход Bluetooth
-- (и) Найти API типа мой IP
 - (д) Тренажёр шахматных координат
-- (д) Ham radio info dashboard
 - (д) Тетрис - настройки Figures (Tetranimo, Pentamino), Speed (Slow, Medium, Fast, Max), Increase on (Figure, Time, Line, None), Next figure (Random, No repeat), Filled lines (0 - 10), Scroll, Colors (on/off)
 - (д) Tetris - зонтичное приложение для игр Brick Game
+- (д) Прошлые команды в терминале по стрелке вверх
+- (н) Почта
+- (н) Gemini
+- (н) Finger
+- (н) Простой HTTP
 
 Буфер обмена
 - (д) Буфер обмена
@@ -446,7 +449,6 @@
 #define PREFER_SD_IF_AVAILABLE
 
 // У некоторых CYD младший бит зелёного слишком яркий, для вывода 24-битной картинки можно его игнорировать чтобы не искажались цвета
-//#define BMP_USE_555
 //#define IS_BLE_ENABLED
 //#define IS_BLUETOOTH_ENABLED
 //#define IS_SSH_ENABLED
@@ -1110,6 +1112,7 @@ void generator(char mode, char *io_buff);
 void wikipedia(char mode, char *io_buff);
 void settings(char mode, char *io_buff);
 void search(char mode, char *io_buff);
+void random_app(char mode, char *io_buff);
 
 void time_and_date_group(char mode, char *io_buff);
 void games_group(char mode, char *io_buff);
@@ -1207,6 +1210,7 @@ function_application_pointer all_apps[] = {
   backups,
   settings,
   search,
+  random_app,
   //reboot,
   NULL
 };
@@ -1988,6 +1992,9 @@ void terminal_manual() {
   "telnets {host} [port] - connect to host and port via telnet using SSL\n"
   "wget {url} [path] - download file from HTTP/HTTPS to local file\n"
   "ipinfo {ip} - IP information from ipinfo.io\n"
+  "hamqsl - get ham propagation info from hamqsl.com\n"
+  "bitcoin - bitcoin info from blockchain.info\n"
+  "myextip - show external IP via api.ipify.org\n"
   "translate {lang_from|auto} {lang_to} {query} - translate via Google Translate\n"
   "weather [{lat} {lon}] - show weather\n"
   "chat [{nick} {message}] - read and send messages to chat\n"
@@ -3573,6 +3580,10 @@ void terminal_execute_single(char *str) {
       setGamma(global_gamma);
     }
   }
+  // Для отладки
+  //else if(strcmp(cmdline_params[0], "ras") == 0) {
+  //  random_app_surprise();
+  //}
 #ifdef IS_WIFI_ENABLED
   else if(strcmp(cmdline_params[0], "ipconfig") == 0 || strcmp(cmdline_params[0], "ifconfig") == 0) {
     sprintf(buff, "Hostname: %s", WiFi.getHostname());
@@ -3679,6 +3690,15 @@ void terminal_execute_single(char *str) {
     else {
       terminal_ipinfo(cmdline_params[1]);
     }
+  }
+  else if(strcmp(cmdline_params[0], "hamqsl") == 0) {
+    terminal_hamqsl();
+  }
+  else if(strcmp(cmdline_params[0], "bitcoin") == 0) {
+    terminal_bitcoin();
+  }
+  else if(strcmp(cmdline_params[0], "myextip") == 0) {
+    terminal_my_ext_ip();
   }
   else if(strcmp(cmdline_params[0], "translate") == 0) {
     if(arg_count == 1) {
@@ -4031,6 +4051,9 @@ void terminal_execute_single(char *str) {
     }
     else if(strcmp(cmdline_params[1], "search") == 0) {
       search(APP_MODE_LAUNCH, NULL);
+    }
+    else if(strcmp(cmdline_params[1], "random") == 0) {
+      random_app(APP_MODE_LAUNCH, NULL);
     }
     else {
       terminal_println("Unknown app name");
@@ -6794,6 +6817,136 @@ int terminal_ipinfo(char *param) {
       terminal_print_char(result[i]);
     }
     return_value = 0;
+  }
+  else {
+    if(httpResponseCode > 0) {
+      sprintf(result, "Return code %d", httpResponseCode);
+      terminal_println(result);
+      return_value = httpResponseCode;
+    }
+    else {
+      http_get_error_text(httpResponseCode, buff);
+      sprintf(result, "%s", buff);
+      terminal_println(result);
+      return_value = 2;
+    }
+  }
+  return return_value;
+}
+
+int terminal_my_ext_ip() {
+  char query[80];
+  char result[500];
+  char buff[80];
+  int i;
+  int httpResponseCode;
+  char begin = 0;
+  char skip_spaces = 0;
+  int return_value = 0;
+
+  httpResponseCode = get_file_https("https://api.ipify.org", result, 500);
+  if(httpResponseCode == 200) {
+    terminal_println(result);
+    return_value = 0;
+  }
+  else {
+    if(httpResponseCode > 0) {
+      sprintf(result, "Return code %d", httpResponseCode);
+      terminal_println(result);
+      return_value = httpResponseCode;
+    }
+    else {
+      http_get_error_text(httpResponseCode, buff);
+      sprintf(result, "%s", buff);
+      terminal_println(result);
+      return_value = 2;
+    }
+  }
+  return return_value;
+}
+
+int terminal_bitcoin() {
+  char query[80];
+  char result[500];
+  char buff[80];
+  int i;
+  int httpResponseCode;
+  char begin = 0;
+  char skip_spaces = 0;
+  int return_value = 0;
+  int error = 0;
+
+  httpResponseCode = get_file_https("https://blockchain.info/q/getblockcount", result, 500);
+  if(httpResponseCode == 200) {
+    terminal_print("Current block: ");
+    terminal_println(result);
+    httpResponseCode = get_file_https("https://blockchain.info/q/unconfirmedcount", result, 500);
+    if(httpResponseCode == 200) {
+      terminal_print("Unconfirmed count: ");
+      terminal_println(result);
+      httpResponseCode = get_file_https("https://blockchain.info/q/24hrprice", result, 500);
+      if(httpResponseCode == 200) {
+        terminal_print("24h weighted price: ");
+        terminal_println(result);
+        return_value = 0;
+      }
+      else {
+        error = 1;
+      }
+    }
+    else {
+      error = 1;
+    }
+  }
+  else {
+    error = 1;
+  }
+  if(error) {
+    if(httpResponseCode > 0) {
+      sprintf(result, "Return code %d", httpResponseCode);
+      terminal_println(result);
+      return_value = httpResponseCode;
+    }
+    else {
+      http_get_error_text(httpResponseCode, buff);
+      sprintf(result, "%s", buff);
+      terminal_println(result);
+      return_value = 2;
+    }
+  }
+  return return_value;
+}
+
+int terminal_hamqsl() {
+  char query[80];
+  char result[500];
+  char buff[80];
+  int i;
+  int httpResponseCode;
+  char begin = 0;
+  char skip_spaces = 0;
+  int return_value = 0;
+  char day80_40[10];
+  char day30_20[10];
+  char day17_15[10];
+  char day12_10[10];
+  char night80_40[10];
+  char night30_20[10];
+  char night17_15[10];
+  char night12_10[10];
+
+  httpResponseCode = get_hamqsl(day80_40, day30_20, day17_15, day12_10, night80_40, night30_20, night17_15, night12_10);
+  if(httpResponseCode == 200) {
+    sprintf(buff, "Band\tDay\tNight");
+    terminal_println(buff);
+    sprintf(buff, "80-40m\t%s\t%s", day80_40, night80_40);
+    terminal_println(buff);
+    sprintf(buff, "30-20m\t%s\t%s", day30_20, night30_20);
+    terminal_println(buff);
+    sprintf(buff, "17-15m\t%s\t%s", day17_15, night17_15);
+    terminal_println(buff);
+    sprintf(buff, "12-10m\t%s\t%s", day12_10, night12_10);
+    terminal_println(buff);
   }
   else {
     if(httpResponseCode > 0) {
@@ -11244,6 +11397,215 @@ void search(char mode, char *io_buff) {
 }
 
 // ====================================================
+// Случайное приложение
+// ====================================================
+
+void random_app(char mode, char *io_buff) {
+  int i;
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00010010,
+    B01011000, B00111010,
+    B01000100, B01010010,
+    B01000010, B10000010,
+    B01000001, B00000010,
+    B01000001, B00000010,
+    B01000010, B10000010,
+    B01000100, B01010010,
+    B01011000, B00111010,
+    B01000000, B00010010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Random App");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Rndm");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Random App");
+
+  drawProcessWindow("Choosing random app...");
+
+  delay(1000);
+
+  // Выбор случайного приложения
+  switch(random(0, 103)) {
+    // First line
+    case 0: calculator(APP_MODE_LAUNCH, NULL); break;
+    case 1: files(APP_MODE_LAUNCH, NULL); break;
+    case 2: terminal(APP_MODE_LAUNCH, NULL); break;
+    case 3: dashboard(APP_MODE_LAUNCH, NULL); break;
+    case 4: notes(APP_MODE_LAUNCH, NULL); break;
+    case 5: contacts(APP_MODE_LAUNCH, NULL); break;
+    case 6: todo(APP_MODE_LAUNCH, NULL); break;
+    case 7: schedule(APP_MODE_LAUNCH, NULL); break;
+
+    // Second line
+    case 8: expenses(APP_MODE_LAUNCH, NULL); break;
+    case 9: flashcards(APP_MODE_LAUNCH, NULL); break;
+    case 10: books(APP_MODE_LAUNCH, NULL); break;
+    case 11: passwords(APP_MODE_LAUNCH, NULL); break;
+    case 12: totp(APP_MODE_LAUNCH, NULL); break;
+    case 13: barcode(APP_MODE_LAUNCH, NULL); break;
+    case 14: screenshots(APP_MODE_LAUNCH, NULL); break;
+    case 15: tables(APP_MODE_LAUNCH, NULL); break;
+    
+    // Third line
+    case 16: basic(APP_MODE_LAUNCH, NULL); break;
+    case 17: tunes(APP_MODE_LAUNCH, NULL); break;
+    case 18: music(APP_MODE_LAUNCH, NULL); break;
+    case 19: webradio(APP_MODE_LAUNCH, NULL); break;
+    case 20: system_info(APP_MODE_LAUNCH, NULL); break;
+    case 21: torch(APP_MODE_LAUNCH, NULL); break;
+    case 22: draw(APP_MODE_LAUNCH, NULL); break;
+    case 23: wifi(APP_MODE_LAUNCH, NULL); break;
+
+    // Fourth line
+    case 24: gopher(APP_MODE_LAUNCH, NULL); break;
+    case 25: rss(APP_MODE_LAUNCH, NULL); break;
+    case 26: irc(APP_MODE_LAUNCH, NULL); break;
+    case 27: chat(APP_MODE_LAUNCH, NULL); break;
+    case 28: weather(APP_MODE_LAUNCH, NULL); break;
+    case 29: http_file_access(APP_MODE_LAUNCH, NULL); break;
+    case 30: translate(APP_MODE_LAUNCH, NULL); break;
+    case 31: wikipedia(APP_MODE_LAUNCH, NULL); break;
+
+    // Fifth line
+    case 32: counter(APP_MODE_LAUNCH, NULL); break;
+    case 33: random_numbers(APP_MODE_LAUNCH, NULL); break;
+    case 34: timer(APP_MODE_LAUNCH, NULL); break;
+    case 35: stopwatch(APP_MODE_LAUNCH, NULL); break;
+    case 36: breathe(APP_MODE_LAUNCH, NULL); break;
+    case 37: piano(APP_MODE_LAUNCH, NULL); break;
+    case 38: metronome(APP_MODE_LAUNCH, NULL); break;
+    case 39: screensaver(APP_MODE_LAUNCH, NULL); break;
+
+    // Sixth line
+    case 40: user_manual(APP_MODE_LAUNCH, NULL); break;
+    case 41: oscilloscope(APP_MODE_LAUNCH, NULL); break;
+    case 42: voltmeter(APP_MODE_LAUNCH, NULL); break;
+    case 43: generator(APP_MODE_LAUNCH, NULL); break;
+    case 44: i2c_scanner(APP_MODE_LAUNCH, NULL); break;
+    case 45: life(APP_MODE_LAUNCH, NULL); break;
+    case 46: fifteen(APP_MODE_LAUNCH, NULL); break;
+    case 47: lights_off(APP_MODE_LAUNCH, NULL); break;
+
+    // Seventh line
+    case 48: snake(APP_MODE_LAUNCH, NULL); break;
+    case 49: sokoban(APP_MODE_LAUNCH, NULL); break;
+    case 50: turkish_kerchief(APP_MODE_LAUNCH, NULL); break;
+    case 51: memory_match(APP_MODE_LAUNCH, NULL); break;
+    case 52: hanoi_towers(APP_MODE_LAUNCH, NULL); break;
+    case 53: match_three(APP_MODE_LAUNCH, NULL); break;
+    case 54: simon(APP_MODE_LAUNCH, NULL); break;
+    case 55: n_back(APP_MODE_LAUNCH, NULL); break;
+
+    // Eight line
+    case 56: mental_math(APP_MODE_LAUNCH, NULL); break;
+    case 57: game2048(APP_MODE_LAUNCH, NULL); break;
+    case 58: minesweeper(APP_MODE_LAUNCH, NULL); break;
+    case 59: chess(APP_MODE_LAUNCH, NULL); break;
+    case 60: tetris(APP_MODE_LAUNCH, NULL); break;
+    case 61: chip8(APP_MODE_LAUNCH, NULL); break;
+    case 62: backups(APP_MODE_LAUNCH, NULL); break;
+    case 63: settings(APP_MODE_LAUNCH, NULL); break;
+
+    // Nineth line
+    case 64: search(APP_MODE_LAUNCH, NULL); break;
+
+    // Dashboards
+    case 65: dashboard_calendar(APP_MODE_LAUNCH, NULL); break;
+    case 66: fuzzy_clock(APP_MODE_LAUNCH, NULL); break;
+    case 67: weather(APP_MODE_LAUNCH, NULL); break;
+    case 68: dashboard_unixtime(); break;
+    case 69: dashboard_internet_time(); break;
+    case 70: dashboard_analog_time(); break;
+    case 71: dashboard_network(); break;
+    case 72: dashboard_channel_monitor(); break;
+    case 73: dashboard_world_time(); break;
+    case 74: dashboard_bitcoin(); break;
+    case 75: dashboard_random_useless_facts(); break;
+    case 76: dashboard_hf_propagation(); break;
+
+    // Screensavers
+    case 77: screensaver_sky(); break;
+    case 78: screensaver_squares(); break;
+    case 79: screensaver_lorenz(); break;
+    case 80: screensaver_noise(); break;
+    case 81: screensaver_matrix(); break;
+    case 82: screensaver_forest_fire(); break;
+    case 83: screensaver_mood_lamp(); break;
+    case 84: screensaver_through_universe(); break;
+    case 85: screensaver_gas(); break;
+
+    // Settings
+    case 86: touch_calibration(APP_MODE_LAUNCH, NULL); break;
+    case 87: brightness_app(APP_MODE_LAUNCH, NULL); break;
+    case 88: keyboard_control(APP_MODE_LAUNCH, NULL); break;
+    case 89: view_font(APP_MODE_LAUNCH, NULL); break;
+    case 90: set_clock(APP_MODE_LAUNCH, NULL); break;
+    case 91: clock_control(APP_MODE_LAUNCH, NULL); break;
+    case 92: security(APP_MODE_LAUNCH, NULL); break;
+    case 93: screen_settings(APP_MODE_LAUNCH, NULL); break;
+    case 94: sound_control(APP_MODE_LAUNCH, NULL); break;
+    case 95: autorun(APP_MODE_LAUNCH, NULL); break;
+    case 96: select_storage_app(APP_MODE_LAUNCH, NULL); break;
+    case 97: screen_test(APP_MODE_LAUNCH, NULL); break;
+    case 98: color_settings(APP_MODE_LAUNCH, NULL); break;
+    case 99: user_manual(APP_MODE_LAUNCH, NULL); break;
+    case 100: reboot(APP_MODE_LAUNCH, NULL); break;
+    case 101: wifi(APP_MODE_LAUNCH, NULL); break;
+
+    case 102: random_app_surprise(); break;
+  }
+}
+
+// Небольшая пасхалка
+void random_app_surprise() {
+  clearScreen();
+  drawAppTitle("Random App");
+  
+  while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.drawCentreString("Surprise!", tft.width() / 2, tft.height() / 2, FONT_DEFAULT);
+
+    if(random(0, 50)) {
+      tft.fillRect(3 * random(0, tft.width() / 3), 16 + 3 * random(0, (tft.height() - 16) / 3), 3, 3, color_scheme_bg);
+    }
+    else {
+      tft.fillRect(3 * random(0, tft.width() / 3), 16 + 3 * random(0, (tft.height() - 16) / 3), 3, 3, colors[random(0, 16)]);
+    }
+
+    if(touchCheckNowait() == 0) {
+      continue;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// ====================================================
 // Общие PIM-функции
 // ====================================================
 
@@ -14665,7 +15027,7 @@ void screensaver(char mode, char *io_buff) {
       if(button_pressed == 0) {
         screensaver_sky();
       }
-      // Double pendulum
+      // Squares
       if(button_pressed == 1) {
         screensaver_squares();
       }
@@ -20467,6 +20829,7 @@ void dashboard(char mode, char *io_buff) {
     "World Time",
     "Bitcoin",
     "Random Facts",
+    "HF Propagation",
     NULL
   };
   char app_icon[] = {
@@ -20555,7 +20918,11 @@ void dashboard(char mode, char *io_buff) {
       if(button_pressed == 10) {
         dashboard_random_useless_facts();
       }
-      
+      // Ham Radio Propagation
+      if(button_pressed == 11) {
+        dashboard_hf_propagation();
+      }
+
       clearScreen();
       drawAppTitle("Dashboards");
     }
@@ -21255,6 +21622,8 @@ void dashboard_world_time() {
   }
 }
 
+#define BITCOIN_UPDATE_INTERVAL 300000
+
 void dashboard_bitcoin() {
   char buff[80];
   int i;
@@ -21262,7 +21631,8 @@ void dashboard_bitcoin() {
   float val;
   int result;
   long prev_update_millis = 0;
-  long prev_update_price = -60000;
+  long prev_update_price = -BITCOIN_UPDATE_INTERVAL;
+  long info_update_data_millis = 0;
   int base_offset = 75;
 
   clearScreen();
@@ -21282,7 +21652,7 @@ void dashboard_bitcoin() {
       tft.drawCentreString(buff, tft.width() / 2, 27, FONT_BIGGER);
 
       // Текущий блок
-      if(millis() - prev_update_price > 60000) {
+      if(millis() - prev_update_price > BITCOIN_UPDATE_INTERVAL) {
         // Текущий блок
         i = 0;
         if(get_file_https("https://blockchain.info/q/getblockcount", buff, 80) == 200) {
@@ -21316,8 +21686,18 @@ void dashboard_bitcoin() {
         }
         prev_update_price = millis();
       }
+      else if(millis() - info_update_data_millis >= 1000) {
+        info_update_data_millis = millis();
+        tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
+        sprintf(buff, "  Next update in %d min %d sec  ",
+          (prev_update_price + BITCOIN_UPDATE_INTERVAL - millis()) / 60000,
+          ((prev_update_price + BITCOIN_UPDATE_INTERVAL - millis()) / 1000) % 60
+        );
+
+        tft.drawCentreString(buff, tft.width() / 2, tft.height() - 16 - 1, FONT_DEFAULT);
+      }
     }
-    
+
     if(!touchCheckNowait()) continue;
 
     touchWaitReleaseOrExit();
@@ -21424,6 +21804,191 @@ int get_random_useless_fact(char *buff) {
       write_offset++;
       buff[write_offset] = 0;
     }
+  }
+  free(contents);
+
+  return result;
+}
+
+#define HAMQSL_UPDATE_INTERVAL 300000
+
+void dashboard_hf_propagation() {
+  char buff[80];
+  int i;
+  int x, y;
+  float val;
+  int result;
+  long prev_update_millis = 0;
+  long prev_update_price = -BITCOIN_UPDATE_INTERVAL;
+  long info_update_data_millis = 0;
+  int base_offset = 75;
+  char day80_40[10];
+  char day30_20[10];
+  char day17_15[10];
+  char day12_10[10];
+  char night80_40[10];
+  char night30_20[10];
+  char night17_15[10];
+  char night12_10[10];
+
+  clearScreen();
+  drawAppTitle("HF Propagation");
+
+  if(WiFi.status() != WL_CONNECTED) {
+    drawError("Wi-Fi connection required");
+    return;
+  }
+  while(1) {
+    if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
+      prev_update_millis = millis();
+
+      // Выводим всё
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      sprintf(buff, " %d:%02d:%02d ", global_hours, global_minutes, global_seconds);
+      tft.drawCentreString(buff, tft.width() / 2, 27, FONT_BIGGER);
+
+      // Текущий блок
+      if(millis() - prev_update_price > HAMQSL_UPDATE_INTERVAL) {
+        get_hamqsl(day80_40, day30_20, day17_15, day12_10, night80_40, night30_20, night17_15, night12_10);
+        i = 0;
+
+        sprintf(buff, "  %s  ", "Band");
+        tft.drawCentreString(buff, 0 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        sprintf(buff, "  %s  ", "Day");
+        tft.drawCentreString(buff, 1 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        sprintf(buff, "  %s  ", "Night");
+        tft.drawCentreString(buff, 2 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        i++;
+
+        sprintf(buff, "  %s  ", "80m-40m");
+        tft.drawCentreString(buff, 0 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        sprintf(buff, "  %s  ", day80_40);
+        tft.drawCentreString(buff, 1 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        sprintf(buff, "  %s  ", night80_40);
+        tft.drawCentreString(buff, 2 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        i++;
+
+        sprintf(buff, "  %s  ", "30m-20m");
+        tft.drawCentreString(buff, 0 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        sprintf(buff, "  %s  ", day30_20);
+        tft.drawCentreString(buff, 1 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        sprintf(buff, "  %s  ", night30_20);
+        tft.drawCentreString(buff, 2 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        i++;
+
+        sprintf(buff, "  %s  ", "17m-15m");
+        tft.drawCentreString(buff, 0 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        sprintf(buff, "  %s  ", day17_15);
+        tft.drawCentreString(buff, 1 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        sprintf(buff, "  %s  ", night17_15);
+        tft.drawCentreString(buff, 2 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        i++;
+
+        sprintf(buff, "  %s  ", "12m-10m");
+        tft.drawCentreString(buff, 0 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        sprintf(buff, "  %s  ", day12_10);
+        tft.drawCentreString(buff, 1 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        sprintf(buff, "  %s  ", night12_10);
+        tft.drawCentreString(buff, 2 * tft.width() / 3 + tft.width() / 6, 96 + 24 * i, FONT_DEFAULT);
+        i++;
+
+        prev_update_price = millis();
+      }
+      else if(millis() - info_update_data_millis >= 1000) {
+        info_update_data_millis = millis();
+        tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
+        sprintf(buff, "  Next update in %d min %d sec  ",
+          (prev_update_price + BITCOIN_UPDATE_INTERVAL - millis()) / 60000,
+          ((prev_update_price + BITCOIN_UPDATE_INTERVAL - millis()) / 1000) % 60
+        );
+
+        tft.drawCentreString(buff, tft.width() / 2, tft.height() - 16 - 1, FONT_DEFAULT);
+      }
+    }
+
+    if(!touchCheckNowait()) continue;
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+int get_hamqsl(char *day80_40, char *day30_20, char *day17_15, char *day12_10, char *night80_40, char *night30_20, char *night17_15, char *night12_10) {
+  char *contents;
+  int read_offset;
+  int write_offset;
+  int result;
+  char *tmp;
+
+  strcpy(day80_40, "");
+  strcpy(day30_20, "");
+  strcpy(day17_15, "");
+  strcpy(day12_10, "");
+  strcpy(night80_40, "");
+  strcpy(night30_20, "");
+  strcpy(night17_15, "");
+  strcpy(night12_10, "");
+
+  contents = (char *)malloc(4096 * sizeof(char));
+  result = get_file_https("https://www.hamqsl.com/solarxml.php", contents, 4096);
+  //result = get_file_https("https://arikado.xyz/solarxml.html", contents, 4096);
+  Serial.println(result);
+  if(result == 200) {
+    Serial.println(contents);
+
+    tmp = strstr(contents, "<band name=\"80m-40m\" time=\"day\">");
+    if(tmp) memcpy(day80_40, tmp + 32, 7);
+    day80_40[7] = 0;
+    tmp = strchr(day80_40, '<');
+    if(tmp) tmp[0] = 0;
+
+    tmp = strstr(contents, "<band name=\"30m-20m\" time=\"day\">");
+    if(tmp) memcpy(day30_20, tmp + 32, 7);
+    day30_20[7] = 0;
+    tmp = strchr(day30_20, '<');
+    if(tmp) tmp[0] = 0;
+
+    tmp = strstr(contents, "<band name=\"17m-15m\" time=\"day\">");
+    if(tmp) memcpy(day17_15, tmp + 32, 7);
+    day17_15[7] = 0;
+    tmp = strchr(day17_15, '<');
+    if(tmp) tmp[0] = 0;
+
+    tmp = strstr(contents, "<band name=\"12m-10m\" time=\"day\">");
+    if(tmp) memcpy(day12_10, tmp + 32, 7);
+    day12_10[7] = 0;
+    tmp = strchr(day12_10, '<');
+    if(tmp) tmp[0] = 0;
+
+    tmp = strstr(contents, "<band name=\"80m-40m\" time=\"night\">");
+    if(tmp) memcpy(night80_40, tmp + 34, 7);
+    night80_40[7] = 0;
+    tmp = strchr(night80_40, '<');
+    if(tmp) tmp[0] = 0;
+
+    tmp = strstr(contents, "<band name=\"30m-20m\" time=\"night\">");
+    if(tmp) memcpy(night30_20, tmp + 34, 7);
+    night30_20[7] = 0;
+    tmp = strchr(night30_20, '<');
+    if(tmp) tmp[0] = 0;
+
+    tmp = strstr(contents, "<band name=\"17m-15m\" time=\"night\">");
+    if(tmp) memcpy(night17_15, tmp + 34, 7);
+    night17_15[7] = 0;
+    tmp = strchr(night17_15, '<');
+    if(tmp) tmp[0] = 0;
+
+    tmp = strstr(contents, "<band name=\"12m-10m\" time=\"night\">");
+    if(tmp) memcpy(night12_10, tmp + 34, 7);
+    night12_10[7] = 0;
+    tmp = strchr(night12_10, '<');
+    if(tmp) tmp[0] = 0;
   }
   free(contents);
 
@@ -30098,7 +30663,7 @@ int show_system_menu() {
     "Brightness",
     "Inversion",
     "Rotation",
-    "Sound",
+    "Silent mode",
     "Sleep",
     "Exit app",
     NULL
@@ -31343,13 +31908,8 @@ int bmp_show_image(char *filename, int start_x, int start_y) {
         current_offset++;
         byte3 = file.read(); // R
         current_offset++;
-        #ifdef BMP_USE_555
-        // Формируем 16-битное значение 5-5-5
-        color = (byte3 >> 3) << 11 | (byte2 >> 3) << 6 | byte1 >> 3;
-        #else
         // Формируем 16-битное значение 5-6-5
         color = (byte3 >> 3) << 11 | (byte2 >> 2) << 5 | byte1 >> 3;
-        #endif
         tft.drawPixel(start_x + x, start_y + y, color);
         x++;
         if(x >= width) {
@@ -32257,6 +32817,13 @@ void setup() {
 
   //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
+  // Проверка доступности FFat в любом случае
+  if(FFat.begin(IS_FORMAT_FFAT_IF_FAILED)) {
+    ffat_available_flag = 1;
+    Serial.println("Storage type FFat present");
+    FFat.end();
+  }
+
   // Инициализация SD
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
   //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
@@ -32270,21 +32837,10 @@ void setup() {
 #ifdef PREFER_SD_IF_AVAILABLE
   else {
     // Проверка доступности FFat только если нет SD
-    if(FFat.begin(IS_FORMAT_FFAT_IF_FAILED)) {
-      ffat_available_flag = 1;
+    if(ffat_available_flag) {
       Storage = &FFat;
       storage_type = STORAGE_TYPE_FFAT;
-      Serial.println("Storage type FFat present");
     }
-  }
-#else
-  // Проверка доступности FFat в любом случае
-  if(FFat.begin(IS_FORMAT_FFAT_IF_FAILED)) {
-    ffat_available_flag = 1;
-    Storage = &FFat;
-    storage_type = STORAGE_TYPE_FFAT;
-    Serial.println("Storage type FFat present");
-    FFat.end();
   }
 #endif
 
