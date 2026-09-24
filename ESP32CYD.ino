@@ -9219,6 +9219,7 @@ void passwords_edit_file(char *title, char *filename_with_path) {
 
     if(!data) {
       drawError("Cannot allocate memory");
+      free(contents);
       return;
     }
 
@@ -9244,6 +9245,7 @@ void passwords_edit_file(char *title, char *filename_with_path) {
 
       if(!data) {
         drawError("Cannot allocate memory");
+        free(contents);
         return;
       }
 
@@ -13754,8 +13756,8 @@ void snake(char mode, char *io_buff) {
   char next_direction = direction;
   int head_x = SNAKE_FIELD_WIDTH_CELLS / 2;
   int head_y = SNAKE_FIELD_HEIGHT_CELLS / 2;
-  int bait_x;
-  int bait_y;
+  int bait_x = -1;
+  int bait_y = -1;
   int segment_x;
   int segment_y;
   int length = 3;
@@ -25701,7 +25703,7 @@ void oscilloscope_show(char *name, int input_index) {
   int ystep;
   int offset;
   char rescan_flag;
-  char show_remain_flag;
+  char show_remain_flag = 0;
   char draw_buttons_flag;
   char buff[80];
   char *buttons[] = {
@@ -29375,15 +29377,15 @@ void tetris_draw_field(char *field) {
   tft.drawCentreString("CW", tft.width() - 24 - 1, 3 * tft.height() / 4, FONT_DEFAULT);
 
   tft.drawRect(
-    tft.width() / 2 - TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE / 2 + x * TETRIS_CELL_SIZE - 2,
-    48 + y * TETRIS_CELL_SIZE - 2,
+    tft.width() / 2 - TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE / 2 - 2,
+    48 - 2,
     TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE + 5,
     TETRIS_FIELD_HEIGHT * TETRIS_CELL_SIZE + 5,
     color_scheme_fg
   );
   tft.drawRect(
-    tft.width() / 2 - TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE / 2 + x * TETRIS_CELL_SIZE - 3,
-    48 + y * TETRIS_CELL_SIZE - 3,
+    tft.width() / 2 - TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE / 2 - 3,
+    48 - 3,
     TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE + 7,
     TETRIS_FIELD_HEIGHT * TETRIS_CELL_SIZE + 7,
     color_scheme_fg
@@ -30424,7 +30426,7 @@ int touchCheckMatrix(int left_x, int top_y, int width, int height, char **str, i
   int touch_y;
   int bg_color;
   int fg_color;
-  int prev_color;
+  int prev_color = 0;
   char is_eol = 0;
   char is_touch;
   char is_inside;
@@ -30727,7 +30729,7 @@ int show_system_menu() {
 
 // Показать меню
 int show_menu(int x0, int y0, int width, int height, char **items) {
-  int offset;
+  int offset = 0;
   int selected = -1;
   int selected_prev = -1;
   int in_menu = 0;
@@ -30766,7 +30768,7 @@ void touchMapXY_multipoint(int x_raw, int y_raw, int *out_x, int *out_y) {
   int x, y;
   double d_min = 100000;
   double d_current;
-  int i, best1, best2, best3;
+  int i, best1 = -1, best2 = -1, best3 = -1;
   int offset_best_x, offset_best_y;
   double x_raw_1, x_raw_2, x_raw_3;
   double y_raw_1, y_raw_2, y_raw_3;
