@@ -100,6 +100,7 @@
 - Сапёр
 - Генератор штрих-кодов EAN8, EAN13, Code128
 - Тетрис
+- L системы
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -292,9 +293,8 @@
 2026-09-23 Тетрис, комментарии в терминале
 2026-09-24 myextip - запросить внешний ip, баг доступности backups, команда bitcoin в терминале, команда hamqsl в терминале,
   запуск случайного приложения/настроек/дашборда/заставки, пасхалка в случайном приложении
-
-- L System
-- ИИ
+2026-09-25 Исправления после статическиого анализатора, баг в поиске по тексту, регистронезависимый поиск 1251,
+  фракталы Линденмайера L system
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (п) Просмотреть справку, может быть что-то добавить
@@ -423,6 +423,7 @@
 - (н) Gemini
 - (н) Finger
 - (н) Простой HTTP
+- (д) Улучшить работу с памятью в L System - один большой буфер памяти, дописывать новое в конец старого (после \0), потом сдвигать
 
 Буфер обмена
 - (д) Буфер обмена
@@ -1073,6 +1074,7 @@ void music(char mode, char *io_buff);
 void webradio(char mode, char *io_buff);
 void backups(char mode, char *io_buff);
 void life(char mode, char *io_buff);
+void l_system(char mode, char *io_buff);
 void i2c_scanner(char mode, char *io_buff);
 void dashboard(char mode, char *io_buff);
 void fuzzy_clock(char mode, char *io_buff);
@@ -1182,6 +1184,7 @@ function_application_pointer all_apps[] = {
   generator,
   i2c_scanner,
   life,
+  l_system,
   //set_clock,
   //view_font,
   fifteen,
@@ -2045,6 +2048,7 @@ void terminal_manual() {
   "voltmeter - Voltmeter app\n"
   "generator - Signal generator app\n"
   "life - Life app\n"
+  "l_system - L system fractal generator\n"
   "dashboard - Dashboard app\n"
   "fuzzy_clock - Fuzzy Clock app\n"
   "view_font - View Font app\n"
@@ -3974,6 +3978,9 @@ void terminal_execute_single(char *str) {
     else if(strcmp(cmdline_params[1], "life") == 0) {
       life(APP_MODE_LAUNCH, NULL);
     }
+    else if(strcmp(cmdline_params[1], "l_system") == 0) {
+      l_system(APP_MODE_LAUNCH, NULL);
+    }
     else if(strcmp(cmdline_params[1], "dashboard") == 0) {
       dashboard(APP_MODE_LAUNCH, NULL);
     }
@@ -5751,6 +5758,7 @@ int basic_get_variable_index(char *var_name) {
     Serial.printf("var not found\n");
     return -1;
   }
+  return -1;
 }
 
 // Уничтожить переменную
@@ -5838,7 +5846,7 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
   char error_flag;
   char is_true;
   char buff[80];
-  double val, left, right;
+  double val = 0, left = 0, right = 0;
 
   //Serial.printf("%s\n", str);
   basic_parse_cmdline(str, &arg_count, cmdline_params);
@@ -11265,6 +11273,9 @@ void search(char mode, char *io_buff) {
   if(drawPrompt("Search", query) != 0) {
     return;
   }
+  for(i = 0; i < strlen(query); i++) {
+    query[i] = char1251_lowercase(query[i]);
+  }
   clearPrompt();
 
   files = (char **)malloc(1024 * sizeof(char *));
@@ -11316,13 +11327,20 @@ void search(char mode, char *io_buff) {
 
           // Ищем в содержимом
           buff[0] = 0;
+          Serial.println("Content search");
           while(file.available()) {
             byte = file.read();
-            for(offset = 79; offset > 0; offset--) {
-              buff[offset] = buff[offset - 1];
+            byte = char1251_lowercase(byte);
+            if(strlen(buff) >= 79) {
+              buff[79] = 0;
+              for(offset = 0; offset < 79; offset++) {
+                buff[offset] = buff[offset + 1];
+              }
             }
-            buff[0] = byte;
-            buff[79] = 0;
+            offset = strlen(buff);
+            buff[offset + 1] = 0;
+            buff[offset] = byte;
+            //Serial.println(buff);
             if(strcasestr(buff, query)) {
               Serial.println("Contents match");
               files[file_offset] = (char *)malloc((strlen(paths[i]) + 1 + strlen(file.name()) + 1) * sizeof(char));
@@ -11398,6 +11416,49 @@ void search(char mode, char *io_buff) {
   }
 }
 
+char char1251_lowercase(char in) {
+  // English
+  if(in >= 'A' && in <= 'Z') {
+    return in - 'A' + 'a';
+  }
+  // Русский
+  if(in >= 0xC0 && in <= 0xDF) {
+    return in - 0xC0 + 0xE0;
+  }
+  // Ё
+  if(in == 0xA8) return 0xB8;
+  // Ђ
+  if(in == 0x80) return 0x90;
+  // Ѓ
+  if(in == 0x81) return 0x83;
+  // Љ
+  if(in == 0x8A) return 0x9A;
+  // Њ
+  if(in == 0x8C) return 0x9C;
+  // Ќ
+  if(in == 0x8D) return 0x9D;
+  // Ћ
+  if(in == 0x8E) return 0x9E;
+  // Џ
+  if(in == 0x8F) return 0x9F;
+  // Ў
+  if(in == 0xA1) return 0xA2;
+  // Ј
+  if(in == 0xA3) return 0xBC;
+  // Ґ
+  if(in == 0xA5) return 0xB4;
+  // Є
+  if(in == 0xAA) return 0xBA;
+  // Ї
+  if(in == 0xAF) return 0xBF;
+  // І
+  if(in == 0xB2) return 0xB3;
+  // Ѕ
+  if(in == 0xBD) return 0xBE;
+
+  return in;
+}
+
 // ====================================================
 // Случайное приложение
 // ====================================================
@@ -11445,7 +11506,7 @@ void random_app(char mode, char *io_buff) {
   delay(1000);
 
   // Выбор случайного приложения
-  switch(random(0, 103)) {
+  switch(random(0, 104)) {
     // First line
     case 0: calculator(APP_MODE_LAUNCH, NULL); break;
     case 1: files(APP_MODE_LAUNCH, NULL); break;
@@ -11573,6 +11634,7 @@ void random_app(char mode, char *io_buff) {
     case 101: wifi(APP_MODE_LAUNCH, NULL); break;
 
     case 102: random_app_surprise(); break;
+    case 103: l_system(APP_MODE_LAUNCH, NULL); break;
   }
 }
 
@@ -11840,7 +11902,7 @@ void schedule(char mode, char *io_buff) {
   char prev_month_dow;
   char next_month_dow;
   char lap_year_flag;
-  char touch_check_flag;
+  char touch_check_flag = 0;
   char record_present = 0;
   int cell_height = 24;
 
@@ -11891,7 +11953,6 @@ void schedule(char mode, char *io_buff) {
     return;
   }
 
-  buff = (char *)malloc(2050 * sizeof(char));
   clearScreen();
   drawAppTitle("Schedule");
 
@@ -11914,6 +11975,8 @@ void schedule(char mode, char *io_buff) {
   day = 1;
   selected_day = -1;
   prev_selected_day = -1;
+
+  buff = (char *)malloc(2050 * sizeof(char));
 
   while(1) {
     drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 2, 1);
@@ -12751,7 +12814,7 @@ void timer(char mode, char *io_buff) {
   int i;
   int preset_minutes = 1;
   int preset_seconds = 0;
-  long start_millis;
+  long start_millis = 0;
   long time_remains;
   char timer_run = 0;
   char auto_restart = 0;
@@ -13529,7 +13592,7 @@ void life_show(char *rule_name, int rule_index, char *field) {
   int cell_color;
   int near_count;
   char current_cell;
-  long prev_millis;
+  long prev_millis = 0;
   char title[80];
   TouchPoint p;
   char *buttons[] = {
@@ -13737,6 +13800,530 @@ void life_set_cell(int x, int y, char *field, char value) {
   offset = (x + y * LIFE_FIELD_WIDTH_CELLS) % 8;
   if(value) field[byte] |= (1 << offset);
   else field[byte] &= ~(1 << offset);
+}
+
+#define L_SYSTEM_MAX (10240 * 4)
+#define L_SYSTEM_WARNING_MAX (L_SYSTEM_MAX - 80)
+
+void l_system(char mode, char *io_buff) {
+  double angle = 60;
+  int iterations = 5;
+  char axiom[80] = "F";
+  char *start = NULL;
+  char *result = NULL;
+  char fh[80] = "F";
+  char fl[80] = "f";
+  char gh[80] = "G";
+  char gl[80] = "g";
+  char r0[80] = "";
+  char r1[80] = "";
+  char r2[80] = "";
+  char r3[80] = "";
+  char *field = NULL;
+  int i;
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000001, B00000010,
+    B01000001, B00000010,
+    B01000010, B10000010,
+    B01000100, B01000010,
+    B01000010, B10000010,
+    B01010100, B01010010,
+    B01101100, B01101110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  int source_offset, source_selected;
+  int button_pressed;
+  char *buttons[] = {
+    "Select",
+    NULL
+  };
+  char *rules_list[] = {
+    "Koch snowflake",
+    "Pythagoras tree",
+    "Cantor dust",
+    "Gosper curve",
+    "Sierpinski triangle 1",
+    "Sierpinski triangle 2",
+    "Dragon curve",
+    "Plant",
+    "Gilbert Curve",
+    "Sierpinski Curve",
+    "Minkowski Island",
+    "Levy C curve",
+    "Empty",
+    NULL,
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "L System");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "LSys");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("L System");
+  
+  source_offset = 0;
+  source_selected = 0;
+  while(1) {
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.drawString("Select rule:", 1, 16, FONT_DEFAULT);
+
+    touchCheckList(0, 32, tft.width(), tft.height() - 72, rules_list, 15, &source_offset, &source_selected);
+    drawList(0, 32, tft.width(), tft.height() - 72, rules_list, 15, &source_offset, &source_selected);
+
+    drawButtonMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+    
+    touchWaitPress();
+    touchCheckList(0, 32, tft.width(), tft.height() - 32 - 40, rules_list, 15, &source_offset, &source_selected);
+    
+    button_pressed = touchCheckMatrix(0, 280, tft.width(), tft.height() - 280, buttons, 1, 1);
+    if(button_pressed != -1) {
+      iterations = 6;
+      angle = 60;
+      strcpy(axiom, "F");
+      strcpy(fh, "F");
+      strcpy(fl, "f");
+      strcpy(gh, "G");
+      strcpy(gl, "g");
+      strcpy(r0, "0");
+      strcpy(r1, "1");
+      strcpy(r2, "2");
+      strcpy(r3, "3");
+
+      switch(source_selected) {
+        // Снежинка Коха
+        case 0:
+          iterations = 6;
+          strcpy(axiom, "F--F--F");
+          strcpy(fh, "F+F--F+F");
+          break;
+
+        // Дерево Пифагора
+        case 1:
+          angle = 45;
+          strcpy(axiom, "++F");
+          strcpy(fh, "G[+F]-F");
+          strcpy(gh, "GG");
+          break;
+
+        // Канторова пыль
+        case 2:
+          strcpy(axiom, "F");
+          strcpy(fh, "FfF");
+          strcpy(fl, "fff");
+          break;
+        
+        // Кривая Госпера
+        case 3:
+          iterations = 4;
+          strcpy(axiom, "F");
+          strcpy(fh, "F-G--G+F++FF+G-");
+          strcpy(gh, "+F-GG--G-F++F+G");
+          break;
+
+        // Треугольник Серпинского 1
+        case 4:
+          angle = 120;
+          strcpy(axiom, "F-G-G");
+          strcpy(fh, "F-G+F+G-F");
+          strcpy(gh, "GG");
+          break;
+
+        // Треугольник Серпинского 2
+        case 5:
+          strcpy(axiom, "F");
+          strcpy(fh, "G-F-G");
+          strcpy(gh, "F+G+F");
+          break;
+
+        // Дракон
+        case 6:
+          iterations = 13;
+          angle = 90;
+          strcpy(axiom, "++F0");
+          strcpy(r0, "0+1F+");
+          strcpy(r1, "-F0-1");
+          break;
+
+        // Растение
+        case 7:
+          iterations = 6;
+          angle = 25;
+          strcpy(axiom, "+++0");
+          strcpy(fh, "FF");
+          strcpy(r0, "F-[[0]+0]+F[+F0]-0");
+          break;
+
+        // Кривая Гильберта
+        case 8:
+          iterations = 6;
+          angle = 90;
+          strcpy(axiom, "-0");
+          strcpy(r0, "-1F+0F0+F1-");
+          strcpy(r1, "+0F-1F1-F0+");
+          break;
+
+        // Кривая Серпинского
+        case 9:
+          iterations = 5;
+          angle = 45;
+          strcpy(axiom, "+F--0F--F--0F");
+          strcpy(r0, "0F+G+0F--F--0F+G+0");
+          break;
+
+        // Остров Минковского
+        case 10:
+          iterations = 4;
+          angle = 90;
+          strcpy(axiom, "F+F+F+F");
+          strcpy(fh, "F+F-F-FF+F+F-F");
+          break;
+
+        // Кривая Леви
+        case 11:
+          iterations = 12;
+          angle = 45;
+          strcpy(axiom, "F");
+          strcpy(fh, "+F--F+");
+          break;
+
+        // Пустые правила
+        default:
+          break;
+      }
+
+      l_system_settings(rules_list[source_selected], angle, iterations, axiom, fh, fl, gh, gl, r0, r1, r2, r3);
+
+      clearScreen();
+      drawAppTitle("L System");
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      if(field) free(field);
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+
+void l_system_settings(char *name, double angle, int iterations, char *axiom, char *fh, char *fl, char *gh, char *gl, char *r0, char *r1, char *r2, char *r3) {
+  char *start = NULL;
+  char *result = NULL;
+  int i;
+  int button_pressed;
+  char buff[80];
+  char *buttons[] = {
+    "Angle (degrees)",
+    "Iterations",
+    "Axiom",
+    "F",
+    "f",
+    "G",
+    "g",
+    "0",
+    "1",
+    "2",
+    "3",
+    "Draw",
+    NULL
+  };
+
+  clearScreen();
+  if(strcmp(name, "Empty") == 0) {
+    drawAppTitle("L System");
+  }
+  else {
+    drawAppTitle(name);
+  }
+
+  while(1) {
+    drawButtonMatrix(0, 32, tft.width() / 2, 24 * 12, buttons, 1, 12);
+
+    i = 0;
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+    sprintf(buff, "%g", angle);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 36 + 24 * i, FONT_DEFAULT);
+    i++;
+
+    sprintf(buff, "%d", iterations);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 36 + 24 * i, FONT_DEFAULT);
+    i++;
+
+    tft.drawCentreString(axiom, 3 * tft.width() / 4, 36 + 24 * i, FONT_DEFAULT);
+    i++;
+
+    tft.drawCentreString(fh, 3 * tft.width() / 4, 36 + 24 * i, FONT_DEFAULT);
+    i++;
+
+    tft.drawCentreString(fl, 3 * tft.width() / 4, 36 + 24 * i, FONT_DEFAULT);
+    i++;
+
+    tft.drawCentreString(gh, 3 * tft.width() / 4, 36 + 24 * i, FONT_DEFAULT);
+    i++;
+
+    tft.drawCentreString(gl, 3 * tft.width() / 4, 36 + 24 * i, FONT_DEFAULT);
+    i++;
+
+    tft.drawCentreString(r0, 3 * tft.width() / 4, 36 + 24 * i, FONT_DEFAULT);
+    i++;
+
+    tft.drawCentreString(r1, 3 * tft.width() / 4, 36 + 24 * i, FONT_DEFAULT);
+    i++;
+
+    tft.drawCentreString(r2, 3 * tft.width() / 4, 36 + 24 * i, FONT_DEFAULT);
+    i++;
+
+    tft.drawCentreString(r3, 3 * tft.width() / 4, 36 + 24 * i, FONT_DEFAULT);
+    i++;
+    
+    touchWaitPress();
+    
+    button_pressed = touchCheckMatrix(0, 32, tft.width() / 2, 24 * 12, buttons, 1, 12);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        sprintf(buff, "%g", angle);
+        if(drawPrompt("Angle", buff) == 0) {
+          angle = strtod(buff, NULL);
+        }
+      }
+      if(button_pressed == 1) {
+        sprintf(buff, "%d", iterations);
+        if(drawPrompt("Iterations", buff) == 0) {
+          iterations = strtol(buff, NULL, 10);
+        }
+      }
+      if(button_pressed == 2) {
+        strcpy(buff, axiom);
+        if(drawPrompt("Axiom", buff) == 0) {
+          strcpy(axiom, buff);
+        }
+      }
+      if(button_pressed == 3) {
+        strcpy(buff, fh);
+        if(drawPrompt("Rule F", buff) == 0) {
+          strcpy(fh, buff);
+        }
+      }
+      if(button_pressed == 4) {
+        strcpy(buff, fl);
+        if(drawPrompt("Rule f", buff) == 0) {
+          strcpy(fl, buff);
+        }
+      }
+      if(button_pressed == 5) {
+        strcpy(buff, gh);
+        if(drawPrompt("Rule G", buff) == 0) {
+          strcpy(gh, buff);
+        }
+      }
+      if(button_pressed == 6) {
+        strcpy(buff, gl);
+        if(drawPrompt("Rule g", buff) == 0) {
+          strcpy(gl, buff);
+        }
+      }
+      if(button_pressed == 7) {
+        strcpy(buff, r0);
+        if(drawPrompt("Rule 0", buff) == 0) {
+          strcpy(r0, buff);
+        }
+      }
+      if(button_pressed == 8) {
+        strcpy(buff, r1);
+        if(drawPrompt("Rule 1", buff) == 0) {
+          strcpy(r1, buff);
+        }
+      }
+      if(button_pressed == 9) {
+        strcpy(buff, r2);
+        if(drawPrompt("Rule 2", buff) == 0) {
+          strcpy(r2, buff);
+        }
+      }
+      if(button_pressed == 10) {
+        strcpy(buff, r3);
+        if(drawPrompt("Rule 3", buff) == 0) {
+          strcpy(r3, buff);
+        }
+      }
+      // Генерация изображения
+      if(button_pressed == 11) {
+        tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+
+        start = (char*)malloc(L_SYSTEM_MAX * sizeof(char));
+        if(!start) {
+          drawError("Unable to reserve memory");
+        }
+        result = (char*)malloc(L_SYSTEM_MAX * sizeof(char));
+        if(!result) {
+          drawError("Unable to reserve memory");
+        }
+        if(start && result) {
+          strcpy(start, axiom);
+          l_system_draw(start, angle);
+          sprintf(buff, "Iteration 0");
+          tft.setTextColor(color_scheme_fg, color_scheme_bg);
+          tft.drawCentreString(buff, tft.width() / 2, tft.height() - 16, FONT_DEFAULT);
+          delay(1000);
+
+          for(i = 0; i < iterations; i++) {
+            if(i != 0) delay(1000);
+            if(l_system_iterate(result, start, fh, fl, gh, gl, r0, r1, r2, r3)) {
+              sprintf(buff, "Iteration %d", i + 1);
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
+              tft.drawCentreString(buff, tft.width() / 2, tft.height() - 16, FONT_DEFAULT);
+
+              l_system_draw(result, angle);
+              strcpy(start, result);
+            }
+            else {
+              tft.setTextColor(color_scheme_fg, color_scheme_bg);
+              tft.drawCentreString("Out of memory", tft.width() / 2, tft.height() - 16, FONT_DEFAULT);
+              break;
+            }
+          }
+          if(i >= iterations) {
+            tft.setTextColor(color_scheme_fg, color_scheme_bg);
+            tft.drawCentreString("          Finished          ", tft.width() / 2, tft.height() - 16, FONT_DEFAULT);
+          }
+          touchWaitPress();
+          touchWaitRelease();
+        }
+        if(start) free(start);
+        if(result) free(result);
+      }
+      
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+int l_system_iterate(char *result, char *axiom, char *fh, char *fl, char *gh, char *gl, char *r0, char *r1, char *r2, char *r3) {
+  int i;
+  int j;
+  char str[2] = "";
+  strcpy(result, "");
+  for(i = 0; i < strlen(axiom); i++) {
+    if(axiom[i] == 'F') strcat(result, fh);
+    else if(axiom[i] == 'f') strcat(result, fl);
+    else if(axiom[i] == 'G') strcat(result, gh);
+    else if(axiom[i] == 'g') strcat(result, gl);
+    else if(axiom[i] == '0') strcat(result, r0);
+    else if(axiom[i] == '1') strcat(result, r1);
+    else if(axiom[i] == '2') strcat(result, r2);
+    else if(axiom[i] == '3') strcat(result, r3);
+    else {
+      str[0] = axiom[i];
+      strcat(result, str);
+    }
+    if(strlen(result) >= L_SYSTEM_WARNING_MAX) return 0;
+  }
+  return 1;
+}
+
+void l_system_draw(char *data, double step_angle) {
+  double x_min = 0;
+  double x_max = 0;
+  double y_min = 0;
+  double y_max = 0;
+  int i, j;
+  double x, y;
+  double prev_x, prev_y;
+  double angle;
+  double scale = 1;
+  double stack_x[20];
+  double stack_y[20];
+  double stack_angle[20];
+  int x_offset = 0;
+  int stack = 0;
+
+  tft.fillRect(0, 16, tft.width(), tft.height() - 32, color_scheme_bg);
+  for(j = 0; j < 2; j++) {
+    x = 0;
+    y = 0;
+    angle = 0;
+    for(i = 0; i < strlen(data); i++) {
+      if(data[i] == '+') angle += step_angle;
+      if(data[i] == '-') angle -= step_angle;
+      if(data[i] == '(' || data[i] == '[' || data[i] == '{') {
+        if(stack >= 20) {
+          drawError("Stack overflow");
+          return;
+        }
+        stack_x[stack] = x;
+        stack_y[stack] = y;
+        stack_angle[stack] = angle;
+        stack++;
+      }
+      if(data[i] == ')' || data[i] == ']' || data[i] == '}') {
+        if(stack == 0) {
+          drawError("Stack empty");
+          return;
+        }
+        stack--;
+        x = stack_x[stack];
+        y = stack_y[stack];
+        angle = stack_angle[stack];
+      }
+      if(data[i] == 'F' || data[i] == 'G') {
+        prev_x = x;
+        prev_y = y;
+        x += cos(PI * angle / 180);
+        y += sin(PI * angle / 180);
+        if(j == 1) {
+          tft.drawLine(x_offset + (prev_x - x_min) / scale, 280 - (prev_y - y_min) / scale, x_offset + (x - x_min) / scale, 280 - (y - y_min) / scale, color_scheme_fg);
+        }
+      }
+      if(data[i] == 'f' || data[i] == 'g') {
+        x += cos(PI * angle / 180);
+        y += sin(PI * angle / 180);
+      }
+      x_min = min(x, x_min);
+      x_max = max(x, x_max);
+      y_min = min(y, y_min);
+      y_max = max(y, y_max);
+    }
+    scale = max(x_max - x_min, y_max - y_min);
+    if(scale == 0) scale = 1;
+    scale /= tft.width();
+
+    if(y_max - y_min > x_max - x_min) {
+      x_offset = (tft.width() - tft.width() * (x_max - x_min) / (y_max - y_min)) / 2;
+    }
+  }
 }
 
 #define SNAKE_CELL_PIXELS 8
@@ -16475,7 +17062,7 @@ void gopher(char mode, char *io_buff) {
   char *history[10];
   char reload_page;
   char ask_address;
-  char type;
+  char type = 0;
   char end_reached_flag;
   int page_offset = 0;
   int button_pressed;
@@ -20526,7 +21113,7 @@ int is_correct_utf8_string(char *str) {
 // Если есть символы 0-8, 11-12, 14-19, то двочиный
 char is_binary_file(char *filename) {
   fs::File file;
-  int offset;
+  int offset = 0;
   int byte;
   char result = 0;
   file = Storage->open(filename);
@@ -20962,7 +21549,7 @@ void dashboard_calendar(char mode, char *io_buff) {
   int year;
   int month;
   int day;
-  int prev_day;
+  int prev_day = 0;
   int moon_day;
   int cal_dow;
   int cal_day;
@@ -23444,6 +24031,7 @@ void set_local_time_from_unix_timestamp() {
   year = 1970;
   month = 1;
   day = 1;
+  lap_year_flag = is_lap_year(year);
   while(days_remain > 0) {
     // Високосные годы
     lap_year_flag = 0;
@@ -24281,8 +24869,8 @@ char edit_text(char *title, char *contents, long max_len) {
   int string_offset;
   int file_line_number = 0; // Номер текущей строки в файле
   int screen_line_number = 0; // Номер строки на экране в процессе вывода
-  int file_skip_lines = 0; // Сколько строк фалйа пропустить
-  int touch_x, touch_y;
+  int file_skip_lines = 0; // Сколько строк файла пропустить
+  int touch_x = 0, touch_y = 0;
   int button;
   char byte;
   char buff[80];
@@ -24596,6 +25184,7 @@ void edit_file(char *title, char *filename) {
   file = Storage->open(filename);
   if(file) {
     if(file.isDirectory()) {
+      free(contents);
       drawError("Cannot edit directory");
       return;
     }
@@ -28188,7 +28777,7 @@ void minesweeper(char mode, char *io_buff) {
   char field[MINESWEEPER_FIELD_TOTAL];
   int button_pressed;
   int mines_count_current;
-  int mines_count_total;
+  int mines_count_total = 0;
   int i;
   int x, y;
   int touch_x, touch_y;
@@ -31304,6 +31893,7 @@ int stream_get_line_by_index(fs::File file, int index, char *buff, int maxlen) {
   if(index == str_index) {
     return 1;
   }
+  return 0;
 }
 
 int get_brightness() {
@@ -32653,7 +33243,7 @@ char * get_reset_reason_text(esp_reset_reason_t reason) {
 
 // Запуск приложения по названию
 void run_app_by_name(char *name) {
-  char buff[80];
+  char buff[80] = "";
   int i;
 
   i = 0;
