@@ -170,6 +170,9 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * rssi - show current RSSI value
 * hostname {hostname} - set hostname
 * ping {host} - ping specified host continiously, touch screen to stop
+* pingscan {network/mask} - scan subnet with ping
+* arp - show ARPs
+* arpscan - scan subnet with ARP
 * serial [speed] - connect to serial port with specified speed, default is 115200
 * telnet {host} [port] - connect via telnet to specified host and port
 * telnets {host} [port] - connect via telnet to specified host and port using SSL
@@ -234,6 +237,20 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * base64decode {path} [path] - decode file from base64
 * aes_encrypt {password} {path} [path] - encrypt file with AES-256
 * aes_decrypt {password} {path} [path] - decrypt file with AES-256
+* ip2long {ip} - convert IP to number
+* long2ip {number} - convert number to IP
+* binoct {binary} - convert binary to octal
+* bindec {binary} - convert binary to decimal
+* binhex {binary} - convert binary to hexadecimal
+* octbin {octal} - convert octal to binary
+* octdec {octal} - convert octal to decimal
+* octhex {octal} - convert octal to hexadecimal
+* decbin {decimal} - convert decimal to binary
+* decoct {decimal} - convert decimal to octal
+* dechex {decimal} - convert decimal to hexadecimal
+* hexbin {hexadecimal} - convert hexadecimal to binary
+* hexoct {hexadecimal} - convert hexadecimal to octal
+* hexdec {hexadecimal} - convert hexadecimal to decimal
 * app {app_name} - launch app by name
 * Filename from /Terminal - run commands from file one-by-one
 
