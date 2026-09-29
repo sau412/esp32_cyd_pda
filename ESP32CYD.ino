@@ -295,8 +295,19 @@
   запуск случайного приложения/настроек/дашборда/заставки, пасхалка в случайном приложении
 2026-09-25 Исправления после статическиого анализатора, баг в поиске по тексту, регистронезависимый поиск 1251,
   фракталы Линденмайера L system
+2026-09-26 Forest Fire баг со сгорающей половиной
+2026-09-28 Баг Gopher browser, когда строка адреса больше 80 символов - не влезала в историю, L system ускорение углов, строк, оптимизация памяти,
+  backlight pin
+2026-09-29 arp, arpscan, pingscan, ip2long, long2ip, bindec, binoct, bindec, octbin, octdec, octhex, decbin, decoct, dechex, hexbin, hexoct, hexdec,
+
+- tcpscan
+- udpscan
+- iperf
+- Morse news Dashboard
+- Время с/до событий
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
+- (д) Сообщение с точкой для разблокировки
 - (п) Просмотреть справку, может быть что-то добавить
 - (н) Мини-калькулятор в меню
 - (н) Конвертер валют, единиц измерения
@@ -359,8 +370,6 @@
 - (д) /Terminal/Environment
 - (н) Чат - просмотр с прокруткой
 - (н) Категории для PIM
-- (н) Фракталы L system как на палме
-- (н) Случайное приложение
 - (н) Rainbow lamp
 - (н) Morse news Dashboard
 - (н) Quick launch лаунчер
@@ -375,7 +384,6 @@
 - (н) Крестики-нолики
 - (н) Заставка множество мандельброта
 - (н) Заставка бассейны Ньютона
-- (н) Заставка идеальный газ - упругие шарики
 - (н) Папоротник Барнсли
 - (н) Морской бой
 - (н) Финансовые данные https://www.valueray.com/api/v1/symbolData?symbol=AAPL
@@ -386,7 +394,7 @@
 - (н) Приливы-отливы
 - (н) Конвертер валют и единиц
 - (н) Спирограф
-- (н) Летающие квадратики
+- (н) Летающие квадратики (как в Song in lines)
 - (н) Четырёхмерный куб
 - (н) Общение с ИИ
 - (н) Курсы валют
@@ -423,7 +431,7 @@
 - (н) Gemini
 - (н) Finger
 - (н) Простой HTTP
-- (д) Улучшить работу с памятью в L System - один большой буфер памяти, дописывать новое в конец старого (после \0), потом сдвигать
+- (н) Настройки пинов: подсветка, светодиод, звук, музыка, кнопка BOOT
 
 Буфер обмена
 - (д) Буфер обмена
@@ -449,7 +457,6 @@
 
 #define PREFER_SD_IF_AVAILABLE
 
-// У некоторых CYD младший бит зелёного слишком яркий, для вывода 24-битной картинки можно его игнорировать чтобы не искажались цвета
 //#define IS_BLE_ENABLED
 //#define IS_BLUETOOTH_ENABLED
 //#define IS_SSH_ENABLED
@@ -496,6 +503,12 @@ WiFiClient *global_client = NULL;
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
 #include <lwip/init.h>
+
+// For arp
+#include "lwip/etharp.h"
+#include "lwip/ip4_addr.h"
+#include "lwip/netif.h"
+#include "lwip/priv/tcpip_priv.h"
 
 // HTTP server
 #include <WebServer.h>
@@ -577,7 +590,7 @@ TFT_eSPI tft = TFT_eSPI();
 #define XPT2046_CLK 25   // T_CLK
 #define XPT2046_CS 33    // T_CS
 
-#define BACKLIGHT_LED 21
+#define BACKLIGHT_LED_PIN 21
 #define LIGHT_SENSOR_PIN 34
 
 #define LED_RED 4
@@ -975,6 +988,7 @@ double global_lat = 0;
 double global_lon = 0;
 
 int global_brightness = 255;
+int global_backlight_pin = BACKLIGHT_LED_PIN;
 int global_inversion = 0;
 int global_rotation = 0;
 int global_gamma = 1;
@@ -2002,6 +2016,7 @@ void terminal_manual() {
   "weather [{lat} {lon}] - show weather\n"
   "chat [{nick} {message}] - read and send messages to chat\n"
   "ruf - random useless fact\n"
+  "# - comments\n"
   "Any other command - try to find file with that name in /Terminal and execute it.\n"
   "\n"
   "== Running apps from terminal ==\n"
@@ -2925,6 +2940,143 @@ void terminal_execute_single(char *str) {
       }
     }
   }
+  else if(strcmp(cmdline_params[0], "ip2long") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: ip2long {IP}");
+    }
+    else {
+      ip.fromString(cmdline_params[1]);
+      sprintf(buff, "%lu", ip2long(ip));
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "long2ip") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: long2ip {number}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 10);
+      sprintf(buff, "%s", long2ip(l).toString().c_str());
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "binoct") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: binoct {binary}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 2);
+      sprintf(buff, "%o", l);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "bindec") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: bindec {binary}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 2);
+      sprintf(buff, "%lu", l);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "binhex") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: binhex {binary}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 2);
+      sprintf(buff, "%X", l);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "octbin") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: octbin {octal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 8);
+      terminal_println((char *)String(l, BIN).c_str());
+    }
+  }
+  else if(strcmp(cmdline_params[0], "octdec") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: octdec {octal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 8);
+      sprintf(buff, "%lu", l);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "octhex") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: octhex {octal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 8);
+      sprintf(buff, "%X", l);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "decbin") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: decbin {decimal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 10);
+      terminal_println((char *)String(l, BIN).c_str());
+    }
+  }
+  else if(strcmp(cmdline_params[0], "decoct") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: decoct {decimal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 10);
+      sprintf(buff, "%o", l);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "dechex") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: octhex {decimal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 10);
+      sprintf(buff, "%X", l);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "hexbin") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: hexbin {hexadecimal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 16);
+      terminal_println((char *)String(l, BIN).c_str());
+    }
+  }
+  else if(strcmp(cmdline_params[0], "hexoct") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: hexoct {hexadecimal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 16);
+      sprintf(buff, "%o", l);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "hexdec") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: hexdec {hexadecimal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 16);
+      sprintf(buff, "%lu", l);
+      terminal_println(buff);
+    }
+  }
   else if(strcmp(cmdline_params[0], "sleep") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: sleep {seconds}");
@@ -3263,7 +3415,7 @@ void terminal_execute_single(char *str) {
       terminal_wc(buff);
     }
   }
-  else if(strcmp(cmdline_params[0], "crc") == 0) {
+  else if(strcmp(cmdline_params[0], "crc") == 0) { // {file} - calculate file CRC checksum
     if(arg_count != 2) {
       terminal_println("Usage: crc {file}");
     }
@@ -3643,12 +3795,26 @@ void terminal_execute_single(char *str) {
       terminal_println(buff);
     }
   }
+  else if(strcmp(cmdline_params[0], "arp") == 0) {
+    terminal_arp();
+  }
+  else if(strcmp(cmdline_params[0], "arpscan") == 0) {
+    terminal_arpscan();
+  }
   else if(strcmp(cmdline_params[0], "ping") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: ping {hostname}");
     }
     else {
       terminal_ping(cmdline_params[1]);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "pingscan") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: pingscan {subnet}/{netmask}");
+    }
+    else {
+      terminal_pingscan(cmdline_params[1]);
     }
   }
   else if(strcmp(cmdline_params[0], "tracert") == 0) {
@@ -7320,6 +7486,131 @@ int terminal_ping(char *ip) {
   }
 }
 
+void terminal_pingscan(char *subnet_and_mask) {
+  char buff[80];
+  char *subnet_text = NULL;
+  char *netmask_text = NULL;
+  int netmask_index;
+  int byte;
+
+  netmask_text = strchr(subnet_and_mask, '/');
+  netmask_text[0] = 0;
+  netmask_text++;
+  subnet_text = subnet_and_mask;
+
+  IPAddress netmask;
+  if(strchr(netmask_text, '.')) {
+    netmask.fromString(netmask_text);
+  }
+  else {
+    netmask_index = strtol(netmask_text, NULL, 10);
+    netmask = long2ip(0xFFFFFFFF << (32 - netmask_index));
+  }
+  IPAddress subnet(subnet_text);
+  //IPAddress netmask(netmask_text);
+
+  uint32_t network = ip2long(subnet) & ip2long(netmask);
+  uint32_t broadcast = ip2long(subnet) | ~ip2long(netmask);
+
+  sprintf(buff, "Ping scan\n\rFrom %s to %s", long2ip(network).toString().c_str(), long2ip(broadcast).toString().c_str());
+  terminal_println(buff);
+  terminal_show_screen();
+
+  for (uint32_t addr = network; addr <= broadcast; addr++) {
+    //Serial.println(long2ip(addr).toString());
+    if(Ping.ping(long2ip(addr), 1)) {
+      sprintf(buff, "%s ICMP reply %0.2f ms", long2ip(addr).toString().c_str(), Ping.averageTime());
+      terminal_println(buff);
+      terminal_show_screen();
+    }
+    byte = terminal_input_char();
+    if(byte == 0x03) {
+      terminal_println("Break");
+      break;
+    }
+  }
+  terminal_println("Scan completed");
+}
+
+void terminal_arp() {
+  char buff[80];
+
+  terminal_println("ARP table:");
+
+  for (int i = 0; i < ARP_TABLE_SIZE; i++) {
+    ip4_addr_t *ip = nullptr;
+    struct netif *netif = nullptr;
+    struct eth_addr *eth = nullptr;
+
+    if (etharp_get_entry(i, &ip, &netif, &eth)) {
+      sprintf(buff,
+        "%s -> %02X:%02X:%02X:%02X:%02X:%02X",
+        ip4addr_ntoa(ip),
+        eth->addr[0], eth->addr[1], eth->addr[2],
+        eth->addr[3], eth->addr[4], eth->addr[5]
+      );
+      terminal_println(buff);
+    }
+  }
+}
+
+void terminal_arpscan() {
+  char buff[80];
+  IPAddress localip = WiFi.localIP();
+  IPAddress mask  = WiFi.subnetMask();
+
+  uint32_t ip =
+      ((uint32_t)localip[0] << 24) |
+      ((uint32_t)localip[1] << 16) |
+      ((uint32_t)localip[2] << 8)  |
+      localip[3];
+
+  uint32_t m =
+      ((uint32_t)mask[0] << 24) |
+      ((uint32_t)mask[1] << 16) |
+      ((uint32_t)mask[2] << 8)  |
+      mask[3];
+
+  uint32_t network = ip & m;
+  uint32_t broadcast = network | ~m;
+
+  sprintf(buff,
+    "ARP scan %s/%s",
+    WiFi.localIP().toString().c_str(),
+    WiFi.subnetMask().toString().c_str()
+  );
+  terminal_println(buff);
+  terminal_show_screen();
+
+  struct netif *n = netif_default;
+
+  if (!n) {
+    terminal_println("No network interface");
+    return;
+  }
+
+  // Отправляем ARP request каждому адресу
+  for (uint32_t a = network + 1; a < broadcast; a++) {
+    ip4_addr_t target;
+    IP4_ADDR(
+        &target,
+        (a >> 24) & 0xff,
+        (a >> 16) & 0xff,
+        (a >> 8)  & 0xff,
+        a & 0xff
+    );
+    LOCK_TCPIP_CORE();
+    etharp_request(n, &target);
+    UNLOCK_TCPIP_CORE();
+    delay(2);
+  }
+
+  // Даём время на ответы
+  delay(500);
+
+  terminal_arp();
+}
+
 void terminal_tracert(char *host) {
   char buff[80];
   const int MAX_HOPS = 30;
@@ -7443,6 +7734,22 @@ uint16_t terminal_tracert_calculate_checksum(void *b, int len) {
 }
 
 #endif
+
+uint32_t ip2long(IPAddress ip) {
+  return ((uint32_t)ip[0] << 24) |
+          ((uint32_t)ip[1] << 16) |
+          ((uint32_t)ip[2] << 8) |
+          ip[3];
+}
+
+IPAddress long2ip(uint32_t n) {
+  return IPAddress(
+    (n >> 24) & 0xFF,
+    (n >> 16) & 0xFF,
+    (n >> 8)  & 0xFF,
+    n & 0xFF
+  );
+}
 
 // ====================================================
 // Заметки
@@ -11535,6 +11842,7 @@ void random_app(char mode, char *io_buff) {
     case 20: system_info(APP_MODE_LAUNCH, NULL); break;
     case 21: torch(APP_MODE_LAUNCH, NULL); break;
     case 22: draw(APP_MODE_LAUNCH, NULL); break;
+#ifdef IS_WIFI_WNABLED
     case 23: wifi(APP_MODE_LAUNCH, NULL); break;
 
     // Fourth line
@@ -11546,6 +11854,7 @@ void random_app(char mode, char *io_buff) {
     case 29: http_file_access(APP_MODE_LAUNCH, NULL); break;
     case 30: translate(APP_MODE_LAUNCH, NULL); break;
     case 31: wikipedia(APP_MODE_LAUNCH, NULL); break;
+#endif // IS_WIFI_WNABLED
 
     // Fifth line
     case 32: counter(APP_MODE_LAUNCH, NULL); break;
@@ -11593,16 +11902,22 @@ void random_app(char mode, char *io_buff) {
     // Dashboards
     case 65: dashboard_calendar(APP_MODE_LAUNCH, NULL); break;
     case 66: fuzzy_clock(APP_MODE_LAUNCH, NULL); break;
+#ifdef IS_WIFI_ENABLED
     case 67: weather(APP_MODE_LAUNCH, NULL); break;
+#endif // IS_WIFI_ENABLED
     case 68: dashboard_unixtime(); break;
     case 69: dashboard_internet_time(); break;
     case 70: dashboard_analog_time(); break;
+#ifdef IS_WIFI_ENABLED
     case 71: dashboard_network(); break;
     case 72: dashboard_channel_monitor(); break;
+#endif // IS_WIFI_ENABLED
     case 73: dashboard_world_time(); break;
+#ifdef IS_WIFI_ENABLED
     case 74: dashboard_bitcoin(); break;
     case 75: dashboard_random_useless_facts(); break;
     case 76: dashboard_hf_propagation(); break;
+#endif // IS_WIFI_ENABLED
 
     // Screensavers
     case 77: screensaver_sky(); break;
@@ -11631,8 +11946,9 @@ void random_app(char mode, char *io_buff) {
     case 98: color_settings(APP_MODE_LAUNCH, NULL); break;
     case 99: user_manual(APP_MODE_LAUNCH, NULL); break;
     case 100: reboot(APP_MODE_LAUNCH, NULL); break;
+#ifdef IS_WIFI_ENABLED
     case 101: wifi(APP_MODE_LAUNCH, NULL); break;
-
+#endif // IS_WIFI_ENABLED
     case 102: random_app_surprise(); break;
     case 103: l_system(APP_MODE_LAUNCH, NULL); break;
   }
@@ -13802,9 +14118,6 @@ void life_set_cell(int x, int y, char *field, char value) {
   else field[byte] &= ~(1 << offset);
 }
 
-#define L_SYSTEM_MAX (10240 * 4)
-#define L_SYSTEM_WARNING_MAX (L_SYSTEM_MAX - 80)
-
 void l_system(char mode, char *io_buff) {
   double angle = 60;
   int iterations = 5;
@@ -14030,8 +14343,8 @@ void l_system(char mode, char *io_buff) {
 
 
 void l_system_settings(char *name, double angle, int iterations, char *axiom, char *fh, char *fl, char *gh, char *gl, char *r0, char *r1, char *r2, char *r3) {
-  char *start = NULL;
   char *result = NULL;
+  int max_len;
   int i;
   int button_pressed;
   char buff[80];
@@ -14173,18 +14486,16 @@ void l_system_settings(char *name, double angle, int iterations, char *axiom, ch
       // Генерация изображения
       if(button_pressed == 11) {
         tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
-
-        start = (char*)malloc(L_SYSTEM_MAX * sizeof(char));
-        if(!start) {
-          drawError("Unable to reserve memory");
-        }
-        result = (char*)malloc(L_SYSTEM_MAX * sizeof(char));
+        // Берём максимальное количество памяти
+        max_len = ESP.getMaxAllocHeap();
+        result = (char*)malloc(max_len * sizeof(char));
         if(!result) {
           drawError("Unable to reserve memory");
         }
-        if(start && result) {
-          strcpy(start, axiom);
-          l_system_draw(start, angle);
+        if(result) {
+          strcpy(result, axiom);
+          l_system_draw(result, angle);
+          Serial.println(result);
           sprintf(buff, "Iteration 0");
           tft.setTextColor(color_scheme_fg, color_scheme_bg);
           tft.drawCentreString(buff, tft.width() / 2, tft.height() - 16, FONT_DEFAULT);
@@ -14192,13 +14503,13 @@ void l_system_settings(char *name, double angle, int iterations, char *axiom, ch
 
           for(i = 0; i < iterations; i++) {
             if(i != 0) delay(1000);
-            if(l_system_iterate(result, start, fh, fl, gh, gl, r0, r1, r2, r3)) {
+            if(l_system_iterate(result, max_len, fh, fl, gh, gl, r0, r1, r2, r3)) {
+              //Serial.println(result);
               sprintf(buff, "Iteration %d", i + 1);
               tft.setTextColor(color_scheme_fg, color_scheme_bg);
               tft.drawCentreString(buff, tft.width() / 2, tft.height() - 16, FONT_DEFAULT);
 
               l_system_draw(result, angle);
-              strcpy(start, result);
             }
             else {
               tft.setTextColor(color_scheme_fg, color_scheme_bg);
@@ -14213,7 +14524,6 @@ void l_system_settings(char *name, double angle, int iterations, char *axiom, ch
           touchWaitPress();
           touchWaitRelease();
         }
-        if(start) free(start);
         if(result) free(result);
       }
       
@@ -14231,26 +14541,49 @@ void l_system_settings(char *name, double angle, int iterations, char *axiom, ch
   }
 }
 
-int l_system_iterate(char *result, char *axiom, char *fh, char *fl, char *gh, char *gl, char *r0, char *r1, char *r2, char *r3) {
+int l_system_iterate(char *result, int max_len, char *fh, char *fl, char *gh, char *gl, char *r0, char *r1, char *r2, char *r3) {
   int i;
   int j;
-  char str[2] = "";
-  strcpy(result, "");
-  for(i = 0; i < strlen(axiom); i++) {
-    if(axiom[i] == 'F') strcat(result, fh);
-    else if(axiom[i] == 'f') strcat(result, fl);
-    else if(axiom[i] == 'G') strcat(result, gh);
-    else if(axiom[i] == 'g') strcat(result, gl);
-    else if(axiom[i] == '0') strcat(result, r0);
-    else if(axiom[i] == '1') strcat(result, r1);
-    else if(axiom[i] == '2') strcat(result, r2);
-    else if(axiom[i] == '3') strcat(result, r3);
+  char *next = NULL;
+  int strlen_result = strlen(result);
+  int strlen_fh = strlen(fh);
+  int strlen_fl = strlen(fl);
+  int strlen_gh = strlen(gh);
+  int strlen_gl = strlen(gl);
+  int strlen_r0 = strlen(r0);
+  int strlen_r1 = strlen(r1);
+  int strlen_r2 = strlen(r2);
+  int strlen_r3 = strlen(r3);
+  int strlen_next = 0;
+  int offset = 0;
+  // next начинается сразу после нулевого символа result
+  next = result + strlen(result) + 1;
+  strcpy(next, "");
+  for(i = 0; i < strlen_result; i++) {
+    //Serial.printf("%d %s %s, %d < %d + %d\n", i, result, next, max_len, strlen(result), strlen(next));
+    if(result[i] == 'F') { memcpy(next + offset, fh, strlen_fh + 1); offset += strlen_fh; }
+    else if(result[i] == 'f') { memcpy(next + offset, fl, strlen_fl + 1); offset += strlen_fl; } //strcat(next, fl);
+    else if(result[i] == 'G') { memcpy(next + offset, gh, strlen_gh + 1); offset += strlen_gh; }
+    else if(result[i] == 'g') { memcpy(next + offset, gl, strlen_gl + 1); offset += strlen_gl; }
+    else if(result[i] == '0') { memcpy(next + offset, r0, strlen_r0 + 1); offset += strlen_r0; }
+    else if(result[i] == '1') { memcpy(next + offset, r1, strlen_r1 + 1); offset += strlen_r1; }
+    else if(result[i] == '2') { memcpy(next + offset, r2, strlen_r2 + 1); offset += strlen_r2; }
+    else if(result[i] == '3') { memcpy(next + offset, r3, strlen_r3 + 1); offset += strlen_r3; }
     else {
-      str[0] = axiom[i];
-      strcat(result, str);
+      next[offset] = result[i];
+      offset += 1;
+      next[offset] = 0;
+      //strcat(next, str);
     }
-    if(strlen(result) >= L_SYSTEM_WARNING_MAX) return 0;
+    if(strlen_result + offset >= max_len - 80) return 0;
   }
+
+  // Нужно теперь сдвинуть result
+  strlen_next = strlen(next);
+  for(i = 0; i <= strlen(next); i++) {
+    result[i] = next[i];
+  }
+
   return 1;
 }
 
@@ -14267,17 +14600,25 @@ void l_system_draw(char *data, double step_angle) {
   double stack_x[20];
   double stack_y[20];
   double stack_angle[20];
+  double sqrt_2 = sqrt(2);
   int x_offset = 0;
   int stack = 0;
+  int strlen_data = strlen(data);
 
   tft.fillRect(0, 16, tft.width(), tft.height() - 32, color_scheme_bg);
   for(j = 0; j < 2; j++) {
     x = 0;
     y = 0;
     angle = 0;
-    for(i = 0; i < strlen(data); i++) {
-      if(data[i] == '+') angle += step_angle;
-      if(data[i] == '-') angle -= step_angle;
+    for(i = 0; i < strlen_data; i++) {
+      if(data[i] == '+') {
+        angle += step_angle;
+        if(angle >= 360) angle -= 360;
+      }
+      if(data[i] == '-') {
+        angle -= step_angle;
+        if(angle < 0) angle += 360;
+      }
       if(data[i] == '(' || data[i] == '[' || data[i] == '{') {
         if(stack >= 20) {
           drawError("Stack overflow");
@@ -14298,19 +14639,40 @@ void l_system_draw(char *data, double step_angle) {
         y = stack_y[stack];
         angle = stack_angle[stack];
       }
-      if(data[i] == 'F' || data[i] == 'G') {
+      if(data[i] == 'F' || data[i] == 'G' || data[i] == 'f' || data[i] == 'g') {
         prev_x = x;
         prev_y = y;
-        x += cos(PI * angle / 180);
-        y += sin(PI * angle / 180);
-        if(j == 1) {
-          tft.drawLine(x_offset + (prev_x - x_min) / scale, 280 - (prev_y - y_min) / scale, x_offset + (x - x_min) / scale, 280 - (y - y_min) / scale, color_scheme_fg);
+        if(angle == 0) {
+          x += 1;
+          y += 0;
+        }
+        else if(angle == 90) {
+          x += 0;
+          y += 1;
+        }
+        else if(angle == 180) {
+          x += -1;
+          y += 0;
+        }
+        else if(angle == 270) {
+          x += 0;
+          y += -1;
+        }
+        else {
+          x += cos(PI * angle / 180);
+          y += sin(PI * angle / 180);
+        }
+        if(j == 1 && (data[i] == 'F' || data[i] == 'G')) {
+          tft.drawLine(
+            x_offset + (prev_x - x_min) / scale,
+            280 - (prev_y - y_min) / scale,
+            x_offset + (x - x_min) / scale,
+            280 - (y - y_min) / scale,
+            color_scheme_fg
+          );
         }
       }
-      if(data[i] == 'f' || data[i] == 'g') {
-        x += cos(PI * angle / 180);
-        y += sin(PI * angle / 180);
-      }
+
       x_min = min(x, x_min);
       x_max = max(x, x_max);
       y_min = min(y, y_min);
@@ -14688,11 +15050,19 @@ void sokoban(char mode, char *io_buff) {
   }
 
   // Предложение скачать
+#ifdef IS_WIFI_ENABLED
   if(is_empty_directory(SOKOBAN_PATH)) {
     if(drawConfirm("Download classic levels?") == 0) {
       terminal_wget("https://raw.githubusercontent.com/lieberkind/sokoban/refs/heads/elm/original-levels.txt", "/Sokoban/Classic");
+      if(Storage->exists("/Sokoban/Classic") && is_empty_file("/Sokoban/Classic")) {
+        Storage->remove("/Sokoban/Classic");
+      }
+      if(!Storage->exists("/Sokoban/Classic")) {
+        drawError("Download error");
+      }
     }
   }
+#endif
 
   // А теперь стандартный PIM APP
   pim_app("Sokoban", SOKOBAN_PATH, sokoban_file_to_list, buttons, sokoban_action);
@@ -15933,13 +16303,13 @@ void screensaver_forest_fire() {
   disableAppTitle();
   tft.fillScreen(TFT_BLACK);
 
-  for(i = 0; i < width * height / 16; i++) {
+  for(i = 0; i < width * height / 8; i++) {
     trees[i] = 0;
     fires[i] = 0;
     fires_next[i] = 0;
   }
 
-  for(i = 0; i < (width * height * 0.8); i++) {
+  for(i = 0; i < (width * height * 0.5); i++) {
     x = random(0, width);
     y = random(0, height);
     array_set_bit(trees, x, y, width, height, 1);
@@ -16527,7 +16897,7 @@ void screen_settings(char mode, char *io_buff) {
     "Inversion",
     "Rotation",
     "Brightness",
-    "Test screen",
+    "Backlight pin",
     "Calibration",
     "Color scheme",
     "Font for view",
@@ -16597,6 +16967,9 @@ void screen_settings(char mode, char *io_buff) {
     sprintf(buff, "  %d  ", global_brightness);
     tft.drawCentreString(buff, 3 * tft.width() / 4, 40 + 32 * 2, FONT_DEFAULT);
 
+    sprintf(buff, "  %d  ", global_backlight_pin);
+    tft.drawCentreString(buff, 3 * tft.width() / 4, 40 + 32 * 3, FONT_DEFAULT);
+
     if(global_view_font_small) {
       strcpy(buff, " small ");
     }
@@ -16635,9 +17008,14 @@ void screen_settings(char mode, char *io_buff) {
       if(button_pressed == 2) {
         brightness_app(APP_MODE_LAUNCH, NULL);
       }
-      // Test screen
+      // Backlight pin
       if(button_pressed == 3) {
-        screen_test(APP_MODE_LAUNCH, NULL);
+        sprintf(buff, "%d", global_backlight_pin);
+        if(drawPrompt("Backlight pin", buff) == 0) {
+          global_backlight_pin = strtol(buff, NULL, 10);
+          changes_flag = 1;
+        }
+        clearPrompt();
       }
       // Calibration
       if(button_pressed == 4) {
@@ -16679,6 +17057,9 @@ void screen_settings(char mode, char *io_buff) {
 
           sprintf(buff, "%d", global_rotation);
           write_file_from_buff("/Settings/Rotation", buff);
+
+          sprintf(buff, "%d", global_backlight_pin);
+          write_file_from_buff("/Settings/BacklightPin", buff);
 
           sprintf(buff, "%d", global_view_font_small);
           write_file_from_buff("/Settings/Font", buff);
@@ -17107,7 +17488,7 @@ void gopher(char mode, char *io_buff) {
   page = (char *)malloc(GOPHER_BYTES_MAX * sizeof(char));
 
   for(i = 0; i < GOPHER_HISTORY_LENGTH; i++) {
-    history[i] = (char *)malloc(80 * sizeof(char));
+    history[i] = (char *)malloc(160 * sizeof(char));
     strcpy(history[i], "");
   }
   clearScreen();
@@ -17288,12 +17669,13 @@ int gopher_get_page(char *address, char *buff_output, char *type) {
       str_offset = 0;
     }
     else if(path_flag) {
-
       path[str_offset] = address[address_offset];
       str_offset++;
       path[str_offset] = 0;
     }
   }
+
+  Serial.printf("Opening: server %s port %d path %s\n", server, port, path);
 
   if(*type == 0) {
     *type = '1';
@@ -17453,8 +17835,11 @@ void gopher_show_page(char *page, int *offset_lines, char address_type, char get
         if(get_touch_address && touch_line == screen_offset) {
           tft.setTextColor(color_scheme_bg, color_scheme_link_fg);
           strcpy(query, "");
-          drawPrompt("Query", query);
-          sprintf(address_to_go, "%s:%s/%c%s\t%s", server, port, line_type, path, query);
+          if(drawPrompt("Query", query) == 0) {
+            sprintf(address_to_go, "%s:%s/%c%s\t%s", server, port, line_type, path, query);
+            Serial.println(address_to_go);
+          }
+          clearPrompt();
         }
         else {
           tft.setTextColor(color_scheme_link_fg, color_scheme_bg);
@@ -21473,7 +21858,9 @@ void dashboard(char mode, char *io_buff) {
       }
       // Weather
       if(button_pressed == 2) {
+#ifdef IS_WIFI_ENABLED
         weather(APP_MODE_LAUNCH, NULL);
+#endif // IS_WIFI_ENABLED
       }
       // Unix Time
       if(button_pressed == 3) {
@@ -21489,11 +21876,15 @@ void dashboard(char mode, char *io_buff) {
       }
       // Network
       if(button_pressed == 6) {
+#ifdef IS_WIFI_ENABLED
         dashboard_network();
+#endif // IS_WIFI_ENABLED
       }
       // Wi-Fi channel monitor
       if(button_pressed == 7) {
+#ifdef IS_WIFI_ENABLED
         dashboard_channel_monitor();
+#endif // IS_WIFI_ENABLED
       }
       // World time
       if(button_pressed == 8) {
@@ -21501,15 +21892,21 @@ void dashboard(char mode, char *io_buff) {
       }
       // Bitcoin
       if(button_pressed == 9) {
+#ifdef IS_WIFI_ENABLED
         dashboard_bitcoin();
+#endif // IS_WIFI_ENABLED
       }
       // Random Useless Facts
       if(button_pressed == 10) {
+#ifdef IS_WIFI_ENABLED
         dashboard_random_useless_facts();
+#endif // IS_WIFI_ENABLED
       }
       // Ham Radio Propagation
       if(button_pressed == 11) {
+#ifdef IS_WIFI_ENABLED
         dashboard_hf_propagation();
+#endif // IS_WIFI_ENABLED
       }
 
       clearScreen();
@@ -21856,6 +22253,8 @@ void dashboard_analog_time() {
   }
 }
 
+#ifdef IS_WIFI_ENABLED
+
 void dashboard_network() {
   char buff[80];
   int i;
@@ -22098,6 +22497,8 @@ void dashboard_channel_monitor() {
   }
 }
 
+#endif
+
 #define INTERNET_TIME_UPDATE_INTERVAL 864
 
 void dashboard_internet_time() {
@@ -22210,6 +22611,8 @@ void dashboard_world_time() {
     touchWaitRelease();
   }
 }
+
+#ifdef IS_WIFI_ENABLED
 
 #define BITCOIN_UPDATE_INTERVAL 300000
 
@@ -22583,6 +22986,8 @@ int get_hamqsl(char *day80_40, char *day30_20, char *day17_15, char *day12_10, c
 
   return result;
 }
+
+#endif // IS_WIFI_ENABLED
 
 // ====================================================
 // Неточные часы
@@ -23426,7 +23831,9 @@ void settings(char mode, char *io_buff) {
         reboot(APP_MODE_LAUNCH, NULL);
       }
       if(button_pressed == 15) {
+#ifdef IS_WIFI_ENABLED
         wifi(APP_MODE_LAUNCH, NULL);
+#endif // IS_WIFI_ENABLED
       }
       
       clearScreen();
@@ -31902,7 +32309,7 @@ int get_brightness() {
 
 void set_brightness(int level) {
   global_brightness = level;
-  analogWrite(BACKLIGHT_LED, level);
+  analogWrite(global_backlight_pin, level);
 }
 
 void save_brightness() {
@@ -33169,7 +33576,7 @@ double parse_expr_constant_by_name(char *name) {
     return sqrt(5);
   }
   if(strcasecmp(name, "bl_pin") == 0) {
-    return BACKLIGHT_LED;
+    return global_backlight_pin;
   }
   if(strcasecmp(name, "ldr_pin") == 0) {
     return LIGHT_SENSOR_PIN;
@@ -33351,7 +33758,6 @@ void setup() {
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
   pinMode(LED_BLUE, OUTPUT);
-  pinMode(BACKLIGHT_LED, OUTPUT);
 
   pinMode(LIGHT_SENSOR_PIN, INPUT);
   pinMode(XPT2046_IRQ, INPUT);
@@ -33441,6 +33847,9 @@ void setup() {
   // Настройки
   // Яркость
   global_brightness = 255;
+  global_backlight_pin = BACKLIGHT_LED_PIN;
+  pinMode(global_backlight_pin, OUTPUT);
+
   // Инверсия
   global_inversion = 0;
   // Поворот
@@ -33485,6 +33894,11 @@ void setup() {
 
   // Загрузка настроек
   if(storage_type != STORAGE_TYPE_NONE) {
+    // Сначала пин подсветки
+    if(read_file_to_buff("/Settings/BacklightPin", 79, buff)) {
+      global_backlight_pin = strtol(buff, NULL, 10);
+      pinMode(global_backlight_pin, OUTPUT);
+    }
     // Яркость
     if(low_power_flag) {
       global_brightness = 12;
