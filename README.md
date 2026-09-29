@@ -244,3 +244,4 @@ You can modify code if you want. Bug reports and pull requests appreciated.
 * Web Flasher: https://sau412.github.io/esp32_cyd_pda/flash
 * Video presentation (old): https://www.youtube.com/watch?v=mXp3R2wKOIw
 * Telegram group: https://t.me/arikado_chat_ru/9896
+* First article! https://hackaday.com/2026/09/26/cheap-yellow-display-dreams-of-pda/
