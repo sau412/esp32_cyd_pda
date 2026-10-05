@@ -126,6 +126,8 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * World Time
 * Bitcoin block, price, pending transactions
 * Random Useless Fact
+* HF Propagation
+* Intervals - time from and to events, like birthdays or new year
 
 ## Screensavers
 * Stars
