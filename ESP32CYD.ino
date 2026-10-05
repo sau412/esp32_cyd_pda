@@ -15,93 +15,6 @@
 - Без iperf (нет библиотеки)
 - Просмотр: текст, таблицы, музыка, картинки
 
-Функции:
-- Лаунчер
-- Калькулятор
-- Информация о системе
-- Файловый менеджер
-- Виртуальная клавиатура
-- Фонарик
-- Калибровка тач-сенсора
-- Рисование (с сохранением)
-- Пароль на вход
-- Счётчик
-- Тест экрана
-- Скринсейвер
-- Игра пятнашки
-- Игра выключи свет
-- Читалка
-- Редактирование файла
-- Генератор случайных чисел
-- Таймер
-- Яркость
-- Секундомер
-- Заметки
-- Жизнь (клеточный автомат)
-- I2C сканер
-- Часы
-- Неточные часы
-- Подключение к вай-фаю
-- Гофер браузер
-- Погода (с настройкой координат)
-- Чат
-- Контакты
-- Дела
-- Расходы
-- Расписание
-- Просмотр шрифта
-- Игра змейка
-- Пасьянс турецкий платок
-- Файловый сервер (с загрузкой файлов)
-- Сохранение скриншотов по кнопке BOOT
-- Ханойские башни
-- Найди пару (как Masterbrain)
-- Пианино
-- Метроном
-- Просмотр текста из памяти
-- Справка
-- RSS
-- Шифрование AES
-- Хранилище паролей
-- Воспроизведение монофонических мелодий
-- Выбор цветовой схемы
-- Три в ряд
-- Терминал
-- Приложения терминала: serial, ping, telnet
-- Бэкап через веб-интерфейс (очень медленно)
-- Восстановление через веб-интерфейс
-- IRC клиент
-- Выбор приложения для автозапуска
-- Повтор последовательности (Simon)
-- N назад
-- Карточки для запоминания слов
-- Устный счёт
-- MP3-плеер
-- Интернет-радио плеер
-- Осциллограф
-- Выбор хранилища при запуске
-- Бэкапы FFat на SD (и восстановление тоже)
-- Смена кодировки файла с utf8 на 1251
-- Игра 2048
-- Настройки экрана
-- Заставка цветные квадратики
-- Заставка аттрактор Лоренца
-- Заставка помехи
-- Заставка матрица
-- Настройки звука/будильника
-- Переводчик
-- Вольтметр
-- CHIP-8 emulator
-- Редактор таблиц
-- TOTP
-- Генератор сигналов
-- Wikipedia
-- Сокобан
-- Сапёр
-- Генератор штрих-кодов EAN8, EAN13, Code128
-- Тетрис
-- L системы
-
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
 2026-03-12 Функция "нарисуй матрицу кнопок x на y в указанном месте", "проверить указанную матрицу кнопок на попадание нажатий", калькулятор (частично)
@@ -298,13 +211,23 @@
 2026-09-26 Forest Fire баг со сгорающей половиной
 2026-09-28 Баг Gopher browser, когда строка адреса больше 80 символов - не влезала в историю, L system ускорение углов, строк, оптимизация памяти,
   backlight pin
-2026-09-29 arp, arpscan, pingscan, ip2long, long2ip, bindec, binoct, bindec, octbin, octdec, octhex, decbin, decoct, dechex, hexbin, hexoct, hexdec,
+2026-09-29 arp, arpscan, pingscan, ip2long, long2ip, bindec, binoct, bindec, octbin, octdec, octhex, decbin, decoct, dechex, hexbin, hexoct, hexdec
+2026-09-30 gcd/nod, lcm/nok, factorial, dividers, factorize, bin, oct, dec, hex
+2026-10-01 Баг с выводом цветов в терминале, colors, stat (суммирование, умножение, минимум, максимум, среднее, медиана, отклонения, сумма квадратов),
+  utc, det, reverse, digit_sum, bitset, bitget, bitclear, bittoggle, rol, ror, popcount, clz, ctz, parity, div, netmask калькулятор подсетей,
+  permutation перестановки, arrangement размещения, combination сочетания, .NET ticks, beats
+2026-10-02 Баг в длиной sha256, он же в паролях, баг в stat неинициализированные m3, m4, баг в stat деление на 0, баг в gcd если в аргументах ноль,
+  баг в files если не выделилась память, баг в files если слишком много файлов, FFatContentsStream::peek возвращает не тот байт,
+  FFatContentsStream::flush может перезаписывать не ту страницу, FFatContentsStream: buff может быть не инициализирован,
+  команды stack (stack, pop, push, shift, unshift), использовать cursor_visible_flag, повторить прошлую команду в терминале (rpt)
+2026-10-05 Разделил код на секции, PIM сортировка по названию, сортировка в файлах, setdatetime, date_add, date_sub, interval, дашборд интервалы
 
+- Угол луны сейчас, максимальный угол, направление
+- Угол солнца сейчас, максимальный угол, направление
 - tcpscan
 - udpscan
 - iperf
 - Morse news Dashboard
-- Время с/до событий
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - (д) Сообщение с точкой для разблокировки
@@ -432,6 +355,42 @@
 - (н) Finger
 - (н) Простой HTTP
 - (н) Настройки пинов: подсветка, светодиод, звук, музыка, кнопка BOOT
+- urlencode
+- port - получить порт по названию или название по порту
+- Физические преобразования (градусы, длина, площадь, объём)
+- raddeg
+- radgrad
+- degrad
+- deggrad
+- graddec
+- gradrad
+- deg - преобразование градусов в дробь и обратно
+- rgb2hex()
+- hex2rgb()
+- rgb2565()
+- rgb5652rgb()
+- rgb2hsv()
+- hsv2rgb()
+- rgb2hsl()
+- hsl2rgb()
+- colorname2rgb()
+- rgb2colorname()
+- декартовы, полярные, сферическое координаты
+- Гамма-функция
+- ЕАН контрольная цифра
+- Карта контрольная цифра
+- Добавление файлов PIM
+- Географическое расстояние между точками
+- Уникальные строки в файле
+- Сортировка файла
+- Показывать размер файлов в ls
+- du
+- dd if=zero/random/file of=file bs count skip
+- Протокол CAN
+- Простокол Modbus
+- Протокол MQTT
+- Протокол RS485
+- Протокол OneWire
 
 Буфер обмена
 - (д) Буфер обмена
@@ -668,12 +627,17 @@ int cursor_saved_col;
 int cursor_saved_color = 0x07;
 int cursor_saved_attribute = 0x00;
 
+#define TERMINAL_AUTOEXEC "/Terminal/Autoexec"
+#define TERMINAL_HISTORY "/Terminal/History"
+#define TERMINAL_STACK "/Terminal/Stack"
+
 char cursor_visible_flag = 1;
 char terminal_autowrap = 1;
 char terminal_keyboard_redraw_flag = 0;
 char terminal_esc_sequence[20];
 char terminal_esc_sequence_flag = 0;
 char terminal_use_alt_screen_flag = 0;
+char terminal_pending_wrap = 0;
 int terminal_scroll_line_begin = 0;
 int terminal_scroll_line_end = 19;
 
@@ -848,7 +812,7 @@ private:
     long offset = 0;
     int buff_offset = -1;
     int chunk_size = 4096;
-    char *buff;
+    char *buff = NULL;
 
     esp_partition_t* partition;
 
@@ -927,9 +891,9 @@ public:
       if(!partition) return -1;
       if((offset + 1) < partition->size) {
         if(buff_offset > 0 && buff_offset < chunk_size - 1) {
-          return buff[buff_offset + 1];
+          return buff[buff_offset];
         }
-        esp_err_t result = esp_partition_read(partition, offset + 1, &c, 1);
+        esp_err_t result = esp_partition_read(partition, offset, &c, 1);
         return c;
       }
       else {
@@ -940,6 +904,7 @@ public:
     void flush() override {
       if(!buff) return;
       if(!partition) return;
+      if(buff_offset == 0) return;
       esp_partition_erase_range(partition, offset, chunk_size);
       esp_partition_write(partition, offset, buff, chunk_size);
       offset += chunk_size;
@@ -1186,21 +1151,14 @@ function_application_pointer all_apps[] = {
   breathe,
   piano,
   metronome,
-  //screen_test,
   screensaver,
   user_manual,
-  //security,
-  //brightness_app,
-  //touch_calibration,
-  //touch_calibration_multipoint,
   oscilloscope,
   voltmeter,
   generator,
   i2c_scanner,
   life,
   l_system,
-  //set_clock,
-  //view_font,
   fifteen,
   lights_off,
   snake,
@@ -1217,20 +1175,16 @@ function_application_pointer all_apps[] = {
   chess,
   tetris,
   chip8,
-  //color_settings,
-  //screen_settings,
-  //keyboard_control,
-  //sound_control,
-  //clock_control,
-  //autorun,
-  //select_storage_app,
   backups,
   settings,
   search,
   random_app,
-  //reboot,
   NULL
 };
+
+// ====================================================
+// Лаунчер
+// ====================================================
 
 void launcher(char mode, char *io_buff) {
   char redraw_flag;
@@ -1371,6 +1325,10 @@ void launcher(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Калькулятор
+// ====================================================
 
 void calculator(char mode, char *io_buff) {
   double a = 0;
@@ -1600,6 +1558,10 @@ void calculator(char mode, char *io_buff) {
   }
 }
 
+// ====================================================
+// Информация о системе
+// ====================================================
+
 void system_info(char mode, char *io_buff) {
   char buff[80];
   int i = 0;
@@ -1772,6 +1734,10 @@ void system_info(char mode, char *io_buff) {
   }
 }
 
+// ====================================================
+// Пользовательский мануал
+// ====================================================
+
 void user_manual(char mode, char *io_buff) {
   char help[] =
   "This is some help for ESP32 CYD PDA Firmware\n"
@@ -1916,6 +1882,10 @@ void user_manual(char mode, char *io_buff) {
 
   view_text("User Manual", help);
 }
+
+// ====================================================
+// Мануал по терминалу
+// ====================================================
 
 void terminal_manual() {
   char help[] =
@@ -2096,6 +2066,10 @@ void terminal_manual() {
   view_text("Terminal Manual", help);
 }
 
+// ====================================================
+// Файловый менеджер
+// ====================================================
+
 #define FILES_COUNT_MAX 1024
 
 void files(char mode, char *io_buff) {
@@ -2116,7 +2090,9 @@ void files(char mode, char *io_buff) {
   char user_input[80];
   char byte;
   char **files = NULL; // 14 элементов на экране
-  int i;
+  char *tmp = NULL;
+  int i, j;
+  char is_dir1, is_dir2;
   char *file_operations[] = {
     "New",    "View", "Edit", "Rename",
     "NewDir", "Copy", "Move", "Delete",
@@ -2218,10 +2194,14 @@ void files(char mode, char *io_buff) {
       }
       // Занимаем память, сразу на FILES_COUNT_MAX элементов, с realloc глючит
       files = (char**)malloc(FILES_COUNT_MAX * sizeof(char *));
+      if(!files) {
+        drawError("Unable to allocate memory");
+        return;
+      }
       files[0] = NULL;
       //delay(1000);
       if(strcmp(terminal_current_path, "/")) {
-        sprintf(buff, "[u] ..");
+        sprintf(buff, "..\t[dir]");
         files[file_index] = (char *)malloc((strlen(buff) + 1) * sizeof(char));
         strcpy(files[file_index], buff);
         files[file_index + 1] = NULL;
@@ -2242,11 +2222,34 @@ void files(char mode, char *io_buff) {
         }
         utf8_to_cp1251(buff);
         files[file_index] = (char *)malloc((strlen(buff) + 1) * sizeof(char));
+        if(!files[file_index]) {
+          drawError("Unable to allocate memory");
+          break;
+        }
         strcpy(files[file_index], buff);
         files[file_index + 1] = NULL;
-        file_index ++;
+        file_index++;
+        if(file_index == FILES_COUNT_MAX - 1) {
+          Serial.println("Too much files!");
+          break;
+        }
       }
       
+      // Сортировка
+      for(j = 0; j < file_index; j++) {
+        for(i = j + 1; i < file_index; i++) {
+          is_dir1 = 0;
+          if(strcmp(strchr(files[i], '\t'), "\t[dir]") == 0) is_dir1 = 1;
+          is_dir2 = 0;
+          if(strcmp(strchr(files[j], '\t'), "\t[dir]") == 0) is_dir2 = 1;
+
+          if(is_dir1 > is_dir2 || strcmp(files[i], files[j]) < 0) {
+            tmp = files[i];
+            files[i] = files[j];
+            files[j] = tmp;
+          }
+        }
+      }
       rescan_files = 0;
     }
 
@@ -2274,11 +2277,19 @@ void files(char mode, char *io_buff) {
       // Находим нужный файл
       current_dir = Storage->open(terminal_current_path);
       file_index = 0;
+      // Для вложенных папок индекс сдвигается на единицу, так как единица - ".."
       if(strcmp(terminal_current_path, "/")) {
         file_index++;
       }
       while(file = current_dir.openNextFile()) {
-        if(file_selected == file_index) break;
+        tmp = strchr(files[file_selected], '\t');
+        *tmp = 0;
+        if(strcmp(file.name(), files[file_selected]) == 0) {
+          *tmp = '\t';
+          break;
+        }
+        *tmp = '\t';
+        //if(file_selected == file_index) break;
         file_index++;
       }
 
@@ -2520,9 +2531,9 @@ void terminal(char mode, char *io_buff) {
   terminal_clear_screen();
 
   // Автозапуск в терминале
-  if(Storage && Storage->exists("/Terminal/Autoexec")) {
+  if(Storage && Storage->exists(TERMINAL_AUTOEXEC)) {
     fs::File file;
-    file = Storage->open("/Terminal/Autoexec");
+    file = Storage->open(TERMINAL_AUTOEXEC);
     while(file.available()) {
       // Читаем команду
       strcpy(buff, file.readStringUntil('\n').c_str());
@@ -2550,16 +2561,14 @@ void terminal(char mode, char *io_buff) {
       return;
     }
 
-    file_append_line("/Terminal/History", buff);
+    file_append_line(TERMINAL_HISTORY, buff);
 
     terminal_execute(buff);
     strcpy(buff, "");
   }
 }
 
-// ====================================================
 // Выполнить командную строку, в которой могут быть несколько команд через ; (учитывая кавычки и эскейпы)
-// ====================================================
 void terminal_execute(char *str) {
   int byte;
   char *cmd_start;
@@ -2611,12 +2620,10 @@ void terminal_execute(char *str) {
   }
 }
 
-// ====================================================
 // Выполнить одну команду терминала
-// ====================================================
 void terminal_execute_single(char *str) {
-  char buff[80];
-  char buff2[80];
+  char buff[160];
+  char buff2[160];
   long i, j;
   int byte;
   int error;
@@ -2625,7 +2632,8 @@ void terminal_execute_single(char *str) {
   int arg_count;
   long l;
   long i1, i2;
-  char *cmdline_params[20];
+  double d1, d2, d3, d4;
+  char *cmdline_params[40];
 
   IPAddress ip;
   fs::File file;
@@ -2639,6 +2647,27 @@ void terminal_execute_single(char *str) {
   if(cmdline_params[0][0] == '#') {
     // Комментарий. Ничего не делаем
   }
+  // ======================================================
+  // Внутренние операции
+  // ======================================================
+  else if(strcmp(cmdline_params[0], "reboot") == 0) {
+    ESP.restart();
+  }
+  else if(strcmp(cmdline_params[0], "exit") == 0) {
+    global_exit_flag = 1;
+  }
+  else if(strcmp(cmdline_params[0], "gamma") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: gamma {value 1-4}");
+    }
+    else {
+      global_gamma = strtol(cmdline_params[1], NULL, 10);
+      setGamma(global_gamma);
+    }
+  }
+  // ======================================================
+  // Дата и время
+  // ======================================================
   else if(strcmp(cmdline_params[0], "millis") == 0) {
     sprintf(buff, "%d", millis());
     terminal_println(buff);
@@ -2647,35 +2676,48 @@ void terminal_execute_single(char *str) {
     sprintf(buff, "%d", micros());
     terminal_println(buff);
   }
-  else if(strcmp(cmdline_params[0], "clear") == 0) {
-    terminal_clear_screen();
-  }
-  else if(strcmp(cmdline_params[0], "reset") == 0) {
-    terminal_clear_screen();
-  }
-  else if(strcmp(cmdline_params[0], "reboot") == 0) {
-    ESP.restart();
-  }
-  else if(strcmp(cmdline_params[0], "exit") == 0) {
-    global_exit_flag = 1;
-  }
-  else if(strcmp(cmdline_params[0], "cursor") == 0) {
-    if(arg_count != 3) {
-      terminal_println("Usage: cursor {col} {row}");
+  else if(strcmp(cmdline_params[0], "uptime") == 0) {
+    l = millis() / 1000;
+    if(l >= 86400) {
+      sprintf(buff, "%d d ", l / 86400);
+      terminal_print(buff);
+      l %= 86400;
     }
-    else {
-      i1 = strtol(cmdline_params[1], NULL, 10);
-      i2 = strtol(cmdline_params[2], NULL, 10);
-      terminal_ansi_set_cursor(i1, i2);
+    if(l >= 3600) {
+      sprintf(buff, "%d h ", l / 3600);
+      terminal_print(buff);
+      l %= 3600;
     }
+    if(l >= 60) {
+      sprintf(buff, "%d m ", l / 60);
+      terminal_print(buff);
+      l %= 60;
+    }
+    sprintf(buff, "%d s", l);
+    terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "date") == 0) {
     sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
     terminal_println(buff);
   }
+  else if(strcmp(cmdline_params[0], "utc") == 0) {
+    i1 = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
+    i2 = i1 % 86400;
+    sprintf(buff, "UTC time is %d:%02d:%02d", i2 / 3600, (i2 / 60) % 60, i2 % 60);
+    terminal_println(buff);
+  }
   else if(strcmp(cmdline_params[0], "unixtime") == 0) {
-    //sprintf(buff, "%d", get_unixtime_from_datetime(global_year, global_month, global_day, global_timezone, global_hours, global_minutes, global_seconds));
-    sprintf(buff, "%d", global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000);
+    sprintf(buff, "%lu", global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000);
+    terminal_println(buff);
+  }
+  else if(strcmp(cmdline_params[0], "ticks") == 0) {
+    long long ticks = (((long long)(global_unixtime_retrieved)) * 1000 + (millis() - global_unixtime_retrieved_millis)) * 10000 + (micros() % 1000) * 10 + 621355968000000000;
+    sprintf(buff, "%llu", ticks);
+    terminal_println(buff);
+  }
+  else if(strcmp(cmdline_params[0], "beats") == 0) {
+    d1 = ((global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000) % 86400) / 86.4;
+    sprintf(buff, "@%03.2f", d1);
     terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "cal") == 0) {
@@ -2696,13 +2738,28 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "setdate") == 0) {
     if(arg_count != 4) {
-      terminal_println("Usage: setdate {year} {month} {day}");
+      terminal_println("Usage: setdate {date}");
     }
     else {
-      global_unixtime_retrieved += get_unixtime_from_datetime(strtol(cmdline_params[1], NULL, 10), strtol(cmdline_params[2], NULL, 10), strtol(cmdline_params[3], NULL, 10), 0, 0, 0, 0)
-        - get_unixtime_from_datetime(global_year, global_month, global_day, 0, 0, 0, 0);
+      int year, month, day, day_of_week, hour, minute, second;
+      get_datetime_from_string(cmdline_params[1], &year, &month, &day, &hour, &minute, &second);
+      i1 = get_unixtime_from_datetime(global_timezone, year, month, day, hour, minute, second);
+      
+      global_unixtime_retrieved += get_unixtime_from_datetime(global_timezone, year, month, day, 0, 0, 0) - get_unixtime_from_current_date();
       set_local_time_from_unix_timestamp();
       sprintf(buff, "Current date: %04d-%02d-%02d", global_year, global_month, global_day);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "setdatetime") == 0) {
+    if(arg_count != 4) {
+      terminal_println("Usage: setdate {datetime}");
+    }
+    else {
+      i1 = get_unixtime_from_string(cmdline_params[1]);
+      global_unixtime_retrieved += i1 - get_unixtime_from_current_datetime();
+      set_local_time_from_unix_timestamp();
+      sprintf(buff, "Current datetime: %04d-%02d-%02d %d:%02d:%02d", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
       terminal_println(buff);
     }
   }
@@ -2725,8 +2782,114 @@ void terminal_execute_single(char *str) {
     sprintf(buff, "Moon day: %d", global_moon_day);
     terminal_println(buff);
   }
+  else if(strcmp(cmdline_params[0], "date_add") == 0) {
+    if(arg_count != 4) {
+      terminal_println("Usage: date_add {date|datetime} {interval} {unit}");
+    }
+    else {
+      int year, month, day, day_of_week, hour, minute, second;
+      i = get_unixtime_from_string(cmdline_params[1]);
+      i1 = strtol(cmdline_params[2], NULL, 10);
+      switch(cmdline_params[3][0]) {
+        default: 
+        case 's': i += i1; break;
+        case 'm': i += i1 * 60; break;
+        case 'h': i += i1 * 3600; break;
+        case 'd': i += i1 * 86400; break;
+      }
+      get_datetime_from_unixtime(i, global_timezone, &year, &month, &day, &day_of_week, &hour, &minute, &second);
+      sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", year, month, day, hour, minute, second);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "date_sub") == 0) {
+    if(arg_count != 4) {
+      terminal_println("Usage: date_add {date|datetime} {interval} {unit}");
+    }
+    else {
+      int year, month, day, day_of_week, hour, minute, second;
+      i = get_unixtime_from_string(cmdline_params[1]);
+      i1 = strtol(cmdline_params[2], NULL, 10);
+      switch(cmdline_params[3][0]) {
+        default: 
+        case 's': i -= i1; break;
+        case 'm': i -= i1 * 60; break;
+        case 'h': i -= i1 * 3600; break;
+        case 'd': i -= i1 * 86400; break;
+      }
+      get_datetime_from_unixtime(i, global_timezone, &year, &month, &day, &day_of_week, &hour, &minute, &second);
+      sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", year, month, day, hour, minute, second);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "interval") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: interval {from_date|from_datetime} [to_date|to_datetime]");
+    }
+    else {
+      i1 = get_unixtime_from_string(cmdline_params[1]);
+      if(arg_count == 3) {
+        i2 = get_unixtime_from_string(cmdline_params[2]);
+      }
+      else {
+        i2 = get_unixtime_from_current_datetime();
+      }
+      i = abs(i1 - i2);
+      sprintf(buff, "In seconds: %d", i);
+      terminal_println(buff);
+      sprintf(buff, "In minutes: %.2f", (double)i / 60);
+      terminal_println(buff);
+      sprintf(buff, "In hours:%.2f", (double)i / 3600);
+      terminal_println(buff);
+      sprintf(buff, "In days: %.2f", (double)i / 86400);
+      terminal_println(buff);
+    }
+  }
+  // ======================================================
+  // Терминал
+  // ======================================================
+  else if(strcmp(cmdline_params[0], "clear") == 0) {
+    terminal_clear_screen();
+  }
+  else if(strcmp(cmdline_params[0], "reset") == 0) {
+    terminal_clear_screen();
+  }
+  else if(strcmp(cmdline_params[0], "cursor") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: cursor {col} {row}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      i2 = strtol(cmdline_params[2], NULL, 10);
+      terminal_ansi_set_cursor(i1, i2);
+    }
+  }
   else if(strcmp(cmdline_params[0], "history") == 0) {
-    terminal_tail("/Terminal/History");
+    terminal_tail(TERMINAL_HISTORY);
+  }
+  else if(strcmp(cmdline_params[0], "rpt") == 0) {
+    // Ищем последнюю команду, которая не rpt
+    file = Storage->open(TERMINAL_HISTORY);
+    i1 = 0;
+    while(file.available()) {
+      i2 = file.position();
+      strcpy(buff, file.readStringUntil('\n').c_str());
+      Serial.println(buff);
+      if(strcmp(buff, "rpt") != 0) {
+        i1 = i2;
+      }
+    }
+    // Копируем в буфер
+    file.seek(i1);
+    strcpy(buff, file.readStringUntil('\n').c_str());
+    Serial.println(buff);
+    file.close();
+    // Выполняем
+    terminal_print("Repeat cmd: ");
+    terminal_println(buff);
+    terminal_show_screen();
+    delay(1000);
+    terminal_execute_single(buff);
   }
   else if(strcmp(cmdline_params[0], "echo") == 0) {
     if(arg_count == 1) {
@@ -2740,19 +2903,32 @@ void terminal_execute_single(char *str) {
       terminal_println("");
     }
   }
-  else if(strcmp(cmdline_params[0], "morse") == 0) {
+  else if(strcmp(cmdline_params[0], "cowsay") == 0) {
     if(arg_count == 1) {
-      terminal_println("Usage: morse {text}");
+      terminal_println("Usage: cowsay {text}");
     }
     else {
-      for(i = 1; i < arg_count; i++) {
-        for(j = 0; j < strlen(cmdline_params[i]); j++) {
-          beep_morse_perform(cmdline_params[i][j]);
-          morse_wait();
-          morse_wait();
-        }
-        if(i + 1 != arg_count) beep_morse_perform(' ');
+      terminal_print(" ");
+      for(i = 1; i <= strlen(cmdline_params[1]) + 2; i++) {
+        terminal_print("_");
       }
+      terminal_println("");
+
+      terminal_print("< ");
+      terminal_print(cmdline_params[1]);
+      terminal_println(" >");
+
+      terminal_print(" ");
+      for(i = 1; i <= strlen(cmdline_params[1]) + 2; i++) {
+        terminal_print("-");
+      }
+      terminal_println("");
+      terminal_println("    \\   ^__^");
+      terminal_println("     \\  (oo)\\_______");
+      terminal_println("        (__)\\       )\\/\\");
+      terminal_println("            ||----w |");
+      terminal_println("            ||     ||");
+      
     }
   }
   else if(strcmp(cmdline_params[0], "caesar") == 0) {
@@ -2783,25 +2959,19 @@ void terminal_execute_single(char *str) {
       terminal_println("");
     }
   }
-  else if(strcmp(cmdline_params[0], "uptime") == 0) {
-    l = millis() / 1000;
-    if(l >= 86400) {
-      sprintf(buff, "%d d ", l / 86400);
-      terminal_print(buff);
-      l %= 86400;
+  else if(strcmp(cmdline_params[0], "seq") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: seq {start_number} {end_number}");
     }
-    if(l >= 3600) {
-      sprintf(buff, "%d h ", l / 3600);
-      terminal_print(buff);
-      l %= 3600;
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      i2 = strtol(cmdline_params[2], NULL, 10);
+      for(i = i1; i <= i2; i++) {
+        sprintf(buff, "%d", i);
+        terminal_println(buff);
+        terminal_show_screen();
+      }
     }
-    if(l >= 60) {
-      sprintf(buff, "%d m ", l / 60);
-      terminal_print(buff);
-      l %= 60;
-    }
-    sprintf(buff, "%d s", l);
-    terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "lscpu") == 0) {
     sprintf(buff, "Chip model: %s", ESP.getChipModel());
@@ -2878,26 +3048,44 @@ void terminal_execute_single(char *str) {
       }
     }
   }
-  else if(strcmp(cmdline_params[0], "df") == 0) {
-    switch(storage_type) {
-      case STORAGE_TYPE_NONE:
-        terminal_println("Storage type: none");
-        break;
-      case STORAGE_TYPE_FFAT:
-        terminal_println("Storage type: FFAT");
-        sprintf(buff, "Used: %d bytes of %d bytes (%d %%)", FFat.usedBytes(), FFat.totalBytes(), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
-        terminal_println(buff);
-        break;
-      case STORAGE_TYPE_SD:
-        terminal_println("Storage type: SD");
-        sprintf(buff, "Used: %llu MiB of %llu MiB (%d %%)", SD.usedBytes() / (1024 * 1024), SD.totalBytes() / (1024 * 1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
-        terminal_println(buff);
-        break;
-      default:
-        terminal_println("Storage type: unknown");
-        break;
+  else if(strcmp(cmdline_params[0], "colors") == 0) {
+    for(i2 = 0; i2 < 16; i2++) {
+      for(i1 = 0; i1 < 16; i1++) {
+        terminal_ansi_set_fg_bg_color(i1, i2);
+        sprintf(buff, "%X%X", i2, i1);
+        terminal_print(buff);
+        terminal_show_screen();
+      }
+      terminal_ansi_reset_color();
+      terminal_println("");
+      terminal_show_screen();
+    }
+    terminal_ansi_reset_color();
+  }
+  else if(strcmp(cmdline_params[0], "sleep") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: sleep {seconds}");
+    }
+    else {
+      i = strtol(cmdline_params[1], NULL, 10);
+      delay(1000 * i);
     }
   }
+  else if(strcmp(cmdline_params[0], "delay") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: delay {milliseconds}");
+    }
+    else {
+      i = strtol(cmdline_params[1], NULL, 10);
+      delay(i);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "serial") == 0) {
+    terminal_serial(arg_count, cmdline_params);
+  }
+  // ======================================================
+  // Случайные числа
+  // ======================================================
   else if(strcmp(cmdline_params[0], "random") == 0) {
     if(arg_count == 1) {
       sprintf(buff, "Random number from 1 to 6: %d", random(1, 7));
@@ -2926,20 +3114,9 @@ void terminal_execute_single(char *str) {
     for(i = 0; i < 12; i++) terminal_print_char(n_to_hex[random(0, 16)]);
     terminal_println("");
   }
-  else if(strcmp(cmdline_params[0], "seq") == 0) {
-    if(arg_count != 3) {
-      terminal_println("Usage: seq {start_number} {end_number}");
-    }
-    else {
-      i1 = strtol(cmdline_params[1], NULL, 10);
-      i2 = strtol(cmdline_params[2], NULL, 10);
-      for(i = i1; i <= i2; i++) {
-        sprintf(buff, "%d", i);
-        terminal_println(buff);
-        terminal_show_screen();
-      }
-    }
-  }
+  // ======================================================
+  // Конвертеры (без интернета)
+  // ======================================================
   else if(strcmp(cmdline_params[0], "ip2long") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: ip2long {IP}");
@@ -2958,6 +3135,17 @@ void terminal_execute_single(char *str) {
       l = strtoul(cmdline_params[1], NULL, 10);
       sprintf(buff, "%s", long2ip(l).toString().c_str());
       terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "bin") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: bin {binary}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 2);
+      terminal_print("Bin: "); terminal_println((char *)String(l, OCT).c_str());
+      terminal_print("Dec: "); terminal_println((char *)String(l, DEC).c_str());
+      terminal_print("Hex: "); terminal_println((char *)String(l, HEX).c_str());
     }
   }
   else if(strcmp(cmdline_params[0], "binoct") == 0) {
@@ -2990,6 +3178,17 @@ void terminal_execute_single(char *str) {
       terminal_println(buff);
     }
   }
+  else if(strcmp(cmdline_params[0], "oct") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: oct {octal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 8);
+      terminal_print("Bin: "); terminal_println((char *)String(l, BIN).c_str());
+      terminal_print("Dec: "); terminal_println((char *)String(l, DEC).c_str());
+      terminal_print("Hex: "); terminal_println((char *)String(l, HEX).c_str());
+    }
+  }
   else if(strcmp(cmdline_params[0], "octbin") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: octbin {octal}");
@@ -3017,6 +3216,17 @@ void terminal_execute_single(char *str) {
       l = strtoul(cmdline_params[1], NULL, 8);
       sprintf(buff, "%X", l);
       terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "dec") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: dec {decimal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 10);
+      terminal_print("Bin: "); terminal_println((char *)String(l, BIN).c_str());
+      terminal_print("Oct: "); terminal_println((char *)String(l, OCT).c_str());
+      terminal_print("Hex: "); terminal_println((char *)String(l, HEX).c_str());
     }
   }
   else if(strcmp(cmdline_params[0], "decbin") == 0) {
@@ -3048,6 +3258,17 @@ void terminal_execute_single(char *str) {
       terminal_println(buff);
     }
   }
+  else if(strcmp(cmdline_params[0], "hex") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: hex {hexadecimal}");
+    }
+    else {
+      l = strtoul(cmdline_params[1], NULL, 16);
+      terminal_print("Bin: "); terminal_println((char *)String(l, BIN).c_str());
+      terminal_print("Oct: "); terminal_println((char *)String(l, OCT).c_str());
+      terminal_print("Dec: "); terminal_println((char *)String(l, DEC).c_str());
+    }
+  }
   else if(strcmp(cmdline_params[0], "hexbin") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: hexbin {hexadecimal}");
@@ -3077,27 +3298,474 @@ void terminal_execute_single(char *str) {
       terminal_println(buff);
     }
   }
-  else if(strcmp(cmdline_params[0], "sleep") == 0) {
+  else if(strcmp(cmdline_params[0], "qth") == 0) {
+    sprintf(buff, "Coordinates: lat %g, lon %g", global_lat, global_lon);
+    terminal_println(buff);
+    terminal_print("QTH: ");
+
+    strcpy(buff, "");
+    j = 0;
+    d1 = 180 + global_lon;
+    d2 = 90 + global_lat;
+    
+    // Первые две буквы (большие)
+    i = d1 / 20;
+    d1 = fmod(d1, 20);
+    buff[j] = 'A' + i;
+    j++;
+
+    i = d2 / 10;
+    d2 = fmod(d2, 10);
+    buff[j] = 'A' + i;
+    j++;
+
+    // Две цифры
+    i = d1 / 2;
+    d1 = fmod(d1, 2);
+    buff[j] = '0' + i;
+    j++;
+
+    i = d2 / 1;
+    d2 = fmod(d2, 1);
+    buff[j] = '0' + i;
+    j++;
+
+    // Две маленькие буквы
+    i = d1 * 12;
+    d1 = fmod(d1, 1.0 / 12);
+    buff[j] = 'a' + i;
+    j++;
+
+    i = d2 * 24;
+    d2 = fmod(d2, 1.0 / 24);
+    buff[j] = 'a' + i;
+    j++;
+
+    // Ещё две цифры
+    i = d1 * 120;
+    buff[j] = '0' + i;
+    j++;
+
+    i = d2 * 240;
+    buff[j] = '0' + i;
+    j++;
+
+    // Ну и хватит
+    buff[j] = 0;
+
+    terminal_println(buff);
+  }
+  // ======================================================
+  // Математика, статистика
+  // ======================================================
+  else if(strcmp(cmdline_params[0], "bc") == 0) {
     if(arg_count != 2) {
-      terminal_println("Usage: sleep {seconds}");
+      terminal_println("Usage: bc {expression}");
     }
     else {
-      i = strtol(cmdline_params[1], NULL, 10);
-      delay(1000 * i);
+      double ans;
+      char error_flag = 0;
+      int expr_offset = 0;
+      ans = parse_expression(cmdline_params[1], parse_expr_constant_by_name, &error_flag, &expr_offset);
+      sprintf(buff, "%g", ans);
+      terminal_println(buff);
     }
   }
-  else if(strcmp(cmdline_params[0], "delay") == 0) {
-    if(arg_count != 2) {
-      terminal_println("Usage: delay {milliseconds}");
+  else if(strcmp(cmdline_params[0], "gcd") == 0 || strcmp(cmdline_params[0], "nod") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: gcd {number} {number}");
     }
     else {
-      i = strtol(cmdline_params[1], NULL, 10);
-      delay(i);
+      i1 = strtoul(cmdline_params[1], NULL, 10);
+      i2 = strtoul(cmdline_params[2], NULL, 10);
+      sprintf(buff, "%lu", gcd(i1, i2));
+      terminal_println(buff);
     }
   }
-  else if(strcmp(cmdline_params[0], "serial") == 0) {
-    terminal_serial(arg_count, cmdline_params);
+  else if(strcmp(cmdline_params[0], "lcm") == 0 || strcmp(cmdline_params[0], "nok") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: lcm {number} {number}");
+    }
+    else {
+      i1 = strtoul(cmdline_params[1], NULL, 10);
+      i2 = strtoul(cmdline_params[2], NULL, 10);
+      sprintf(buff, "%lu", lcm(i1, i2));
+      terminal_println(buff);
+    }
   }
+  else if(strcmp(cmdline_params[0], "factorial") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: factorial {number}");
+    }
+    else {
+      d1 = strtod(cmdline_params[1], NULL);
+      sprintf(buff, "%g", factorial(d1));
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "dividers") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: dividers {number}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      for(i = 1; i <= i1 / 2; i++) {
+        if(i1 % i == 0) {
+          if(i > 1) terminal_print(" ");
+          sprintf(buff, "%d", i);
+          terminal_print(buff);
+          terminal_show_screen();
+        }
+      }
+      terminal_println("");
+    }
+  }
+  else if(strcmp(cmdline_params[0], "factorize") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: factorize {number}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      terminal_print("1");
+      for(i = 2; i <= i1 / 2; i++) {
+        while(i1 % i == 0) {
+          terminal_print(" ");
+          sprintf(buff, "%d", i);
+          i1 = i1 / i;
+          terminal_print(buff);
+          terminal_show_screen();
+        }
+      }
+      sprintf(buff, " %d", i1);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "stat") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: stat {number} [number] ...");
+    }
+    else {
+      double sum = 0;
+      double sumsq = 0;
+      double avg = 0;
+      double prod = 1;
+      double min_val = 0;
+      double max_val = 0;
+      double disp = 0;
+      double m3 = 0, m4 = 0;
+      long count = 0;
+      for(i = 1; i < arg_count; i++) {
+        d1 = strtod(cmdline_params[i], NULL);
+        sum += d1;
+        sumsq += d1 * d1;
+        prod *= d1;
+        count++;
+        if(i == 1) {
+          min_val = d1;
+          max_val = d1;
+        }
+        else {
+          min_val = min(min_val, d1);
+          max_val = max(max_val, d1);
+        }
+      }
+      avg = sum / count;
+      // Второй проход для дисперсии
+      for(i = 1; i < arg_count; i++) {
+        d1 = strtod(cmdline_params[i], NULL);
+        disp += (avg - d1) * (avg - d1);
+        m3 += (avg - d1) * (avg - d1) * (avg - d1);
+        m4 += (avg - d1) * (avg - d1) * (avg - d1) * (avg - d1);
+      }
+      disp /= count;
+      m3 /= count;
+      m4 /= count;
+      sprintf(buff, "Count = %d", count);
+      terminal_println(buff);
+      sprintf(buff, "Sum = %g", sum);
+      terminal_println(buff);
+      sprintf(buff, "Avg = %g", avg);
+      terminal_println(buff);
+      sprintf(buff, "Sum of squares = %g", sumsq);
+      terminal_println(buff);
+      sprintf(buff, "Product = %g", prod);
+      terminal_println(buff);
+      sprintf(buff, "Min = %g", min_val);
+      terminal_println(buff);
+      sprintf(buff, "Max = %g", max_val);
+      terminal_println(buff);
+      sprintf(buff, "Variance = %g", disp);
+      terminal_println(buff);
+      sprintf(buff, "Standard deviation = %g", sqrt(disp));
+      terminal_println(buff);
+      sprintf(buff, "Third central moment = %g", m3);
+      terminal_println(buff);
+      sprintf(buff, "Fourth central moment = %g", m4);
+      terminal_println(buff);
+      if(disp != 0) {
+        sprintf(buff, "Skewness = %g", m3 / sqrt(disp * disp * disp));
+        terminal_println(buff);
+        sprintf(buff, "Kurtosis = %g", m4 / (disp * disp));
+        terminal_println(buff);
+      }
+      else {
+        terminal_println("Dispersion is zero, no skewness and kurtosis");
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "det") == 0) {
+    if(arg_count != 5 && arg_count != 10) {
+      terminal_println("Usage: det {{a11} {a12} {a21} {a22}|{a11} {a12} {a13} {a21} {a22} {a23} {a31} {a32} {a33}}");
+    }
+    else if(arg_count == 5) {
+      double a[4];
+      for(i = 0; i < 4; i++) {
+        a[i] = strtod(cmdline_params[i + 1], NULL);
+      }
+      sprintf(buff, "det = %g", a[0] * a[3] - a[1] * a[2]);
+      terminal_println(buff);
+    }
+    else if(arg_count == 10) {
+      double a[9];
+      for(i = 0; i < 9; i++) {
+        a[i] = strtod(cmdline_params[i + 1], NULL);
+      }
+      sprintf(buff, "det = %g", det3(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8]));
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "reverse") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: reverse {number}");
+    }
+    else {
+      i = strtod(cmdline_params[1], NULL);
+      sprintf(buff, "%d", i);
+      for(i = strlen(buff) - 1; i >= 0; i--) {
+        terminal_print_char(buff[i]);
+      }
+      terminal_println("");
+    }
+  }
+  else if(strcmp(cmdline_params[0], "digit_sum") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: digit_sum {number}");
+    }
+    else {
+      i = strtod(cmdline_params[1], NULL);
+      sprintf(buff, "%d", i);
+      i1 = 0;
+      for(i = 0; i < strlen(buff); i++) {
+        i1 += buff[i] - '0';
+      }
+      sprintf(buff, "%d", i1);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "bitset") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: bitset {number} {bit_number}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      i2 = strtol(cmdline_params[2], NULL, 10);
+      i1 |= 1 << i2;
+      sprintf(buff, "%lu", i1);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "bitget") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: bitget {number} {bit_number}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      i2 = strtol(cmdline_params[2], NULL, 10);
+      i1 &= 1 << i2;
+      sprintf(buff, "%lu", i1 ? 1 : 0);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "bitclear") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: bitclear {number} {bit_number}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      i2 = strtol(cmdline_params[2], NULL, 10);
+      i1 &= ~(1 << i2);
+      sprintf(buff, "%lu", i1);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "bittoggle") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: bittoggle {number} {bit_number}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      i2 = strtol(cmdline_params[2], NULL, 10);
+      i1 ^= (1 << i2);
+      sprintf(buff, "%lu", i1);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "rol") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: rol {number} {bit_count}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      if(arg_count == 3) {
+        i2 = strtol(cmdline_params[2], NULL, 10);
+      }
+      else {
+        i2 = 1;
+      }
+      char b;
+      for(i = 0; i < i2; i++) {
+        // Перемещаем старший бит в младший, остальные сдвигаем
+        b = i1 >> 31;
+        i1 = i1 << 1;
+        i1 |= b;
+      }
+      sprintf(buff, "%lu", i1);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "ror") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: ror {number} {bit_count}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      if(arg_count == 3) {
+        i2 = strtol(cmdline_params[2], NULL, 10);
+      }
+      else {
+        i2 = 1;
+      }
+      char b;
+      for(i = 0; i < i2; i++) {
+        // Перемещаем младший бит в старший, остальные сдвигаем
+        b = i1 & 1;
+        i1 = i1 >> 1;
+        i1 |= b << 31;
+      }
+      sprintf(buff, "%lu", i1);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "clz") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: clz {number}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      for(i = 0; i1 != 0; i++) {
+        i1 = i1 >> 1;
+      }
+      sprintf(buff, "%lu", 32 - i);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "ctz") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: ctz {number}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      for(i = 0; i1 != 0; i++) {
+        i1 = i1 << 1;
+      }
+      sprintf(buff, "%lu", 32 - i);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "popcount") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: popcount {number}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      strcpy(buff, String(i1, BIN).c_str());
+      i2 = 0;
+      for(i = 0; i < strlen(buff); i++) {
+        if(buff[i] == '1') i2++;
+      }
+      sprintf(buff, "%lu", i2);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "parity") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: parity {number}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      strcpy(buff, String(i1, BIN).c_str());
+      i2 = 0;
+      for(i = 0; i < strlen(buff); i++) {
+        if(buff[i] == '1') i2++;
+      }
+      sprintf(buff, "%lu", i2 % 2);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "div") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: div {number1} {number2}");
+    }
+    else {
+      d1 = strtod(cmdline_params[1], NULL);
+      d2 = strtod(cmdline_params[2], NULL);
+      sprintf(buff, "%g / %g = %g remainder %g", d1, d2, floor(d1 / d2), fmod(d1, d2));
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "permutation") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: permutation {number1}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      sprintf(buff, "Permutation of %lu is %g", i1, factorial(i1));
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "arrangement") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: arrangement {of_n} {taken_k}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      i2 = strtol(cmdline_params[2], NULL, 10);
+      sprintf(buff, "Arrangements of %d taken %d = %g", i1, i2, factorial(i1) / (factorial(i1 - i2)));
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "combination") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: combination {of_n} {taken_k}");
+    }
+    else {
+      i1 = strtol(cmdline_params[1], NULL, 10);
+      i2 = strtol(cmdline_params[2], NULL, 10);
+      sprintf(buff, "Combinations of %d taken %d = %g", i1, i2, factorial(i1) / (factorial(i2) * factorial(i1 - i2)));
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "subnet") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: subnet {subnet}/{netmask}");
+    }
+    else {
+      terminal_subnet(cmdline_params[1]);
+    }
+  }
+  // ======================================================
+  // Операции с хранилищем
+  // ======================================================
   else if(strcmp(cmdline_params[0], "storage") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: storage {ffat|sd|none}");
@@ -3130,6 +3798,26 @@ void terminal_execute_single(char *str) {
       }
     }
   }
+  else if(strcmp(cmdline_params[0], "df") == 0) {
+    switch(storage_type) {
+      case STORAGE_TYPE_NONE:
+        terminal_println("Storage type: none");
+        break;
+      case STORAGE_TYPE_FFAT:
+        terminal_println("Storage type: FFAT");
+        sprintf(buff, "Used: %d bytes of %d bytes (%d %%)", FFat.usedBytes(), FFat.totalBytes(), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
+        terminal_println(buff);
+        break;
+      case STORAGE_TYPE_SD:
+        terminal_println("Storage type: SD");
+        sprintf(buff, "Used: %llu MiB of %llu MiB (%d %%)", SD.usedBytes() / (1024 * 1024), SD.totalBytes() / (1024 * 1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+        terminal_println(buff);
+        break;
+      default:
+        terminal_println("Storage type: unknown");
+        break;
+    }
+  }
   else if(strcmp(cmdline_params[0], "format") == 0) {
     if(strcmp(cmdline_params[1], "ffat") == 0) {
       if(FFat.format() == true) {
@@ -3151,6 +3839,60 @@ void terminal_execute_single(char *str) {
     }
     else {
       terminal_println("Usage: erase {ffat}");
+    }
+  }
+  // ======================================================
+  // Файловые операции
+  // ======================================================
+  else if(strcmp(cmdline_params[0], "stack") == 0) {
+    if(arg_count > 1) {
+      terminal_println("Usage: stack");
+    }
+    else {
+      terminal_cat(TERMINAL_STACK);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "push") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: push {text}");
+    }
+    else {
+      for(i = 1; i < arg_count; i++) {
+        terminal_stack_push(cmdline_params[i]);
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "pop") == 0) {
+    if(arg_count > 1) {
+      terminal_println("Usage: pop");
+    }
+    else {
+      terminal_stack_pop(buff);
+      terminal_println(buff);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "unshift") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: unshift {text}");
+    }
+    else {
+      for(i = 1; i < arg_count; i++) {
+        terminal_stack_unshift(cmdline_params[i]);
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "shift") == 0) {
+    if(arg_count > 1) {
+      terminal_println("Usage: shift");
+    }
+    else {
+      terminal_stack_shift(buff);
+      Serial.println(strlen(buff));
+      Serial.println(buff);
+      Serial.println(buff[0], HEX);
+      Serial.println(buff[1], HEX);
+      Serial.println(buff[2], HEX);
+      terminal_println(buff);
     }
   }
   else if(strcmp(cmdline_params[0], "cd") == 0) {
@@ -3681,7 +4423,9 @@ void terminal_execute_single(char *str) {
     sprintf(buff, "sizeof(void*) = %d", sizeof(void*));
     terminal_println(buff);
   }
+  // ======================================================
   // I2C
+  // ======================================================
   else if(strcmp(cmdline_params[0], "i2c") == 0) {
     found = 0;
     Wire.begin(I2C_SDA, I2C_SCL);
@@ -3698,7 +4442,9 @@ void terminal_execute_single(char *str) {
       terminal_println("No I2C devices found");
     }
   }
+  // ======================================================
   // Звуки
+  // ======================================================
   else if(strcmp(cmdline_params[0], "beep") == 0) {
     beep_if_enabled();
   }
@@ -3714,26 +4460,19 @@ void terminal_execute_single(char *str) {
       tone(global_beeper_pin, freq);
     }
   }
-  else if(strcmp(cmdline_params[0], "bc") == 0) {
-    if(arg_count != 2) {
-      terminal_println("Usage: bc {expression}");
+  else if(strcmp(cmdline_params[0], "morse") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: morse {text}");
     }
     else {
-      double ans;
-      char error_flag = 0;
-      int expr_offset = 0;
-      ans = parse_expression(cmdline_params[1], parse_expr_constant_by_name, &error_flag, &expr_offset);
-      sprintf(buff, "%g", ans);
-      terminal_println(buff);
-    }
-  }
-  else if(strcmp(cmdline_params[0], "gamma") == 0) {
-    if(arg_count != 2) {
-      terminal_println("Usage: gamma {value 1-4}");
-    }
-    else {
-      global_gamma = strtol(cmdline_params[1], NULL, 10);
-      setGamma(global_gamma);
+      for(i = 1; i < arg_count; i++) {
+        for(j = 0; j < strlen(cmdline_params[i]); j++) {
+          beep_morse_perform(cmdline_params[i][j]);
+          morse_wait();
+          morse_wait();
+        }
+        if(i + 1 != arg_count) beep_morse_perform(' ');
+      }
     }
   }
   // Для отладки
@@ -3741,6 +4480,9 @@ void terminal_execute_single(char *str) {
   //  random_app_surprise();
   //}
 #ifdef IS_WIFI_ENABLED
+  // ======================================================
+  // Сетевые команды
+  // ======================================================
   else if(strcmp(cmdline_params[0], "ipconfig") == 0 || strcmp(cmdline_params[0], "ifconfig") == 0) {
     sprintf(buff, "Hostname: %s", WiFi.getHostname());
     terminal_println(buff);
@@ -4408,15 +5150,19 @@ void terminal_print_char(char c) {
     else if(c >= 0x40 && c <=0x7E && terminal_esc_sequence[0] == '[' && c != '[') {
       if(c == 'A') {
         cursor_row--;
+        terminal_pending_wrap = 0;
       }
       else if(c == 'B') {
         cursor_row++;
+        terminal_pending_wrap = 0;
       }
       else if(c == 'C') {
         cursor_col++;
+        terminal_pending_wrap = 0;
       }
       else if(c == 'D') {
         cursor_col--;
+        terminal_pending_wrap = 0;
       }
       else if(c == 'G') {
         if(strcmp(terminal_esc_sequence, "[G") == 0) {
@@ -4437,9 +5183,33 @@ void terminal_print_char(char c) {
           cursor_row--;
           cursor_col--;
         }
+        terminal_pending_wrap = 0;
       }
       else if(c == 'J') {
-        terminal_clear_screen();
+        // Очищает экран с текущей позиции курсора
+        if(strcmp(terminal_esc_sequence, "[0J") == 0) {
+          for(i = cursor_col + cursor_row * TERMINAL_WIDTH_CHARS; i < TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS; i++) {
+            terminal_screen[i] = 0;
+            terminal_colors[i] = current_color;
+            terminal_attributes[i] = current_attribute;
+          }
+        }
+        // Очищает экран до текущей позиции курсора
+        if(strcmp(terminal_esc_sequence, "[1J") == 0) {
+          for(i = 0; i <= cursor_col + cursor_row * TERMINAL_WIDTH_CHARS; i++) {
+            terminal_screen[i] = 0;
+            terminal_colors[i] = current_color;
+            terminal_attributes[i] = current_attribute;
+          }
+        }
+        // Очищает весь экран, но курсор не трогает
+        if(strcmp(terminal_esc_sequence, "[2J") == 0) {
+          for(i = 0; i < TERMINAL_WIDTH_CHARS * TERMINAL_HEIGHT_CHARS; i++) {
+            terminal_screen[i] = 0;
+            terminal_colors[i] = current_color;
+            terminal_attributes[i] = current_attribute;
+          }
+        }
       }
       else if(c == 'K') {
         if(strcmp(terminal_esc_sequence, "[K") == 0
@@ -4573,7 +5343,7 @@ void terminal_print_char(char c) {
         else if(strcmp(terminal_esc_sequence, "[27m") == 0) {
           current_attribute &= ~ATTRIBUTE_INVERSION;
         }
-        else if(strcmp(terminal_esc_sequence, "[27m") == 0) {
+        else if(strcmp(terminal_esc_sequence, "[29m") == 0) {
           current_attribute &= ~ATTRIBUTE_STRIKEOUT;
         }
         else if(strcmp(terminal_esc_sequence, "[39m") == 0) {
@@ -4590,20 +5360,45 @@ void terminal_print_char(char c) {
           if(strchr(terminal_esc_sequence, ';')) {
             sscanf(terminal_esc_sequence, "[%d;%d", &val, &val2);
             if(val >= 30 && val <= 37) {
-              current_color = val - 30;
+              current_color &= 0xF0;
+              current_color |= val - 30;
             }
             else if(val >= 90 && val <= 97) {
-              current_color = val - 90 + 8;
+              current_color &= 0xF0;
+              current_color |= val - 90 + 8;
             }
-            if(val2 >= 40 && val <= 47) {
-              current_color = (val - 40) << 4;
+            else if(val >= 40 && val <= 47) {
+              current_color &= 0x0F;
+              current_color |= (val - 40) << 4;
             }
             else if(val >= 100 && val <= 107) {
-              current_color = (val - 100 + 8) << 4;
+              current_color &= 0x0F;
+              current_color |= (val - 100 + 8) << 4;
             }
             else {
-              Serial.printf("Unknown ESC color sequence: %s\n", terminal_esc_sequence);
+              Serial.printf("Unknown ESC color sequence (first arg): %s\n", terminal_esc_sequence);
             }
+
+            if(val2 >= 30 && val2 <= 37) {
+              current_color &= 0xF0;
+              current_color |= val2 - 30;
+            }
+            else if(val2 >= 90 && val2 <= 97) {
+              current_color &= 0xF0;
+              current_color |= val2 - 90 + 8;
+            }
+            else if(val2 >= 40 && val2 <= 47) {
+              current_color &= 0x0F;
+              current_color |= (val2 - 40) << 4;
+            }
+            else if(val2 >= 100 && val2 <= 107) {
+              current_color &= 0x0F;
+              current_color |= (val2 - 100 + 8) << 4;
+            }
+            else {
+              Serial.printf("Unknown ESC color sequence (second arg): %s\n", terminal_esc_sequence);
+            }
+            //Serial.printf("current_color %02X\n", current_color);
           }
           else {
             sscanf(terminal_esc_sequence, "[%d", &val);
@@ -4683,6 +5478,7 @@ void terminal_print_char(char c) {
     }
     else if(c == 0x08) {
       if(cursor_col > 0) cursor_col--;
+      terminal_pending_wrap = 0;
     }
     else if(c == 0x09) {
       cursor_col = (cursor_col / 8 + 1) * 8;
@@ -4710,6 +5506,15 @@ void terminal_print_char(char c) {
       terminal_attributes[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_attribute;
     }
     else {
+      if(terminal_pending_wrap && terminal_autowrap) {
+        cursor_col = 0;
+        cursor_row++;
+        terminal_pending_wrap = 0;
+      }
+      if(cursor_row >= TERMINAL_HEIGHT_CHARS) {
+        terminal_scroll_down();
+        cursor_row = TERMINAL_HEIGHT_CHARS - 1;
+      }
       if(cursor_col < TERMINAL_WIDTH_CHARS) {
         terminal_screen[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = c;
         terminal_colors[cursor_col + cursor_row * TERMINAL_WIDTH_CHARS] = current_color;
@@ -4719,14 +5524,8 @@ void terminal_print_char(char c) {
     }
   }
   if(cursor_col >= TERMINAL_WIDTH_CHARS) {
-    if(terminal_autowrap) {
-      cursor_col = 0;
-      cursor_row++;
-    }
-  }
-  if(cursor_row >= TERMINAL_HEIGHT_CHARS) {
-    terminal_scroll_down();
-    cursor_row = TERMINAL_HEIGHT_CHARS - 1;
+    cursor_col = TERMINAL_WIDTH_CHARS - 1;
+    terminal_pending_wrap = 1;
   }
 }
 
@@ -4743,9 +5542,30 @@ void terminal_ansi_set_cursor(int col, int row) {
   sprintf(buff, "\e[%d;%dH", row, col);
   terminal_print(buff);
 }
-void terminal_ansi_set_color(int color, int background) {
+
+void terminal_ansi_set_fg_color(int color) {
   char buff[20];
-  sprintf(buff, "\e[%d;%dm", background, color);
+  if(color <= 7) color += 30;
+  else color += 90 - 8;
+  sprintf(buff, "\e[%dm", color);
+  terminal_print(buff);
+}
+
+void terminal_ansi_set_bg_color(int color) {
+  char buff[20];
+  if(color <= 7) color += 40;
+  else color += 100 - 8;
+  sprintf(buff, "\e[%dm", color);
+  terminal_print(buff);
+}
+
+void terminal_ansi_set_fg_bg_color(int fg, int bg) {
+  char buff[20];
+  if(fg <= 7) fg += 30;
+  else fg += 90 - 8;
+  if(bg <= 7) bg += 40;
+  else bg += 100 - 8;
+  sprintf(buff, "\e[%d;%dm", bg, fg);
   terminal_print(buff);
 }
 
@@ -4760,6 +5580,156 @@ void terminal_ansi_query_size() {
 
 void terminal_ansi_clear_screen() {
   terminal_print("\e[2J");
+}
+
+void terminal_stack_push(char *str) {
+  fs::File file;
+  if(!Storage) return;
+  file = Storage->open(TERMINAL_STACK, FILE_APPEND);
+  file.println(str);
+  file.close();
+}
+
+void terminal_stack_pop(char *str) {
+  int i = 0;
+  int offset;
+  fs::File file;
+  char *buff = NULL;
+  char *tmp = NULL;
+
+  if(!Storage) return;
+
+  buff = (char *)malloc(4096 * sizeof(char));
+  if(!buff) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  // Читаем файл в буфер
+  file = Storage->open(TERMINAL_STACK);
+  offset = 0;
+  buff[offset] = 0;
+  while(file.available()) {
+    buff[offset] = file.read();
+    offset++;
+    buff[offset] = 0;
+  }
+  file.close();
+
+  // Последнюю строку в буфер
+  offset -= 3;
+  strcpy(str, "");
+  while(offset >= 0) {
+    if(buff[offset] == '\n' || buff[offset] == '\r') {
+      strcpy(str, buff + offset + 1);
+      tmp = strchr(str, '\n');
+      if(tmp) *tmp = 0;
+      tmp = strchr(str, '\r');
+      if(tmp) *tmp = 0;
+      break;
+    }
+    offset--;
+  }
+
+  // Остальное в файл
+  file = Storage->open(TERMINAL_STACK, FILE_WRITE);
+  if(offset > 0) {
+    file.write((const uint8_t *)buff, offset + 1);
+  }
+  file.close();
+
+  free(buff);
+}
+
+void terminal_stack_shift(char *str) {
+  int i = 0;
+  int offset;
+  int size;
+  fs::File file;
+  char *buff = NULL;
+  char *tmp = NULL;
+
+  if(!Storage) return;
+
+  buff = (char *)malloc(4096 * sizeof(char));
+  if(!buff) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  // Читаем файл в буфер
+  file = Storage->open(TERMINAL_STACK);
+  size = file.size();
+  offset = 0;
+  buff[offset] = 0;
+  while(file.available()) {
+    buff[offset] = file.read();
+    offset++;
+    buff[offset] = 0;
+  }
+  file.close();
+
+  // Первую строку в буфер
+  offset = 0;
+  tmp = strchr(buff, '\n');
+  if(tmp) {
+    offset = tmp - buff + 2;
+    memcpy(str, buff, offset);
+    tmp = strchr(str, '\n');
+    if(tmp) *tmp = 0;
+    tmp = strchr(str, '\r');
+    if(tmp) *tmp = 0;
+
+  }
+  else {
+    strcpy(str, buff);
+  }
+
+  // Остальное в файл
+  file = Storage->open(TERMINAL_STACK, FILE_WRITE);
+  if(tmp != NULL) {
+    file.write((const uint8_t *)buff + offset - 1, size - offset + 1);
+  }
+  file.close();
+
+  free(buff);
+}
+
+void terminal_stack_unshift(char *str) {
+  int i = 0;
+  int offset;
+  int size;
+  fs::File file;
+  char *buff = NULL;
+  char *tmp = NULL;
+
+  if(!Storage) return;
+
+  buff = (char *)malloc(4096 * sizeof(char));
+  if(!buff) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  // Читаем файл в буфер
+  file = Storage->open(TERMINAL_STACK);
+  size = file.size();
+  offset = 0;
+  buff[offset] = 0;
+  while(file.available()) {
+    buff[offset] = file.read();
+    offset++;
+    buff[offset] = 0;
+  }
+  file.close();
+
+  // Пишем в файл
+  file = Storage->open(TERMINAL_STACK, FILE_WRITE);
+  file.println(str);
+  file.write((const uint8_t *)buff, size);
+  file.close();
+
+  free(buff);
 }
 
 void terminal_rot_string(char *str, int shift) {
@@ -4830,11 +5800,18 @@ void terminal_show_screen() {
         color_fg = color_bg;
         color_bg = tmp;
       }
-      if(row == cursor_row && col == cursor_col) {
+      if(row == cursor_row && col == cursor_col && cursor_visible_flag) {
         color_bg = COLOR_INDEX_GREEN;
       }
-      tft.setTextColor(colors[color_fg], colors[color_bg]);
-      tft.drawString(buff, col * 6, 16 + row * 8, FONT_MONOSPACE);
+      // Если цвета текста и фона одинаковы, то TFT_eSPI пытается ничего не выводить, получается неправильно. Фиксим
+      if(color_fg == color_bg) {
+        tft.setTextColor(colors[(color_fg + 1) % 16], colors[color_bg]);
+        tft.drawString(" ", col * 6, 16 + row * 8, FONT_MONOSPACE);
+      }
+      else {
+        tft.setTextColor(colors[color_fg], colors[color_bg]);
+        tft.drawString(buff, col * 6, 16 + row * 8, FONT_MONOSPACE);
+      }
       if(striked) {
         tft.drawLine(col * 6, 16 + row * 8 + 4, col * 6 + 6, 16 + row * 8 + 4, colors[color_fg]);
       }
@@ -4865,7 +5842,7 @@ void terminal_scroll_down() {
 
 void terminal_scroll_up() {
   int row, col;
-  for(row = terminal_scroll_line_end; row < terminal_scroll_line_begin; row--) {
+  for(row = terminal_scroll_line_end; row > terminal_scroll_line_begin; row--) {
     for(col = 0; col < TERMINAL_WIDTH_CHARS; col++) {
       terminal_screen[col + row * TERMINAL_WIDTH_CHARS] = terminal_screen[col + (row - 1) * TERMINAL_WIDTH_CHARS];
       terminal_colors[col + row * TERMINAL_WIDTH_CHARS] = terminal_colors[col + (row - 1) * TERMINAL_WIDTH_CHARS];
@@ -5182,6 +6159,9 @@ void terminal_parse_cmdline(char *cmdline, int *arg_count, char **parsed_cmdline
       }
       else if(escape && cmdline[read_index] == 't') {
         cmdline[write_index] = '\t';
+      }
+      else if(escape && cmdline[read_index] == 'e') {
+        cmdline[write_index] = '\e';
       }
       else {
         cmdline[write_index] = cmdline[read_index];
@@ -5632,7 +6612,7 @@ void terminal_checksum(char *filename, int checksum_type) {
   const size_t bufferSize = 512;
   char buff[bufferSize];
   size_t bytesRead;
-  unsigned char result[16];
+  unsigned char result[32];
 
   file = Storage->open(filename);
   if(file) {
@@ -5672,7 +6652,7 @@ void terminal_checksum(char *filename, int checksum_type) {
         }
         mbedtls_sha256_finish(&sha256_ctx, result);
         mbedtls_sha256_free(&sha256_ctx);
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < 32; i++) {
           sprintf(buff, "%02x", result[i]);
           terminal_print(buff);
         }
@@ -5709,6 +6689,10 @@ void file_append_line(char *filename, char *data) {
     file.close();
   }
 }
+
+// ====================================================
+// Интерпретатор Brainfuck
+// ====================================================
 
 #define BRAINFUCK_CELLS 30000
 #define BRAINFUCK_STACK 100
@@ -5843,7 +6827,10 @@ void terminal_brainfuck(char *filename) {
   free(mem);
 }
 
+// ====================================================
 // Интерпретатор BASIC
+// ====================================================
+
 #define BASIC_VARS_COUNT 80
 #define BASIC_STACK_LEN 80
 
@@ -6103,7 +7090,7 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
     }
     for(i = 1; i < arg_count; i++) {
       if(cmdline_params[i][0] == '"') {
-        unquote_string(cmdline_params[i]);
+        basic_unquote_string(cmdline_params[i]);
         terminal_print(cmdline_params[i]);
       }
       else {
@@ -6125,7 +7112,7 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
 
     for(i = 1; i < arg_count; i++) {
       if(cmdline_params[i][0] == '"') {
-        unquote_string(cmdline_params[i]);
+        basic_unquote_string(cmdline_params[i]);
         terminal_print(cmdline_params[i]);
       }
       else {
@@ -6501,7 +7488,7 @@ void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
   }
 }
 
-void unquote_string(char *str) {
+void basic_unquote_string(char *str) {
   int read_offset = 1;
   char escape = 0;
   int write_offset = 0;
@@ -6515,6 +7502,9 @@ void unquote_string(char *str) {
       }
       else if(str[read_offset] == 't') {
         str[write_offset] = '\t';
+      }
+      else if(str[read_offset] == 'e') {
+        str[write_offset] = '\e';
       }
       else {
           str[write_offset] = str[read_offset];
@@ -6536,7 +7526,57 @@ void unquote_string(char *str) {
   str[write_offset] = 0;
 }
 
+// Показать текущий месяц
+void terminal_cal() {
+  char buff[80];
+  int i;
+  int dow = global_day_of_week;
+  char *month_to_name[] = {
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  };
+  int month_to_days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+  sprintf(buff, "%s %d", month_to_name[global_month - 1], global_year);
+  i = 10 - strlen(buff) / 2;
+  while(i > 0) {
+    terminal_print(" ");
+    i--;
+  }
+  terminal_println(buff);
+  terminal_println("Mo Tu We Th Fr Sa Su");
+
+  // Високосный год?
+  if(is_lap_year(global_year)) {
+    month_to_days[1] = 29;
+  }
+
+  // Какой сейчас день недели?
+  i = global_day;
+  while(i > 0) {
+    Serial.printf("i: %d, dow: %d\n", i, dow);
+    i = (i + 1) % 7;
+    dow = (dow + 1) % 7;
+  }
+  dow++;
+  Serial.printf("dow: %d\n", dow);
+  for(i = 0; i < dow; i++) {
+    terminal_print("   ");
+  }
+  
+  for(i = 1; i <= month_to_days[global_month - 1]; i++) {
+    sprintf(buff, "%2d ", i);
+    terminal_print(buff);
+    dow = (dow + 1) % 7;
+    if(dow == 0) terminal_println("");
+  }
+  terminal_println("");
+}
+
 #ifdef IS_WIFI_ENABLED
+// ====================================================
+// Терминальные команды с Wi-Fi
+// ====================================================
 
 int terminal_telnet(int arg_count, char **args, char ssl_flag) {
   long speed;
@@ -7138,303 +8178,6 @@ int terminal_hamqsl() {
   return return_value;
 }
 
-#endif
-
-void cp_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
-  char *buff;
-  int size;
-  fs::File file_from;
-  fs::File file_to;
-
-  Serial.printf("Copy from %s to %s\n", path_from, path_to);
-
-  buff = (char *)malloc(4096 * sizeof(char));
-  file_from = Storage_from->open(path_from);
-  // Проверить существование файла назначения
-  if(Storage_to->exists(path_to)) {
-    file_to = Storage_to->open(path_to);
-    if(file_to) {
-      // Если это папка, то нужно копировать файл в эту папку с тем же названием файла
-      if(file_to.isDirectory()) {
-        strcat(path_to, "/");
-        strcat(path_to, file_from.name());
-      }
-      file_to.close();
-    }
-  }
-  file_to = Storage_to->open(path_to, FILE_WRITE);
-
-  while(file_from.available()) {
-    size = file_from.read((uint8_t *)buff, 4096);
-    file_to.write((const uint8_t *)buff, size);
-  }
-  
-  free(buff);
-  file_from.close();
-  file_to.close();
-}
-
-void cp_recursive_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
-  char path_next_from[80];
-  char path_next_to[80];
-  fs::File file_from;
-  fs::File file_to;
-
-  Serial.printf("Recursive from %s to %s\n", path_from, path_to);
-
-  file_from = Storage_from->open(path_from);
-  if(file_from) {
-    // Если это папка
-    if(file_from.isDirectory()) {
-      if(!Storage_to->exists(path_to)) {
-        Storage_to->mkdir(path_to);
-      }
-      // Копировать содержимое
-      while(file_to = file_from.openNextFile()) {
-        // 
-        if(strcmp("/", path_from)) {
-          sprintf(path_next_from, "%s/%s", path_from, file_to.name());
-        }
-        else {
-          sprintf(path_next_from, "/%s", file_to.name());
-        }
-        if(strcmp("/", path_to)) {
-          sprintf(path_next_to, "%s/%s", path_to, file_to.name());
-        }
-        else {
-          sprintf(path_next_to, "/%s", file_to.name());
-        }
-        if(file_to.isDirectory()) {
-          Serial.printf("mkdir %s\n", path_next_to);
-          Storage_to->mkdir(path_next_to);
-        }
-        file_to.close();
-        cp_recursive_between_storages(Storage_from, path_next_from, Storage_to, path_next_to);
-      }
-    }
-    else {
-      file_from.close();
-      cp_between_storages(Storage_from, path_from, Storage_to, path_to);
-    }
-  }
-}
-
-void delete_recursive(fs::FS *Storage_from, char *path) {
-  char buff[80];
-  fs::File file;
-  fs::File current_dir;
-  current_dir = Storage_from->open(path);
-  if(current_dir.isDirectory()) {
-    while(file = current_dir.openNextFile()) {
-      sprintf(buff, "%s/%s", path, file.name());
-      if(file.isDirectory()) {
-        Serial.printf("rmdir %s\n", buff);
-        delete_recursive(Storage_from, buff);
-      }
-      else {
-        Serial.printf("rm %s\n", buff);
-        Storage_from->remove(buff);
-      }
-    }
-    current_dir.close();
-    // Удалить папку, но не корень
-    if(strcmp(path, "/")) {
-      Serial.printf("rmdir %s\n", path);
-      Storage_from->rmdir(path);
-    }
-  }
-  else {
-    Serial.printf("rm %s\n", path);
-    Storage_from->remove(path);
-  }
-}
-
-// Показать текущий месяц
-void terminal_cal() {
-  char buff[80];
-  int i;
-  int dow = global_day_of_week;
-  char *month_to_name[] = {
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  };
-  int month_to_days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-
-  sprintf(buff, "%s %d", month_to_name[global_month - 1], global_year);
-  i = 10 - strlen(buff) / 2;
-  while(i > 0) {
-    terminal_print(" ");
-    i--;
-  }
-  terminal_println(buff);
-  terminal_println("Mo Tu We Th Fr Sa Su");
-
-  // Високосный год?
-  if(is_lap_year(global_year)) {
-    month_to_days[1] = 29;
-  }
-
-  // Какой сейчас день недели?
-  i = global_day;
-  while(i > 0) {
-    Serial.printf("i: %d, dow: %d\n", i, dow);
-    i = (i + 1) % 7;
-    dow = (dow + 1) % 7;
-  }
-  dow++;
-  Serial.printf("dow: %d\n", dow);
-  for(i = 0; i < dow; i++) {
-    terminal_print("   ");
-  }
-  
-  for(i = 1; i <= month_to_days[global_month - 1]; i++) {
-    sprintf(buff, "%2d ", i);
-    terminal_print(buff);
-    dow = (dow + 1) % 7;
-    if(dow == 0) terminal_println("");
-  }
-  terminal_println("");
-}
-
-#ifdef IS_SSH_ENABLED
-
-void terminal_ssh(char *arg) {
-  long speed;
-  int byte;
-  int port = 22;
-  int bytes_read;
-  char host[80] = "example.com";
-  char ssh_user[80] = "user";
-  char ssh_pass[80] = "password";
-  char buff[80];
-  int rc;
-
-  if(strcmp(arg, "") != 0) {
-    strcpy(host, arg);
-  }
-  ssh_channel channel;
-Serial.println(__LINE__); delay(1000);
-  ssh_session my_session = ssh_new();
-  if (my_session == NULL) {
-    Serial.println("Error creating SSH session");
-    return 0;
-  }
-Serial.println(__LINE__); delay(1000);
-  ssh_options_set(my_session, SSH_OPTIONS_HOST, host);
-Serial.println(__LINE__); delay(1000);
-  ssh_options_set(my_session, SSH_OPTIONS_USER, ssh_user);
-Serial.println(__LINE__); delay(1000);
-  rc = ssh_connect(my_session);
-Serial.println(__LINE__); delay(1000);
-  if (rc != SSH_OK) {
-    terminal_println("Error connecting to server");
-    terminal_println((char *)ssh_get_error(my_session));
-    terminal_show_screen();
-    ssh_free(my_session);
-    return 0;
-  }
-  
-Serial.println(__LINE__); delay(100);
-  rc = ssh_userauth_password(my_session, NULL, ssh_pass);
-Serial.println(__LINE__); delay(100);
-  if (rc != SSH_AUTH_SUCCESS) {
-    terminal_println("Error authenticating");
-    terminal_println((char *)ssh_get_error(my_session));
-    terminal_show_screen();
-    ssh_disconnect(my_session);
-    ssh_free(my_session);
-    return 0;
-  }
-
-  // Open channel
-Serial.println(__LINE__); delay(100);
-  channel = ssh_channel_new(my_session);
-Serial.println(__LINE__); delay(100);
-  if (channel == NULL) {
-    terminal_println("Unable to open channel");
-    terminal_show_screen();
-    return 0;
-  }
-
-  // Open session
-Serial.println(__LINE__); delay(100);
-  rc = ssh_channel_open_session(channel);
-Serial.println(__LINE__); delay(100);
-  if (rc != SSH_OK) {
-    terminal_println("Unable to open session");
-    terminal_show_screen();
-    ssh_channel_free(channel);
-    return 0;
-  }
-
-  // Request PTY
-Serial.println(__LINE__); delay(100);
-  if (ssh_channel_request_pty(channel) != SSH_OK) {
-      terminal_println("Unable to request PTY");
-      terminal_show_screen();
-      ssh_channel_close(channel);
-      ssh_channel_free(channel);
-      return 0;
-  }
-
-  // Request shell
-Serial.println(__LINE__); delay(100);
-  if (ssh_channel_request_shell(channel) != SSH_OK) {
-      terminal_println("Unable to request shell");
-      terminal_show_screen();
-      ssh_channel_close(channel);
-      ssh_channel_free(channel);
-      return 0;
-  }
-
-  while(1) {
-Serial.println(__LINE__); delay(100);
-    bytes_read = ssh_channel_read(channel, buff, 1, 0);
-    if(bytes_read > 0) {
-      byte = buff[0];
-      if(byte == '\n') {
-        //client.print('\r');
-        terminal_print_char('\r');
-      }
-      else if(byte == '\r') {
-        //client.print('\n');
-        terminal_print_char('\n');
-      }
-      //client.print((char)byte);
-      terminal_print_char(byte);
-      terminal_show_screen();
-    }
-
-    byte = terminal_input_char();
-    if(byte != -1) {
-      // Esc
-      if(byte == 0x1B) {
-        ssh_channel_send_eof(channel);
-        ssh_channel_close(channel);
-        ssh_channel_free(channel);
-        ssh_disconnect(my_session);
-        ssh_free(my_session);
-        return 0;
-      }
-      else if(byte == '\n') {
-        //client.print('\r');
-        //client.print('\n');
-        terminal_print_char('\r');
-        terminal_print_char('\n');
-      }
-      else {
-        //client.print((char)byte);
-        terminal_print_char((char)byte);
-        terminal_show_screen();
-      }
-    }
-  }
-}
-
-#endif
-
-#ifdef IS_WIFI_ENABLED
-
 int terminal_ping(char *ip) {
   char buff[80];
   int seq = 1;
@@ -7530,6 +8273,60 @@ void terminal_pingscan(char *subnet_and_mask) {
     }
   }
   terminal_println("Scan completed");
+}
+
+void terminal_subnet(char *subnet_and_mask) {
+  char buff[80];
+  char *subnet_text = NULL;
+  char *netmask_text = NULL;
+  int netmask_index;
+  int byte;
+
+  netmask_text = strchr(subnet_and_mask, '/');
+  netmask_text[0] = 0;
+  netmask_text++;
+  subnet_text = subnet_and_mask;
+
+  IPAddress netmask;
+  uint32_t netmask_num;
+  if(strchr(netmask_text, '.')) {
+    netmask.fromString(netmask_text);
+    netmask_num = ip2long(netmask);
+    for(netmask_index = 0; netmask_num != 0; netmask_index++) {
+      netmask_num = netmask_num << 1;
+    }
+  }
+  else {
+    netmask_index = strtol(netmask_text, NULL, 10);
+    netmask = long2ip(0xFFFFFFFF << (32 - netmask_index));
+  }
+  IPAddress subnet(subnet_text);
+  IPAddress netmask_rev = ~netmask;
+
+  uint32_t network = ip2long(subnet) & ip2long(netmask);
+  uint32_t broadcast = ip2long(subnet) | ~ip2long(netmask);
+
+  sprintf(buff, "Subnet: %s", long2ip(network).toString().c_str());
+  terminal_println(buff);
+  sprintf(buff, "Broadcast: %s", long2ip(broadcast).toString().c_str());
+  terminal_println(buff);
+  sprintf(buff, "Netmask: %s", netmask.toString().c_str());
+  terminal_println(buff);
+  sprintf(buff, "Wildcard mask: %s", netmask_rev.toString().c_str());
+  terminal_println(buff);
+  sprintf(buff, "Prefix length: %d", netmask_index);
+  terminal_println(buff);
+  if(netmask_index == 32) {
+    sprintf(buff, "Total IPs: 1");
+  }
+  else if(netmask_index == 31) {
+    sprintf(buff, "Total IPs: 2 (subnet and broadcast included)");
+  }
+  else {
+    sprintf(buff, "Total IPs: %d (subnet and broadcast excluded)", (long)(pow(2, 32 - netmask_index) - 2));
+  }
+  terminal_println(buff);
+  terminal_show_screen();
 }
 
 void terminal_arp() {
@@ -7733,23 +8530,144 @@ uint16_t terminal_tracert_calculate_checksum(void *b, int len) {
   return result;
 }
 
-#endif
+#ifdef IS_SSH_ENABLED
 
-uint32_t ip2long(IPAddress ip) {
-  return ((uint32_t)ip[0] << 24) |
-          ((uint32_t)ip[1] << 16) |
-          ((uint32_t)ip[2] << 8) |
-          ip[3];
+void terminal_ssh(char *arg) {
+  long speed;
+  int byte;
+  int port = 22;
+  int bytes_read;
+  char host[80] = "example.com";
+  char ssh_user[80] = "user";
+  char ssh_pass[80] = "password";
+  char buff[80];
+  int rc;
+
+  if(strcmp(arg, "") != 0) {
+    strcpy(host, arg);
+  }
+  ssh_channel channel;
+Serial.println(__LINE__); delay(1000);
+  ssh_session my_session = ssh_new();
+  if (my_session == NULL) {
+    Serial.println("Error creating SSH session");
+    return 0;
+  }
+Serial.println(__LINE__); delay(1000);
+  ssh_options_set(my_session, SSH_OPTIONS_HOST, host);
+Serial.println(__LINE__); delay(1000);
+  ssh_options_set(my_session, SSH_OPTIONS_USER, ssh_user);
+Serial.println(__LINE__); delay(1000);
+  rc = ssh_connect(my_session);
+Serial.println(__LINE__); delay(1000);
+  if (rc != SSH_OK) {
+    terminal_println("Error connecting to server");
+    terminal_println((char *)ssh_get_error(my_session));
+    terminal_show_screen();
+    ssh_free(my_session);
+    return 0;
+  }
+  
+Serial.println(__LINE__); delay(100);
+  rc = ssh_userauth_password(my_session, NULL, ssh_pass);
+Serial.println(__LINE__); delay(100);
+  if (rc != SSH_AUTH_SUCCESS) {
+    terminal_println("Error authenticating");
+    terminal_println((char *)ssh_get_error(my_session));
+    terminal_show_screen();
+    ssh_disconnect(my_session);
+    ssh_free(my_session);
+    return 0;
+  }
+
+  // Open channel
+Serial.println(__LINE__); delay(100);
+  channel = ssh_channel_new(my_session);
+Serial.println(__LINE__); delay(100);
+  if (channel == NULL) {
+    terminal_println("Unable to open channel");
+    terminal_show_screen();
+    return 0;
+  }
+
+  // Open session
+Serial.println(__LINE__); delay(100);
+  rc = ssh_channel_open_session(channel);
+Serial.println(__LINE__); delay(100);
+  if (rc != SSH_OK) {
+    terminal_println("Unable to open session");
+    terminal_show_screen();
+    ssh_channel_free(channel);
+    return 0;
+  }
+
+  // Request PTY
+Serial.println(__LINE__); delay(100);
+  if (ssh_channel_request_pty(channel) != SSH_OK) {
+      terminal_println("Unable to request PTY");
+      terminal_show_screen();
+      ssh_channel_close(channel);
+      ssh_channel_free(channel);
+      return 0;
+  }
+
+  // Request shell
+Serial.println(__LINE__); delay(100);
+  if (ssh_channel_request_shell(channel) != SSH_OK) {
+      terminal_println("Unable to request shell");
+      terminal_show_screen();
+      ssh_channel_close(channel);
+      ssh_channel_free(channel);
+      return 0;
+  }
+
+  while(1) {
+Serial.println(__LINE__); delay(100);
+    bytes_read = ssh_channel_read(channel, buff, 1, 0);
+    if(bytes_read > 0) {
+      byte = buff[0];
+      if(byte == '\n') {
+        //client.print('\r');
+        terminal_print_char('\r');
+      }
+      else if(byte == '\r') {
+        //client.print('\n');
+        terminal_print_char('\n');
+      }
+      //client.print((char)byte);
+      terminal_print_char(byte);
+      terminal_show_screen();
+    }
+
+    byte = terminal_input_char();
+    if(byte != -1) {
+      // Esc
+      if(byte == 0x1B) {
+        ssh_channel_send_eof(channel);
+        ssh_channel_close(channel);
+        ssh_channel_free(channel);
+        ssh_disconnect(my_session);
+        ssh_free(my_session);
+        return 0;
+      }
+      else if(byte == '\n') {
+        //client.print('\r');
+        //client.print('\n');
+        terminal_print_char('\r');
+        terminal_print_char('\n');
+      }
+      else {
+        //client.print((char)byte);
+        terminal_print_char((char)byte);
+        terminal_show_screen();
+      }
+    }
+  }
 }
 
-IPAddress long2ip(uint32_t n) {
-  return IPAddress(
-    (n >> 24) & 0xFF,
-    (n >> 16) & 0xFF,
-    (n >> 8)  & 0xFF,
-    n & 0xFF
-  );
-}
+#endif // IS_SSH_ENABLED
+
+#endif // IS_WIFI_ENABLED
 
 // ====================================================
 // Заметки
@@ -9958,7 +10876,7 @@ void totp(char mode, char *io_buff) {
 }
 
 // ====================================================
-// Одноразовые пароли TOTP
+// Генератор штрих-кодов
 // ====================================================
 
 #define BARCODE_PATH "/Barcode"
@@ -10124,14 +11042,6 @@ void barcode_show(char *filename) {
     } while(1);
     touchWaitRelease();
   }
-}
-
-char is_digit_string(char *str) {
-  int i;
-  for(i = 0; i < strlen(str); i++) {
-    if(str[i] < '0' || str[i] > '9') return 0;
-  }
-  return 1;
 }
 
 int barcode_ean8(char *input, char *output) {
@@ -11723,49 +12633,6 @@ void search(char mode, char *io_buff) {
   }
 }
 
-char char1251_lowercase(char in) {
-  // English
-  if(in >= 'A' && in <= 'Z') {
-    return in - 'A' + 'a';
-  }
-  // Русский
-  if(in >= 0xC0 && in <= 0xDF) {
-    return in - 0xC0 + 0xE0;
-  }
-  // Ё
-  if(in == 0xA8) return 0xB8;
-  // Ђ
-  if(in == 0x80) return 0x90;
-  // Ѓ
-  if(in == 0x81) return 0x83;
-  // Љ
-  if(in == 0x8A) return 0x9A;
-  // Њ
-  if(in == 0x8C) return 0x9C;
-  // Ќ
-  if(in == 0x8D) return 0x9D;
-  // Ћ
-  if(in == 0x8E) return 0x9E;
-  // Џ
-  if(in == 0x8F) return 0x9F;
-  // Ў
-  if(in == 0xA1) return 0xA2;
-  // Ј
-  if(in == 0xA3) return 0xBC;
-  // Ґ
-  if(in == 0xA5) return 0xB4;
-  // Є
-  if(in == 0xAA) return 0xBA;
-  // Ї
-  if(in == 0xAF) return 0xBF;
-  // І
-  if(in == 0xB2) return 0xB3;
-  // Ѕ
-  if(in == 0xBD) return 0xBE;
-
-  return in;
-}
-
 // ====================================================
 // Случайное приложение
 // ====================================================
@@ -11986,211 +12853,8 @@ void random_app_surprise() {
 }
 
 // ====================================================
-// Общие PIM-функции
+// Календарь
 // ====================================================
-
-#define PIM_FILES_COUNT_MAX 1000
-// Рисует типичное приложение PIM (заметки, контакты, книги, расходы, дела, рисунки)
-// title - заголовок приложения
-// path - путь к файлам
-// file_to_list_function - функция для преобразования содержимого файла в элемент списка
-// buttons - кнопки действий
-// action_function - функция активации по индексу кнопки
-void pim_app(char *title, char *path, function_conversion_pointer file_to_list_function, char **buttons, function_action_pointer action_function) {
-  fs::File current_dir;
-  fs::File file;
-  int button_pressed;
-  int buttons_count;
-  int file_offset = 0;
-  int file_selected = 0;
-  int i;
-  int offset;
-  char buff[80];
-  char left[80];
-  char right[80];
-  char byte;
-  char update_list_flag = 1;
-  char **files_list = NULL;
-  char **visible_list = NULL;
-
-  // Очищаем экран
-  clearScreen();
-  drawAppTitle(title);
-
-  if(storage_type == STORAGE_TYPE_NONE || !Storage) {
-    drawError("No storage available");
-    return;
-  }
-
-  // Считаем число кнопок
-  buttons_count = 0;
-  while(buttons[buttons_count]) {
-    buttons_count++;
-  }
-
-  // Резервируем память, инициализируем
-  files_list = (char **)malloc(PIM_FILES_COUNT_MAX * sizeof(char *));
-  visible_list = (char **)malloc(PIM_FILES_COUNT_MAX * sizeof(char *));
-  for(i = 0; i < PIM_FILES_COUNT_MAX; i++) {
-    files_list[i] = NULL;
-    visible_list[i] = NULL;
-  }
-
-  update_list_flag = 1;
-  while(1) {
-    // Обновляем список файлов если нужно
-    if(update_list_flag) {
-      // Перерисовываем экран
-      drawAppTitle(title);
-      // Тонкая полоска между заголовком и списком
-      tft.fillRect(0, 16, tft.width(), 4, color_scheme_bg);
-      // Кнопки
-      tft.fillRect(0, 276, tft.width(), tft.height() - 276, color_scheme_bg);
-    
-      //tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
-      offset = 0;
-      // Освобождаем память
-      for(i = 0; i < PIM_FILES_COUNT_MAX; i++) {
-        if(files_list[i]) {
-          free(files_list[i]);
-          free(visible_list[i]);
-        }
-        files_list[i] = NULL;
-        visible_list[i] = NULL;
-      }
-      // Получаем список файлов
-      current_dir = Storage->open(path);
-      if(!current_dir) {
-        Storage->mkdir(path);
-        current_dir = Storage->open(path);
-        if(!current_dir) {
-          drawError("Cannot open path");
-          return;
-        }
-      }
-      while(file = current_dir.openNextFile()) {
-        // Пропускаем папки
-        //if(file.isDirectory()) continue;
-        // Читаем файл
-        // Первая строчка - Имя
-        if((*file_to_list_function)(file, buff)) {
-          files_list[offset] = (char *)malloc((strlen(file.name()) + 1) * sizeof(char));
-          visible_list[offset] = (char *)malloc((strlen(buff) + 1) * sizeof(char));
-
-          strcpy(files_list[offset], file.name());
-          strcpy(visible_list[offset], buff);
-          offset++;
-        }
-      }
-      update_list_flag = 0;
-    }
-
-    tft.setTextColor(color_scheme_fg, color_scheme_bg);
-
-    touchCheckList(0, 16 + 4, tft.width(), 16 * 16, visible_list, 16, &file_offset, &file_selected);
-    drawList(0, 16 + 4, tft.width(), 16 * 16, visible_list, 16, &file_offset, &file_selected);
-
-    drawButtonMatrix(0, 280, tft.width(), 40, buttons, buttons_count, 1);
-
-    touchWaitPress();
-
-    touchCheckList(0, 16 + 4, tft.width(), 16 * 16, visible_list, 16, &file_offset, &file_selected);
-    button_pressed = touchCheckMatrix(0, 280, tft.width(), 40, buttons, buttons_count, 1);
-    if(button_pressed != -1) {
-      (*action_function)(button_pressed, files_list[file_selected]);
-      update_list_flag = 1;
-    }
-
-    touchWaitReleaseOrExit();
-    if(global_exit_flag) {
-      drawAppTitle("Exit");
-      touchWaitRelease();
-      for(i = 0; i < PIM_FILES_COUNT_MAX; i++) {
-        if(files_list[i]) {
-          free(files_list[i]);
-        }
-        if(visible_list[i]) {
-          free(visible_list[i]);
-        }
-      }
-      free(files_list);
-      free(visible_list);
-      touchExitActionReset();
-      return;
-    }
-    touchWaitRelease();
-  }
-}
-
-// Переименовывает файл в соответствии с содержимым
-void pim_rename_file(char *path, char *old_filename, char *prefix) {
-  fs::File file;
-  char old_path_filename[80];
-  char new_path_filename[80];
-  char new_filename[80];
-  char byte;
-  int offset;
-
-  sprintf(old_path_filename, "%s/%s", path, old_filename);
-  file = Storage->open(old_path_filename);
-  new_filename[0] = 0;
-  offset = 0;
-  while(file.available()) {
-    byte = file.read();
-    // Если уже хоть что-то в названии есть - достаточно
-    if(offset > 0 && (byte == '\n' || byte == '\r')) {
-      break;
-    }
-    // Только алфавитно-цифровые символы
-    if(byte >= '0' && byte <= '9' || byte == ' ' || byte >= 'a' && byte <= 'z'
-      || byte >= 'A' && byte <= 'Z' || byte == 0xA8 || byte == 0xB8 || byte >= 0xC0) {
-      // Пробел меняем на подчёркивание
-      if(byte == ' ') byte = '_';
-      new_filename[offset] = byte;
-      offset++;
-      new_filename[offset] = 0;
-      if(offset > 20) break;
-    }
-    if(byte == '\n' || byte == '\r') break;
-  }
-  file.close();
-
-  cp1251_to_translit(new_filename, new_filename);
-  // Проверяем если название изменилось, и такого названия нет
-  if(strcmp(old_filename, new_filename) != 0 && strcmp("", new_filename) != 0) {
-    sprintf(new_path_filename, "%s/%s%s", path, prefix ? prefix : "", new_filename);
-    if(Storage->exists(new_path_filename)) {
-      strcpy(new_filename, "");
-    }
-  }
-
-  // Если название не сформировалось даём ему первый свободный цифровой номер
-  if(strcmp("", new_filename) == 0) {
-    for(offset = 1;; offset++) {
-      sprintf(new_filename, "%d", offset);
-      sprintf(new_path_filename, "%s/%s%s", path, prefix ? prefix : "", new_filename);
-      file = Storage->open(new_path_filename);
-      if(!file) {
-        break;
-      }
-      file.close();
-    }
-  }
-
-  // Переименовываем файл если есть новое название, и оно отличается
-  if(strcmp("", new_filename) != 0 && strcmp(old_filename, new_filename)) {
-    sprintf(new_path_filename, "%s/%s%s", path, prefix ? prefix : "", new_filename);
-    // Проверяем что мы не затрём какой-нибудь файл
-    file = Storage->open(new_path_filename);
-    if(!file) {
-      // И только тогда переименовываем
-      Storage->rename(old_path_filename, new_path_filename);
-    }
-    else {
-      file.close();
-    }
-  }
-}
 
 #define SCHEDULE_PATH "/Schedule"
 
@@ -12482,6 +13146,10 @@ void schedule(char mode, char *io_buff) {
   }
 }
 
+// ====================================================
+// Фонарик
+// ====================================================
+
 void torch(char mode, char *io_buff) {
   int button_pressed;
   char *buttons[] = {
@@ -12549,6 +13217,10 @@ void torch(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Установка пароля
+// ====================================================
 
 void security(char mode, char *io_buff) {
   int button_pressed;
@@ -12645,6 +13317,10 @@ void security(char mode, char *io_buff) {
           if(!strcmp(user_input_hash, correct_password_hash)) {
             password_correct_flag = 1;
           }
+          // Был баг когда сохранялись только 32 символа хэша вместо 64, сохранено в целях совместимости
+          if(strlen(correct_password_hash) == 32 && !memcmp(user_input_hash, correct_password_hash, 32)) {
+            password_correct_flag = 1;
+          }
         }
       }
       else {
@@ -12699,6 +13375,10 @@ void security(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Счётчик
+// ====================================================
 
 void counter(char mode, char *io_buff) {
   int button_pressed;
@@ -12797,6 +13477,10 @@ void counter(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Генератор случайных чисел
+// ====================================================
 
 void random_numbers(char mode, char *io_buff) {
   int button_pressed;
@@ -12917,6 +13601,10 @@ void random_numbers(char mode, char *io_buff) {
   }
 }
 
+// ====================================================
+// Яркость
+// ====================================================
+
 void brightness_app(char mode, char *io_buff) {
   int button_pressed;
   int result = 0;
@@ -13019,7 +13707,10 @@ void brightness_app(char mode, char *io_buff) {
   }
 }
 
-// Select storage app
+// ====================================================
+// Приложение выбора хранилища
+// ====================================================
+
 void select_storage_app(char mode, char *io_buff) {
   int button_pressed;
   int result = 0;
@@ -13124,6 +13815,10 @@ void select_storage_app(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Таймер
+// ====================================================
 
 void timer(char mode, char *io_buff) {
   int button_pressed;
@@ -13379,6 +14074,10 @@ void timer(char mode, char *io_buff) {
   }
 }
 
+// ====================================================
+// Секундомер
+// ====================================================
+
 #define STOPWATCH_MAX_LAPS 100
 
 void stopwatch(char mode, char *io_buff) {
@@ -13591,6 +14290,10 @@ void stopwatch(char mode, char *io_buff) {
   }
 }
 
+// ====================================================
+// Дыхание по счёту
+// ====================================================
+
 void breathe(char mode, char *io_buff) {
   int button_pressed;
   int i;
@@ -13797,6 +14500,10 @@ void breathe(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Клеточные автоматы - жизнь и подобные
+// ====================================================
 
 #define LIFE_CELL_PIXELS 4
 #define LIFE_FIELD_WIDTH_CELLS (tft.width() / LIFE_CELL_PIXELS)
@@ -14118,6 +14825,10 @@ void life_set_cell(int x, int y, char *field, char value) {
   else field[byte] &= ~(1 << offset);
 }
 
+// ====================================================
+// Фракталы L системы
+// ====================================================
+
 void l_system(char mode, char *io_buff) {
   double angle = 60;
   int iterations = 5;
@@ -14340,7 +15051,6 @@ void l_system(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
-
 
 void l_system_settings(char *name, double angle, int iterations, char *axiom, char *fh, char *fl, char *gh, char *gl, char *r0, char *r1, char *r2, char *r3) {
   char *result = NULL;
@@ -14688,6 +15398,10 @@ void l_system_draw(char *data, double step_angle) {
   }
 }
 
+// ====================================================
+// Змейка
+// ====================================================
+
 #define SNAKE_CELL_PIXELS 8
 #define SNAKE_FIELD_WIDTH_CELLS (tft.width() / SNAKE_CELL_PIXELS)
 #define SNAKE_FIELD_HEIGHT_CELLS ((tft.height() - 32) / SNAKE_CELL_PIXELS)
@@ -14954,6 +15668,10 @@ void snake_set_cell(int x, int y, char *field, char value) {
   if(value) field[byte] |= (1 << offset);
   else field[byte] &= ~(1 << offset);
 }
+
+// ====================================================
+// Сокобан
+// ====================================================
 
 #define SOKOBAN_PATH "/Sokoban"
 #define SOKOBAN_FIELD_WIDTH 20
@@ -15563,6 +16281,10 @@ char sokoban_is_win(char *field) {
   return 0;
 }
 
+// ====================================================
+// Пасьянс турецкий платок
+// ====================================================
+
 void turkish_kerchief(char mode, char *io_buff) {
   char field[60];
   char deck[52];
@@ -15925,6 +16647,10 @@ void turkish_kerchief(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Заставки
+// ====================================================
 
 void screensaver(char mode, char *io_buff) {
   int button_pressed;
@@ -16410,7 +17136,7 @@ void screensaver_mood_lamp() {
     blue = B00011110 * (1 + sin(1.3 * millis() / 10000)) / 2;
     color = ((red) << (5 + 6)) | ((green) << (5)) | ((blue));
     tft.fillScreen(color);
-    Serial.printf("r %d g %d b %d color %04X\n", red, green, blue, color);
+    //Serial.printf("r %d g %d b %d color %04X\n", red, green, blue, color);
     delayOrTouchWait(50);
     if(touchCheckNowait()) {
       touchWaitRelease();
@@ -16553,6 +17279,10 @@ void array_set_bit(char *arr, int x, int y, int width, int height, char bit) {
     arr[byte_offset] &= ~(1 << bit_offset);
   }
 }
+
+// ====================================================
+// Настройки цветовой схемы
+// ====================================================
 
 void color_settings(char mode, char *io_buff) {
   int scheme_offset = 0;
@@ -16887,6 +17617,10 @@ void color_settings(char mode, char *io_buff) {
   }
 }
 
+// ====================================================
+// Настройки экрана
+// ====================================================
+
 void screen_settings(char mode, char *io_buff) {
   int i;
   int button_pressed;
@@ -17096,6 +17830,10 @@ int color_read_to_index(int color) {
 }
 
 #ifdef IS_WIFI_ENABLED
+
+// ====================================================
+// Список вай-фай сетей, подключение
+// ====================================================
 
 #define WIFI_MAX_NETWORKS 128
 
@@ -17429,6 +18167,10 @@ void get_current_timestamp_wifi() {
   time(&global_unixtime_retrieved);
   global_unixtime_retrieved_millis = millis();
 }
+
+// ====================================================
+// Гофер-браузер
+// ====================================================
 
 #define GOPHER_BYTES_MAX 32768
 #define GOPHER_HISTORY_LENGTH 10
@@ -17950,6 +18692,10 @@ void gopher_parse_line(char *line, char *line_type, char *line_text, char *path,
   }
 }
 
+// ====================================================
+// Погода
+// ====================================================
+
 #define WEATHER_AUTO_UPDATE_INTERVAL 300000
 
 void weather(char mode, char *io_buff) {
@@ -18225,6 +18971,10 @@ int weather_get(double lat, double lon, char *temp, char *wind, char *weather_te
   return result;
 }
 
+// ====================================================
+// Чат
+// ====================================================
+
 #define CHAT_AUTO_UPDATE_INTERVAL 30000
 #define CHAT_NICKNAME_FILE "/Settings/Nickname"
 
@@ -18434,6 +19184,10 @@ int chat_send_message(char *nickname, char *message, char *response) {
   free(query);
   return httpResponseCode;
 }
+
+// ====================================================
+// Доступ к файлам через веб
+// ====================================================
 
 WebServer httpServer(80);
 
@@ -20459,6 +21213,10 @@ void wikipedia_show_artice(char *lang, char *title) {
 
 #ifdef IS_BLE_ENABLED
 
+// ====================================================
+// BLE список устройств
+// ====================================================
+
 void ble(char mode, char *io_buff) {
   char **networks;
   int button_pressed;
@@ -20587,1080 +21345,11 @@ void ble(char mode, char *io_buff) {
   }
 }
 
-#endif
-// IS_BLE_ENABLED
-
-void file_base16_encode(char *from_filename, char *to_filename) {
-  char out_buff[4];
-  int byte;
-  fs::File file_from;
-  fs::File file_to;
-
-  file_from = Storage->open(from_filename);
-  if(to_filename) {
-    file_to = Storage->open(to_filename, FILE_WRITE);
-  }
-  while(file_from.available()) {
-    byte = file_from.read();
-    sprintf(out_buff, "%02X", byte);
-    if(to_filename) file_to.print(out_buff); else terminal_print(out_buff);
-  }
-  
-  if(to_filename) {
-    file_to.close();
-  }
-  else {
-    terminal_println("");
-  }
-  file_from.close();
-}
-
-void file_base16_decode(char *from_filename, char *to_filename) {
-  char in_buff[4];
-  int byte, byte2;
-  int byte_out;
-  fs::File file_from;
-  fs::File file_to;
-
-  file_from = Storage->open(from_filename);
-  if(to_filename) {
-    file_to = Storage->open(to_filename, FILE_WRITE);
-  }
-  memset(in_buff, 0, 4);
-  while(file_from.available()) {
-    byte_out = 0;
-    in_buff[0] = file_from.read();
-    in_buff[1] = file_from.read();
-    sscanf(in_buff, "%02X", &byte_out);
-    if(to_filename) file_to.print((char)byte_out); else terminal_print_char((char)byte_out);
-  }
-  
-  if(to_filename) {
-    file_to.close();
-  }
-  else {
-    terminal_println("");
-  }
-  file_from.close();
-}
-
-void file_base32_encode(char *from_filename, char *to_filename) {
-  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  char byte_out;
-  char byte_in;
-  int bit_index_in = 0;
-  int bit_index_out = 0;
-  int index_out = 0;
-  int byte_index_out = 0;
-  int eof = 0;
-  int i;
-  fs::File file_from;
-  fs::File file_to;
-
-  file_from = Storage->open(from_filename);
-  if(to_filename) {
-    file_to = Storage->open(to_filename, FILE_WRITE);
-  }
-  bit_index_in = 0;
-  byte_out = 0;
-  index_out = 0;
-  eof = 0;
-  byte_index_out = 0;
-  while(file_from.available() || bit_index_in > 0 || bit_index_out > 0) {
-    if(bit_index_in == 0) {
-      if(file_from.available()) {
-        byte_in = file_from.read();
-      }
-      else {
-        byte_in = 0;
-      }
-    }
-
-    index_out = index_out << 1 | ((byte_in >> (7 - bit_index_in)) & 1);
-    
-    bit_index_out++;
-    if(bit_index_out == 5) {
-      byte_out = alphabet[index_out];
-      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-      bit_index_out = 0;
-      index_out = 0;
-      byte_index_out = (byte_index_out + 1) % 8;
-
-      if(!file_from.available() && eof) {
-        if(byte_index_out > 0) {
-          byte_out = '=';
-          for(i = byte_index_out; i < 8; i++) {
-            if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-          }
-        }
-        break;
-      }
-    }
-    bit_index_in++;
-    if(bit_index_in == 8) {
-      if(!file_from.available()) eof = 1;
-      bit_index_in = 0;
-    }
-  }
-
-  if(to_filename) {
-    file_to.close();
-  }
-  else {
-    terminal_println("");
-  }
-  file_from.close();
-}
-
-void file_base32_decode(char *from_filename, char *to_filename) {
-  char byte_out;
-  char byte_in;
-  int bit_index_in = 0;
-  int bit_index_out = 0;
-  int index_out = 0;
-  int byte_index_out = 0;
-  int eof = 0;
-  int i;
-  fs::File file_from;
-  fs::File file_to;
-
-  file_from = Storage->open(from_filename);
-  if(to_filename) {
-    file_to = Storage->open(to_filename, FILE_WRITE);
-  }
-  bit_index_in = 0;
-  byte_out = 0;
-  index_out = 0;
-  eof = 0;
-  byte_index_out = 0;
-  while(file_from.available() || bit_index_in > 0 || bit_index_out > 0) {
-    if(bit_index_in == 0) {
-      if(file_from.available()) {
-        byte_in = file_from.read();
-        if(byte_in == '=') break;
-        byte_in = base32_get_bits(byte_in);
-      }
-      else {
-        byte_in = 0;
-      }
-    }
-
-    index_out = index_out << 1 | ((byte_in >> (4 - bit_index_in)) & 1);
-    
-    bit_index_out++;
-    if(bit_index_out == 8) {
-      byte_out = index_out;
-      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-      bit_index_out = 0;
-      index_out = 0;
-    }
-    bit_index_in++;
-    if(bit_index_in == 5) {
-      if(!file_from.available()) eof = 1;
-      bit_index_in = 0;
-    }
-  }
-
-  if(to_filename) {
-    file_to.close();
-  }
-  else {
-    terminal_println("");
-  }
-  file_from.close();
-}
-
-char base32_get_bits(char c) {
-  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  if(c >= 'A' && c <= 'Z') return c - 'A';
-  if(c >= '2' && c <= '7') return c - '2' + 26;
-
-  return -1;
-}
-
-void file_base64_encode(char *from_filename, char *to_filename) {
-  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  char in_buff[3];
-  char out_buff[4];
-  char byte_out;
-  fs::File file_from;
-  fs::File file_to;
-
-  file_from = Storage->open(from_filename);
-  if(to_filename) {
-    file_to = Storage->open(to_filename, FILE_WRITE);
-  }
-  while(file_from.available()) {
-    in_buff[0] = file_from.read();
-    // xxxxxx00 00000000 00000000
-    out_buff[0] = in_buff[0] >> 2;
-    byte_out = alphabet[out_buff[0]];
-    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-    
-    if(!file_from.available()) {
-      out_buff[1] = ((in_buff[0] & B00000011) << 4);
-      byte_out = alphabet[out_buff[1]];
-      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-      byte_out = '=';
-      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-      break;
-    }
-
-    in_buff[1] = file_from.read();
-    // 000000xx xxxx0000 00000000
-    out_buff[1] = ((in_buff[0] & B00000011) << 4) | (in_buff[1] >> 4);
-    byte_out = alphabet[out_buff[1]];
-    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-    if(!file_from.available()) {
-      out_buff[2] = ((in_buff[1] & B00001111) << 2);
-      byte_out = alphabet[out_buff[2]];
-      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-      byte_out = '=';
-      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-      break;
-    }
-
-    in_buff[2] = file_from.read();
-    // 00000000 0000xxxx xx000000
-    out_buff[2] = ((in_buff[1] & B00001111) << 2) | (in_buff[2] >> 6);
-    byte_out = alphabet[out_buff[2]];
-    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-
-    // 00000000 00000000 00xxxxxx
-    out_buff[3] = (in_buff[2] & B00111111);
-    byte_out = alphabet[out_buff[3]];
-    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-  }
-  
-  if(to_filename) {
-    file_to.close();
-  }
-  else {
-    terminal_println("");
-  }
-  file_from.close();
-}
-
-void file_base64_decode(char *from_filename, char *to_filename) {
-  char byte_out;
-  char byte_in;
-  int bit_index_in = 0;
-  int bit_index_out = 0;
-  int index_out = 0;
-  int byte_index_out = 0;
-  int eof = 0;
-  int i;
-  fs::File file_from;
-  fs::File file_to;
-
-  file_from = Storage->open(from_filename);
-  if(to_filename) {
-    file_to = Storage->open(to_filename, FILE_WRITE);
-  }
-  bit_index_in = 0;
-  byte_out = 0;
-  index_out = 0;
-  eof = 0;
-  byte_index_out = 0;
-  while(file_from.available() || bit_index_in > 0 || bit_index_out > 0) {
-    if(bit_index_in == 0) {
-      if(file_from.available()) {
-        byte_in = file_from.read();
-        if(byte_in == '=') break;
-        byte_in = base64_get_bits(byte_in);
-      }
-      else {
-        byte_in = 0;
-      }
-    }
-
-    index_out = index_out << 1 | ((byte_in >> (5 - bit_index_in)) & 1);
-    
-    bit_index_out++;
-    if(bit_index_out == 8) {
-      byte_out = index_out;
-      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
-      bit_index_out = 0;
-      index_out = 0;
-    }
-    bit_index_in++;
-    if(bit_index_in == 6) {
-      if(!file_from.available()) eof = 1;
-      bit_index_in = 0;
-    }
-  }
-
-  if(to_filename) {
-    file_to.close();
-  }
-  else {
-    terminal_println("");
-  }
-  file_from.close();
-}
-
-char base64_get_bits(char c) {
-  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  if(c >= 'A' && c <= 'Z') return c - 'A';
-  if(c >= 'a' && c <= 'z') return c - 'a' + 26;
-  if(c >= '0' && c <= '9') return c - '0' + 26 + 26;
-  if(c == '+') return 62;
-  if(c == '/') return 63;
-
-  return -1;
-}
-
-void file_aes_encrypt(char *password, char *from_filename, char *to_filename) {
-  char *data_in;
-  char *data_out;
-  long offset;
-  long in_file_size;
-  long out_file_size;
-  int i;
-  fs::File file_from;
-  fs::File file_to;
-
-  memset(aes_encryption_key, 0, 32);
-  for(i = 0; i < 32; i++) {
-    aes_encryption_key[i] = password[i];
-    if(password[i] == 0) break;
-  }
-
-  file_from = Storage->open(from_filename);
-  if(!file_from) {
-    terminal_println("Unable to open input file");
-    return;
-  }
-  in_file_size = file_from.size();
-  data_in = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
-  if(!data_in) {
-    terminal_println("Unable to reserve memory");
-    return;
-  }
-
-  offset = 0;
-  while(file_from.available()) {
-    data_in[offset] = file_from.read();
-    offset++;
-    data_in[offset] = 0;
-  }
-  file_from.close();
-
-  out_file_size = 16 + (((in_file_size + 1) / 16) + 1) * 16;
-  data_out = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
-  if(!data_out) {
-    terminal_println("Unable to reserve memory");
-    free(data_in);
-    return;
-  }
-
-  Serial.printf("encryptAES %s %d %d\n", data_in, in_file_size, out_file_size);
-  terminal_println("encryptAES before"); terminal_show_screen(); delay(1000);
-  encryptAES((uint8_t*) data_in, in_file_size + 1, (uint8_t*) data_out, out_file_size);
-  terminal_println("encryptAES after"); terminal_show_screen(); delay(1000);
-
-  if(to_filename) {
-    file_to = Storage->open(to_filename, FILE_WRITE);
-    file_to.write((const uint8_t *)data_out, out_file_size);
-    file_to.close();
-  }
-  else {
-    for(offset = 0; offset < out_file_size; offset++) {
-      terminal_print_char(data_out[offset]);
-    }
-  }
-}
-
-void file_aes_decrypt(char *password, char *from_filename, char *to_filename) {
-  char *data_in;
-  char *data_out;
-  long offset;
-  long in_file_size;
-  long out_file_size;
-  int i;
-  fs::File file_from;
-
-  memset(aes_encryption_key, 0, 32);
-  for(i = 0; i < 32; i++) {
-    aes_encryption_key[i] = password[i];
-    if(password[i] == 0) break;
-  }
-
-  file_from = Storage->open(from_filename);
-  if(!file_from) {
-    terminal_println("Unable to open input file");
-    return;
-  }
-  in_file_size = file_from.size();
-  data_in = (char *)malloc(in_file_size * sizeof(char));
-  if(!data_in) {
-    terminal_println("Unable to reserve memory");
-    return;
-  }
-
-  offset = 0;
-  data_in[offset] = 0;
-  while(file_from.available()) {
-    data_in[offset] = file_from.read();
-    offset++;
-  }
-  file_from.close();
-
-  // Выход меньше на 16 байт (вектор инициализации)
-  out_file_size = in_file_size - 16;
-  data_out = (char *)malloc(out_file_size * sizeof(char));
-  if(!data_out) {
-    terminal_println("Unable to reserve memory");
-    free(data_in);
-    return;
-  }
-  
-  decryptAES((uint8_t*) data_in, in_file_size, (uint8_t*) data_out);
-  
-  if(to_filename) {
-    write_file_from_buff(to_filename, data_out);
-  }
-  else {
-    terminal_print(data_out);
-    terminal_println("");
-  }
-}
-
-void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
-  int byte1, byte2, byte3;
-  int byte_out;
-  char buff[80];
-  fs::File file_from;
-  fs::File file_to;
-  file_from = Storage->open(from_filename);
-  file_to = Storage->open(to_filename, FILE_WRITE);
-  while(file_from.available()) {
-    byte1 = file_from.read();
-    if(byte1 < 0xC0) {
-      byte_out = byte1;
-    }
-    else {
-      byte2 = file_from.read();
-      // Трёхбайтовые символы
-      if(byte1 == 0xE2 && byte2 == 0x80) {
-        byte3 = file_from.read();
-        byte_out = '?';
-        if(byte3 == 0x90) byte_out = '-'; // дефис
-        else if(byte3 == 0x91) byte_out = '-'; // неразрывный дефис
-        else if(byte3 == 0x92) byte_out = '-'; // фигурное тире (по ширине цифры)
-        else if(byte3 == 0x93) byte_out = 0x96; // N dash
-        else if(byte3 == 0x94) byte_out = 0x97; // M dash
-        else if(byte3 == 0x95) byte_out = '-'; // Горизонтальная черта
-        else if(byte3 == 0x98) byte_out = 0x91; // Левая одинарная кавычка
-        else if(byte3 == 0x99) byte_out = 0x92; // Правая одинарная кавычка
-        else if(byte3 == 0x9A) byte_out = 0x83; // 
-        else if(byte3 == 0x9C) byte_out = 0x93; // Открывающая кавычка (верх)
-        else if(byte3 == 0x9D) byte_out = 0x94; // Правая двойная кавычка
-        else if(byte3 == 0x9E) byte_out = 0x84; // Нижняя открывающая двойная кавычка
-        else if(byte3 == 0xA0) byte_out = 0x86; // Типографский крестик
-        else if(byte3 == 0xA1) byte_out = 0x87; // Двойной типографский крестик
-        else if(byte3 == 0xA2) byte_out = 0x95; // Буллет
-        else if(byte3 == 0xA6) byte_out = 0x85; // Троеточие
-        else if(byte3 == 0xB0) byte_out = 0x89; // Промилле
-        else if(byte3 == 0xB9) byte_out = 0x8B; // Открывающая одиночная ёлочка
-        else if(byte3 == 0xBA) byte_out = 0x9B; // Закрывающая одиночная ёлочка
-        else {
-          sprintf(buff, "Unknown 3-byte symbol: %02X %02X %02X", byte1, byte2, byte3);
-          terminal_println(buff);
-          Serial.println(buff);
-        }
-      }
-      else if(byte1 == 0xE2 && byte2 == 0x82) {
-        if(byte3 == 0xAC) byte_out = 0x88; // Евро
-      }
-      else if(byte1 == 0xE2 && byte2 == 0x84) {
-        if(byte3 == 0x96) byte_out = 0xB9; // №
-        if(byte3 == 0xA2) byte_out = 0x99; // TM
-      }
-      else {
-        byte_out = utf8_to_cp1251_byte(byte1, byte2);
-      }
-    }
-    file_to.write(byte_out);
-  }
-  file_to.close();
-  file_from.close();
-}
-
-void file_cp1251_to_utf8(char *from_filename, char *to_filename) {
-  char in_buff[2];
-  char out_buff[3];
-  fs::File file_from;
-  fs::File file_to;
-
-  in_buff[0] = 0;
-  in_buff[1] = 0;
-
-  file_from = Storage->open(from_filename);
-  file_to = Storage->open(to_filename, FILE_WRITE);
-  while(file_from.available()) {
-    in_buff[0] = file_from.read();
-    cp1251_to_utf8(in_buff, out_buff);
-    if(strlen(out_buff) == 1) {
-      file_to.write(out_buff[0]);
-    }
-    else {
-      file_to.write(out_buff[0]);
-      file_to.write(out_buff[1]);
-    }
-  }
-  file_to.close();
-  file_from.close();
-}
-
-// Конвертировать два байта в cp1251
-char utf8_to_cp1251_byte(char byte1, char byte2) {
-  char byte;
-  byte = byte1;
-  if(byte1 == 0xD0) {
-    if(byte2 == 0x81) byte = 0xA8; // Ё
-    else if(byte2 == 0x82) byte = 0x80; // Ђ
-    else if(byte2 == 0x83) byte = 0x81; // Ѓ
-    else if(byte2 == 0x84) byte = 0xAA; // Є
-    else if(byte2 == 0x85) byte = 0xBD; // Ѕ
-    else if(byte2 == 0x86) byte = 0xB2; // І
-    else if(byte2 == 0x87) byte = 0xAF; // Ї
-    else if(byte2 == 0x88) byte = 0xA3; // Ј
-    else if(byte2 == 0x89) byte = 0x8A; // Љ
-    else if(byte2 == 0x8A) byte = 0x8C; // Њ
-    else if(byte2 == 0x8B) byte = 0x8E; // Ћ
-    else if(byte2 == 0x8C) byte = 0x8D; // Ќ
-    else if(byte2 == 0x8E) byte = 0xA1; // Ў
-    else if(byte2 == 0x8F) byte = 0x8F; // Џ
-    else if(byte2 < 0xA0) {
-      byte = 0xC0 + byte2 - 0x90; // А-П
-    }
-    else {
-      byte = 0xD0 + byte2 - 0xA0; // Р-Я а-п
-    }
-  }
-  else if(byte1 == 0xD1) {
-    if(byte2 == 0x91) byte = 0xB8; // ё
-    else if(byte2 == 0x92) byte = 0x90; // ђ
-    else if(byte2 == 0x93) byte = 0x83; // ѓ
-    else if(byte2 == 0x94) byte = 0xBA; // є
-    else if(byte2 == 0x95) byte = 0xBE; // ѕ
-    else if(byte2 == 0x96) byte = 0xB3; // і
-    else if(byte2 == 0x97) byte = 0xBF; // ї
-    else if(byte2 == 0x98) byte = 0xBC; // ј
-    else if(byte2 == 0x99) byte = 0x9A; // љ
-    else if(byte2 == 0x9A) byte = 0x9C; // њ
-    else if(byte2 == 0x9B) byte = 0x9E; // ћ
-    else if(byte2 == 0x9C) byte = 0x9D; // ќ
-    else if(byte2 == 0x9E) byte = 0xA2; // ў
-    else if(byte2 == 0x9F) byte = 0x9F; // џ
-    else {
-      byte = 0xF0 + byte2 - 0x80; // р-я
-    }
-  }
-  else if(byte1 == 0xD2) {
-    if(byte2 == 0x90) byte = 0x81; // Ґ
-    if(byte2 == 0x91) byte = 0x83; // ґ
-  }
-  else if(byte1 == 0xC2) {
-    if(byte2 == 0xA0) byte = 0xA0; // Неразрывный пробел
-    if(byte2 == 0xA4) byte = 0xA4; // ¤
-    if(byte2 == 0xA6) byte = 0xA6; // ¦
-    if(byte2 == 0xA7) byte = 0xA7; // §
-    if(byte2 == 0xA9) byte = 0xA9; // ©
-    if(byte2 == 0xAB) byte = 0xAB; // Кавычка ёлочка открывающая
-    if(byte2 == 0xAC) byte = 0xAC; // ¬
-    if(byte2 == 0xAD) byte = 0xAD; // Мягкий перенос
-    if(byte2 == 0xAE) byte = 0xAE; // ®
-    if(byte2 == 0xB0) byte = 0xB0; // °
-    if(byte2 == 0xB1) byte = 0xB1; // ±
-    if(byte2 == 0xB5) byte = 0xB5; // µ
-    if(byte2 == 0xB6) byte = 0xB6; // ¶
-    if(byte2 == 0xB7) byte = 0xB7; // ·
-    if(byte2 == 0xBB) byte = 0xBB; // Кавычка ёлочка закрывающая
-  }
-
-  return byte;
-}
-
-void utf8_to_cp1251(char *buff) {
-  int read_offset = 0;
-  int write_offset = 0;
-  unsigned char byte, byte2, byte3, byte4;
-  int length = strlen(buff);
-  while(read_offset < length) {
-    byte = buff[read_offset];
-    read_offset++;
-    if(utf8_is_double_byte(byte)) {
-      //Serial.printf("2-byte: %02X %02X\n", byte, buff[read_offset]);
-      byte = utf8_to_cp1251_byte(byte, buff[read_offset]);
-      read_offset++;
-    }
-    else if(utf8_is_triple_byte(byte)) {
-      byte2 = buff[read_offset + 0];
-      byte3 = buff[read_offset + 1];
-
-      // Трёхбайтовые символы
-      if(byte == 0xE2 && byte2 == 0x80) {
-        byte = '?';
-        if(byte3 == 0x90) byte = '-'; // дефис
-        else if(byte3 == 0x91) byte = '-'; // неразрывный дефис
-        else if(byte3 == 0x92) byte = '-'; // фигурное тире (по ширине цифры)
-        else if(byte3 == 0x93) byte = 0x96; // N dash
-        else if(byte3 == 0x94) byte = 0x97; // M dash
-        else if(byte3 == 0x95) byte = '-'; // Горизонтальная черта
-        else if(byte3 == 0x98) byte = 0x91; // Левая одинарная кавычка
-        else if(byte3 == 0x99) byte = 0x92; // Правая одинарная кавычка
-        else if(byte3 == 0x9A) byte = 0x83; // 
-        else if(byte3 == 0x9C) byte = 0x93; // Открывающая кавычка (верх)
-        else if(byte3 == 0x9D) byte = 0x94; // Правая двойная кавычка
-        else if(byte3 == 0x9E) byte = 0x84; // Нижняя открывающая двойная кавычка
-        else if(byte3 == 0xA0) byte = 0x86; // Типографский крестик
-        else if(byte3 == 0xA1) byte = 0x87; // Двойной типографский крестик
-        else if(byte3 == 0xA2) byte = 0x95; // Буллет
-        else if(byte3 == 0xA6) byte = 0x85; // Троеточие
-        else if(byte3 == 0xB0) byte = 0x89; // Промилле
-        else if(byte3 == 0xB9) byte = 0x8B; // Открывающая одиночная ёлочка
-        else if(byte3 == 0xBA) byte = 0x9B; // Закрывающая одиночная ёлочка
-        else {
-          sprintf(buff, "Unknown 3-byte symbol: %02X %02X %02X", byte, byte2, byte3);
-          terminal_println(buff);
-          Serial.println(buff);
-        }
-      }
-      else if(byte == 0xE2 && byte2 == 0x82) {
-        if(byte3 == 0xAC) byte = 0x88; // Евро
-      }
-      else if(byte == 0xE2 && byte2 == 0x84) {
-        if(byte3 == 0x96) byte = 0xB9; // №
-        if(byte3 == 0xA2) byte = 0x99; // TM
-      }
-      else {
-        Serial.printf("3-byte: %02X %02X %02X\n", byte, byte2, byte3);
-        byte = '?';
-      }
-      read_offset += 2;
-    }
-    else if(utf8_is_quad_byte(byte)) {
-      byte2 = buff[read_offset + 0];
-      byte3 = buff[read_offset + 1];
-      byte4 = buff[read_offset + 2];
-      //Serial.printf("4-byte: %02X %02X %02X %02X\n", byte, buff[read_offset], buff[read_offset + 1], buff[read_offset + 2]);
-      byte = '?';
-      read_offset += 3;
-    }
-    else {
-      //Serial.printf("1-byte: %02X\n", byte);
-    }
-    
-    buff[write_offset] = byte;
-    write_offset++;
-  }
-  buff[write_offset] = 0;
-}
-
-void cp1251_to_utf8(char *in_buff, char *out_buff) {
-  int read_offset = 0;
-  int write_offset = 0;
-  int i;
-  unsigned char byte;
-  // 1251 byte, utf8 bytes (2/3), byte1, byte2, byte3
-  char byte_to_bytes[] = {
-    0x80, 2, 0xD0, 0x82, 0x00, // Ђ
-    0x81, 2, 0xD0, 0x83, 0x00, // Ѓ
-    0x82, 3, 0xE2, 0x80, 0x9A, // ‚
-    0x83, 2, 0xD1, 0x93, 0x00, // ѓ
-    0x84, 3, 0xE2, 0x80, 0x9E, // „
-    0x85, 3, 0xE2, 0x80, 0xA6, // …
-    0x86, 3, 0xE2, 0x80, 0xA0, // †
-    0x87, 3, 0xE2, 0x80, 0xA1, // ‡
-    0x88, 3, 0xE2, 0x82, 0xAC, // €
-    0x89, 3, 0xE2, 0x80, 0xB0, // ‰
-    0x8A, 2, 0xD0, 0x89, 0x00, // Љ
-    0x8B, 3, 0xE2, 0x80, 0xB9, // ‹
-    0x8C, 2, 0xD0, 0x8A, 0x00, // Њ
-    0x8D, 2, 0xD0, 0x8C, 0x00, // Ќ
-    0x8E, 2, 0xD0, 0x8B, 0x00, // Ћ
-    0x8F, 2, 0xD0, 0x8F, 0x00, // Џ
-    0x90, 2, 0xD1, 0x92, 0x00, // ђ
-    0x91, 3, 0xE2, 0x80, 0x98, // ‘
-    0x92, 3, 0xE2, 0x80, 0x99, // ’
-    0x93, 3, 0xE2, 0x80, 0x9C, // “
-    0x94, 3, 0xE2, 0x80, 0x9D, // ”
-    0x95, 3, 0xE2, 0x80, 0xA2, // •
-    0x96, 3, 0xE2, 0x80, 0x93, // –
-    0x97, 3, 0xE2, 0x80, 0x94, // —
-    0x98, 1, 0x20, 0x00, 0x00, //  
-    0x99, 3, 0xE2, 0x84, 0xA2, // ™
-    0x9A, 2, 0xD1, 0x99, 0x00, // љ
-    0x9B, 3, 0xE2, 0x80, 0xBA, // ›
-    0x9C, 2, 0xD1, 0x9A, 0x00, // њ
-    0x9D, 2, 0xD1, 0x9C, 0x00, // ќ
-    0x9E, 2, 0xD1, 0x9B, 0x00, // ћ
-    0x9F, 2, 0xD1, 0x9F, 0x00, // џ
-    0xA0, 2, 0xC2, 0xA0, 0x00, // NBSP
-    0xA1, 2, 0xD0, 0x8E, 0x00, // Ў
-    0xA2, 2, 0xD1, 0x9E, 0x00, // ў
-    0xA3, 2, 0xD0, 0x88, 0x00, // Ј
-    0xA4, 2, 0xC2, 0xA4, 0x00, // ¤
-    0xA5, 2, 0xD2, 0x90, 0x00, // Ґ
-    0xA6, 2, 0xC2, 0xA6, 0x00, // ¦
-    0xA7, 2, 0xC2, 0xA7, 0x00, // §
-    0xA8, 2, 0xD0, 0x81, 0x00, // Ё
-    0xA9, 2, 0xC2, 0xA9, 0x00, // ©
-    0xAA, 2, 0xD0, 0x84, 0x00, // Є
-    0xAB, 2, 0xC2, 0xAB, 0x00, // «
-    0xAC, 2, 0xC2, 0xAC, 0x00, // ¬
-    0xAD, 2, 0xC2, 0xAD, 0x00, // SHY
-    0xAE, 2, 0xC2, 0xAE, 0x00, // ®
-    0xAF, 2, 0xD0, 0x87, 0x00, // Ї
-    0xB0, 2, 0xC2, 0xB0, 0x00, // °
-    0xB1, 2, 0xC2, 0xB1, 0x00, // ±
-    0xB2, 2, 0xD0, 0x86, 0x00, // І
-    0xB3, 2, 0xD1, 0x96, 0x00, // і
-    0xB4, 2, 0xD2, 0x91, 0x00, // ґ
-    0xB5, 2, 0xC2, 0xB5, 0x00, // µ
-    0xB6, 2, 0xC2, 0xB6, 0x00, // ¶
-    0xB7, 2, 0xC2, 0xB7, 0x00, // ·
-    0xB8, 2, 0xD1, 0x91, 0x00, // ё
-    0xB9, 3, 0xE2, 0x84, 0x96, // №
-    0xBA, 2, 0xD1, 0x94, 0x00, // є
-    0xBB, 2, 0xC2, 0xBB, 0x00, // »
-    0xBC, 2, 0xD1, 0x98, 0x00, // ј
-    0xBD, 2, 0xD0, 0x85, 0x00, // Ѕ
-    0xBE, 2, 0xD1, 0x95, 0x00, // ѕ
-    0xBF, 2, 0xD1, 0x97, 0x00, // ї
-    0x00
-  };
-  int length = strlen(in_buff);
-  while(read_offset < length) {
-    byte = in_buff[read_offset];
-    read_offset++;
-
-    if(byte <= 0x7F) {
-      out_buff[write_offset] = byte;
-      write_offset++;
-    }
-    else {
-      for(i = 0; byte_to_bytes[i] != 0x00; i += 5) {
-        if(byte_to_bytes[i] == byte) {
-          if(byte_to_bytes[i + 1] >= 1) {
-            out_buff[write_offset] = byte_to_bytes[i + 2];
-            write_offset++;
-          }
-          if(byte_to_bytes[i + 1] >= 2) {
-            out_buff[write_offset] = byte_to_bytes[i + 3];
-            write_offset++;
-          }
-          if(byte_to_bytes[i + 1] >= 3) {
-            out_buff[write_offset] = byte_to_bytes[i + 4];
-            write_offset++;
-          }
-          break;
-        }
-      }
-      // А-П
-      if(byte >= 0xC0 && byte <= 0xCF) {
-        out_buff[write_offset] = 0xD0;
-        write_offset++;
-        out_buff[write_offset] = 0x90 + byte - 0xC0;
-        write_offset++;
-      }
-      // Р-Я а-п
-      if(byte >= 0xD0 && byte <= 0xEF) {
-        out_buff[write_offset] = 0xD0;
-        write_offset++;
-        out_buff[write_offset] = 0xA0 + byte - 0xD0;
-        write_offset++;
-      }
-      // р-я
-      if(byte >= 0xF0 && byte <= 0xFF) {
-        out_buff[write_offset] = 0xD1;
-        write_offset++;
-        out_buff[write_offset] = 0x80 + byte - 0xF0;
-        write_offset++;
-      }
-    }
-  }
-  out_buff[write_offset] = 0;
-}
-
-void cp1251_to_translit(char *in_buff, char *out_buff) {
-  char *encoding = "ABVGDEJZIJKLMNOPRSTUFHC4WW'I'EUAabvgdejzijklmnoprstufhc4ww'i'eua";
-  int read_offset = 0;
-  int write_offset = 0;
-  unsigned char byte;
-  int length = strlen(in_buff);
-  while(read_offset < length) {
-    byte = in_buff[read_offset];
-    read_offset++;
-
-    if(byte <= 0x7F) {
-      out_buff[write_offset] = byte;
-      write_offset++;
-    }
-    else {
-      // Ё
-      if(byte == 0xA8) {
-        out_buff[write_offset] = 'E';
-        write_offset++;
-      }
-      // ё
-      if(byte == 0xB8) {
-        out_buff[write_offset] = 'e';
-        write_offset++;
-      }
-      // Остальные
-      if(byte >= 0xC0) {
-        out_buff[write_offset] = *(encoding + byte - 0xC0);
-        write_offset++;
-      }
-    }
-  }
-  out_buff[write_offset] = 0;
-}
-
-// Проверка на начало однобайтового символа
-char utf8_is_single_byte(char byte1) {
-  if(byte1 <= 0x7F) {
-    return 1;
-  }
-  return 0;
-}
-
-// Проверка на начало двухбайтового символа
-char utf8_is_double_byte(char byte1) {
-  if(byte1 > 0x7F && byte1 <= 0xDF) {
-    return 1;
-  }
-  return 0;
-}
-
-// Проверка на начало трёхбайтового символа
-char utf8_is_triple_byte(char byte1) {
-  if(byte1 > 0xDF && byte1 <= 0xEF) {
-    return 1;
-  }
-  return 0;
-}
-
-// Проверка на начало четырёхбайтового символа
-char utf8_is_quad_byte(char byte1) {
-  if(byte1 > 0xEF && byte1 <= 0xF4) {
-    return 1;
-  }
-  return 0;
-}
-
-// Проверка, является ли корректной строкой UTF-8
-int is_correct_utf8_string(char *str) {
-  int offset = 0;
-  while(offset <= strlen(str)) {
-    if(str[offset] <= 0x7F) offset++;
-    else if(str[offset] <= 0xDF) {
-      // Первый байт из диапазона 0xC2 - 0xDF - маска B110xxxxx
-      if(str[offset] < 0xC2) return 0;
-      // Второй байт из диапазона 0x80 - 0xBF - маска B10xxxxxx
-      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
-      offset += 2;
-    }
-    else if(str[offset] <= 0xDF) {
-      // Первый байт из диапазона 0xC2 - 0xDF - маска B110xxxxx
-      if(str[offset] < 0xC2) return 0;
-      // Второй байт из диапазона 0x80 - 0xBF - маска B10xxxxxx
-      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
-      offset += 2;
-    }
-    else if(str[offset] <= 0xEF) {
-      // Первый байт из диапазона 0xE0 - 0xEF - маска B1110xxxx
-      // Второй и третий байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
-      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
-      if(str[offset + 2] < 0x80 || str[offset + 2] > 0xBF) return 0;
-      offset += 3;
-    }
-    else if(str[offset] <= 0xF4) {
-      // Первый байт из диапазона 0xF0 - 0xF4 - маска B11110xxx
-      // Второй и дальше байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
-      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
-      if(str[offset + 2] < 0x80 || str[offset + 2] > 0xBF) return 0;
-      if(str[offset + 3] < 0x80 || str[offset + 3] > 0xBF) return 0;
-      offset += 4;
-    }
-    else {
-      return 0;
-    }
-  }
-  return 1;
-}
-
-// Двоичный файл или нет (содержит нули)
-// Если есть символы 0-8, 11-12, 14-19, то двочиный
-char is_binary_file(char *filename) {
-  fs::File file;
-  int offset = 0;
-  int byte;
-  char result = 0;
-  file = Storage->open(filename);
-  while(file.available()) {
-    byte = file.read();
-    if(byte >= 0 && byte <= 8 || byte == 11 || byte == 12 || byte >= 14 && byte <= 19) {
-      result = 1;
-      break;
-    }
-    offset++;
-    if(offset >= 1024) break;
-  }
-  file.close();
-  return result;
-}
-
-// Папка или нет
-char is_directory(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 0;
-  file = Storage->open(filename);
-  result = file.isDirectory();
-  file.close();
-  return result;
-}
-
-// Пустая папка или нет
-char is_empty_directory(char *filename) {
-  fs::File file;
-  fs::File current_dir;
-  int bytes;
-  char result = 1;
-  current_dir = Storage->open(filename);
-  if(!current_dir.isDirectory()) return 0;
-
-  // Смотрим содержимое папки, пропускаем . и ..
-  // Любой другой элемент - непустая папка
-  while(file = current_dir.openNextFile()) {
-    if(strcmp(file.name(), ".") == 0) continue;
-    if(strcmp(file.name(), "..") == 0) continue;
-    result = 0;
-    break;
-  }
-  current_dir.close();
-
-  return result;
-}
-
-// Пустой файл или нет
-char is_empty_file(char *filename) {
-  if(get_file_size(filename) == 0) return 1;
-  return 0;
-}
-
-long get_file_size(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 0;
-  file = Storage->open(filename);
-  result = file.size();
-  file.close();
-  return result;
-}
-
-// BMP или нет
-char is_bmp_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 54 байта
-  if(file.size() < 54) result = 0;
-  // Файл начинается буквами BM
-  if(file.read() != 'B') result = 0;
-  if(file.read() != 'M') result = 0;
-  file.close();
-  return result;
-}
-
-// PNG или нет
-char is_png_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 67 байта
-  if(file.size() < 67) result = 0;
-  // Файл начинается буквами BM
-  if(file.read() != 0x89) result = 0;
-  if(file.read() != 'P') result = 0;
-  if(file.read() != 'N') result = 0;
-  if(file.read() != 'G') result = 0;
-  file.close();
-  return result;
-}
-
-// JPEG или нет
-char is_jpeg_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 107 байт
-  if(file.size() < 107) result = 0;
-  // Файл начинается буквами BM
-  if(file.read() != 0xFF) result = 0;
-  if(file.read() != 0xD8) result = 0;
-  if(file.read() != 0xFF) result = 0;
-  file.close();
-  return result;
-}
-
-// WEBP или нет
-char is_webp_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 47 байт
-  if(file.size() < 47) result = 0;
-  // Файл начинается буквами BM
-  if(file.read() != 'R') result = 0;
-  if(file.read() != 'I') result = 0;
-  if(file.read() != 'F') result = 0;
-  if(file.read() != 'F') result = 0;
-  file.close();
-  return result;
-}
-
-// MP3 или нет
-char is_mp3_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 417 байт
-  if(file.size() < 417) result = 0;
-  // Файл начинается буквами ID3
-  if(file.read() != 'I') result = 0;
-  if(file.read() != 'D') result = 0;
-  if(file.read() != '3') result = 0;
-  file.close();
-  return result;
-}
-
-// WAV или нет
-char is_wav_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 44 байт
-  if(file.size() < 44) result = 0;
-  // Файл начинается буквами ID3
-  if(file.read() != 'R') result = 0;
-  if(file.read() != 'I') result = 0;
-  if(file.read() != 'F') result = 0;
-  if(file.read() != 'F') result = 0;
-  file.close();
-  return result;
-}
+#endif // IS_BLE_ENABLED
+
+// ====================================================
+// I2C сканер
+// ====================================================
 
 #define I2C_MAX_DEVICES 127
 
@@ -21804,6 +21493,7 @@ void dashboard(char mode, char *io_buff) {
     "Bitcoin",
     "Random Facts",
     "HF Propagation",
+    "Intervals",
     NULL
   };
   char app_icon[] = {
@@ -21907,6 +21597,10 @@ void dashboard(char mode, char *io_buff) {
 #ifdef IS_WIFI_ENABLED
         dashboard_hf_propagation();
 #endif // IS_WIFI_ENABLED
+      }
+      // Intervals
+      if(button_pressed == 12) {
+        dashboard_intervals();
       }
 
       clearScreen();
@@ -22905,6 +22599,139 @@ void dashboard_hf_propagation() {
       drawAppTitle("Exit");
       touchWaitRelease();
       touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+void dashboard_intervals() {
+  char buff[80];
+  int i, j;
+  int x, y;
+  float val;
+  int result;
+  long prev_update_millis = 0;
+  long info_update_data_millis = 0;
+  long interval;
+  int base_offset = 75;
+  int button_pressed;
+  fs::File file;
+  char update_file = 1;
+  char *data = NULL;
+  char *tmp = NULL;
+  char interval_type = 's';
+  char *buttons[] = {
+    "Switch unit",
+    "Set intervals",
+    NULL
+  };
+
+  data = (char*)malloc(4096 * sizeof(char));
+
+  clearScreen();
+  drawAppTitle("Intervals");
+
+  while(1) {
+    if(update_file) {
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+      drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 2, 1);
+
+      if(!Storage->exists("/Settings/Intervals")) {
+        file = Storage->open("/Settings/Intervals", FILE_WRITE);
+        sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d,New year %04d", global_year + 1, 1, 1, 0, 0, 0, global_year + 1);
+        file.println(buff);
+        file.close();
+      }
+      read_file_to_buff("/Settings/Intervals", 4096, data);
+      update_file = 0;
+    }
+
+    if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
+      prev_update_millis = millis();
+
+      // Выводим всё
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      sprintf(buff, " %d:%02d:%02d ", global_hours, global_minutes, global_seconds);
+      tft.drawCentreString(buff, tft.width() / 2, 27, FONT_BIGGER);
+
+      if(millis() - info_update_data_millis >= 1000) {
+        info_update_data_millis = millis();
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+        tmp = data;
+        for(y = 0; y < 12; y++) {
+          if(strlen(tmp) == 0) break;
+          if(!strchr(tmp, ',')) break;
+          interval = get_unixtime_from_string(tmp) - get_unixtime_from_current_datetime();
+
+          if(interval_type == 's') {
+            sprintf(buff, "%d %c", (long)interval, interval_type);
+          }
+          else if(interval_type == 'm') {
+            sprintf(buff, "%0.2f %c", (double)interval / 60, interval_type);
+          }
+          else if(interval_type == 'h') {
+            sprintf(buff, "%0.2f %c", (double)interval / 3600, interval_type);
+          }
+          else if(interval_type == 'd') {
+            sprintf(buff, "%0.2f %c", (double)interval / 86400, interval_type);
+          }
+          tft.drawRightString(buff, tft.width() - 2, 96 + y * 16, FONT_DEFAULT);
+          j = tft.textWidth(buff, FONT_DEFAULT);
+          //Serial.println(buff);
+
+          tmp = strchr(tmp, ',');
+          if(!tmp) break;
+          tmp++;
+          memcpy(buff, tmp, 79);
+          buff[79] = 0;
+          for(i = 0; i < strlen(buff); i++) {
+            if(buff[i] == '\n' || buff[i] == '\r') {
+              buff[i] = 0;
+              break;
+            }
+          }
+          x = tft.drawString(buff, 1, 96 + y * 16, FONT_DEFAULT);
+          tft.fillRect(x + 1, 96 + y * 16, tft.width() - 2 - j - x - 1, 15, color_scheme_bg);
+          tft.fillRect(x + 1, 96 + y * 16 + 15, tft.width() - 2 - j - x - 1, 1, color_scheme_inactive_fg);
+
+          //Serial.println(buff);
+
+          // Переходим к следующей строке
+          tmp = strchr(tmp, '\n');
+          if(!tmp) break;
+          while(*tmp == '\n' || *tmp == '\r') tmp++;
+          if(!tmp) break;
+        }
+      }
+    }
+
+    if(!touchCheckNowait()) continue;
+
+    //drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 2, 1);
+    button_pressed = touchCheckMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 2, 1);
+    if(button_pressed != -1) {
+      // Switch unit
+      if(button_pressed == 0) {
+        if(interval_type == 's') interval_type = 'm';
+        else if(interval_type == 'm') interval_type = 'h';
+        else if(interval_type == 'h') interval_type = 'd';
+        else interval_type = 's';
+      }
+      // Set intervals
+      if(button_pressed == 1) {
+        edit_file("Intervals", "/Settings/Intervals");
+        update_file = 1;
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      free(data);
       return;
     }
     touchWaitRelease();
@@ -24406,8 +24233,1369 @@ void clock_control(char mode, char *io_buff) {
 }
 
 // ====================================================
+// Общие PIM-функции
+// ====================================================
+
+#define PIM_FILES_COUNT_MAX 1000
+// Рисует типичное приложение PIM (заметки, контакты, книги, расходы, дела, рисунки)
+// title - заголовок приложения
+// path - путь к файлам
+// file_to_list_function - функция для преобразования содержимого файла в элемент списка
+// buttons - кнопки действий
+// action_function - функция активации по индексу кнопки
+void pim_app(char *title, char *path, function_conversion_pointer file_to_list_function, char **buttons, function_action_pointer action_function) {
+  fs::File current_dir;
+  fs::File file;
+  int button_pressed;
+  int buttons_count;
+  int file_offset = 0;
+  int file_selected = 0;
+  int i, j;
+  int offset;
+  char buff[80];
+  char left[80];
+  char right[80];
+  char byte;
+  char update_list_flag = 1;
+  char **files_list = NULL;
+  char **visible_list = NULL;
+  char *tmp = NULL;
+
+  // Очищаем экран
+  clearScreen();
+  drawAppTitle(title);
+
+  if(storage_type == STORAGE_TYPE_NONE || !Storage) {
+    drawError("No storage available");
+    return;
+  }
+
+  // Считаем число кнопок
+  buttons_count = 0;
+  while(buttons[buttons_count]) {
+    buttons_count++;
+  }
+
+  // Резервируем память, инициализируем
+  files_list = (char **)malloc(PIM_FILES_COUNT_MAX * sizeof(char *));
+  visible_list = (char **)malloc(PIM_FILES_COUNT_MAX * sizeof(char *));
+  for(i = 0; i < PIM_FILES_COUNT_MAX; i++) {
+    files_list[i] = NULL;
+    visible_list[i] = NULL;
+  }
+
+  update_list_flag = 1;
+  while(1) {
+    // Обновляем список файлов если нужно
+    if(update_list_flag) {
+      // Перерисовываем экран
+      drawAppTitle(title);
+      // Тонкая полоска между заголовком и списком
+      tft.fillRect(0, 16, tft.width(), 4, color_scheme_bg);
+      // Кнопки
+      tft.fillRect(0, 276, tft.width(), tft.height() - 276, color_scheme_bg);
+    
+      //tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+      offset = 0;
+      // Освобождаем память
+      for(i = 0; i < PIM_FILES_COUNT_MAX; i++) {
+        if(files_list[i]) {
+          free(files_list[i]);
+        }
+        if(visible_list[i]) {
+          free(visible_list[i]);
+        }
+        files_list[i] = NULL;
+        visible_list[i] = NULL;
+      }
+      // Получаем список файлов
+      current_dir = Storage->open(path);
+      if(!current_dir) {
+        Storage->mkdir(path);
+        current_dir = Storage->open(path);
+        if(!current_dir) {
+          drawError("Cannot open path");
+          return;
+        }
+      }
+      while(file = current_dir.openNextFile()) {
+        // Вызываем функцию имени
+        if((*file_to_list_function)(file, buff)) {
+          files_list[offset] = (char *)malloc((strlen(file.name()) + 1) * sizeof(char));
+          visible_list[offset] = (char *)malloc((strlen(buff) + 1) * sizeof(char));
+
+          strcpy(files_list[offset], file.name());
+          strcpy(visible_list[offset], buff);
+          offset++;
+        }
+      }
+
+      // Сортировка
+      for(j = 0; j < offset; j++) {
+        for(i = j + 1; i < offset; i++) {
+          if(strcmp(visible_list[i], visible_list[j]) < 0) {
+            Serial.printf("Excahnge %s and %s\n", visible_list[i], visible_list[j]);
+            tmp = visible_list[i];
+            visible_list[i] = visible_list[j];
+            visible_list[j] = tmp;
+            tmp = files_list[i];
+            files_list[i] = files_list[j];
+            files_list[j] = tmp;
+          }
+        }
+      }
+      update_list_flag = 0;
+    }
+
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+
+    touchCheckList(0, 16 + 4, tft.width(), 16 * 16, visible_list, 16, &file_offset, &file_selected);
+    drawList(0, 16 + 4, tft.width(), 16 * 16, visible_list, 16, &file_offset, &file_selected);
+
+    drawButtonMatrix(0, 280, tft.width(), 40, buttons, buttons_count, 1);
+
+    touchWaitPress();
+
+    touchCheckList(0, 16 + 4, tft.width(), 16 * 16, visible_list, 16, &file_offset, &file_selected);
+    button_pressed = touchCheckMatrix(0, 280, tft.width(), 40, buttons, buttons_count, 1);
+    if(button_pressed != -1) {
+      (*action_function)(button_pressed, files_list[file_selected]);
+      update_list_flag = 1;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      for(i = 0; i < PIM_FILES_COUNT_MAX; i++) {
+        if(files_list[i]) {
+          free(files_list[i]);
+        }
+        if(visible_list[i]) {
+          free(visible_list[i]);
+        }
+      }
+      free(files_list);
+      free(visible_list);
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+// Переименовывает файл в соответствии с содержимым
+void pim_rename_file(char *path, char *old_filename, char *prefix) {
+  fs::File file;
+  char old_path_filename[80];
+  char new_path_filename[80];
+  char new_filename[80];
+  char byte;
+  int offset;
+
+  sprintf(old_path_filename, "%s/%s", path, old_filename);
+  file = Storage->open(old_path_filename);
+  new_filename[0] = 0;
+  offset = 0;
+  while(file.available()) {
+    byte = file.read();
+    // Если уже хоть что-то в названии есть - достаточно
+    if(offset > 0 && (byte == '\n' || byte == '\r')) {
+      break;
+    }
+    // Только алфавитно-цифровые символы
+    if(byte >= '0' && byte <= '9' || byte == ' ' || byte >= 'a' && byte <= 'z'
+      || byte >= 'A' && byte <= 'Z' || byte == 0xA8 || byte == 0xB8 || byte >= 0xC0) {
+      // Пробел меняем на подчёркивание
+      if(byte == ' ') byte = '_';
+      new_filename[offset] = byte;
+      offset++;
+      new_filename[offset] = 0;
+      if(offset > 20) break;
+    }
+    if(byte == '\n' || byte == '\r') break;
+  }
+  file.close();
+
+  cp1251_to_translit(new_filename, new_filename);
+  // Проверяем если название изменилось, и такого названия нет
+  if(strcmp(old_filename, new_filename) != 0 && strcmp("", new_filename) != 0) {
+    sprintf(new_path_filename, "%s/%s%s", path, prefix ? prefix : "", new_filename);
+    if(Storage->exists(new_path_filename)) {
+      strcpy(new_filename, "");
+    }
+  }
+
+  // Если название не сформировалось даём ему первый свободный цифровой номер
+  if(strcmp("", new_filename) == 0) {
+    for(offset = 1;; offset++) {
+      sprintf(new_filename, "%d", offset);
+      sprintf(new_path_filename, "%s/%s%s", path, prefix ? prefix : "", new_filename);
+      file = Storage->open(new_path_filename);
+      if(!file) {
+        break;
+      }
+      file.close();
+    }
+  }
+
+  // Переименовываем файл если есть новое название, и оно отличается
+  if(strcmp("", new_filename) != 0 && strcmp(old_filename, new_filename)) {
+    sprintf(new_path_filename, "%s/%s%s", path, prefix ? prefix : "", new_filename);
+    // Проверяем что мы не затрём какой-нибудь файл
+    file = Storage->open(new_path_filename);
+    if(!file) {
+      // И только тогда переименовываем
+      Storage->rename(old_path_filename, new_path_filename);
+    }
+    else {
+      file.close();
+    }
+  }
+}
+
+// ====================================================
 // Общие функции для устройства
 // ====================================================
+
+uint32_t ip2long(IPAddress ip) {
+  return ((uint32_t)ip[0] << 24) |
+          ((uint32_t)ip[1] << 16) |
+          ((uint32_t)ip[2] << 8) |
+          ip[3];
+}
+
+IPAddress long2ip(uint32_t n) {
+  return IPAddress(
+    (n >> 24) & 0xFF,
+    (n >> 16) & 0xFF,
+    (n >> 8)  & 0xFF,
+    n & 0xFF
+  );
+}
+
+void file_base16_encode(char *from_filename, char *to_filename) {
+  char out_buff[4];
+  int byte;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  while(file_from.available()) {
+    byte = file_from.read();
+    sprintf(out_buff, "%02X", byte);
+    if(to_filename) file_to.print(out_buff); else terminal_print(out_buff);
+  }
+  
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
+
+void file_base16_decode(char *from_filename, char *to_filename) {
+  char in_buff[4];
+  int byte, byte2;
+  int byte_out;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  memset(in_buff, 0, 4);
+  while(file_from.available()) {
+    byte_out = 0;
+    in_buff[0] = file_from.read();
+    in_buff[1] = file_from.read();
+    sscanf(in_buff, "%02X", &byte_out);
+    if(to_filename) file_to.print((char)byte_out); else terminal_print_char((char)byte_out);
+  }
+  
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
+
+void file_base32_encode(char *from_filename, char *to_filename) {
+  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  char byte_out;
+  char byte_in;
+  int bit_index_in = 0;
+  int bit_index_out = 0;
+  int index_out = 0;
+  int byte_index_out = 0;
+  int eof = 0;
+  int i;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  bit_index_in = 0;
+  byte_out = 0;
+  index_out = 0;
+  eof = 0;
+  byte_index_out = 0;
+  while(file_from.available() || bit_index_in > 0 || bit_index_out > 0) {
+    if(bit_index_in == 0) {
+      if(file_from.available()) {
+        byte_in = file_from.read();
+      }
+      else {
+        byte_in = 0;
+      }
+    }
+
+    index_out = index_out << 1 | ((byte_in >> (7 - bit_index_in)) & 1);
+    
+    bit_index_out++;
+    if(bit_index_out == 5) {
+      byte_out = alphabet[index_out];
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      bit_index_out = 0;
+      index_out = 0;
+      byte_index_out = (byte_index_out + 1) % 8;
+
+      if(!file_from.available() && eof) {
+        if(byte_index_out > 0) {
+          byte_out = '=';
+          for(i = byte_index_out; i < 8; i++) {
+            if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+          }
+        }
+        break;
+      }
+    }
+    bit_index_in++;
+    if(bit_index_in == 8) {
+      if(!file_from.available()) eof = 1;
+      bit_index_in = 0;
+    }
+  }
+
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
+
+void file_base32_decode(char *from_filename, char *to_filename) {
+  char byte_out;
+  char byte_in;
+  int bit_index_in = 0;
+  int bit_index_out = 0;
+  int index_out = 0;
+  int byte_index_out = 0;
+  int eof = 0;
+  int i;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  bit_index_in = 0;
+  byte_out = 0;
+  index_out = 0;
+  eof = 0;
+  byte_index_out = 0;
+  while(file_from.available() || bit_index_in > 0 || bit_index_out > 0) {
+    if(bit_index_in == 0) {
+      if(file_from.available()) {
+        byte_in = file_from.read();
+        if(byte_in == '=') break;
+        byte_in = base32_get_bits(byte_in);
+      }
+      else {
+        byte_in = 0;
+      }
+    }
+
+    index_out = index_out << 1 | ((byte_in >> (4 - bit_index_in)) & 1);
+    
+    bit_index_out++;
+    if(bit_index_out == 8) {
+      byte_out = index_out;
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      bit_index_out = 0;
+      index_out = 0;
+    }
+    bit_index_in++;
+    if(bit_index_in == 5) {
+      if(!file_from.available()) eof = 1;
+      bit_index_in = 0;
+    }
+  }
+
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
+
+char base32_get_bits(char c) {
+  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  if(c >= 'A' && c <= 'Z') return c - 'A';
+  if(c >= '2' && c <= '7') return c - '2' + 26;
+
+  return -1;
+}
+
+void file_base64_encode(char *from_filename, char *to_filename) {
+  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  char in_buff[3];
+  char out_buff[4];
+  char byte_out;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  while(file_from.available()) {
+    in_buff[0] = file_from.read();
+    // xxxxxx00 00000000 00000000
+    out_buff[0] = in_buff[0] >> 2;
+    byte_out = alphabet[out_buff[0]];
+    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+    
+    if(!file_from.available()) {
+      out_buff[1] = ((in_buff[0] & B00000011) << 4);
+      byte_out = alphabet[out_buff[1]];
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      byte_out = '=';
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      break;
+    }
+
+    in_buff[1] = file_from.read();
+    // 000000xx xxxx0000 00000000
+    out_buff[1] = ((in_buff[0] & B00000011) << 4) | (in_buff[1] >> 4);
+    byte_out = alphabet[out_buff[1]];
+    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+    if(!file_from.available()) {
+      out_buff[2] = ((in_buff[1] & B00001111) << 2);
+      byte_out = alphabet[out_buff[2]];
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      byte_out = '=';
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      break;
+    }
+
+    in_buff[2] = file_from.read();
+    // 00000000 0000xxxx xx000000
+    out_buff[2] = ((in_buff[1] & B00001111) << 2) | (in_buff[2] >> 6);
+    byte_out = alphabet[out_buff[2]];
+    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+
+    // 00000000 00000000 00xxxxxx
+    out_buff[3] = (in_buff[2] & B00111111);
+    byte_out = alphabet[out_buff[3]];
+    if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+  }
+  
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
+
+void file_base64_decode(char *from_filename, char *to_filename) {
+  char byte_out;
+  char byte_in;
+  int bit_index_in = 0;
+  int bit_index_out = 0;
+  int index_out = 0;
+  int byte_index_out = 0;
+  int eof = 0;
+  int i;
+  fs::File file_from;
+  fs::File file_to;
+
+  file_from = Storage->open(from_filename);
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+  }
+  bit_index_in = 0;
+  byte_out = 0;
+  index_out = 0;
+  eof = 0;
+  byte_index_out = 0;
+  while(file_from.available() || bit_index_in > 0 || bit_index_out > 0) {
+    if(bit_index_in == 0) {
+      if(file_from.available()) {
+        byte_in = file_from.read();
+        if(byte_in == '=') break;
+        byte_in = base64_get_bits(byte_in);
+      }
+      else {
+        byte_in = 0;
+      }
+    }
+
+    index_out = index_out << 1 | ((byte_in >> (5 - bit_index_in)) & 1);
+    
+    bit_index_out++;
+    if(bit_index_out == 8) {
+      byte_out = index_out;
+      if(to_filename) file_to.print(byte_out); else terminal_print_char(byte_out);
+      bit_index_out = 0;
+      index_out = 0;
+    }
+    bit_index_in++;
+    if(bit_index_in == 6) {
+      if(!file_from.available()) eof = 1;
+      bit_index_in = 0;
+    }
+  }
+
+  if(to_filename) {
+    file_to.close();
+  }
+  else {
+    terminal_println("");
+  }
+  file_from.close();
+}
+
+char base64_get_bits(char c) {
+  char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  if(c >= 'A' && c <= 'Z') return c - 'A';
+  if(c >= 'a' && c <= 'z') return c - 'a' + 26;
+  if(c >= '0' && c <= '9') return c - '0' + 26 + 26;
+  if(c == '+') return 62;
+  if(c == '/') return 63;
+
+  return -1;
+}
+
+void file_aes_encrypt(char *password, char *from_filename, char *to_filename) {
+  char *data_in;
+  char *data_out;
+  long offset;
+  long in_file_size;
+  long out_file_size;
+  int i;
+  fs::File file_from;
+  fs::File file_to;
+
+  memset(aes_encryption_key, 0, 32);
+  for(i = 0; i < 32; i++) {
+    aes_encryption_key[i] = password[i];
+    if(password[i] == 0) break;
+  }
+
+  file_from = Storage->open(from_filename);
+  if(!file_from) {
+    terminal_println("Unable to open input file");
+    return;
+  }
+  in_file_size = file_from.size();
+  data_in = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
+  if(!data_in) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  offset = 0;
+  while(file_from.available()) {
+    data_in[offset] = file_from.read();
+    offset++;
+    data_in[offset] = 0;
+  }
+  file_from.close();
+
+  out_file_size = 16 + (((in_file_size + 1) / 16) + 1) * 16;
+  data_out = (char *)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
+  if(!data_out) {
+    terminal_println("Unable to reserve memory");
+    free(data_in);
+    return;
+  }
+
+  Serial.printf("encryptAES %s %d %d\n", data_in, in_file_size, out_file_size);
+  terminal_println("encryptAES before"); terminal_show_screen(); delay(1000);
+  encryptAES((uint8_t*) data_in, in_file_size + 1, (uint8_t*) data_out, out_file_size);
+  terminal_println("encryptAES after"); terminal_show_screen(); delay(1000);
+
+  if(to_filename) {
+    file_to = Storage->open(to_filename, FILE_WRITE);
+    file_to.write((const uint8_t *)data_out, out_file_size);
+    file_to.close();
+  }
+  else {
+    for(offset = 0; offset < out_file_size; offset++) {
+      terminal_print_char(data_out[offset]);
+    }
+  }
+}
+
+void file_aes_decrypt(char *password, char *from_filename, char *to_filename) {
+  char *data_in;
+  char *data_out;
+  long offset;
+  long in_file_size;
+  long out_file_size;
+  int i;
+  fs::File file_from;
+
+  memset(aes_encryption_key, 0, 32);
+  for(i = 0; i < 32; i++) {
+    aes_encryption_key[i] = password[i];
+    if(password[i] == 0) break;
+  }
+
+  file_from = Storage->open(from_filename);
+  if(!file_from) {
+    terminal_println("Unable to open input file");
+    return;
+  }
+  in_file_size = file_from.size();
+  data_in = (char *)malloc(in_file_size * sizeof(char));
+  if(!data_in) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  offset = 0;
+  data_in[offset] = 0;
+  while(file_from.available()) {
+    data_in[offset] = file_from.read();
+    offset++;
+  }
+  file_from.close();
+
+  // Выход меньше на 16 байт (вектор инициализации)
+  out_file_size = in_file_size - 16;
+  data_out = (char *)malloc(out_file_size * sizeof(char));
+  if(!data_out) {
+    terminal_println("Unable to reserve memory");
+    free(data_in);
+    return;
+  }
+  
+  decryptAES((uint8_t*) data_in, in_file_size, (uint8_t*) data_out);
+  
+  if(to_filename) {
+    write_file_from_buff(to_filename, data_out);
+  }
+  else {
+    terminal_print(data_out);
+    terminal_println("");
+  }
+}
+
+void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
+  int byte1, byte2, byte3;
+  int byte_out;
+  char buff[80];
+  fs::File file_from;
+  fs::File file_to;
+  file_from = Storage->open(from_filename);
+  file_to = Storage->open(to_filename, FILE_WRITE);
+  while(file_from.available()) {
+    byte1 = file_from.read();
+    if(byte1 < 0xC0) {
+      byte_out = byte1;
+    }
+    else {
+      byte2 = file_from.read();
+      // Трёхбайтовые символы
+      if(byte1 == 0xE2 && byte2 == 0x80) {
+        byte3 = file_from.read();
+        byte_out = '?';
+        if(byte3 == 0x90) byte_out = '-'; // дефис
+        else if(byte3 == 0x91) byte_out = '-'; // неразрывный дефис
+        else if(byte3 == 0x92) byte_out = '-'; // фигурное тире (по ширине цифры)
+        else if(byte3 == 0x93) byte_out = 0x96; // N dash
+        else if(byte3 == 0x94) byte_out = 0x97; // M dash
+        else if(byte3 == 0x95) byte_out = '-'; // Горизонтальная черта
+        else if(byte3 == 0x98) byte_out = 0x91; // Левая одинарная кавычка
+        else if(byte3 == 0x99) byte_out = 0x92; // Правая одинарная кавычка
+        else if(byte3 == 0x9A) byte_out = 0x83; // 
+        else if(byte3 == 0x9C) byte_out = 0x93; // Открывающая кавычка (верх)
+        else if(byte3 == 0x9D) byte_out = 0x94; // Правая двойная кавычка
+        else if(byte3 == 0x9E) byte_out = 0x84; // Нижняя открывающая двойная кавычка
+        else if(byte3 == 0xA0) byte_out = 0x86; // Типографский крестик
+        else if(byte3 == 0xA1) byte_out = 0x87; // Двойной типографский крестик
+        else if(byte3 == 0xA2) byte_out = 0x95; // Буллет
+        else if(byte3 == 0xA6) byte_out = 0x85; // Троеточие
+        else if(byte3 == 0xB0) byte_out = 0x89; // Промилле
+        else if(byte3 == 0xB9) byte_out = 0x8B; // Открывающая одиночная ёлочка
+        else if(byte3 == 0xBA) byte_out = 0x9B; // Закрывающая одиночная ёлочка
+        else {
+          sprintf(buff, "Unknown 3-byte symbol: %02X %02X %02X", byte1, byte2, byte3);
+          terminal_println(buff);
+          Serial.println(buff);
+        }
+      }
+      else if(byte1 == 0xE2 && byte2 == 0x82) {
+        if(byte3 == 0xAC) byte_out = 0x88; // Евро
+      }
+      else if(byte1 == 0xE2 && byte2 == 0x84) {
+        if(byte3 == 0x96) byte_out = 0xB9; // №
+        if(byte3 == 0xA2) byte_out = 0x99; // TM
+      }
+      else {
+        byte_out = utf8_to_cp1251_byte(byte1, byte2);
+      }
+    }
+    file_to.write(byte_out);
+  }
+  file_to.close();
+  file_from.close();
+}
+
+void file_cp1251_to_utf8(char *from_filename, char *to_filename) {
+  char in_buff[2];
+  char out_buff[3];
+  fs::File file_from;
+  fs::File file_to;
+
+  in_buff[0] = 0;
+  in_buff[1] = 0;
+
+  file_from = Storage->open(from_filename);
+  file_to = Storage->open(to_filename, FILE_WRITE);
+  while(file_from.available()) {
+    in_buff[0] = file_from.read();
+    cp1251_to_utf8(in_buff, out_buff);
+    if(strlen(out_buff) == 1) {
+      file_to.write(out_buff[0]);
+    }
+    else {
+      file_to.write(out_buff[0]);
+      file_to.write(out_buff[1]);
+    }
+  }
+  file_to.close();
+  file_from.close();
+}
+
+// Конвертировать два байта в cp1251
+char utf8_to_cp1251_byte(char byte1, char byte2) {
+  char byte;
+  byte = byte1;
+  if(byte1 == 0xD0) {
+    if(byte2 == 0x81) byte = 0xA8; // Ё
+    else if(byte2 == 0x82) byte = 0x80; // Ђ
+    else if(byte2 == 0x83) byte = 0x81; // Ѓ
+    else if(byte2 == 0x84) byte = 0xAA; // Є
+    else if(byte2 == 0x85) byte = 0xBD; // Ѕ
+    else if(byte2 == 0x86) byte = 0xB2; // І
+    else if(byte2 == 0x87) byte = 0xAF; // Ї
+    else if(byte2 == 0x88) byte = 0xA3; // Ј
+    else if(byte2 == 0x89) byte = 0x8A; // Љ
+    else if(byte2 == 0x8A) byte = 0x8C; // Њ
+    else if(byte2 == 0x8B) byte = 0x8E; // Ћ
+    else if(byte2 == 0x8C) byte = 0x8D; // Ќ
+    else if(byte2 == 0x8E) byte = 0xA1; // Ў
+    else if(byte2 == 0x8F) byte = 0x8F; // Џ
+    else if(byte2 < 0xA0) {
+      byte = 0xC0 + byte2 - 0x90; // А-П
+    }
+    else {
+      byte = 0xD0 + byte2 - 0xA0; // Р-Я а-п
+    }
+  }
+  else if(byte1 == 0xD1) {
+    if(byte2 == 0x91) byte = 0xB8; // ё
+    else if(byte2 == 0x92) byte = 0x90; // ђ
+    else if(byte2 == 0x93) byte = 0x83; // ѓ
+    else if(byte2 == 0x94) byte = 0xBA; // є
+    else if(byte2 == 0x95) byte = 0xBE; // ѕ
+    else if(byte2 == 0x96) byte = 0xB3; // і
+    else if(byte2 == 0x97) byte = 0xBF; // ї
+    else if(byte2 == 0x98) byte = 0xBC; // ј
+    else if(byte2 == 0x99) byte = 0x9A; // љ
+    else if(byte2 == 0x9A) byte = 0x9C; // њ
+    else if(byte2 == 0x9B) byte = 0x9E; // ћ
+    else if(byte2 == 0x9C) byte = 0x9D; // ќ
+    else if(byte2 == 0x9E) byte = 0xA2; // ў
+    else if(byte2 == 0x9F) byte = 0x9F; // џ
+    else {
+      byte = 0xF0 + byte2 - 0x80; // р-я
+    }
+  }
+  else if(byte1 == 0xD2) {
+    if(byte2 == 0x90) byte = 0x81; // Ґ
+    if(byte2 == 0x91) byte = 0x83; // ґ
+  }
+  else if(byte1 == 0xC2) {
+    if(byte2 == 0xA0) byte = 0xA0; // Неразрывный пробел
+    if(byte2 == 0xA4) byte = 0xA4; // ¤
+    if(byte2 == 0xA6) byte = 0xA6; // ¦
+    if(byte2 == 0xA7) byte = 0xA7; // §
+    if(byte2 == 0xA9) byte = 0xA9; // ©
+    if(byte2 == 0xAB) byte = 0xAB; // Кавычка ёлочка открывающая
+    if(byte2 == 0xAC) byte = 0xAC; // ¬
+    if(byte2 == 0xAD) byte = 0xAD; // Мягкий перенос
+    if(byte2 == 0xAE) byte = 0xAE; // ®
+    if(byte2 == 0xB0) byte = 0xB0; // °
+    if(byte2 == 0xB1) byte = 0xB1; // ±
+    if(byte2 == 0xB5) byte = 0xB5; // µ
+    if(byte2 == 0xB6) byte = 0xB6; // ¶
+    if(byte2 == 0xB7) byte = 0xB7; // ·
+    if(byte2 == 0xBB) byte = 0xBB; // Кавычка ёлочка закрывающая
+  }
+
+  return byte;
+}
+
+void utf8_to_cp1251(char *buff) {
+  int read_offset = 0;
+  int write_offset = 0;
+  unsigned char byte, byte2, byte3, byte4;
+  int length = strlen(buff);
+  while(read_offset < length) {
+    byte = buff[read_offset];
+    read_offset++;
+    if(utf8_is_double_byte(byte)) {
+      //Serial.printf("2-byte: %02X %02X\n", byte, buff[read_offset]);
+      byte = utf8_to_cp1251_byte(byte, buff[read_offset]);
+      read_offset++;
+    }
+    else if(utf8_is_triple_byte(byte)) {
+      byte2 = buff[read_offset + 0];
+      byte3 = buff[read_offset + 1];
+
+      // Трёхбайтовые символы
+      if(byte == 0xE2 && byte2 == 0x80) {
+        byte = '?';
+        if(byte3 == 0x90) byte = '-'; // дефис
+        else if(byte3 == 0x91) byte = '-'; // неразрывный дефис
+        else if(byte3 == 0x92) byte = '-'; // фигурное тире (по ширине цифры)
+        else if(byte3 == 0x93) byte = 0x96; // N dash
+        else if(byte3 == 0x94) byte = 0x97; // M dash
+        else if(byte3 == 0x95) byte = '-'; // Горизонтальная черта
+        else if(byte3 == 0x98) byte = 0x91; // Левая одинарная кавычка
+        else if(byte3 == 0x99) byte = 0x92; // Правая одинарная кавычка
+        else if(byte3 == 0x9A) byte = 0x83; // 
+        else if(byte3 == 0x9C) byte = 0x93; // Открывающая кавычка (верх)
+        else if(byte3 == 0x9D) byte = 0x94; // Правая двойная кавычка
+        else if(byte3 == 0x9E) byte = 0x84; // Нижняя открывающая двойная кавычка
+        else if(byte3 == 0xA0) byte = 0x86; // Типографский крестик
+        else if(byte3 == 0xA1) byte = 0x87; // Двойной типографский крестик
+        else if(byte3 == 0xA2) byte = 0x95; // Буллет
+        else if(byte3 == 0xA6) byte = 0x85; // Троеточие
+        else if(byte3 == 0xB0) byte = 0x89; // Промилле
+        else if(byte3 == 0xB9) byte = 0x8B; // Открывающая одиночная ёлочка
+        else if(byte3 == 0xBA) byte = 0x9B; // Закрывающая одиночная ёлочка
+        else {
+          sprintf(buff, "Unknown 3-byte symbol: %02X %02X %02X", byte, byte2, byte3);
+          terminal_println(buff);
+          Serial.println(buff);
+        }
+      }
+      else if(byte == 0xE2 && byte2 == 0x82) {
+        if(byte3 == 0xAC) byte = 0x88; // Евро
+      }
+      else if(byte == 0xE2 && byte2 == 0x84) {
+        if(byte3 == 0x96) byte = 0xB9; // №
+        if(byte3 == 0xA2) byte = 0x99; // TM
+      }
+      else {
+        Serial.printf("3-byte: %02X %02X %02X\n", byte, byte2, byte3);
+        byte = '?';
+      }
+      read_offset += 2;
+    }
+    else if(utf8_is_quad_byte(byte)) {
+      byte2 = buff[read_offset + 0];
+      byte3 = buff[read_offset + 1];
+      byte4 = buff[read_offset + 2];
+      //Serial.printf("4-byte: %02X %02X %02X %02X\n", byte, buff[read_offset], buff[read_offset + 1], buff[read_offset + 2]);
+      byte = '?';
+      read_offset += 3;
+    }
+    else {
+      //Serial.printf("1-byte: %02X\n", byte);
+    }
+    
+    buff[write_offset] = byte;
+    write_offset++;
+  }
+  buff[write_offset] = 0;
+}
+
+void cp1251_to_utf8(char *in_buff, char *out_buff) {
+  int read_offset = 0;
+  int write_offset = 0;
+  int i;
+  unsigned char byte;
+  // 1251 byte, utf8 bytes (2/3), byte1, byte2, byte3
+  char byte_to_bytes[] = {
+    0x80, 2, 0xD0, 0x82, 0x00, // Ђ
+    0x81, 2, 0xD0, 0x83, 0x00, // Ѓ
+    0x82, 3, 0xE2, 0x80, 0x9A, // ‚
+    0x83, 2, 0xD1, 0x93, 0x00, // ѓ
+    0x84, 3, 0xE2, 0x80, 0x9E, // „
+    0x85, 3, 0xE2, 0x80, 0xA6, // …
+    0x86, 3, 0xE2, 0x80, 0xA0, // †
+    0x87, 3, 0xE2, 0x80, 0xA1, // ‡
+    0x88, 3, 0xE2, 0x82, 0xAC, // €
+    0x89, 3, 0xE2, 0x80, 0xB0, // ‰
+    0x8A, 2, 0xD0, 0x89, 0x00, // Љ
+    0x8B, 3, 0xE2, 0x80, 0xB9, // ‹
+    0x8C, 2, 0xD0, 0x8A, 0x00, // Њ
+    0x8D, 2, 0xD0, 0x8C, 0x00, // Ќ
+    0x8E, 2, 0xD0, 0x8B, 0x00, // Ћ
+    0x8F, 2, 0xD0, 0x8F, 0x00, // Џ
+    0x90, 2, 0xD1, 0x92, 0x00, // ђ
+    0x91, 3, 0xE2, 0x80, 0x98, // ‘
+    0x92, 3, 0xE2, 0x80, 0x99, // ’
+    0x93, 3, 0xE2, 0x80, 0x9C, // “
+    0x94, 3, 0xE2, 0x80, 0x9D, // ”
+    0x95, 3, 0xE2, 0x80, 0xA2, // •
+    0x96, 3, 0xE2, 0x80, 0x93, // –
+    0x97, 3, 0xE2, 0x80, 0x94, // —
+    0x98, 1, 0x20, 0x00, 0x00, //  
+    0x99, 3, 0xE2, 0x84, 0xA2, // ™
+    0x9A, 2, 0xD1, 0x99, 0x00, // љ
+    0x9B, 3, 0xE2, 0x80, 0xBA, // ›
+    0x9C, 2, 0xD1, 0x9A, 0x00, // њ
+    0x9D, 2, 0xD1, 0x9C, 0x00, // ќ
+    0x9E, 2, 0xD1, 0x9B, 0x00, // ћ
+    0x9F, 2, 0xD1, 0x9F, 0x00, // џ
+    0xA0, 2, 0xC2, 0xA0, 0x00, // NBSP
+    0xA1, 2, 0xD0, 0x8E, 0x00, // Ў
+    0xA2, 2, 0xD1, 0x9E, 0x00, // ў
+    0xA3, 2, 0xD0, 0x88, 0x00, // Ј
+    0xA4, 2, 0xC2, 0xA4, 0x00, // ¤
+    0xA5, 2, 0xD2, 0x90, 0x00, // Ґ
+    0xA6, 2, 0xC2, 0xA6, 0x00, // ¦
+    0xA7, 2, 0xC2, 0xA7, 0x00, // §
+    0xA8, 2, 0xD0, 0x81, 0x00, // Ё
+    0xA9, 2, 0xC2, 0xA9, 0x00, // ©
+    0xAA, 2, 0xD0, 0x84, 0x00, // Є
+    0xAB, 2, 0xC2, 0xAB, 0x00, // «
+    0xAC, 2, 0xC2, 0xAC, 0x00, // ¬
+    0xAD, 2, 0xC2, 0xAD, 0x00, // SHY
+    0xAE, 2, 0xC2, 0xAE, 0x00, // ®
+    0xAF, 2, 0xD0, 0x87, 0x00, // Ї
+    0xB0, 2, 0xC2, 0xB0, 0x00, // °
+    0xB1, 2, 0xC2, 0xB1, 0x00, // ±
+    0xB2, 2, 0xD0, 0x86, 0x00, // І
+    0xB3, 2, 0xD1, 0x96, 0x00, // і
+    0xB4, 2, 0xD2, 0x91, 0x00, // ґ
+    0xB5, 2, 0xC2, 0xB5, 0x00, // µ
+    0xB6, 2, 0xC2, 0xB6, 0x00, // ¶
+    0xB7, 2, 0xC2, 0xB7, 0x00, // ·
+    0xB8, 2, 0xD1, 0x91, 0x00, // ё
+    0xB9, 3, 0xE2, 0x84, 0x96, // №
+    0xBA, 2, 0xD1, 0x94, 0x00, // є
+    0xBB, 2, 0xC2, 0xBB, 0x00, // »
+    0xBC, 2, 0xD1, 0x98, 0x00, // ј
+    0xBD, 2, 0xD0, 0x85, 0x00, // Ѕ
+    0xBE, 2, 0xD1, 0x95, 0x00, // ѕ
+    0xBF, 2, 0xD1, 0x97, 0x00, // ї
+    0x00
+  };
+  int length = strlen(in_buff);
+  while(read_offset < length) {
+    byte = in_buff[read_offset];
+    read_offset++;
+
+    if(byte <= 0x7F) {
+      out_buff[write_offset] = byte;
+      write_offset++;
+    }
+    else {
+      for(i = 0; byte_to_bytes[i] != 0x00; i += 5) {
+        if(byte_to_bytes[i] == byte) {
+          if(byte_to_bytes[i + 1] >= 1) {
+            out_buff[write_offset] = byte_to_bytes[i + 2];
+            write_offset++;
+          }
+          if(byte_to_bytes[i + 1] >= 2) {
+            out_buff[write_offset] = byte_to_bytes[i + 3];
+            write_offset++;
+          }
+          if(byte_to_bytes[i + 1] >= 3) {
+            out_buff[write_offset] = byte_to_bytes[i + 4];
+            write_offset++;
+          }
+          break;
+        }
+      }
+      // А-П
+      if(byte >= 0xC0 && byte <= 0xCF) {
+        out_buff[write_offset] = 0xD0;
+        write_offset++;
+        out_buff[write_offset] = 0x90 + byte - 0xC0;
+        write_offset++;
+      }
+      // Р-Я а-п
+      if(byte >= 0xD0 && byte <= 0xEF) {
+        out_buff[write_offset] = 0xD0;
+        write_offset++;
+        out_buff[write_offset] = 0xA0 + byte - 0xD0;
+        write_offset++;
+      }
+      // р-я
+      if(byte >= 0xF0 && byte <= 0xFF) {
+        out_buff[write_offset] = 0xD1;
+        write_offset++;
+        out_buff[write_offset] = 0x80 + byte - 0xF0;
+        write_offset++;
+      }
+    }
+  }
+  out_buff[write_offset] = 0;
+}
+
+void cp1251_to_translit(char *in_buff, char *out_buff) {
+  char *encoding = "ABVGDEJZIJKLMNOPRSTUFHC4WW'I'EUAabvgdejzijklmnoprstufhc4ww'i'eua";
+  int read_offset = 0;
+  int write_offset = 0;
+  unsigned char byte;
+  int length = strlen(in_buff);
+  while(read_offset < length) {
+    byte = in_buff[read_offset];
+    read_offset++;
+
+    if(byte <= 0x7F) {
+      out_buff[write_offset] = byte;
+      write_offset++;
+    }
+    else {
+      // Ё
+      if(byte == 0xA8) {
+        out_buff[write_offset] = 'E';
+        write_offset++;
+      }
+      // ё
+      if(byte == 0xB8) {
+        out_buff[write_offset] = 'e';
+        write_offset++;
+      }
+      // Остальные
+      if(byte >= 0xC0) {
+        out_buff[write_offset] = *(encoding + byte - 0xC0);
+        write_offset++;
+      }
+    }
+  }
+  out_buff[write_offset] = 0;
+}
+
+// Проверка на начало однобайтового символа
+char utf8_is_single_byte(char byte1) {
+  if(byte1 <= 0x7F) {
+    return 1;
+  }
+  return 0;
+}
+
+// Проверка на начало двухбайтового символа
+char utf8_is_double_byte(char byte1) {
+  if(byte1 > 0x7F && byte1 <= 0xDF) {
+    return 1;
+  }
+  return 0;
+}
+
+// Проверка на начало трёхбайтового символа
+char utf8_is_triple_byte(char byte1) {
+  if(byte1 > 0xDF && byte1 <= 0xEF) {
+    return 1;
+  }
+  return 0;
+}
+
+// Проверка на начало четырёхбайтового символа
+char utf8_is_quad_byte(char byte1) {
+  if(byte1 > 0xEF && byte1 <= 0xF4) {
+    return 1;
+  }
+  return 0;
+}
+
+// Проверка, является ли корректной строкой UTF-8
+int is_correct_utf8_string(char *str) {
+  int offset = 0;
+  while(offset <= strlen(str)) {
+    if(str[offset] <= 0x7F) offset++;
+    else if(str[offset] <= 0xDF) {
+      // Первый байт из диапазона 0xC2 - 0xDF - маска B110xxxxx
+      if(str[offset] < 0xC2) return 0;
+      // Второй байт из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      offset += 2;
+    }
+    else if(str[offset] <= 0xDF) {
+      // Первый байт из диапазона 0xC2 - 0xDF - маска B110xxxxx
+      if(str[offset] < 0xC2) return 0;
+      // Второй байт из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      offset += 2;
+    }
+    else if(str[offset] <= 0xEF) {
+      // Первый байт из диапазона 0xE0 - 0xEF - маска B1110xxxx
+      // Второй и третий байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      if(str[offset + 2] < 0x80 || str[offset + 2] > 0xBF) return 0;
+      offset += 3;
+    }
+    else if(str[offset] <= 0xF4) {
+      // Первый байт из диапазона 0xF0 - 0xF4 - маска B11110xxx
+      // Второй и дальше байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      if(str[offset + 2] < 0x80 || str[offset + 2] > 0xBF) return 0;
+      if(str[offset + 3] < 0x80 || str[offset + 3] > 0xBF) return 0;
+      offset += 4;
+    }
+    else {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+// Двоичный файл или нет (содержит нули)
+// Если есть символы 0-8, 11-12, 14-19, то двочиный
+char is_binary_file(char *filename) {
+  fs::File file;
+  int offset = 0;
+  int byte;
+  char result = 0;
+  file = Storage->open(filename);
+  while(file.available()) {
+    byte = file.read();
+    if(byte >= 0 && byte <= 8 || byte == 11 || byte == 12 || byte >= 14 && byte <= 19) {
+      result = 1;
+      break;
+    }
+    offset++;
+    if(offset >= 1024) break;
+  }
+  file.close();
+  return result;
+}
+
+// Папка или нет
+char is_directory(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 0;
+  file = Storage->open(filename);
+  result = file.isDirectory();
+  file.close();
+  return result;
+}
+
+// Пустая папка или нет
+char is_empty_directory(char *filename) {
+  fs::File file;
+  fs::File current_dir;
+  int bytes;
+  char result = 1;
+  current_dir = Storage->open(filename);
+  if(!current_dir.isDirectory()) return 0;
+
+  // Смотрим содержимое папки, пропускаем . и ..
+  // Любой другой элемент - непустая папка
+  while(file = current_dir.openNextFile()) {
+    if(strcmp(file.name(), ".") == 0) continue;
+    if(strcmp(file.name(), "..") == 0) continue;
+    result = 0;
+    break;
+  }
+  current_dir.close();
+
+  return result;
+}
+
+// Пустой файл или нет
+char is_empty_file(char *filename) {
+  if(get_file_size(filename) == 0) return 1;
+  return 0;
+}
+
+long get_file_size(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 0;
+  file = Storage->open(filename);
+  result = file.size();
+  file.close();
+  return result;
+}
+
+// BMP или нет
+char is_bmp_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 54 байта
+  if(file.size() < 54) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 'B') result = 0;
+  if(file.read() != 'M') result = 0;
+  file.close();
+  return result;
+}
+
+// PNG или нет
+char is_png_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 67 байта
+  if(file.size() < 67) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 0x89) result = 0;
+  if(file.read() != 'P') result = 0;
+  if(file.read() != 'N') result = 0;
+  if(file.read() != 'G') result = 0;
+  file.close();
+  return result;
+}
+
+// JPEG или нет
+char is_jpeg_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 107 байт
+  if(file.size() < 107) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 0xFF) result = 0;
+  if(file.read() != 0xD8) result = 0;
+  if(file.read() != 0xFF) result = 0;
+  file.close();
+  return result;
+}
+
+// WEBP или нет
+char is_webp_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 47 байт
+  if(file.size() < 47) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 'R') result = 0;
+  if(file.read() != 'I') result = 0;
+  if(file.read() != 'F') result = 0;
+  if(file.read() != 'F') result = 0;
+  file.close();
+  return result;
+}
+
+// MP3 или нет
+char is_mp3_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 417 байт
+  if(file.size() < 417) result = 0;
+  // Файл начинается буквами ID3
+  if(file.read() != 'I') result = 0;
+  if(file.read() != 'D') result = 0;
+  if(file.read() != '3') result = 0;
+  file.close();
+  return result;
+}
+
+// WAV или нет
+char is_wav_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 44 байт
+  if(file.size() < 44) result = 0;
+  // Файл начинается буквами ID3
+  if(file.read() != 'R') result = 0;
+  if(file.read() != 'I') result = 0;
+  if(file.read() != 'F') result = 0;
+  if(file.read() != 'F') result = 0;
+  file.close();
+  return result;
+}
+
+char is_digit_string(char *str) {
+  int i;
+  for(i = 0; i < strlen(str); i++) {
+    if(str[i] < '0' || str[i] > '9') return 0;
+  }
+  return 1;
+}
+
+char char1251_lowercase(char in) {
+  // English
+  if(in >= 'A' && in <= 'Z') {
+    return in - 'A' + 'a';
+  }
+  // Русский
+  if(in >= 0xC0 && in <= 0xDF) {
+    return in - 0xC0 + 0xE0;
+  }
+  // Ё
+  if(in == 0xA8) return 0xB8;
+  // Ђ
+  if(in == 0x80) return 0x90;
+  // Ѓ
+  if(in == 0x81) return 0x83;
+  // Љ
+  if(in == 0x8A) return 0x9A;
+  // Њ
+  if(in == 0x8C) return 0x9C;
+  // Ќ
+  if(in == 0x8D) return 0x9D;
+  // Ћ
+  if(in == 0x8E) return 0x9E;
+  // Џ
+  if(in == 0x8F) return 0x9F;
+  // Ў
+  if(in == 0xA1) return 0xA2;
+  // Ј
+  if(in == 0xA3) return 0xBC;
+  // Ґ
+  if(in == 0xA5) return 0xB4;
+  // Є
+  if(in == 0xAA) return 0xBA;
+  // Ї
+  if(in == 0xAF) return 0xBF;
+  // І
+  if(in == 0xB2) return 0xB3;
+  // Ѕ
+  if(in == 0xBD) return 0xBE;
+
+  return in;
+}
 
 void set_local_time_from_unix_timestamp() {
   unsigned long unix_timestamp;
@@ -24516,7 +25704,7 @@ void set_local_time_from_unix_timestamp() {
   global_moon_day = fmod(25 + days_since_epoch, 29.53059);
 }
 
-time_t get_unixtime_from_datetime(int year, int month, int day, long timezone, int hour, int minute, int second) {
+time_t get_unixtime_from_datetime(long timezone, int year, int month, int day, int hour, int minute, int second) {
   time_t result = 0;
   int i;
   // Учитываем годы
@@ -24554,6 +25742,132 @@ time_t get_unixtime_from_datetime(int year, int month, int day, long timezone, i
 
   // Возвращаем результат
   return result;
+}
+
+time_t get_unixtime_from_current_datetime() {
+  return get_unixtime_from_datetime(global_timezone, global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
+}
+
+time_t get_unixtime_from_current_date() {
+  return get_unixtime_from_datetime(global_timezone, global_year, global_month, global_day, 0, 0, 0);
+}
+
+// Получить дату и время из строки вида гггг-мм-дд чч:мм:сс
+int get_datetime_from_string(char *str, int *year, int *month, int *day, int *hour, int *minute, int *second) {
+  char *tmp = NULL;
+  tmp = str;
+  *year = 0;
+  *month = 0;
+  *day = 0;
+  *hour = 0;
+  *minute = 0;
+  *second = 0;
+
+  // Год
+  if(!tmp) return 0;
+  *year = strtol(tmp, NULL, 10);
+
+  // Месяц
+  tmp = strchr(tmp, '-');
+  if(!tmp) return 0;
+  tmp++;
+  *month = strtol(tmp, NULL, 10);
+
+  // День
+  tmp = strchr(tmp, '-');
+  if(!tmp) return 0;
+  tmp++;
+  *day = strtol(tmp, NULL, 10);
+
+  // Часы
+  tmp = strchr(tmp, ' ');
+  if(!tmp) return 1;
+  tmp++;
+  *hour = strtol(tmp, NULL, 10);
+
+  // Минуты
+  tmp = strchr(tmp, ':');
+  if(!tmp) return 1;
+  tmp++;
+  *minute = strtol(tmp, NULL, 10);
+
+  // Секунды
+  tmp = strchr(tmp, ':');
+  if(!tmp) return 1;
+  tmp++;
+  *second = strtol(tmp, NULL, 10);
+
+  return 1;
+}
+
+// Получить юникстайм из строки
+time_t get_unixtime_from_string(char *str) {
+    int year, month, day, day_of_week, hour, minute, second;
+    get_datetime_from_string(str, &year, &month, &day, &hour, &minute, &second);
+    return get_unixtime_from_datetime(global_timezone, year, month, day, hour, minute, second);
+}
+
+// Получить дату и время из юникстайма
+void get_datetime_from_unixtime(unsigned long unix_timestamp, long timezone, int *year, int *month, int *day, int *day_of_week, int *hour, int *minute, int *second) {
+  unsigned long days_since_epoch;
+  unsigned long days_remain;
+  char lap_year_flag;
+
+  // Дней с начала эпохи
+  days_since_epoch = (unix_timestamp + timezone) / 86400;
+  // День недели
+  *day_of_week = (days_since_epoch + 3) % 7;
+  // Высчитываем дату
+  days_remain = days_since_epoch;
+  *year = 1970;
+  *month = 1;
+  *day = 1;
+  lap_year_flag = is_lap_year(*year);
+  while(days_remain > 0) {
+    // Високосные годы
+    lap_year_flag = 0;
+    if(is_lap_year(*year)) {
+      lap_year_flag = 1;
+    }
+    if(lap_year_flag && days_remain >= 366) {
+      days_remain -= 366;
+      (*year)++;
+      continue;
+    }
+    // Обычные годы
+    if(!lap_year_flag && days_remain >= 365) {
+      days_remain -= 365;
+      (*year)++;
+      continue;
+    }
+    //Serial.println(days_remain);
+    if((*month == 1 || *month == 3 || *month == 5 || *month == 7 || *month == 8 || *month == 10 || *month == 12) && days_remain >= 31) {
+      days_remain -= 31;
+      (*month)++;
+      continue;
+    }
+    if((*month == 4 || *month == 6 || *month == 9 || *month == 11) && days_remain >= 30) {
+      days_remain -= 30;
+      (*month)++;
+      continue;
+    }
+    if(*month == 2 && days_remain >= 29 & lap_year_flag) {
+      days_remain -= 29;
+      (*month)++;
+      continue;
+    }
+    if(*month == 2 && days_remain >= 28 & !lap_year_flag) {
+      days_remain -= 28;
+      (*month)++;
+      continue;
+    }
+    *day += days_remain;
+    break;
+  }
+
+  *hour = ((unix_timestamp + global_timezone) / 3600) % 24;
+  *minute = ((unix_timestamp + global_timezone) / 60) % 60;
+  *second = (unix_timestamp + global_timezone) % 60;
 }
 
 // Високосный ли год
@@ -24644,6 +25958,115 @@ void save_current_timezone() {
   char buff[80];
   sprintf(buff, "%ld", global_timezone);
   write_file_from_buff("/Settings/Timezone", buff);
+}
+
+void cp_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
+  char *buff;
+  int size;
+  fs::File file_from;
+  fs::File file_to;
+
+  Serial.printf("Copy from %s to %s\n", path_from, path_to);
+
+  buff = (char *)malloc(4096 * sizeof(char));
+  file_from = Storage_from->open(path_from);
+  // Проверить существование файла назначения
+  if(Storage_to->exists(path_to)) {
+    file_to = Storage_to->open(path_to);
+    if(file_to) {
+      // Если это папка, то нужно копировать файл в эту папку с тем же названием файла
+      if(file_to.isDirectory()) {
+        strcat(path_to, "/");
+        strcat(path_to, file_from.name());
+      }
+      file_to.close();
+    }
+  }
+  file_to = Storage_to->open(path_to, FILE_WRITE);
+
+  while(file_from.available()) {
+    size = file_from.read((uint8_t *)buff, 4096);
+    file_to.write((const uint8_t *)buff, size);
+  }
+  
+  free(buff);
+  file_from.close();
+  file_to.close();
+}
+
+void cp_recursive_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
+  char path_next_from[80];
+  char path_next_to[80];
+  fs::File file_from;
+  fs::File file_to;
+
+  Serial.printf("Recursive from %s to %s\n", path_from, path_to);
+
+  file_from = Storage_from->open(path_from);
+  if(file_from) {
+    // Если это папка
+    if(file_from.isDirectory()) {
+      if(!Storage_to->exists(path_to)) {
+        Storage_to->mkdir(path_to);
+      }
+      // Копировать содержимое
+      while(file_to = file_from.openNextFile()) {
+        // 
+        if(strcmp("/", path_from)) {
+          sprintf(path_next_from, "%s/%s", path_from, file_to.name());
+        }
+        else {
+          sprintf(path_next_from, "/%s", file_to.name());
+        }
+        if(strcmp("/", path_to)) {
+          sprintf(path_next_to, "%s/%s", path_to, file_to.name());
+        }
+        else {
+          sprintf(path_next_to, "/%s", file_to.name());
+        }
+        if(file_to.isDirectory()) {
+          Serial.printf("mkdir %s\n", path_next_to);
+          Storage_to->mkdir(path_next_to);
+        }
+        file_to.close();
+        cp_recursive_between_storages(Storage_from, path_next_from, Storage_to, path_next_to);
+      }
+    }
+    else {
+      file_from.close();
+      cp_between_storages(Storage_from, path_from, Storage_to, path_to);
+    }
+  }
+}
+
+void delete_recursive(fs::FS *Storage_from, char *path) {
+  char buff[80];
+  fs::File file;
+  fs::File current_dir;
+  current_dir = Storage_from->open(path);
+  if(current_dir.isDirectory()) {
+    while(file = current_dir.openNextFile()) {
+      sprintf(buff, "%s/%s", path, file.name());
+      if(file.isDirectory()) {
+        Serial.printf("rmdir %s\n", buff);
+        delete_recursive(Storage_from, buff);
+      }
+      else {
+        Serial.printf("rm %s\n", buff);
+        Storage_from->remove(buff);
+      }
+    }
+    current_dir.close();
+    // Удалить папку, но не корень
+    if(strcmp(path, "/")) {
+      Serial.printf("rmdir %s\n", path);
+      Storage_from->rmdir(path);
+    }
+  }
+  else {
+    Serial.printf("rm %s\n", path);
+    Storage_from->remove(path);
+  }
 }
 
 void screen_test(char mode, char *io_buff) {
@@ -27239,7 +28662,7 @@ void generator(char mode, char *io_buff) {
       if(value > 255) value = 255;
       if(pin == -1) {
         Serial.println(value);
-        delay(20 / frequency);
+        delayMicroseconds(20000 / frequency);
       }
       else {
         analogWrite(pin, value);
@@ -31333,6 +32756,10 @@ void checkPasswordUntilCorrect(char *correct_password, char is_sha256) {
         if(!strcmp(correct_password, user_input_hash)) {
           return;
         }
+        // Был баг когда сохранялись только первые 32 символа хэша, в целях совместимости вторая проверка
+        if(strlen(correct_password) == 32 && !memcmp(correct_password, user_input_hash, 32)) {
+          return;
+        }
         else {
           drawError("Wrong password!");
           //drawInfo(correct_password);
@@ -31355,7 +32782,7 @@ void checkPasswordUntilCorrect(char *correct_password, char is_sha256) {
 
 void password_sha256(char *password, char *hash) {
   mbedtls_sha256_context sha256_ctx;
-  unsigned char result[16];
+  unsigned char result[32];
   char buff[10];
   int i;
 
@@ -31365,7 +32792,7 @@ void password_sha256(char *password, char *hash) {
   mbedtls_sha256_finish(&sha256_ctx, result);
   mbedtls_sha256_free(&sha256_ctx);
   strcpy(hash, "");
-  for(i = 0; i < 16; i++) {
+  for(i = 0; i < 32; i++) {
     sprintf(buff, "%02x", result[i]);
     strcat(hash, buff);
   }
@@ -33740,6 +35167,41 @@ void deep_sleep_until_boot() {
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
   esp_sleep_enable_ext0_wakeup((gpio_num_t)BOOT_BUTTON_PIN, LOW);
   esp_deep_sleep_start();
+}
+
+// НОД
+long gcd(long a, long b) {
+  if(a == 0 || b == 0) return 0;
+  while(a != b) {
+    if(a > b) {
+      if(a % b == 0) return b;
+      a = a % b;
+    }
+    if(b > a) {
+      if(b % a == 0) return a;
+      b = b % a;
+    }
+  }
+  return a;
+}
+
+// НОК
+long lcm(long a, long b) {
+  if(a == 0 || b == 0) return 0;
+  return (a / gcd(a, b)) * b;
+}
+
+// Факториал
+double factorial(double a) {
+  int i;
+  double result = 1;
+  if(a == 0) return result;
+  if(a == 1) return result;
+
+  for(i = 2; i <= a; i++) {
+    result *= i;
+  }
+  return result;
 }
 
 void setup() {
