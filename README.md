@@ -115,19 +115,20 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Tetris - see https://en.wikipedia.org/wiki/Tetris for details
 
 ## Dashboards
-* Clock and Calendar
-* Fuzzy Clock
-* Unix Time
-* Internet Time
-* Analog Time
-* Weather
-* Network
-* Wi-Fi Channels Monitor
-* World Time
+* Clock and Calendar - shows clock and calendar
+* Fuzzy Clock - shows time with 5 minutes precision
+* Unix Time - shows unix time
+* Internet Time - shows @beats time
+* Analog Time - shows analog clock
+* Weather - show current weather
+* Network - ping different continents
+* Wi-Fi Channels Monitor - monitor Wi-Fi channels usage
+* World Time - time in different cities
 * Bitcoin block, price, pending transactions
 * Random Useless Fact
-* HF Propagation
+* HF Propagation - HF propagation from hamqsl.com
 * Intervals - time from and to events, like birthdays or new year
+* Morse News - beep news titles with morse each five minutes
 
 ## Screensavers
 * Stars
@@ -158,103 +159,276 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Web Radio Player
 
 ## Terminal commands
-* millis - show milliseconds after reboot
-* micros - show microseconds after reboot
-* date - show current date
-* reset - clear screen, reinit terminal
-* reboot - reboot CYD
-* host - resolve domain name
-* ipconfig - show all network information
-* ip - show current ip
-* gateway - show current gateway
-* dns - show current DNS
-* netmask - show current netmask
-* rssi - show current RSSI value
-* hostname {hostname} - set hostname
-* ping {host} - ping specified host continiously, touch screen to stop
-* pingscan {network/mask} - scan subnet with ping
-* arp - show ARPs
-* arpscan - scan subnet with ARP
-* serial [speed] - connect to serial port with specified speed, default is 115200
-* telnet {host} [port] - connect via telnet to specified host and port
-* telnets {host} [port] - connect via telnet to specified host and port using SSL
-* wget {url} [filename] - download file with http/https and show or store to file
-* tracert {host} - traceroute ho host
-* ipinfo {ip} - show IP information (via ipinfo.io)
-* translate {from} {to} {text} - translate with Google Translate
-* weather [lat] [lon] - show weather in specific location
-* chat [{nick} {message}] - show chat or send message to chat
-* sd_to_ffat {sd_path} {ffat_path} - copy file from SD to FFat
-* ffat_to_sd {ffat_path} {sd_path} - copy file from FFat to SD
-* utf8_to_cp1251 {from_file} {to_file} - convert file encoding from UTF-8 to CP1251
-* beep - beep sound
-* tone - start sound tone
-* notone - stop tone
-* hexdump {path} - view files in hex codes
-* uuidgen - generate uuid
-* uptime - shows uptime in days, hours, minutes, seconds
-* tracert {host} - traceroute host
-* random [from] [to] - random number
-* cd {path} - change directory
-* pwd - show current directory
-* mkdir {path} - create directory
-* rmdir {path} - remove empty directory
-* rm {path} - remove file
-* file {path} - show file type
-* touch {path} - create empty file
-* ls {path} - list directory files
-* cat {path} - show file contents
-* more {path} - show file page by page
-* head {path} - show beginning of the file
-* tail {path} - show ending of the file
-* grep {text} {path} - find lines with text
-* hexdump {path} - view file in hex
-* append {path} {text} - append text to file
-* crc {path} - calculate CRC of file
-* md5sum {path} - calculate MD5 of file
-* sha256sum {path} - calculate SHA256 of file
-* brainfuck {path} - run brainfuck code from file
-* touch {path} - create file
-* basic {path} - run BASIC code from file
-* echo {text} - show text and exit
-* caesar {text} - encodes text with Caesar encryption, https://en.wikipedia.org/wiki/Caesar_cipher
-* seq {from} {to} - generate number sequence
-* wc {path} - calculate words, lines and bytes in file
-* lscpu - information about CPU
-* lsmem - information about memory
-* lsblk - information about internal storage
-* ffat_to_sd {path} {path} - copy between storages
-* sd_to_ffat {path} {path} - copy between storages
-* view {path} - view file (GUI viewer)
-* hexview {path} - view file in hex (GUI viewer)
-* edit {path} - edit file (GUI editor)
-* csv {path} - edit file in table editor
-* utf8_to_cp1251 {path} {path} - change enconding from utf-8 to cp1251
-* cp1251_to_utf8 {path} {path} - change enconding from cp1251 to utf-8
-* base16encode {path} [path] - encode file to base16
-* base16decode {path} [path] - decode file from base16
-* base32encode {path} [path] - encode file to base32
-* base32decode {path} [path] - decode file from base32
-* base64encode {path} [path] - encode file to base64
-* base64decode {path} [path] - decode file from base64
-* aes_encrypt {password} {path} [path] - encrypt file with AES-256
-* aes_decrypt {password} {path} [path] - decrypt file with AES-256
-* ip2long {ip} - convert IP to number
-* long2ip {number} - convert number to IP
-* binoct {binary} - convert binary to octal
-* bindec {binary} - convert binary to decimal
-* binhex {binary} - convert binary to hexadecimal
-* octbin {octal} - convert octal to binary
-* octdec {octal} - convert octal to decimal
-* octhex {octal} - convert octal to hexadecimal
-* decbin {decimal} - convert decimal to binary
-* decoct {decimal} - convert decimal to octal
-* dechex {decimal} - convert decimal to hexadecimal
-* hexbin {hexadecimal} - convert hexadecimal to binary
-* hexoct {hexadecimal} - convert hexadecimal to octal
-* hexdec {hexadecimal} - convert hexadecimal to decimal
-* app {app_name} - launch app by name
 * Filename from /Terminal - run commands from file one-by-one
+* # is a comment
+
+Internal operations:
+* reboot - reboot device
+* exit - exit terminal app
+* gamma {value 1-4} - set gamma correction by index
+
+Date and time:
+* millis - milliseconds after boot
+* micros - microseconds after boot
+* uptime - human-readable uptime
+* date - current date
+* utc - current time in UTC
+* unixtime - current unix timestamp
+* ticks - current time in .NET ticks
+* beats - current time in @beats
+* cal - show current month
+* settime {hour} {minute} {second} - set clock
+* setdate {date} - set date
+* setdatetime {datetime} - set clock and date
+* sun - sun information
+* moon - moon information
+* date_add {date|datetime} {interval} {unit} - add interval to date
+* date_sub {date|datetime} {interval} {unit} - substract interval from date
+* interval {from_date|from_datetime} [to_date|to_datetime] - interval between dates
+
+Terminal controls:
+* clear - clear screen
+* reset - reset terminal (apply default settings)
+* cursor {col} {row} - set cursor position
+* history - show command history
+* rpt - repeat last command (except rpt)
+* echo {text} - show text
+* cowsay {text} - show text with a cow
+* caesar {text} - encode text with Caesar code
+* rot13 {text} - encode text with rot13
+* seq {start_number} {end_number} - sequental numbers
+* lscpu - show CPU information
+* uname - show firmware information
+* lsmem - show RAM information
+* lsblk - show internal storage information
+* colors - show terminal colors
+* sleep {seconds} - sleep for specific time in seconds
+* delay {milliseconds} - sleep for specific time in milliseconds
+* serial [-tx pin] [-rx pin] [speed] - connect to serial port
+
+Random numbers:
+* random [from] [to] - generate random numbers (from and to included)
+* uuidgen - generate random UUID
+
+Converters:
+* ip2long {IP} - IP to number
+* long2ip {number} - number to IP
+* bin {binary} - binary number to octal, decimal, hexadecimal
+* binoct {binary} - binary to octal
+* bindec {binary} - binary to decimal
+* binhex {binary} - binary to hexadecimal
+* oct {octal} - octal to binary, decimal, hexadecimal
+* octbin {octal} - octal to binary
+* octdec {octal} - octal to decimal
+* octhex {octal} - octal to hexadecimal
+* dec {decimal} - decimal to binary, octal, hexadecimal
+* decbin {decimal} - decimal to binary
+* decoct {decimal} - decimal to octal
+* dechex {decimal} - decimal to hexadecimal
+* hex {hexadecimal} - hexadecimal to binary, octal, decimal
+* hexbin {hexadecimal} - hexadecimal to binary
+* hexoct {hexadecimal} - hexadecimal to octal
+* hexdec {hexadecimal} - hexadecimal to decimal
+* qth - ham QTH locator
+
+Math and statistics:
+* bc {expression} - calculate expressions
+* gcd {number} {number} - greatest common divider
+* nod {number} {number} - same as gcd 
+* lcm {number} {number} - least common multiple
+* nok {number} {number} - same as lcm
+* factorial {number} - factorial of number
+* dividers {number} - dividers of number
+* factorize {number} - factorize number
+* stat {number} [number ...] - statistics of input data
+* det {{a11} {a12} {a21} {a22}|{a11} {a12} {a13} {a21} {a22} {a23} {a31} {a32} {a33}} - determinant of matrix 2x2 or 3x3
+* reverse {number} - reverse digits in number (in decimal)
+* digit_sum {number} - sum of digits (in decimal)
+* bitset {number} {bit_number} - set single bit
+* bitget {number} {bit_number} - get single bit
+* bitclear {number} {bit_number} - clear single bit
+* bittoggle {number} {bit_number} - toggle single bit
+* rol {number} - rotate binary left
+* ror {number} - rotate binary right
+* clz {number} - count leading zeroes (in binary)
+* ctz {number} - count tailing zeroes (in binary)
+* popcount {number} - number of set bits (in binary)
+* parity {number} - is number of bits odd (in binary)
+* div {number1} {number2} - divide by module
+* permutation  {number} - permutations count
+* arrangement {of_n} {taken_k} - arrangements count
+* combination {of_n} {taken_k} - combinations count
+* subnet {subnet}/{netmask} - subnet calculator
+
+Storage settings:
+* storage {ffat|sd|none} - set storage
+* df - show current storage stats
+* format {ffat} - format (ffat only)
+* erase {ffat} - erase ffat flash
+
+File operations:
+* stack - show file /Terminal/Stack
+* push {text} - push line to /Terminal/Stack
+* pop - pop line from /Terminal/Stack
+* unshift {text} - unshift line to /Terminal/Stack
+* shift - shift line from /Terminal/Stack
+* cd [directory] - change directory
+* pwd - chow current directory
+* ls [directory] - list files in current directory
+* mkdir {directory} - create directory
+* rmdir {directory} - remove directory
+* cp {from_path} {to_path} - copy files recursively
+* mv {from_path} {to_path} - move files recursively
+* rm {from_path} - remove files recursively
+* file {file_path} - show file type by file contents
+* cat {file_path} - show file contents
+* head {file_path} - show starting lines of file
+* tail {file_path} - show tailing lines of file
+* more {file_path} - show file screen by screen
+* grep {text} {file_path} - grep lines from file
+* view {file_path} - view file in GUI viewer
+* hexview {file_path} - view file in hex in GUI viewer
+* append {file} {line} [line] … - add lines to file
+* edit {file_path} - edit text file in GUI editor
+* csv {file_path} - edic CSV file in GUI editor
+* hexdump {file_path} - show file in hex (in console)
+* wc {file_path} - calculate chars, words, lines
+* crc {file_path} - calculate CRC checksum
+* md5sum {file_path} - calculate MD5 schecksum
+* sha256sum {file_path} - calculate SHA256 checksum
+* brainfuck {file_path} - brainfuck interpreter
+* basic {file_path} - BASIC interpreter
+* touch {file_path} - crete empty file
+* ffat_to_sd {ffat_filename} {sd_filename} - copy file from ffat to SD
+* sd_to_ffat {sd_filename} {ffat_filename} - copy file from SD to ffat
+* utf8_to_cp1251 {input_filename} {output_filename} - change file encoding from UTF-8 to cp1251
+* cp1251_to_utf8 {input_filename} {output_filename} - change file encoding from cp1251 to UTF-8
+* base16encode {input_filename} [output_filename] - encode file with base16
+* base16decode {input_filename} [output_filename] - decode file from base16
+* base32encode {input_filename} [output_filename] - encode file with base32
+* base32decode {input_filename} [output_filename] - decode file from base32
+* base64encode {input_filename} [output_filename] - encode file with base64
+* base64decode {input_filename} [output_filename] - decode file from base64
+* aes_encrypt {password} {input_filename} [output_filename] - encrypt file with AES256
+* aes_decrypt {password} {input_filename} [output_filename] - decrypt file from AES256
+* sizeof - show size of internal data types
+
+I2C and other protocols:
+* i2c - I2C scanner
+
+Sound:
+* beep - beep once
+* notone - stop sound
+* tone {freq} - start sound tone
+* morse {text} - beep text with morse code
+
+Networking:
+* ifconfig - show network configuration
+* ipconfig - same as ifconfig
+* hostname [new_hostname] - show and set current hostname
+* ip - current ip
+* netmask - current netmask
+* gateway - current gateway
+* dns - current DNS
+* rssi - current RSSI
+* host - resovle host with DNS
+* arp - show ARP
+* arpscan - scan subnet with ARP
+* ping {hostname} - ping host
+* pingscan {subnet}/{netmask} - scan subnet with ping
+* tcpscan {host} [port_from] [port_to] - scan host ports with TCP
+* tracert {hostname} - traceroute
+* telnet {host} [port] - telnet client
+* telnets {host} [port] - telnet client with SSL
+* wget {URL} [filename] - download file
+* ipinfo {ip} - fhow ipinfo via ipinfo.io
+* hamqsl - show hf propagation
+* bitcoin - show current bitcoin info
+* myextip - show current external IP
+* translate {lang_from|auto} {lang_to} {query} - translate with google translate
+* weather [lat] [lon] - current weather
+* chat [{nick} {message}]- chat read and post
+* ruf - random useless fact
+* iperf {host} [port] - iperf 2 client
+* help - show current help
+* app {app_name} - run GUI app with app name
+
+app arguments:
+* calculator
+* files
+* notes
+* contacts
+* todo
+* schedule
+* expenses
+* flashcards
+* books
+* passwords
+* totp
+* barcode
+* tables
+* screenshots
+* tunes
+* music
+* webradio
+* system_info
+* torch
+* draw
+* wifi
+* gopher
+* rss
+* irc
+* chat
+* weather
+* file_server
+* translate
+* wikipedia
+* counter
+* random_numbers
+* timer
+* stopwatch
+* breathe
+* piano
+* metronome
+* screensaver
+* user_manual
+* security
+* brightness
+* touch_calibration
+* touch_calibration_3point
+* touch_calibration_multipoint
+* oscilloscope
+* voltmeter
+* generator
+* life
+* l_system
+* dashboard
+* fuzzy_clock
+* view_font
+* fifteen
+* lights_off
+* snake
+* turkish_kerchief
+* memory_match
+* hanoi_towers
+* match_three
+* simon
+* n_back
+* mental_math
+* game2048
+* minesweeper
+* chess
+* tetris
+* sokoban
+* screen_settings
+* keyboard_control
+* sound_control
+* set_clock
+* autorun
+* select_storage
+* backups
+* search
+* random
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
