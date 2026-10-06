@@ -139,6 +139,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * Forest Fire Simulator
 * Mood Lamp
 * Through the Universe
+* Gas
 
 ## Wi-Fi
 * Wi-Fi connection
