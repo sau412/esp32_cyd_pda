@@ -12,7 +12,6 @@
 - Игры
 - Без Bluetooth (не хватает памяти?)
 - Без SSH (не хватает памяти?)
-- Без iperf (нет библиотеки)
 - Просмотр: текст, таблицы, музыка, картинки
 
 Лог разработки:
@@ -220,16 +219,25 @@
   баг в files если не выделилась память, баг в files если слишком много файлов, FFatContentsStream::peek возвращает не тот байт,
   FFatContentsStream::flush может перезаписывать не ту страницу, FFatContentsStream: buff может быть не инициализирован,
   команды stack (stack, pop, push, shift, unshift), использовать cursor_visible_flag, повторить прошлую команду в терминале (rpt)
-2026-10-05 Разделил код на секции, PIM сортировка по названию, сортировка в файлах, setdatetime, date_add, date_sub, interval, дашборд интервалы
+2026-10-05 Разделил код на секции, PIM сортировка по названию, сортировка в файлах, setdatetime, date_add, date_sub, interval, дашборд интервалы,
+  qth локатор в терминале (без аргументов), cowsay
+2026-10-06 strcat_char, iperf клиент (но не iperf3), tcpscan, terminal cursor bug fix, Morse News dashdoard, часы азбукой морзе, drawTextBar,
+  обновление справки github
 
-- Угол луны сейчас, максимальный угол, направление
-- Угол солнца сейчас, максимальный угол, направление
-- tcpscan
-- udpscan
-- iperf
-- Morse news Dashboard
+- Настройки азбуки Морзе: частота, точка, доп интервал
+- drawTextBar где необходимо
+- обновить внутреннюю справку по командам
+- UTC полное время
+- unixtime ввод времени
+- ticks ввод времени
+- beats ввод времени
+- qth ввод координат
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
+- Режим без хранилища - использовать NVS, одна заметка, один пароль, одна таблица
+- Цветные значки
+- (д) Терминал многопараметрические ^[...m
+- Ближайший цвет для 256 цветов терминала (а может 256 цветов?)
 - (д) Сообщение с точкой для разблокировки
 - (п) Просмотреть справку, может быть что-то добавить
 - (н) Мини-калькулятор в меню
@@ -391,6 +399,9 @@
 - Протокол MQTT
 - Протокол RS485
 - Протокол OneWire
+- Угол луны сейчас, максимальный угол, направление
+- Угол солнца сейчас, максимальный угол, направление
+- udpscan - сложный и довольно бестолковый
 
 Буфер обмена
 - (д) Буфер обмена
@@ -2874,7 +2885,7 @@ void terminal_execute_single(char *str) {
     while(file.available()) {
       i2 = file.position();
       strcpy(buff, file.readStringUntil('\n').c_str());
-      Serial.println(buff);
+      //Serial.println(buff);
       if(strcmp(buff, "rpt") != 0) {
         i1 = i2;
       }
@@ -3725,7 +3736,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "permutation") == 0) {
     if(arg_count < 2) {
-      terminal_println("Usage: permutation {number1}");
+      terminal_println("Usage: permutation {number}");
     }
     else {
       i1 = strtol(cmdline_params[1], NULL, 10);
@@ -4218,20 +4229,6 @@ void terminal_execute_single(char *str) {
       }
     }
   }
-  else if(strcmp(cmdline_params[0], "rm") == 0) {
-    if(arg_count != 2) {
-      terminal_println("Usage: rm {filename}");
-    }
-    else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      if(Storage->remove(buff)) {
-        terminal_println("OK");
-      }
-      else {
-        terminal_println("File not found");
-      }
-    }
-  }
   // Копирование между ФС
   else if(strcmp(cmdline_params[0], "ffat_to_sd") == 0) {
     if(arg_count != 3) {
@@ -4559,6 +4556,22 @@ void terminal_execute_single(char *str) {
       terminal_pingscan(cmdline_params[1]);
     }
   }
+  else if(strcmp(cmdline_params[0], "tcpscan") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Usage: tcpscan {host} [port_from] [port_to]");
+    }
+    else {
+      if(arg_count == 4) {
+        terminal_tcpscan(cmdline_params[1], cmdline_params[2], cmdline_params[3]);
+      }
+      else if(arg_count == 3) {
+        terminal_tcpscan(cmdline_params[1], cmdline_params[2], NULL);
+      }
+      else {
+        terminal_tcpscan(cmdline_params[1], NULL, NULL);
+      }
+    }
+  }
   else if(strcmp(cmdline_params[0], "tracert") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: tracert {hostname}");
@@ -4585,7 +4598,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "wget") == 0) {
     if(arg_count < 2) {
-      terminal_println("Usage: wget {URL}");
+      terminal_println("Usage: wget {URL} [filename]");
     }
     else if(arg_count == 2) {
       terminal_wget(cmdline_params[1], NULL);
@@ -4728,6 +4741,18 @@ void terminal_execute_single(char *str) {
     }
     else {
       terminal_println("Unable to get random useless fact");
+    }
+  }
+  else if(strcmp(cmdline_params[0], "iperf") == 0) {
+    if(arg_count == 1) {
+    }
+    else {
+      if(arg_count == 2) {
+        terminal_iperf_client(cmdline_params[1], NULL);
+      }
+      else {
+        terminal_iperf_client(cmdline_params[1], cmdline_params[2]);
+      }
     }
   }
 #ifdef IS_SSH_ENABLED
@@ -5522,10 +5547,17 @@ void terminal_print_char(char c) {
         cursor_col++;
       }
     }
+    if(cursor_row >= TERMINAL_HEIGHT_CHARS) {
+      terminal_scroll_down();
+      cursor_row = TERMINAL_HEIGHT_CHARS - 1;
+    }
   }
+  // Это нужно чтобы курсор не мог уйти за экран
   if(cursor_col >= TERMINAL_WIDTH_CHARS) {
     cursor_col = TERMINAL_WIDTH_CHARS - 1;
-    terminal_pending_wrap = 1;
+  }
+  if(cursor_row >= TERMINAL_HEIGHT_CHARS) {
+    cursor_row = TERMINAL_HEIGHT_CHARS - 1;
   }
 }
 
@@ -7585,7 +7617,7 @@ int terminal_telnet(int arg_count, char **args, char ssl_flag) {
   char do_echo = 1;
   char host[80];
   long prev_terminal_update = 0;
-  WiFiClient *client;
+  WiFiClient *client = NULL;
 
   terminal_output[0] = 0;
 
@@ -7871,8 +7903,8 @@ int terminal_wget(char *url, char *filename) {
   fs::File file;
   int offset;
   int result;
-  WiFiClient *client;
-  WiFiClient *stream;
+  WiFiClient *client = NULL;
+  WiFiClient *stream = NULL;
   HTTPClient http;
   long millis_last_byte;
   long bytes_count = 0;
@@ -8273,6 +8305,106 @@ void terminal_pingscan(char *subnet_and_mask) {
     }
   }
   terminal_println("Scan completed");
+}
+
+#define TCPSCAN_TIMEOUT 200
+
+void terminal_tcpscan(char *host, char *port_from_text, char *port_to_text) {
+  int port_from = 20;
+  int port_to = 80;
+  int port;
+  char buff[80];
+  WiFiClient client;
+
+  if(port_from_text != NULL) {
+    port_from = strtol(port_from_text, NULL, 10);
+    port_to = port_from;
+  }
+  if(port_to_text != NULL) {
+    port_to = strtol(port_to_text, NULL, 10);
+  }
+  for(port = port_from; port <= port_to; port++) {
+    sprintf(buff, "Scanning port %d... ", port);
+    terminal_print(buff);
+    terminal_show_screen();
+
+    client.setTimeout(TCPSCAN_TIMEOUT);
+    if(client.connect(host, port)) {
+      terminal_println("open");
+    }
+    else {
+      terminal_print("\r");
+    }
+    client.stop();
+  }
+  terminal_println("Scan completed               ");
+}
+
+// Iperf клиент для теста скорости
+#define IPERF_DATA_LEN 8192
+
+void terminal_iperf_client(char *ip, char *port_text) {
+  int port = 5001;
+  char *buff = NULL;
+  uint32_t start = 0;
+  uint32_t bytes = 0;
+  WiFiClient client;
+
+  buff = (char *)malloc(IPERF_DATA_LEN * sizeof(char));
+  if(!buff) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  if(port_text != NULL) {
+    port = strtol(port_text, NULL, 10);
+  }
+  
+  memset(buff, 'A', IPERF_DATA_LEN);
+
+  client.connect(ip, port);
+  terminal_println("Connecting...");
+  terminal_show_screen();
+  if(client) {
+    terminal_println("Testing speed for 10 seconds...");
+    terminal_show_screen();
+    start = millis();
+
+    while (millis() - start < 10000) {
+      if (client.write((uint8_t *)buff, IPERF_DATA_LEN) != IPERF_DATA_LEN)
+        break;
+      bytes += IPERF_DATA_LEN;
+    }
+
+    float mbps = bytes * 8.0f / 1000000.0f / ((millis() - start) / 1000.0f);
+
+    // Правильно завершаем соединение чтобы не видеть ошибку в консоли
+    int sock = client.fd();
+    shutdown(sock, SHUT_WR);
+
+    uint32_t timeout = millis();
+
+    while(client.connected() && millis() - timeout < 3000) {
+      while(client.available()) {
+        client.read();
+      }
+      delay(10);
+    }
+
+    client.stop();
+    
+    if(mbps > 1) {
+      sprintf(buff, "Speed: %.2f Mbps", mbps);
+    }
+    else {
+      sprintf(buff, "Speed: %.2f kbps", mbps * 1000);
+    }
+    terminal_println(buff);
+  }
+  else {
+    terminal_println("Unable to connect");
+  }
+  free(buff);
 }
 
 void terminal_subnet(char *subnet_and_mask) {
@@ -12680,7 +12812,7 @@ void random_app(char mode, char *io_buff) {
   delay(1000);
 
   // Выбор случайного приложения
-  switch(random(0, 104)) {
+  switch(random(0, 106)) {
     // First line
     case 0: calculator(APP_MODE_LAUNCH, NULL); break;
     case 1: files(APP_MODE_LAUNCH, NULL); break;
@@ -12818,6 +12950,8 @@ void random_app(char mode, char *io_buff) {
 #endif // IS_WIFI_ENABLED
     case 102: random_app_surprise(); break;
     case 103: l_system(APP_MODE_LAUNCH, NULL); break;
+    case 104: dashboard_intervals(); break;
+    case 105: dashboard_morse_news(); break;
   }
 }
 
@@ -13436,11 +13570,17 @@ void counter(char mode, char *io_buff) {
     tft.fillRect(0, 16, tft.width(), 30, color_scheme_bg);
 
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    sprintf(buff, " %ld ", counter);
-    tft.drawCentreString(buff, tft.width() / 2, 32, FONT_BIGGER);
+    sprintf(buff, "%ld", counter);
+    drawTextBar(buff, 0, 16 + 42 - tft.fontHeight(FONT_BIGGER) / 2, tft.width(), tft.fontHeight(FONT_BIGGER), color_scheme_fg, color_scheme_bg, FONT_BIGGER);
+    //tft.drawCentreString(buff, tft.width() / 2, 32, FONT_BIGGER);
 
-    sprintf(buff, "   BPM: %f   ", bpm);
-    tft.drawCentreString(buff, tft.width() / 2, 210, FONT_DEFAULT);
+    if(bpm > 30) {
+      sprintf(buff, "BPM: %d", (int)bpm);
+    }
+    else {
+      sprintf(buff, "BPM: %0.2f", bpm);
+    }
+    drawTextBar(buff, 0, 210, tft.width(), 16, color_scheme_fg, color_scheme_bg, FONT_DEFAULT);
 
     drawButtonMatrix(0, 100, tft.width(), 100, buttons_inc, 1, 1);
     drawButtonMatrix(0, tft.height() - 64, tft.width(), 64, buttons_other, 2, 1);
@@ -15207,8 +15347,7 @@ void l_system_settings(char *name, double angle, int iterations, char *axiom, ch
           l_system_draw(result, angle);
           Serial.println(result);
           sprintf(buff, "Iteration 0");
-          tft.setTextColor(color_scheme_fg, color_scheme_bg);
-          tft.drawCentreString(buff, tft.width() / 2, tft.height() - 16, FONT_DEFAULT);
+          drawTextBar(buff, 0, tft.height() - 16 - 1, tft.width(), 16, color_scheme_fg, color_scheme_bg, FONT_DEFAULT);
           delay(1000);
 
           for(i = 0; i < iterations; i++) {
@@ -15216,20 +15355,18 @@ void l_system_settings(char *name, double angle, int iterations, char *axiom, ch
             if(l_system_iterate(result, max_len, fh, fl, gh, gl, r0, r1, r2, r3)) {
               //Serial.println(result);
               sprintf(buff, "Iteration %d", i + 1);
-              tft.setTextColor(color_scheme_fg, color_scheme_bg);
-              tft.drawCentreString(buff, tft.width() / 2, tft.height() - 16, FONT_DEFAULT);
+              drawTextBar(buff, 0, tft.height() - 16 - 1, tft.width(), 16, color_scheme_fg, color_scheme_bg, FONT_DEFAULT);
 
               l_system_draw(result, angle);
             }
             else {
               tft.setTextColor(color_scheme_fg, color_scheme_bg);
-              tft.drawCentreString("Out of memory", tft.width() / 2, tft.height() - 16, FONT_DEFAULT);
+              drawTextBar("Out of memory", 0, tft.height() - 16 - 1, tft.width(), 16, color_scheme_fg, color_scheme_bg, FONT_DEFAULT);
               break;
             }
           }
           if(i >= iterations) {
-            tft.setTextColor(color_scheme_fg, color_scheme_bg);
-            tft.drawCentreString("          Finished          ", tft.width() / 2, tft.height() - 16, FONT_DEFAULT);
+            drawTextBar("Finished", 0, tft.height() - 16 - 1, tft.width(), 16, color_scheme_fg, color_scheme_bg, FONT_DEFAULT);
           }
           touchWaitPress();
           touchWaitRelease();
@@ -21494,6 +21631,7 @@ void dashboard(char mode, char *io_buff) {
     "Random Facts",
     "HF Propagation",
     "Intervals",
+    "Morse News",
     NULL
   };
   char app_icon[] = {
@@ -21601,6 +21739,10 @@ void dashboard(char mode, char *io_buff) {
       // Intervals
       if(button_pressed == 12) {
         dashboard_intervals();
+      }
+      // Morse news
+      if(button_pressed == 13) {
+        dashboard_morse_news();
       }
 
       clearScreen();
@@ -22722,6 +22864,167 @@ void dashboard_intervals() {
       // Set intervals
       if(button_pressed == 1) {
         edit_file("Intervals", "/Settings/Intervals");
+        update_file = 1;
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      free(data);
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+#define MORSE_NEWS_SOURCES "/Settings/MorseNews"
+#define MORSE_NEWS_BUFFER 50000
+#define MORSE_NEWS_INTERVAL 300000
+
+void dashboard_morse_news() {
+  char buff[80];
+  char title[500];
+  char url[160];
+  int offset = 0;
+  char convert_from_utf8 = 1;
+  int i, j;
+  int x, y;
+  float val;
+  int result;
+  char error = 0;
+  long prev_update_millis = 0;
+  long info_update_data_millis = 0;
+  long interval;
+  int button_pressed;
+  fs::File file;
+  char update_file = 1;
+  char *data = NULL;
+  char *tmp = NULL;
+  char *buttons[] = {
+    "Set RSS source",
+    NULL
+  };
+
+  data = (char*)malloc(MORSE_NEWS_BUFFER * sizeof(char));
+  strcpy(data, "");
+  
+  clearScreen();
+  drawAppTitle("Morse News");
+
+  while(1) {
+    if(update_file) {
+      tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
+      drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 1, 1);
+
+      while(!Storage->exists(MORSE_NEWS_SOURCES)) {
+        drawInfo("Write RSS URL to use Morse News");
+        edit_file("Morse News", MORSE_NEWS_SOURCES);
+      }
+      read_file_to_buff(MORSE_NEWS_SOURCES, 159, url);
+
+      // Удалить лишние символы в конце
+      for(i = 0; i < strlen(url); i++) {
+        if(url[i] == ' ' || url[i] == '\n' || url[i] == '\r') {
+          url[i] = 0;
+          break;
+        }
+      }
+
+      strcpy(data, "");
+      drawProcessWindow("Downloading RSS source...");
+      if(url[4] == 's') {
+        result = get_file_https(url, data, MORSE_NEWS_BUFFER - 1);
+      }
+      else {
+        result = get_file_http(url, data, MORSE_NEWS_BUFFER - 1);
+      }
+      clearPopupWindow();
+
+      if(result == 200) {
+        convert_from_utf8 = 1;
+        if(strstr(data, "windows-1251") != NULL) {
+          Serial.println("Encoding is 1251");
+          convert_from_utf8 = 0;
+        }
+        if(convert_from_utf8) {
+          utf8_to_cp1251(data);
+        }
+      }
+      else {
+        strcpy(data, "<item><title>Error, retry in 5 min</title>");
+      }
+      offset = 0;
+
+      for(; offset < strlen(data); offset++) {
+        if(memcmp(data + offset, "<item>", 6) == 0) {
+          offset += 6;
+          break;
+        }
+      }
+      update_file = 0;
+      info_update_data_millis = -MORSE_NEWS_INTERVAL;
+    }
+
+    if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
+      prev_update_millis = millis();
+
+      // Выводим всё
+      tft.setTextColor(color_scheme_fg, color_scheme_bg);
+      sprintf(buff, " %d:%02d:%02d ", global_hours, global_minutes, global_seconds);
+      tft.drawCentreString(buff, tft.width() / 2, 27, FONT_BIGGER);
+
+      tft.setTextColor(color_scheme_inactive_fg, color_scheme_bg);
+      if(info_update_data_millis + MORSE_NEWS_INTERVAL - millis() > 0) {
+        sprintf(buff, "    Next in %d min %d sec    ",
+          (info_update_data_millis + MORSE_NEWS_INTERVAL - millis()) / 60000,
+          ((info_update_data_millis + MORSE_NEWS_INTERVAL - millis()) / 1000) % 60
+        );
+
+        tft.drawCentreString(buff, tft.width() / 2, tft.height() - 16 - 32 - 1, FONT_DEFAULT);
+      }
+    }
+
+    if(millis() - info_update_data_millis >= MORSE_NEWS_INTERVAL) {
+      info_update_data_millis = millis();
+      for(; offset < strlen(data); offset++) {
+        if(memcmp("<title>", data + offset, 7) == 0) {
+          offset += 7;
+          break;
+        }
+      }
+      if(offset < strlen(data)) {
+        memcpy(title, data + offset, 499);
+        title[499] = 0;
+        for(i = 0; i < strlen(title); i++) {
+          if(memcmp("</title>", title + i, 8) == 0) {
+            title[i] = 0;
+            break;
+          }
+        }
+
+        //Serial.println(buff);
+        beep_morse(title);
+        draw_text_formatted(title, 1, 96, tft.width() - 2, 10, FONT_DEFAULT, 1);
+      }
+      else {
+        Serial.println("End of buffer, updating...");
+        update_file = 1;
+        continue;
+      }
+      //tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    }
+
+    if(!touchCheckNowait()) continue;
+
+    //drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 2, 1);
+    button_pressed = touchCheckMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 1, 1);
+    if(button_pressed != -1) {
+      // Set source
+      if(button_pressed == 0) {
+        edit_file("Morse News", MORSE_NEWS_SOURCES);
         update_file = 1;
       }
     }
@@ -33012,6 +33315,27 @@ void drawList(int left_x, int top_y, int width, int height, char **str, int rows
   }
 }
 
+// Нарисовать текст в центре прямоугольника, зачистить остальное
+void drawTextBar(char *str, int offset_x, int offset_y, int width, int height, int fg_color, int bg_color, int font) {
+  int text_width = tft.textWidth(str, font);
+  int text_height = tft.fontHeight(font);
+  // Нарисовать текст
+  tft.setTextColor(fg_color, bg_color);
+  tft.drawCentreString(str, offset_x + width / 2, offset_y + height / 2 - text_height / 2, font);
+
+  // Заполнить остальное пространство
+  // Верх и низ
+  if(height / 2 - text_height / 2 > 0) {
+    tft.fillRect(offset_x, offset_y, width, height / 2 - text_height / 2, bg_color);
+    tft.fillRect(offset_x, offset_y + height / 2 + text_height / 2, width, height / 2 - text_height / 2, bg_color);
+  }
+  // Лево и право
+  if(width - text_width / 2 > 0) {
+    tft.fillRect(offset_x, offset_y + height / 2 - text_height / 2, width / 2 - text_width / 2, text_height, bg_color);
+    tft.fillRect(offset_x + width / 2 + text_width / 2, offset_y + height / 2 - text_height / 2, width / 2 - text_width / 2, text_height, bg_color);
+  }
+}
+
 void getListItemParts(char *item, char *left, char *right) {
   char *tab_ptr;
   strcpy(left, item);
@@ -33815,7 +34139,7 @@ void beep_morse_task(void *pvParameters) {
   char *str = (char *)pvParameters;
   int i;
   for(i = 0; i < strlen(str); i++) {
-    Serial.println(str[i]);
+    //Serial.println(str[i]);
     beep_morse_perform(str[i]);
     morse_wait();
     morse_wait();
@@ -33870,6 +34194,7 @@ void beep_morse_perform(char c) {
     case 0xC0: case 0xE0: morse_dit(); morse_dah(); break; // А
     case 0xC1: case 0xE1: morse_dah(); morse_dit(); morse_dit(); morse_dit(); break; // Б
     case 0xC2: case 0xE2: morse_dit(); morse_dah(); morse_dah(); break; // В
+    case 0x81: case 0x83: case 0xA5: case 0xB4:
     case 0xC3: case 0xE3: morse_dah(); morse_dah(); morse_dit(); break; // Г
     case 0xC4: case 0xE4: morse_dah(); morse_dit(); morse_dit(); break; // Д
     case 0xC5: case 0xE5: morse_dit(); break; // Е
@@ -33877,7 +34202,9 @@ void beep_morse_perform(char c) {
     case 0xC6: case 0xE6: morse_dit(); morse_dit(); morse_dit(); morse_dah(); break; // Ж
     case 0xC7: case 0xE7: morse_dah(); morse_dah(); morse_dit(); morse_dit(); break; // З
     case 0xC8: case 0xE8: morse_dit(); morse_dit(); break; // И
+    case 0xA3: case 0xBC:
     case 0xC9: case 0xE9: morse_dit(); morse_dah(); morse_dah(); morse_dah(); break; // Й
+    case 0x8D: case 0x9D:
     case 0xCA: case 0xEA: morse_dah(); morse_dit(); morse_dah(); break; // К
     case 0xCB: case 0xEB: morse_dit(); morse_dah(); morse_dit(); morse_dit(); break; // Л
     case 0xCC: case 0xEC: morse_dah(); morse_dah(); break; // М
@@ -33885,8 +34212,10 @@ void beep_morse_perform(char c) {
     case 0xCE: case 0xEE: morse_dah(); morse_dah(); morse_dah(); break; // О
     case 0xCF: case 0xEF: morse_dit(); morse_dah(); morse_dah(); morse_dit(); break; // П
     case 0xD0: case 0xF0: morse_dit(); morse_dah(); morse_dit(); break; // Р
+    case 0xBD: case 0xBE:
     case 0xD1: case 0xF1: morse_dit(); morse_dit(); morse_dit(); break; // С
     case 0xD2: case 0xF2: morse_dah(); break; // Т
+    case 0xA1: case 0xA2:
     case 0xD3: case 0xF3: morse_dit(); morse_dit(); morse_dah(); break; // У
     case 0xD4: case 0xF4: morse_dit(); morse_dit(); morse_dah(); morse_dit(); break; // Ф
     case 0xD5: case 0xF5: morse_dit(); morse_dit(); morse_dit(); morse_dit(); break; // Х
@@ -33897,21 +34226,27 @@ void beep_morse_perform(char c) {
     case 0xDA: case 0xFA: morse_dah(); morse_dah(); morse_dit(); morse_dah(); morse_dah(); break; // Ъ
     case 0xDB: case 0xFB: morse_dah(); morse_dit(); morse_dah(); morse_dah(); break; // Ы
     case 0xDC: case 0xFC: morse_dah(); morse_dit(); morse_dit(); morse_dah(); break; // Ь
+    case 0xAA: case 0xBA:
     case 0xDD: case 0xFD: morse_dit(); morse_dit(); morse_dah(); morse_dit(); morse_dit(); break; // Э
     case 0xDE: case 0xFE: morse_dit(); morse_dit(); morse_dah(); morse_dah(); break; // Ю
     case 0xDF: case 0xFF: morse_dit(); morse_dah(); morse_dit(); morse_dah(); break; // Я
 
     // Знаки препинания (русский вариант)
     case '.': morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); break;
+    case 0x82:
     case ',': morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); morse_dah(); break;
     case '?': morse_dit(); morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dit(); break;
     case '!': morse_dah(); morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dah(); break;
     case ':': morse_dah(); morse_dah(); morse_dah(); morse_dit(); morse_dit(); morse_dit(); break;
     case ';': morse_dah(); morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
     case '(': case ')': morse_dah(); morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dah(); break;
+    case 0x91: case 0x92:
     case '\'': morse_dit(); morse_dah(); morse_dah(); morse_dah(); morse_dah(); morse_dit(); break;
+    case 0xAB: case 0xBB: case 0x8B: case 0x9B: case 0x84: case 0x93: case 0x94:
     case '"': morse_dit(); morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dit(); break;
     case '+': morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
+    case 0x96: case 0x97:
+    case '-': morse_dah(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dah(); break;
     case '@': morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
     case '=': morse_dah(); morse_dit(); morse_dit(); morse_dit(); morse_dah(); break;
     case '/': morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dit(); break;
@@ -33956,9 +34291,14 @@ void beep_tap_if_enabled() {
   }
 }
 
+char *hour_to_string[] = {
+  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
+  "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", 
+};
 void beep_hour() {
   if(global_is_beep_hour_enabled && !global_silent_mode) {
-    beep_morse("H");
+    beep_morse(hour_to_string[global_hours]);
+    //beep_morse("H");
   }
 }
 
@@ -34060,31 +34400,10 @@ void encryptAES(uint8_t* input, int inputLen, uint8_t* output, int paddedLen) {
 
   mbedtls_aes_init(&aes);
   mbedtls_aes_setkey_enc(&aes, (const unsigned char*)aes_encryption_key, PASSWORDS_AES_BITS);
-  /*
-  Serial.println("Encryption");
-  Serial.print("paddedLen="); Serial.println(paddedLen);
-  Serial.print("paddingValue="); Serial.println(paddingValue);
-  Serial.print("inputLen="); Serial.println(inputLen);
-  Serial.print("input="); Serial.println((char *)input);
-  Serial.print("paddedInput=");
-  for(i = 0; i < 16; i++) {
-    Serial.print(paddedInput[i], HEX);
-    Serial.print(" ");
-  }
-  Serial.println();
-  delay(100);
-  */
+
   mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, paddedLen, iv_copy, paddedInput, output + 16);
   mbedtls_aes_free(&aes);
-  /*
-  Serial.print("output=");
-  for(i = 0; i < 16; i++) {
-    Serial.print(*(output + 16 + i), HEX);
-    Serial.print(" ");
-  }
-  Serial.println();
-  delay(100);
-  */
+
   // Первые 16 байт - вектор инициализации
   memcpy(output, aes_iv, 16);
   free(paddedInput);
@@ -34106,40 +34425,13 @@ void decryptAES(uint8_t* input, int dataLen, uint8_t* output) {
 
   mbedtls_aes_init(&aes);
   mbedtls_aes_setkey_dec(&aes, (const unsigned char*)aes_encryption_key, PASSWORDS_AES_BITS);
-  /*
-  Serial.println("Decryption");
-  Serial.print("dataLen="); Serial.println(dataLen);
-  Serial.print("paddedLen="); Serial.println(paddedLen);
-  Serial.print("input=");
-  for(i = 0; i < 16; i++) {
-    Serial.print(*(input + 16 + i), HEX);
-    Serial.print(" ");
-  }
-  Serial.println();
 
-  delay(100);
-  */
   mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, paddedLen, iv_copy, input + 16, output);
-  /*
-  Serial.print("output=");
-  for(i = 0; i < 16; i++) {
-    Serial.print(*(output + i), HEX);
-    Serial.print(" ");
-  }
-  Serial.println();
-  delay(100);
-*/
   mbedtls_aes_free(&aes);
 
   // Read PKCS#7 padding value from the very last byte to remove it
   paddingValue = output[paddedLen - 1];
   originalLen = paddedLen - paddingValue;
-  /*
-  Serial.print("paddingValue="); Serial.println(paddingValue);
-  Serial.print("originalLen="); Serial.println(originalLen);
-  */
-  // Truncate the string to restore original length
-  //output[originalLen] = 0;
 }
 
 // Отобразить BMP в указанном месте
@@ -35055,6 +35347,12 @@ void scrollAddress(uint16_t vsp) {
 void setGamma(int gamma_value) {
   tft.writecommand(0x26); // Gamma Set Command
   tft.writedata(gamma_value);
+}
+
+void strcat_char(char *str, char c) {
+  while(*str) str++;
+  *(str) = c;
+  *(str + 1) = 0;
 }
 
 char * get_reset_reason_text(esp_reset_reason_t reason) {
