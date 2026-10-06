@@ -160,7 +160,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 
 ## Terminal commands
 * Filename from /Terminal - run commands from file one-by-one
-* # is a comment
+* String starting with # is a comment
 
 Internal operations:
 * reboot - reboot device
