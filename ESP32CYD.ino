@@ -7,12 +7,12 @@
 - Папка настроек /Settings
 - Wi-Fi и работа с сетью
 - Работа с текстом, данными
+- Просмотр: текст, таблицы, музыка, картинки
 - Управление пинами, осциллограф, вольтметр, генератор сигналов
 - Программирование: Brainfuck, BASIC
 - Игры
 - Без Bluetooth (не хватает памяти?)
 - Без SSH (не хватает памяти?)
-- Просмотр: текст, таблицы, музыка, картинки
 
 Лог разработки:
 2026-03-11 Лаунчер и статическая информация о системе
@@ -222,22 +222,25 @@
 2026-10-05 Разделил код на секции, PIM сортировка по названию, сортировка в файлах, setdatetime, date_add, date_sub, interval, дашборд интервалы,
   qth локатор в терминале (без аргументов), cowsay
 2026-10-06 strcat_char, iperf клиент (но не iperf3), tcpscan, terminal cursor bug fix, Morse News dashdoard, часы азбукой морзе, drawTextBar,
-  обновление справки github
+  обновление справки github, обновить справку
+2026-10-07 доработка date, utc, unixtime; qth от координат и координаты по qth, настройки азбуки морзе, cowsay множественные аргументы
+2026-10-08 Доработка расписания (ускорение работы, оптимизация), функции get_next_month, get_prev_month, get_next_day, get_prev_date, is_valid_date,
+  get_day_of_week, last_day_of_month, конвертер 256 цветов в 16, конвертер 565 в 16, конвертер 24 бит в 16 цветов,
+  терминал многопараметрические ^[...m, поддержка мыши в терминале, баг метронома отрисовка
 
-- Настройки азбуки Морзе: частота, точка, доп интервал
-- drawTextBar где необходимо
-- обновить внутреннюю справку по командам
-- UTC полное время
-- unixtime ввод времени
-- ticks ввод времени
-- beats ввод времени
-- qth ввод координат
+- новый обзор(ы)
+
+- терминал клавиши курсора
+- терминал ввод поддержка передвижения курсора
+- Уникальные строки в файле
+- Сортировка файла
+- Показывать размер файлов в ls (или ещё как)
+- du
+- dd if=zero/random/file of=file bs count skip
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
 - Режим без хранилища - использовать NVS, одна заметка, один пароль, одна таблица
 - Цветные значки
-- (д) Терминал многопараметрические ^[...m
-- Ближайший цвет для 256 цветов терминала (а может 256 цветов?)
 - (д) Сообщение с точкой для разблокировки
 - (п) Просмотреть справку, может быть что-то добавить
 - (н) Мини-калькулятор в меню
@@ -247,18 +250,36 @@
 - (н) Генератор сигналов в фоне
 - (н) Таймер в фоне
 - (н) Дашборд валюты
-- (н) Дашборд акции
+- (н) Дашборд акции - финансовые данные https://www.valueray.com/api/v1/symbolData?symbol=AAPL
+- (н) Дашборд криптовалюты
 - (н) Дашборд фотографии
-- (н) Дашборд события
+- (н) Дашборд орбиты и положение планет
+- (н) Дашборд знаки зодиака
+- Дашборд ZPG - можно idlerpg: персонаж качается, встречает монстров, находит/теряет предметы; а можно как годвиль; ИИ предлагает целый город
+- (н) Flightradar https://api.adsb.lol/docs
 - (н) Настройка: не показывать значки статуса AFMSWT
 - (н) Настройка: не показывать время
 - (н) Настройка: не показывать время пока оно не синхронизировано
 - (н) Bluetooth музыка и радио - похоже не хватает на это памяти
 - (н) Шахматы (задачи)
-- (н) Шахматы (игра)
+- (н) Шахматы (игра с компьютером)
 - (н) Бегающий динозавр (как в Chrome)
 - (н) Арканоид
 - (н) Судоку
+- (н) Четыре в ряд
+- (н) Крестики-нолики
+- (н) Морской бой
+- (н) Бомбер
+- (н) Гонки
+- (н) Линии (lines)
+- (н) Пасьянс косынка
+- (н) Лабиринт
+- (н) Светофор
+- (н) Косынка
+- (н) Marbles (правда это сложно)
+- (д) Тренажёр шахматных координат
+- (д) Тетрис - настройки Figures (Tetranimo, Pentamino), Speed (Slow, Medium, Fast, Max), Increase on (Figure, Time, Line, None), Next figure (Random, No repeat), Filled lines (0 - 10), Scroll, Colors (on/off)
+- (д) Tetris - зонтичное приложение для игр Brick Game
 - (н) Убирать значки в лаунчере
 - (н) Соединение через HTTP прокси
 - (н) Вебсервер в фоне
@@ -285,78 +306,55 @@
 - (н) Обновление по OTA
 - (н) CHIP-8 ускорение работы вывода спрайта
 - (н) CHIP-8 рисовать только изменённые части экрана
-- (н) Информация по акциям, валютам и криптовалютам (курсы)
 - (н) Управление через веб
 - (н) I2C чтение распространённых датчиков
 - (н) Basic рисование: plot, draw, rect, fillrect, triangle, fillscreen, drawString, drawCentreString, drawCircle, fillCircle
 - (н) Basic строки
 - (н) Basic работа с файлами
 - (н) Полноцветные скриншоты (24 бита) если нужно
-- (н) Заставка Boids
-- (н) Заставка DLA
 - (н) tftp
-- (д) История/продолжить
-- (д) Переход к случайной функции (приложению)
+- (д) Совет от ИИ - экран История/продолжить - чем занимался в каких приложениях, как задачи
 - (д) Терминал переменные окружения
 - (д) /Terminal/Environment
 - (н) Чат - просмотр с прокруткой
 - (н) Категории для PIM
+- (н) Заставка Boids
+- (н) Заставка DLA
 - (н) Rainbow lamp
-- (н) Morse news Dashboard
-- (н) Quick launch лаунчер
 - (н) Заставка снег
 - (н) Заставка огонь
 - (н) Заставка гравитация
 - (н) Заставка бегущая строка
-- (н) Дашборд орбиты и положение планет
-- (н) Дашборд знаки зодиака
 - (н) Заставка точки вверх-вниз как в 3д-кубе
-- (н) Четыре в ряд
-- (н) Крестики-нолики
-- (н) Заставка множество мандельброта
+- (н) Заставка множество мандельброта, Жюлиа
 - (н) Заставка бассейны Ньютона
+- (н) Спирограф
+- (н) Летающие квадратики (как в Song in lines)
+- (н) Четырёхмерный куб
 - (н) Папоротник Барнсли
-- (н) Морской бой
-- (н) Финансовые данные https://www.valueray.com/api/v1/symbolData?symbol=AAPL
 - (н) Тонкий клиент - отправка касаний на сервер, получение текста/картинки с сервера
 - (н) Удалённое управление - отправка картинки на сервер, получение касания с сервера
 - (н) Облачная фоторамка - картинка с сервера
 - (н) Таблица менделеева
 - (н) Приливы-отливы
 - (н) Конвертер валют и единиц
-- (н) Спирограф
-- (н) Летающие квадратики (как в Song in lines)
-- (н) Четырёхмерный куб
 - (н) Общение с ИИ
-- (н) Курсы валют
-- (н) Flightradar
 - (н) Майнер
 - (н) Serial to web - управление RS-232 с веб-интерфейса
 - (н) Просмотр mjpeg с esp32cam
-- (н) Бомбер
-- (н) Гонки
-- (н) Линии (lines)
-- (н) Пасьянс косынка
-- (н) Лабиринт
-- (н) Светофор
-- (н) Косынка
-- (н) Marbles (правда это сложно)
 - (н) Дней с начала года
 - (н) Дней до конца года
-- (н) Время с/до событий
 - (н) Номер недели
 - (н) Терминал операции со строками ESC-кодами
 - (н) tar
 - (н) xmodem отправка
 - (н) xmodem приём
 - (н) Можно заменить millis на esp_timer_get_time, чтобы не было переполнения времени
+- (н) Quick launch лаунчер
 - (д) Ланучер-список
 - (д) Лаунчер с более крупными значками
 - (д) Выбор вида лаунчера
 - (д) Ещё один заход Bluetooth
-- (д) Тренажёр шахматных координат
-- (д) Тетрис - настройки Figures (Tetranimo, Pentamino), Speed (Slow, Medium, Fast, Max), Increase on (Figure, Time, Line, None), Next figure (Random, No repeat), Filled lines (0 - 10), Scroll, Colors (on/off)
-- (д) Tetris - зонтичное приложение для игр Brick Game
 - (д) Прошлые команды в терминале по стрелке вверх
 - (н) Почта
 - (н) Gemini
@@ -389,11 +387,6 @@
 - Карта контрольная цифра
 - Добавление файлов PIM
 - Географическое расстояние между точками
-- Уникальные строки в файле
-- Сортировка файла
-- Показывать размер файлов в ls
-- du
-- dd if=zero/random/file of=file bs count skip
 - Протокол CAN
 - Простокол Modbus
 - Протокол MQTT
@@ -402,6 +395,9 @@
 - Угол луны сейчас, максимальный угол, направление
 - Угол солнца сейчас, максимальный угол, направление
 - udpscan - сложный и довольно бестолковый
+- ticks ввод времени
+- beats ввод времени
+- drawTextBar где необходимо
 
 Буфер обмена
 - (д) Буфер обмена
@@ -649,6 +645,7 @@ char terminal_esc_sequence[20];
 char terminal_esc_sequence_flag = 0;
 char terminal_use_alt_screen_flag = 0;
 char terminal_pending_wrap = 0;
+char terminal_send_mouse = 0;
 int terminal_scroll_line_begin = 0;
 int terminal_scroll_line_end = 19;
 
@@ -978,6 +975,9 @@ int global_is_beep_hour_enabled = 1;
 int global_is_beep_quarter_enabled = 0;
 int global_is_beep_tap_enabled = 1;
 int global_volume = 100;
+int global_morse_freq = 1000;
+int global_dot_len = 50;
+int global_morse_char_add_wait = 0;
 
 // После подключения к вай-фаю можно узнать текущее время
 time_t global_unixtime_retrieved = 0;
@@ -1898,106 +1898,201 @@ void user_manual(char mode, char *io_buff) {
 // Мануал по терминалу
 // ====================================================
 
-void terminal_manual() {
-  char help[] =
+const char global_terminal_help[] PROGMEM =
   "== Terminal help ==\n"
   "Commands available:\n"
+  "String starts with # - comments\n"
   "help - this help\n"
-  "bc - simple console calculator\n"
-  "millis - milliseconds since boot\n"
-  "micros - microseconds since boot\n"
-  "clear - clear terminal\n"
-  "reset - clear terminal\n"
+  "Internal operations:\n"
   "reboot - reboot device\n"
-  "exit - exit terminal\n"
-  "cursor {col} {row} - set cursor position\n"
-  "date - current date\n"
-  "unixtime - unix timestamp\n"
+  "exit - exit terminal app\n"
+  "gamma {value 1-4} - set gamma correction by index\n"
+  "\n"
+  "Date and time:\n"
+  "millis - milliseconds after boot\n"
+  "micros - microseconds after boot\n"
+  "uptime - human-readable uptime\n"
+  "date [unixtime] - current date or date by unix timestamp\n"
+  "utc [unixtime] - current time in UTC or UTC date by unix timestamp\n"
+  "unixtime [datetime] - current unix timestamp or datetime's unix timestamp\n"
+  "ticks - current time in .NET ticks\n"
+  "beats - current time in @beats\n"
   "cal - show current month\n"
-  "settime - set current time\n"
-  "setdate - set current date\n"
-  "sun - show sunrise, solar noon and sunset\n"
-  "moon - show moon day\n"
-  "history - show commands history\n"
-  "sleep {seconds} - delay specified amount of seconds\n"
-  "delay {milliseconds} - delay specified amount of milliseconds\n"
-  "format ffat - erase all in FFat storage\n"
-  "ls {full_path} - show directory listing\n"
-  "mkdir {full_path} - create new directory\n"
-  "rmdir {full_path} - remove empty directory\n"
-  "cat {path} - show file contents\n"
-  "file {path} - detect file type\n"
-  "cp {from} {to} - copy file\n"
-  "mv {from} {to} - move file\n"
-  "rm {full_path} - remove file\n"
-  "cd {full_path} - change path\n"
-  "pwd - current path\n"
-  "touch {full_path} - create file\n"
-  "i2c - scan I2C devices\n"
-  "beep - beep as system event\n"
-  "tone {frequency} - make sound tone\n"
-  "notone - stop sound tone\n"
-  "serial [speed] - connect to serial port\n"
-  "sd_to_ffat {path_sd} {path_ffat} - copy file from SD to FFat\n"
-  "ffat_to_sd {path_ffat} {path_sd} - copy file from FFat to SD\n"
-  "utf8_to_cp1251 {input_file} {output_file} - change file encoding\n"
-  "cp1251_to_utf8 {input_file} {output_file} - change file encoding\n"
-  "base16encode {input_file} [output_file] - encode file to base16\n"
-  "base16decode {input_file} [output_file] - decode file from base16\n"
-  "base32encode {input_file} [output_file] - encode file to base32\n"
-  "base32decode {input_file} [output_file] - decode file from base32\n"
-  "base64encode {input_file} [output_file] - encode file to base64\n"
-  "base64decode {input_file} [output_file] - decode file from base64\n"
-  "aes_encrypt {password} {input_file} [output_file] - encrypt file with EAS256\n"
-  "aes_decrypt {password} {input_file} [output_file] - decrypt file from EAS256\n"
-  "hexdump {path} - view files in hex codes\n"
-  "uuidgen - generate uuid\n"
-  "uptime - shows uptime in days, hours, minutes, seconds\n"
-  "tracert {host} - traceroute host\n"
-  "random [from] [to] - random number\n"
-  "more {path} - show file page by page\n"
-  "head {path} - show beginning of the file\n"
-  "tail {path} - show ending of the file\n"
-  "echo {text} - show text and exit\n"
-  "morse {text} - beep text in Morse code\n"
-  "caesar {text} - encodes text with Caesar encryption\n"
-  "rot13 {text} - encodes text with rot13 encryption\n"
-  "seq {from} {to} - generate number sequence\n"
-  "wc {path} - calculate words, lines and bytes in file\n"
-  "lscpu - information about CPU\n"
-  "lsmem - information about memory\n"
-  "lsblk - information about internal storage\n"
-  "df - information about current storage\n"
-  "brainfuck {path} - brainfuck interpretator\n"
-  "basic {path} - BASIC interpretator\n"
-  "view {path} - view file\n"
-  "hexview {path} - view files in hex codes (GUI)\n"
-  "edit {file} - edit file\n"
-  "csv {file} - edit file in CSV editor\n"
-  "gamma {index} - apply gamma correction\n"
-  "sizeof - show data type sizes\n"
-  "ip - current IP\n"
-  "ipconfig - show network settings\n"
-  "ifconfig - show network settings\n"
+  "settime {hour} {minute} {second} - set clock\n"
+  "setdate {date} - set date\n"
+  "setdatetime {datetime} - set clock and date\n"
+  "sun - sun information\n"
+  "moon - moon information\n"
+  "date_add {date|datetime} {interval} {unit} - add interval to date\n"
+  "date_sub {date|datetime} {interval} {unit} - substract interval from date\n"
+  "interval {from_date|from_datetime} [to_date|to_datetime] - interval between dates\n"
+  "\n"
+  "Terminal controls:\n"
+  "clear - clear screen\n"
+  "reset - reset terminal (apply default settings)\n"
+  "cursor {col} {row} - set cursor position\n"
+  "history - show command history\n"
+  "rpt - repeat last command (except rpt)\n"
+  "echo {text} - show text\n"
+  "cowsay {text} - show text with a cow\n"
+  "caesar {text} - encode text with Caesar code\n"
+  "rot13 {text} - encode text with rot13\n"
+  "seq {start_number} {end_number} - sequental numbers\n"
+  "lscpu - show CPU information\n"
+  "uname - show firmware information\n"
+  "lsmem - show RAM information\n"
+  "lsblk - show internal storage information\n"
+  "colors - show terminal colors\n"
+  "sleep {seconds} - sleep for specific time in seconds\n"
+  "delay {milliseconds} - sleep for specific time in milliseconds\n"
+  "serial [-tx pin] [-rx pin] [speed] - connect to serial port\n"
+  "\n"
+  "Random numbers:\n"
+  "random [from] [to] - generate random numbers (from and to included)\n"
+  "uuidgen - generate random UUID\n"
+  "\n"
+  "Converters:\n"
+  "ip2long {IP} - IP to number\n"
+  "long2ip {number} - number to IP\n"
+  "bin {binary} - binary number to octal, decimal, hexadecimal\n"
+  "binoct {binary} - binary to octal\n"
+  "bindec {binary} - binary to decimal\n"
+  "binhex {binary} - binary to hexadecimal\n"
+  "oct {octal} - octal to binary, decimal, hexadecimal\n"
+  "octbin {octal} - octal to binary\n"
+  "octdec {octal} - octal to decimal\n"
+  "octhex {octal} - octal to hexadecimal\n"
+  "dec {decimal} - decimal to binary, octal, hexadecimal\n"
+  "decbin {decimal} - decimal to binary\n"
+  "decoct {decimal} - decimal to octal\n"
+  "dechex {decimal} - decimal to hexadecimal\n"
+  "hex {hexadecimal} - hexadecimal to binary, octal, decimal\n"
+  "hexbin {hexadecimal} - hexadecimal to binary\n"
+  "hexoct {hexadecimal} - hexadecimal to octal\n"
+  "hexdec {hexadecimal} - hexadecimal to decimal\n"
+  "qth [locator]|{[lat] [lon]} - ham QTH locator\n"
+  "\n"
+  "Math and statistics:\n"
+  "bc {expression} - calculate expressions\n"
+  "gcd {number} {number} - greatest common divider\n"
+  "nod {number} {number} - same as gcd\n"
+  "lcm {number} {number} - least common multiple\n"
+  "nok {number} {number} - same as lcm\n"
+  "factorial {number} - factorial of number\n"
+  "dividers {number} - dividers of number\n"
+  "factorize {number} - factorize number\n"
+  "stat {number} [number ...] - statistics of input data\n"
+  "det {{a11} {a12} {a21} {a22}|{a11} {a12} {a13} {a21} {a22} {a23} {a31} {a32} {a33}} - determinant of matrix 2x2 or 3x3\n"
+  "reverse {number} - reverse digits in number (in decimal)\n"
+  "digit_sum {number} - sum of digits (in decimal)\n"
+  "bitset {number} {bit_number} - set single bit\n"
+  "bitget {number} {bit_number} - get single bit\n"
+  "bitclear {number} {bit_number} - clear single bit\n"
+  "bittoggle {number} {bit_number} - toggle single bit\n"
+  "rol {number} - rotate binary left\n"
+  "ror {number} - rotate binary right\n"
+  "clz {number} - count leading zeroes (in binary)\n"
+  "ctz {number} - count tailing zeroes (in binary)\n"
+  "popcount {number} - number of set bits (in binary)\n"
+  "parity {number} - is number of bits odd (in binary)\n"
+  "div {number1} {number2} - divide by module\n"
+  "permutation  {number} - permutations count\n"
+  "arrangement {of_n} {taken_k} - arrangements count\n"
+  "combination {of_n} {taken_k} - combinations count\n"
+  "subnet {subnet}/{netmask} - subnet calculator\n"
+  "\n"
+  "Storage settings:\n"
+  "storage {ffat|sd|none} - set storage\n"
+  "df - show current storage stats\n"
+  "format {ffat} - format (ffat only)\n"
+  "erase {ffat} - erase ffat flash\n"
+  "\n"
+  "File operations:\n"
+  "stack - show file /Terminal/Stack\n"
+  "push {text} - push line to /Terminal/Stack\n"
+  "pop - pop line from /Terminal/Stack\n"
+  "unshift {text} - unshift line to /Terminal/Stack\n"
+  "shift - shift line from /Terminal/Stack\n"
+  "cd [directory] - change directory\n"
+  "pwd - chow current directory\n"
+  "ls [directory] - list files in current directory\n"
+  "mkdir {directory} - create directory\n"
+  "rmdir {directory} - remove directory\n"
+  "cp {from_path} {to_path} - copy files recursively\n"
+  "mv {from_path} {to_path} - move files recursively\n"
+  "rm {from_path} - remove files recursively\n"
+  "file {file_path} - show file type by file contents\n"
+  "cat {file_path} - show file contents\n"
+  "head {file_path} - show starting lines of file\n"
+  "tail {file_path} - show tailing lines of file\n"
+  "more {file_path} - show file screen by screen\n"
+  "grep {text} {file_path} - grep lines from file\n"
+  "view {file_path} - view file in GUI viewer\n"
+  "hexview {file_path} - view file in hex in GUI viewer\n"
+  "append {file} {line} [line] … - add lines to file\n"
+  "edit {file_path} - edit text file in GUI editor\n"
+  "csv {file_path} - edic CSV file in GUI editor\n"
+  "hexdump {file_path} - show file in hex (in console)\n"
+  "wc {file_path} - calculate chars, words, lines\n"
+  "crc {file_path} - calculate CRC checksum\n"
+  "md5sum {file_path} - calculate MD5 schecksum\n"
+  "sha256sum {file_path} - calculate SHA256 checksum\n"
+  "brainfuck {file_path} - brainfuck interpreter\n"
+  "basic {file_path} - BASIC interpreter\n"
+  "touch {file_path} - crete empty file\n"
+  "ffat_to_sd {ffat_filename} {sd_filename} - copy file from ffat to SD\n"
+  "sd_to_ffat {sd_filename} {ffat_filename} - copy file from SD to ffat\n"
+  "utf8_to_cp1251 {input_filename} {output_filename} - change file encoding from UTF-8 to cp1251\n"
+  "cp1251_to_utf8 {input_filename} {output_filename} - change file encoding from cp1251 to UTF-8\n"
+  "base16encode {input_filename} [output_filename] - encode file with base16\n"
+  "base16decode {input_filename} [output_filename] - decode file from base16\n"
+  "base32encode {input_filename} [output_filename] - encode file with base32\n"
+  "base32decode {input_filename} [output_filename] - decode file from base32\n"
+  "base64encode {input_filename} [output_filename] - encode file with base64\n"
+  "base64decode {input_filename} [output_filename] - decode file from base64\n"
+  "aes_encrypt {password} {input_filename} [output_filename] - encrypt file with AES256\n"
+  "aes_decrypt {password} {input_filename} [output_filename] - decrypt file from AES256\n"
+  "sizeof - show size of internal data types\n"
+  "\n"
+  "I2C and other protocols:\n"
+  "i2c - I2C scanner\n"
+  "\n"
+  "Sound:\n"
+  "beep - beep once\n"
+  "notone - stop sound\n"
+  "tone {freq} - start sound tone\n"
+  "morse {text} - beep text with morse code\n"
+  "\n"
+  "Networking:\n"
+  "ifconfig - show network configuration\n"
+  "ipconfig - same as ifconfig\n"
+  "hostname [new_hostname] - show and set current hostname\n"
+  "ip - current ip\n"
   "netmask - current netmask\n"
   "gateway - current gateway\n"
   "dns - current DNS\n"
-  "rssi - RSSI value\n"
-  "host {host} - lookup DNS host\n"
-  "ping {host} - ping host continiously\n"
-  "tracert {host} - traceroute host\n"
-  "telnet {host} [port] - connect to host and port via telnet\n"
-  "telnets {host} [port] - connect to host and port via telnet using SSL\n"
-  "wget {url} [path] - download file from HTTP/HTTPS to local file\n"
-  "ipinfo {ip} - IP information from ipinfo.io\n"
-  "hamqsl - get ham propagation info from hamqsl.com\n"
-  "bitcoin - bitcoin info from blockchain.info\n"
-  "myextip - show external IP via api.ipify.org\n"
-  "translate {lang_from|auto} {lang_to} {query} - translate via Google Translate\n"
-  "weather [{lat} {lon}] - show weather\n"
-  "chat [{nick} {message}] - read and send messages to chat\n"
+  "rssi - current RSSI\n"
+  "host - resovle host with DNS\n"
+  "arp - show ARP\n"
+  "arpscan - scan subnet with ARP\n"
+  "ping {hostname} - ping host\n"
+  "pingscan {subnet}/{netmask} - scan subnet with ping\n"
+  "tcpscan {host} [port_from] [port_to] - scan host ports with TCP\n"
+  "tracert {hostname} - traceroute\n"
+  "telnet {host} [port] - telnet client\n"
+  "telnets {host} [port] - telnet client with SSL\n"
+  "wget {URL} [filename] - download file\n"
+  "ipinfo {ip} - fhow ipinfo via ipinfo.io\n"
+  "hamqsl - show hf propagation\n"
+  "bitcoin - show current bitcoin info\n"
+  "myextip - show current external IP\n"
+  "translate {lang_from|auto} {lang_to} {query} - translate with google translate\n"
+  "weather [qth]|[{lat} {lon}] - current weather\n"
+  "chat [{nick} {message}]- chat read and post\n"
   "ruf - random useless fact\n"
-  "# - comments\n"
+  "iperf {host} [port] - iperf 2 client\n"
+  "help - show current help\n"
+  "app {app_name} - run GUI app with app name\n"
   "Any other command - try to find file with that name in /Terminal and execute it.\n"
   "\n"
   "== Running apps from terminal ==\n"
@@ -2072,9 +2167,10 @@ void terminal_manual() {
   "search - Search app\n"
   "totp - TOTP app\n"
   "\n"
-  ;
+  "";
 
-  view_text("Terminal Manual", help);
+void terminal_manual() {
+  view_text("Terminal Manual", (char *)global_terminal_help);
 }
 
 // ====================================================
@@ -2708,17 +2804,41 @@ void terminal_execute_single(char *str) {
     terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "date") == 0) {
-    sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
+    if(arg_count == 1) {
+      set_local_time_from_unix_timestamp();
+      sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
+    }
+    else {
+      int year, month, day, day_of_week, hour, minute, second;
+      i1 = strtol(cmdline_params[1], NULL, 10); //
+      get_datetime_from_unixtime(i1, 0, &year, &month, &day, &day_of_week, &hour, &minute, &second);
+      sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", year, month, day, hour, minute, second);
+    }
     terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "utc") == 0) {
-    i1 = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
-    i2 = i1 % 86400;
-    sprintf(buff, "UTC time is %d:%02d:%02d", i2 / 3600, (i2 / 60) % 60, i2 % 60);
+    int year, month, day, day_of_week, hour, minute, second;
+    if(arg_count == 1) {
+      set_local_time_from_unix_timestamp();
+      i1 = get_unixtime_from_current_datetime();
+    }
+    else {
+      i1 = get_unixtime_from_string(cmdline_params[1]);
+    }
+    get_datetime_from_unixtime(i1, 0, &year, &month, &day, &day_of_week, &hour, &minute, &second);
+
+    sprintf(buff, "UTC time is %04d-%02d-%02d %d:%02d:%02d", year, month, day, hour, minute, second);
     terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "unixtime") == 0) {
-    sprintf(buff, "%lu", global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000);
+    set_local_time_from_unix_timestamp();
+    if(arg_count == 1) {
+      i1 = get_unixtime_from_current_datetime();
+    }
+    else {
+      i1 = get_unixtime_from_string(cmdline_params[1]);
+    }
+    sprintf(buff, "%lu", i1);
     terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "ticks") == 0) {
@@ -2807,6 +2927,7 @@ void terminal_execute_single(char *str) {
         case 'm': i += i1 * 60; break;
         case 'h': i += i1 * 3600; break;
         case 'd': i += i1 * 86400; break;
+        case 'w': i += i1 * 86400 * 7; break;
       }
       get_datetime_from_unixtime(i, global_timezone, &year, &month, &day, &day_of_week, &hour, &minute, &second);
       sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", year, month, day, hour, minute, second);
@@ -2827,6 +2948,7 @@ void terminal_execute_single(char *str) {
         case 'm': i -= i1 * 60; break;
         case 'h': i -= i1 * 3600; break;
         case 'd': i -= i1 * 86400; break;
+        case 'w': i -= i1 * 86400 * 7; break;
       }
       get_datetime_from_unixtime(i, global_timezone, &year, &month, &day, &day_of_week, &hour, &minute, &second);
       sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", year, month, day, hour, minute, second);
@@ -2919,18 +3041,24 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: cowsay {text}");
     }
     else {
+      strcpy(buff, "");
+      for(i = 1; i < arg_count; i++) {
+        if(i > 1) strcat(buff, " ");
+        strcat(buff, cmdline_params[i]);
+      }
+
       terminal_print(" ");
-      for(i = 1; i <= strlen(cmdline_params[1]) + 2; i++) {
+      for(i = 1; i <= strlen(buff) + 2; i++) {
         terminal_print("_");
       }
       terminal_println("");
 
       terminal_print("< ");
-      terminal_print(cmdline_params[1]);
+      terminal_print(buff);
       terminal_println(" >");
 
       terminal_print(" ");
-      for(i = 1; i <= strlen(cmdline_params[1]) + 2; i++) {
+      for(i = 1; i <= strlen(buff) + 2; i++) {
         terminal_print("-");
       }
       terminal_println("");
@@ -3310,61 +3438,86 @@ void terminal_execute_single(char *str) {
     }
   }
   else if(strcmp(cmdline_params[0], "qth") == 0) {
-    sprintf(buff, "Coordinates: lat %g, lon %g", global_lat, global_lon);
-    terminal_println(buff);
-    terminal_print("QTH: ");
+    double lat, lon;
+    if(arg_count == 2) {
+      // Обратное преобразование, из QTH-локатора в координаты
+      double dist_lat = 0, dist_lon = 0;
+      qth_to_lat_lon(cmdline_params[1], &lat, &lon, &dist_lat, &dist_lon);
+      sprintf(buff, "Center: lat %g, lon %g", lat, lon);
+      terminal_println(buff);
 
-    strcpy(buff, "");
-    j = 0;
-    d1 = 180 + global_lon;
-    d2 = 90 + global_lat;
-    
-    // Первые две буквы (большие)
-    i = d1 / 20;
-    d1 = fmod(d1, 20);
-    buff[j] = 'A' + i;
-    j++;
+      // Погрешность
+      terminal_println("Uncertainty:");
+      sprintf(buff, "Lat %c%g deg, %c%g km", 0xB1, dist_lat, 0xB1, 110.62 * dist_lat);
+      terminal_println(buff);
+      sprintf(buff, "Lon %c%g deg, %c%g km", 0xB1, dist_lon, 0xB1, 111.32 * cos(PI * lat / 180) * dist_lon);
+      terminal_println(buff);
+    }
+    else {
+      if(arg_count == 1) {
+        lat = global_lat;
+        lon = global_lon;
+      }
+      else {
+        lat = strtod(cmdline_params[1], NULL);
+        lon = strtod(cmdline_params[2], NULL);
+      }
+      sprintf(buff, "Coordinates: lat %g, lon %g", lat, lon);
+      terminal_println(buff);
+      terminal_print("QTH: ");
 
-    i = d2 / 10;
-    d2 = fmod(d2, 10);
-    buff[j] = 'A' + i;
-    j++;
+      strcpy(buff, "");
+      j = 0;
+      d1 = 180 + global_lon;
+      d2 = 90 + global_lat;
+      
+      // Первые две буквы (большие)
+      i = d1 / 20;
+      d1 = fmod(d1, 20);
+      buff[j] = 'A' + i;
+      j++;
 
-    // Две цифры
-    i = d1 / 2;
-    d1 = fmod(d1, 2);
-    buff[j] = '0' + i;
-    j++;
+      i = d2 / 10;
+      d2 = fmod(d2, 10);
+      buff[j] = 'A' + i;
+      j++;
 
-    i = d2 / 1;
-    d2 = fmod(d2, 1);
-    buff[j] = '0' + i;
-    j++;
+      // Две цифры
+      i = d1 / 2;
+      d1 = fmod(d1, 2);
+      buff[j] = '0' + i;
+      j++;
 
-    // Две маленькие буквы
-    i = d1 * 12;
-    d1 = fmod(d1, 1.0 / 12);
-    buff[j] = 'a' + i;
-    j++;
+      i = d2 / 1;
+      d2 = fmod(d2, 1);
+      buff[j] = '0' + i;
+      j++;
 
-    i = d2 * 24;
-    d2 = fmod(d2, 1.0 / 24);
-    buff[j] = 'a' + i;
-    j++;
+      // Две маленькие буквы
+      i = d1 * 12;
+      d1 = fmod(d1, 1.0 / 12);
+      buff[j] = 'a' + i;
+      j++;
 
-    // Ещё две цифры
-    i = d1 * 120;
-    buff[j] = '0' + i;
-    j++;
+      i = d2 * 24;
+      d2 = fmod(d2, 1.0 / 24);
+      buff[j] = 'a' + i;
+      j++;
 
-    i = d2 * 240;
-    buff[j] = '0' + i;
-    j++;
+      // Ещё две цифры
+      i = d1 * 120;
+      buff[j] = '0' + i;
+      j++;
 
-    // Ну и хватит
-    buff[j] = 0;
+      i = d2 * 240;
+      buff[j] = '0' + i;
+      j++;
 
-    terminal_println(buff);
+      // Ну и хватит
+      buff[j] = 0;
+
+      terminal_println(buff);
+    }
   }
   // ======================================================
   // Математика, статистика
@@ -3926,10 +4079,20 @@ void terminal_execute_single(char *str) {
     }
     current_dir = Storage->open(buff);
     if(current_dir && current_dir.isDirectory()) {
+      i1 = 0;
       while(file = current_dir.openNextFile()) {
         strcpy(buff, file.name());
         utf8_to_cp1251(buff);
-        terminal_println(buff);
+        if(i1 + strlen(buff) >= 40) {
+          terminal_println("");
+          i1 = 0;
+        }
+        terminal_print(buff);
+        i1 += strlen(buff) + 2;
+        terminal_print("  ");
+      }
+      if(i1 > 0) {
+        terminal_println("");
       }
     }
     else {
@@ -4467,6 +4630,7 @@ void terminal_execute_single(char *str) {
           beep_morse_perform(cmdline_params[i][j]);
           morse_wait();
           morse_wait();
+          delay(global_morse_char_add_wait);
         }
         if(i + 1 != arg_count) beep_morse_perform(' ');
       }
@@ -4651,6 +4815,9 @@ void terminal_execute_single(char *str) {
     int result = 0;
     lat = global_lat;
     lon = global_lon;
+    if(arg_count == 2) {
+      qth_to_lat_lon(cmdline_params[1], &lat, &lon, NULL, NULL);
+    }
     if(arg_count == 3) {
       lat = strtod(cmdline_params[1], NULL);
       lon = strtod(cmdline_params[2], NULL);
@@ -5133,9 +5300,10 @@ void terminal_println(char *string) {
 }
 
 void terminal_print_char(char c) {
-  int val, val2;
+  int val, val2, val3;
   int i;
   char buff[20];
+  char *seq_read = NULL;
   // ESC - последовательность
   if(terminal_esc_sequence_flag) {
     terminal_esc_sequence[strlen(terminal_esc_sequence) + 1] = 0;
@@ -5282,11 +5450,30 @@ void terminal_print_char(char c) {
           Serial.println(terminal_esc_sequence);
           terminal_autowrap = 1;
         }
+        if(strcmp(terminal_esc_sequence, "[?9h") == 0) {
+          Serial.println(terminal_esc_sequence);
+        }
         if(strcmp(terminal_esc_sequence, "[?25h") == 0) {
           cursor_visible_flag = 1;
         }
-        if(strcmp(terminal_esc_sequence, "[?1049h") == 0) {
+        if(strcmp(terminal_esc_sequence, "[?1000h") == 0) {
           Serial.println(terminal_esc_sequence);
+          terminal_send_mouse = 1;
+        }
+        if(strcmp(terminal_esc_sequence, "[?1002h") == 0) {
+          Serial.println(terminal_esc_sequence);
+          terminal_send_mouse = 1;
+        }
+        if(strcmp(terminal_esc_sequence, "[?1003h") == 0) {
+          Serial.println(terminal_esc_sequence);
+          terminal_send_mouse = 1;
+        }
+        if(strcmp(terminal_esc_sequence, "[?1006h") == 0) {
+          Serial.println(terminal_esc_sequence);
+          terminal_send_mouse = 1;
+        }
+        if(strcmp(terminal_esc_sequence, "[?1049h") == 0) {
+          //Serial.println(terminal_esc_sequence);
           terminal_use_alt_screen_flag = 1;
           terminal_screen = terminal_alt_screen;
           terminal_colors = terminal_alt_colors;
@@ -5300,14 +5487,33 @@ void terminal_print_char(char c) {
       }
       else if(c == 'l') {
         if(strcmp(terminal_esc_sequence, "[?7l") == 0) {
-          Serial.println(terminal_esc_sequence);
+          //Serial.println(terminal_esc_sequence);
           terminal_autowrap = 0;
+        }
+        if(strcmp(terminal_esc_sequence, "[?9l") == 0) {
+          Serial.println(terminal_esc_sequence);
         }
         if(strcmp(terminal_esc_sequence, "[?25l") == 0) {
           cursor_visible_flag = 0;
         }
-        if(strcmp(terminal_esc_sequence, "[?1049l") == 0) {
+        if(strcmp(terminal_esc_sequence, "[?1000l") == 0) {
           Serial.println(terminal_esc_sequence);
+          terminal_send_mouse = 0;
+        }
+        if(strcmp(terminal_esc_sequence, "[?1002l") == 0) {
+          Serial.println(terminal_esc_sequence);
+          terminal_send_mouse = 0;
+        }
+        if(strcmp(terminal_esc_sequence, "[?1003l") == 0) {
+          Serial.println(terminal_esc_sequence);
+          terminal_send_mouse = 0;
+        }
+        if(strcmp(terminal_esc_sequence, "[?1006l") == 0) {
+          Serial.println(terminal_esc_sequence);
+          terminal_send_mouse = 0;
+        }
+        if(strcmp(terminal_esc_sequence, "[?1049l") == 0) {
+          //Serial.println(terminal_esc_sequence);
           terminal_use_alt_screen_flag = 0;
           terminal_screen = terminal_primary_screen;
           terminal_colors = terminal_primary_colors;
@@ -5323,68 +5529,104 @@ void terminal_print_char(char c) {
           current_color = 0x07;
           current_attribute = 0x00;
         }
-        else if(strcmp(terminal_esc_sequence, "[0m") == 0) {
-          current_color = 0x07;
-          current_attribute = 0x00;
-        }
-        else if(strcmp(terminal_esc_sequence, "[0;1m") == 0) {
-          current_color = 0x07;
-          current_attribute = 0x00;
-          current_attribute |= ATTRIBUTE_BOLD;
-        }
-        else if(strcmp(terminal_esc_sequence, "[0;4m") == 0) {
-          current_color = 0x07;
-          current_attribute = 0x00;
-          current_attribute |= ATTRIBUTE_UNDERLINED;
-        }
-        else if(strcmp(terminal_esc_sequence, "[0;7m") == 0) {
-          current_color = 0x07;
-          current_attribute = 0x00;
-          current_attribute |= ATTRIBUTE_INVERSION;
-        }
-        else if(strcmp(terminal_esc_sequence, "[0;9m") == 0) {
-          current_color = 0x07;
-          current_attribute = 0x00;
-          current_attribute |= ATTRIBUTE_STRIKEOUT;
-        }
-        else if(strcmp(terminal_esc_sequence, "[1m") == 0) {
-          current_attribute |= ATTRIBUTE_BOLD;
-        }
-        else if(strcmp(terminal_esc_sequence, "[4m") == 0) {
-          current_attribute |= ATTRIBUTE_UNDERLINED;
-        }
-        else if(strcmp(terminal_esc_sequence, "[7m") == 0) {
-          current_attribute |= ATTRIBUTE_INVERSION;
-        }
-        else if(strcmp(terminal_esc_sequence, "[9m") == 0) {
-          current_attribute |= ATTRIBUTE_STRIKEOUT;
-        }
-        else if(strcmp(terminal_esc_sequence, "[22m") == 0) {
-          current_attribute &= ~ATTRIBUTE_BOLD;
-        }
-        else if(strcmp(terminal_esc_sequence, "[24m") == 0) {
-          current_attribute &= ~ATTRIBUTE_UNDERLINED;
-        }
-        else if(strcmp(terminal_esc_sequence, "[27m") == 0) {
-          current_attribute &= ~ATTRIBUTE_INVERSION;
-        }
-        else if(strcmp(terminal_esc_sequence, "[29m") == 0) {
-          current_attribute &= ~ATTRIBUTE_STRIKEOUT;
-        }
-        else if(strcmp(terminal_esc_sequence, "[39m") == 0) {
-          current_color &= 0xF0;
-          current_color |= 0x07;
-        }
-        else if(strcmp(terminal_esc_sequence, "[39;49m") == 0) {
-          current_color = 0x07;
-        }
-        else if(strcmp(terminal_esc_sequence, "[49m") == 0) {
-          current_color &= 0x0F;
-        }
         else {
-          if(strchr(terminal_esc_sequence, ';')) {
-            sscanf(terminal_esc_sequence, "[%d;%d", &val, &val2);
-            if(val >= 30 && val <= 37) {
+          // Нужно читать параметры по одному, применяя последовательно
+          seq_read = terminal_esc_sequence + 1;
+          while(*seq_read != 'm') {
+            if(*seq_read == ';') {
+              seq_read++;
+              continue;
+            }
+            if(*seq_read == 'm') {
+              break;
+            }
+            val = strtol(seq_read, &seq_read, 10);
+            if(val == 0) {
+              current_color = 0x07;
+              current_attribute = 0x00;
+            }
+            else if(val == 1) {
+              current_attribute |= ATTRIBUTE_BOLD;
+            }
+            else if(val == 2) {
+              current_attribute &= ~ATTRIBUTE_BOLD;
+            }
+            else if(val == 4) {
+              current_attribute |= ATTRIBUTE_UNDERLINED;
+            }
+            else if(val == 7) {
+              current_attribute |= ATTRIBUTE_INVERSION;
+            }
+            else if(val == 9) {
+              current_attribute |= ATTRIBUTE_STRIKEOUT;
+            }
+            else if(val == 21) {
+              current_attribute &= ~ATTRIBUTE_BOLD;
+            }
+            else if(val == 22) {
+              current_attribute &= ~ATTRIBUTE_BOLD;
+            }
+            else if(val == 24) {
+              current_attribute &= ~ATTRIBUTE_UNDERLINED;
+            }
+            else if(val == 27) {
+              current_attribute &= ~ATTRIBUTE_INVERSION;
+            }
+            else if(val == 29) {
+              current_attribute &= ~ATTRIBUTE_STRIKEOUT;
+            }
+            else if(val == 38) {
+              if(*seq_read == ';') seq_read++;
+              val = strtol(seq_read, &seq_read, 10);
+              if(val == 2) {
+                // 24 бита
+                if(*seq_read == ';') seq_read++;
+                val = strtol(seq_read, &seq_read, 10);
+                if(*seq_read == ';') seq_read++;
+                val2 = strtol(seq_read, &seq_read, 10);
+                if(*seq_read == ';') seq_read++;
+                val3 = strtol(seq_read, &seq_read, 10);
+                current_color &= 0xF0;
+                current_color |= rgb_24_to_16(val, val2, val3);
+              }
+              else if(val == 5) {
+                // 256 цветов
+                if(*seq_read == ';') seq_read++;
+                val = strtol(seq_read, &seq_read, 10);
+                current_color &= 0xF0;
+                current_color |= rgb_256_to_16(val);
+              }
+            }
+            else if(val == 39) {
+              current_color &= 0xF0;
+              current_color |= 0x07;
+            }
+            else if(val == 48) {
+              if(*seq_read == ';') seq_read++;
+              val = strtol(seq_read, &seq_read, 10);
+              if(val == 2) {
+                // 24 бита
+                if(*seq_read == ';') seq_read++;
+                val = strtol(seq_read, &seq_read, 10);
+                if(*seq_read == ';') seq_read++;
+                val2 = strtol(seq_read, &seq_read, 10);
+                if(*seq_read == ';') seq_read++;
+                val3 = strtol(seq_read, &seq_read, 10);
+                current_color &= 0x0F;
+                current_color |= rgb_256_to_16(val) << 4;
+              }
+              else if(val == 5) {
+                // 256 цветов
+                if(*seq_read == ';') seq_read++;
+                val = strtol(seq_read, &seq_read, 10);
+                current_color &= 0x0F;
+                current_color |= rgb_256_to_16(val) << 4;
+              }
+            }
+            else if(val == 49) {
+              current_color &= 0x0F;
+            }
+            else if(val >= 30 && val <= 37) {
               current_color &= 0xF0;
               current_color |= val - 30;
             }
@@ -5401,50 +5643,8 @@ void terminal_print_char(char c) {
               current_color |= (val - 100 + 8) << 4;
             }
             else {
-              Serial.printf("Unknown ESC color sequence (first arg): %s\n", terminal_esc_sequence);
-            }
-
-            if(val2 >= 30 && val2 <= 37) {
-              current_color &= 0xF0;
-              current_color |= val2 - 30;
-            }
-            else if(val2 >= 90 && val2 <= 97) {
-              current_color &= 0xF0;
-              current_color |= val2 - 90 + 8;
-            }
-            else if(val2 >= 40 && val2 <= 47) {
-              current_color &= 0x0F;
-              current_color |= (val2 - 40) << 4;
-            }
-            else if(val2 >= 100 && val2 <= 107) {
-              current_color &= 0x0F;
-              current_color |= (val2 - 100 + 8) << 4;
-            }
-            else {
-              Serial.printf("Unknown ESC color sequence (second arg): %s\n", terminal_esc_sequence);
-            }
-            //Serial.printf("current_color %02X\n", current_color);
-          }
-          else {
-            sscanf(terminal_esc_sequence, "[%d", &val);
-            if(val >= 30 && val <= 37) {
-              current_color &= 0xF0;
-              current_color |= val - 30;
-            }
-            else if(val >= 40 && val <= 47) {
-              current_color &= 0x0F;
-              current_color |= (val - 40) << 4;
-            }
-            else if(val >= 90 && val <= 97) {
-              current_color &= 0xF0;
-              current_color |= val - 90 + 8;
-            }
-            else if(val >= 100 && val <= 107) {
-              current_color &= 0x0F;
-              current_color |= (val - 100 + 8) << 4;
-            }
-            else {
-              Serial.printf("Unknown ESC color sequence: %s\n", terminal_esc_sequence);
+              Serial.printf("Unknown ESC color sequence arg in '%s' from '%s'\n", terminal_esc_sequence, seq_read);
+              break;
             }
           }
         }
@@ -5931,6 +6131,7 @@ void terminal_input_string(char *input_buff) {
     else {
       byte = terminal_input_char();
     }
+
     if(byte != -1) {
       if(byte == 0x00) {
         // Ignored
@@ -6055,6 +6256,17 @@ int terminal_input_char() {
       return -1;
     }
     touchWaitPress();
+
+    if(terminal_send_mouse && global_touch_y >= 16 && global_touch_y < (16 + 8 * 20)) {
+      // Нажатие ESC [ < 0 ; 10 ; 5 M
+      char seq[20];
+      sprintf(seq, "\x1B[<0;%d;%dM", 1 + global_touch_x / 6, 1 + (global_touch_y - 16) / 8);
+      strcat(terminal_output, seq);
+      // Отпускание ESC [ < 0 ; 10 ; 5 m
+      touchWaitRelease();
+      sprintf(seq, "\x1B[<0;%d;%dm", 1 + global_touch_x / 6, 1 + (global_touch_y - 16) / 8);
+      strcat(terminal_output, seq);
+    }
 
     button = touchCheckMatrix(indent_left, 176, tft.width() - indent_width, 24, control_buttons, 4, 1);
     if(button != -1) {
@@ -6742,6 +6954,8 @@ void terminal_brainfuck(char *filename) {
   char *mem;
   int stack[BRAINFUCK_STACK];
 
+  terminal_send_mouse = 0;
+
   mem = (char *)malloc(BRAINFUCK_CELLS * sizeof(char));
   for(i = 0; i < BRAINFUCK_CELLS; i++) {
     mem[i] = 0;
@@ -6876,6 +7090,8 @@ void terminal_basic(char *filename) {
   char cont_flag = 1;
   char str[80];
   fs::File file;
+
+  terminal_send_mouse = 0;
 
   basic_stack = (long*)malloc(BASIC_STACK_LEN * sizeof(long));
   basic_vars = (double*)malloc(BASIC_VARS_COUNT * sizeof(double));
@@ -11078,8 +11294,6 @@ void barcode_show(char *filename) {
   char control_correct_flag = 1;
   int i;
   int width;
-  unsigned long unix_timestamp;
-  int progress_len;
   char *buttons[] = {NULL};
 
   if(!Storage) {
@@ -12386,15 +12600,11 @@ void draw_edit(char *title, char *filename) {
             for(i = 0; i < 60; i++) {
               byte = 0;
               pixel_color = tft.readPixel(x, y + 16 - 1);
-              for(color_index = 0; color_index < 16; color_index++) {
-                if(pixel_color == colors_read[color_index]) break;
-              }
+              color_index = color_read_to_index(pixel_color);
               byte |= color_index << 4;
               x++;
               pixel_color = tft.readPixel(x, y + 16 - 1);
-              for(color_index = 0; color_index < 16; color_index++) {
-                if(pixel_color == colors_read[color_index]) break;
-              }
+              color_index = color_read_to_index(pixel_color);
               byte |= color_index;
               x++;
               //file.write(byte);
@@ -12812,7 +13022,7 @@ void random_app(char mode, char *io_buff) {
   delay(1000);
 
   // Выбор случайного приложения
-  switch(random(0, 106)) {
+  switch(random(0, 107)) {
     // First line
     case 0: calculator(APP_MODE_LAUNCH, NULL); break;
     case 1: files(APP_MODE_LAUNCH, NULL); break;
@@ -12952,6 +13162,7 @@ void random_app(char mode, char *io_buff) {
     case 103: l_system(APP_MODE_LAUNCH, NULL); break;
     case 104: dashboard_intervals(); break;
     case 105: dashboard_morse_news(); break;
+    case 106: morse_settings(APP_MODE_LAUNCH, NULL); break;
   }
 }
 
@@ -12998,13 +13209,11 @@ void schedule(char mode, char *io_buff) {
   char *buff;
   //char schedule_file_template[] = "8:00 \n9:00 \n10:00 \n11:00 \n12:00 \n13:00 \n14:00 \n15:00 \n16:00 \n17:00 \n18:00 \n";
   char schedule_file_template[] = "";
-  int day_of_week;
   int year;
   int month;
   int day;
-  int prev_day;
   int cal_dow;
-  int cal_day;
+  int cal_day, cal_day_next;
   int cal_row;
   int cal_col;
   int selected_day;
@@ -13013,12 +13222,12 @@ void schedule(char mode, char *io_buff) {
   int prev_selected_day;
   int button_pressed;
   char redraw_flag;
-  char prev_month_dow;
-  char next_month_dow;
-  char lap_year_flag;
   char touch_check_flag = 0;
-  char record_present = 0;
   int cell_height = 24;
+  char day_to_record_present[32];
+  char month_update_records = 1;
+  int color_fg, color_bg;
+  int i;
 
   char *day_of_week_name[] = {
     "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
@@ -13083,17 +13292,34 @@ void schedule(char mode, char *io_buff) {
     Storage->mkdir(SCHEDULE_PATH);
   }
 
-  day_of_week = (global_day_of_week + 7 - (global_day - 1) % 7) % 7;
   year = global_year;
   month = global_month;
   day = 1;
   selected_day = -1;
   prev_selected_day = -1;
 
+  for(i = 0; i < 32; i++) {
+    day_to_record_present[i] = 0;
+  }
+
   buff = (char *)malloc(2050 * sizeof(char));
+  month_update_records = 1;
 
   while(1) {
     drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 2, 1);
+
+    if(month_update_records) {
+      // Заполняем данные месяца, есть ли заметки
+      for(i = 1; i < 32; i++) {
+        day_to_record_present[i] = 0;
+        sprintf(filename, "%s/%04d-%02d-%02d", SCHEDULE_PATH, year, month, i);
+        if(Storage->exists(filename)) {
+          day_to_record_present[i] = 1;
+        }
+      }
+      month_update_records = 0;
+    }
+
     if(redraw_flag == 0) {
       touchWaitPress();
       redraw_flag = 1;
@@ -13104,52 +13330,32 @@ void schedule(char mode, char *io_buff) {
       if(touch_check_flag == 0) {
         tft.fillRect(0, 16, tft.width(), tft.height() - 16 - 32 + 1, color_scheme_bg);
       }
-      prev_day = day;
 
       tft.setTextColor(color_scheme_fg, color_scheme_bg);
       sprintf(buff, "%s, %04d", month_name[month], year);
-      tft.drawCentreString(buff, tft.width() / 2, 32, FONT_BIG);
+      //tft.drawCentreString(buff, tft.width() / 2, 32, FONT_BIG);
+      drawTextBar(buff, 0, 16, tft.width(), 54, color_scheme_fg, color_scheme_bg, FONT_BIG);
 
       // Календарь на текущий месяц
       cal_day = 1;
-      cal_dow = day_of_week;
-      lap_year_flag = 0;
-      if(is_lap_year(year)) {
-        lap_year_flag = 1;
-      }
+      cal_day_next = 1;
+      cal_dow = get_day_of_week(year, month, 1);
 
-      prev_month_dow = 0;
-      next_month_dow = 0;
-      record_present = 0;
-      for(cal_row = 0; cal_row < 7; cal_row++) {
+      for(cal_row = 0; cal_row < 8; cal_row++) {
         for(cal_col = 0; cal_col < 7; cal_col++) {
           if(cal_row == 0) {
             strcpy(buff, day_of_week_short[cal_col]);
           }
           else {
+            cal_day = cal_day_next;
             if(cal_row == 1 && cal_col < cal_dow) {
-              prev_month_dow = cal_col;
               continue;
             }
 
-            record_present = 0;
-            // Проверяем заметки на отображаемый день
-            sprintf(buff, "%s/%04d-%02d-%02d", SCHEDULE_PATH, year, month, cal_day);
-            if(Storage->exists(buff)) {
-              record_present = 1;
-            }
-
             sprintf(buff, "%d", cal_day);
-            next_month_dow = cal_col;
-            if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
-              if(cal_day > 31) break;
-            }
-            if(month == 4 || month == 6 || month == 9 || month == 11) {
-              if(cal_day > 30) break;
-            }
-            if(lap_year_flag && month == 2 && cal_day > 29) break;
-            if(!lap_year_flag && month == 2 && cal_day > 28) break;
-            cal_day++;
+            if(is_valid_date(year, month, cal_day) == 0) break;
+
+            cal_day_next = cal_day + 1;
           }
           // Проверяем касание
           if(global_touch_present_flag) {
@@ -13158,23 +13364,33 @@ void schedule(char mode, char *io_buff) {
               global_touch_y >= 70 + cal_row * cell_height - 8 && global_touch_y < 70 + (cal_row + 1) * cell_height - 8
             ) {
               prev_selected_day = selected_day;
-              selected_day = (cal_day - 1);
+              selected_day = cal_day;
             }
           }
-          if((global_day + 1) == cal_day && month == global_month && year == global_year) {
-            tft.fillRect(cal_col * tft.width() / 7, 70 + cal_row * cell_height - 4, tft.width() / 7, cell_height, color_scheme_selection_bg);
+          if(global_day == cal_day && month == global_month && year == global_year) {
+            //tft.fillRect(cal_col * tft.width() / 7, 70 + cal_row * cell_height - 4, tft.width() / 7, cell_height, color_scheme_selection_bg);
             tft.setTextColor(color_scheme_selection_fg, color_scheme_selection_bg);
+            color_fg = color_scheme_selection_fg;
+            color_bg = color_scheme_selection_bg;
           }
           else {
-            tft.fillRect(cal_col * tft.width() / 7, 70 + cal_row * cell_height - 4, tft.width() / 7, cell_height, color_scheme_bg);
+            //tft.fillRect(cal_col * tft.width() / 7, 70 + cal_row * cell_height - 4, tft.width() / 7, cell_height, color_scheme_bg);
             tft.setTextColor(color_scheme_fg, color_scheme_bg);
+            color_fg = color_scheme_fg;
+            color_bg = color_scheme_bg;
           }
-          if(selected_day == (cal_day - 1)) {
+          if(selected_day == cal_day) {
             selected_day_x = cal_col * tft.width() / 7;
             selected_day_y = 70 + cal_row * cell_height - 4;
           }
-          tft.drawCentreString(buff, (cal_col + 0.5) * tft.width() / 7, 70 + cal_row * cell_height, FONT_DEFAULT);
-          if(record_present) {
+
+          drawTextBar(buff,
+            cal_col * tft.width() / 7,
+            70 + cal_row * cell_height - 4,
+            tft.width() / 7, cell_height, color_fg, color_bg, FONT_DEFAULT);
+          
+          //tft.drawCentreString(buff, (cal_col + 0.5) * tft.width() / 7, 70 + cal_row * cell_height, FONT_DEFAULT);
+          if(cal_row > 0 && cal_day > 0 && day_to_record_present[cal_day]) {
             tft.drawRightString("+", (cal_col + 1) * tft.width() / 7 - 1, 70 + cal_row * cell_height, FONT_MONOSPACE);
           }
         }
@@ -13192,19 +13408,10 @@ void schedule(char mode, char *io_buff) {
       sprintf(filename, "%s/%04d-%02d-%02d", SCHEDULE_PATH, year, month, selected_day);
       sprintf(buff, "%04d-%02d-%02d", year, month, selected_day);
       if(prev_selected_day == selected_day) {
-        // Если файла нет, то его нужно создать
-        file = Storage->open(filename);
-        if(file) {
-          file.close();
-        }
-        else {
-          file = Storage->open(filename, FILE_WRITE);
-          file.print(schedule_file_template);
-          file.close();
-        }
         edit_file(buff, filename);
         redraw_flag = 1;
         prev_selected_day = -1;
+        month_update_records = 1;
       }
       else {
         // Предпросмотр дня
@@ -13215,55 +13422,19 @@ void schedule(char mode, char *io_buff) {
           buff[2048] = 0;
           file.close();
         }
-        draw_text_formatted(buff, 1, 70 + 6 * cell_height, tft.width() - 2, 4, FONT_DEFAULT, 1);
+        draw_text_formatted(buff, 1, 70 + 7 * cell_height, tft.width() - 2, 3, FONT_DEFAULT, 1);
       }
     }
 
     button_pressed = touchCheckMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 2, 1);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
-        month--;
-        if(month == 0) {
-          year--;
-          month = 12;
-        }
-        day = 1;
-        if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
-          day_of_week = (day_of_week + 35 - 31) % 7;
-        }
-        if(month == 4 || month == 6 || month == 9 || month == 11) {
-          day_of_week = (day_of_week + 35 - 30) % 7;
-        }
-        if(month == 2) {
-          if(lap_year_flag) {
-            day_of_week = (day_of_week + 35 - 29) % 7;
-          }
-          else {
-            day_of_week = (day_of_week + 35 - 28) % 7;
-          }
-        }
+        get_prev_month(&year, &month);
       }
       else if(button_pressed == 1) {
-        if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
-          day_of_week = (day_of_week + 31) % 7;
-        }
-        if(month == 4 || month == 6 || month == 9 || month == 11) {
-          day_of_week = (day_of_week + 30) % 7;
-        }
-        if(month == 2) {
-          if(lap_year_flag) {
-            day_of_week = (day_of_week + 29) % 7;
-          }
-          else {
-            day_of_week = (day_of_week + 28) % 7;
-          }
-        }
-        month++;
-        if(month > 12) {
-          month = 1;
-          year++;
-        }
+        get_next_month(&year, &month);
       }
+      month_update_records = 1;
       redraw_flag = 1;
       continue;
     }
@@ -13580,7 +13751,7 @@ void counter(char mode, char *io_buff) {
     else {
       sprintf(buff, "BPM: %0.2f", bpm);
     }
-    drawTextBar(buff, 0, 210, tft.width(), 16, color_scheme_fg, color_scheme_bg, FONT_DEFAULT);
+    drawTextBarDefault(buff, 0, 210, tft.width(), 16);
 
     drawButtonMatrix(0, 100, tft.width(), 100, buttons_inc, 1, 1);
     drawButtonMatrix(0, tft.height() - 64, tft.width(), 64, buttons_other, 2, 1);
@@ -15347,7 +15518,7 @@ void l_system_settings(char *name, double angle, int iterations, char *axiom, ch
           l_system_draw(result, angle);
           Serial.println(result);
           sprintf(buff, "Iteration 0");
-          drawTextBar(buff, 0, tft.height() - 16 - 1, tft.width(), 16, color_scheme_fg, color_scheme_bg, FONT_DEFAULT);
+          drawTextBarDefault(buff, 0, tft.height() - 16 - 1, tft.width(), 16);
           delay(1000);
 
           for(i = 0; i < iterations; i++) {
@@ -15355,18 +15526,18 @@ void l_system_settings(char *name, double angle, int iterations, char *axiom, ch
             if(l_system_iterate(result, max_len, fh, fl, gh, gl, r0, r1, r2, r3)) {
               //Serial.println(result);
               sprintf(buff, "Iteration %d", i + 1);
-              drawTextBar(buff, 0, tft.height() - 16 - 1, tft.width(), 16, color_scheme_fg, color_scheme_bg, FONT_DEFAULT);
+              drawTextBarDefault(buff, 0, tft.height() - 16 - 1, tft.width(), 16);
 
               l_system_draw(result, angle);
             }
             else {
               tft.setTextColor(color_scheme_fg, color_scheme_bg);
-              drawTextBar("Out of memory", 0, tft.height() - 16 - 1, tft.width(), 16, color_scheme_fg, color_scheme_bg, FONT_DEFAULT);
+              drawTextBarDefault("Out of memory", 0, tft.height() - 16 - 1, tft.width(), 16);
               break;
             }
           }
           if(i >= iterations) {
-            drawTextBar("Finished", 0, tft.height() - 16 - 1, tft.width(), 16, color_scheme_fg, color_scheme_bg, FONT_DEFAULT);
+            drawTextBarDefault("Finished", 0, tft.height() - 16 - 1, tft.width(), 16);
           }
           touchWaitPress();
           touchWaitRelease();
@@ -17947,6 +18118,136 @@ void screen_settings(char mode, char *io_buff) {
   }
 }
 
+// ====================================================
+// Настройки азбуки Морзе
+// ====================================================
+
+void morse_settings(char mode, char *io_buff) {
+  int i;
+  int button_pressed;
+  char redraw_flag;
+  char changes_flag = 0;
+  char buff[80];
+  char *buttons_settings[] = {
+    "Test",
+    "Frequency",
+    "Dot length",
+    "Interval",
+    NULL
+  };
+  char app_icon[] = {
+    16, 16,
+    B00000000, B00000000,
+    B01111111, B11111110,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01000000, B00000010,
+    B01111111, B11111110,
+    B00000000, B00000000
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Morse Settings");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "MrsS");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 34);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Morse Settings");
+
+  while(1) {
+    drawButtonMatrix(0, 32, tft.width() / 2, 32 * 8, buttons_settings, 1, 8);
+
+    sprintf(buff, "%d", global_morse_freq);
+    drawTextBarDefault(buff, tft.width() / 2, 32 + 32 * 1, tft.width() / 2, 32);
+
+    sprintf(buff, "%d", global_dot_len);
+    drawTextBarDefault(buff, tft.width() / 2, 32 + 32 * 2, tft.width() / 2, 32);
+
+    sprintf(buff, "%d", global_morse_char_add_wait);
+    drawTextBarDefault(buff, tft.width() / 2, 32 + 32 * 3, tft.width() / 2, 32);
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, 32, tft.width() / 2, 32 * 8, buttons_settings, 1, 8);
+    if(button_pressed != -1) {
+      if(button_pressed == 0) {
+        beep_morse("CYD PDA");
+      }
+      if(button_pressed == 1) {
+        sprintf(buff, "%d", global_morse_freq);
+        if(drawPrompt("Frequency", buff) == 0) {
+          global_morse_freq = strtol(buff, NULL, 10);
+          changes_flag = 1;
+        }
+        clearPrompt();
+      }
+      if(button_pressed == 2) {
+        sprintf(buff, "%d", global_dot_len);
+        if(drawPrompt("Dot length", buff) == 0) {
+          global_dot_len = strtol(buff, NULL, 10);
+          changes_flag = 1;
+        }
+        clearPrompt();
+      }
+      if(button_pressed == 3) {
+        sprintf(buff, "%d", global_morse_char_add_wait);
+        if(drawPrompt("Additional interval", buff) == 0) {
+          global_morse_char_add_wait = strtol(buff, NULL, 10);
+          changes_flag = 1;
+        }
+        clearPrompt();
+      }
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+
+      if(changes_flag) {
+        if(drawConfirm("Save settings?") == 0) {
+          char *setting_text;
+          setting_text = (char *)malloc(2000);
+          if(setting_text) {
+            setting_text[0] = 0;
+            sprintf(buff, "frequency=%d\n", global_morse_freq);
+            strcat(setting_text, buff);
+            sprintf(buff, "dot_length=%d\n", global_dot_len);
+            strcat(setting_text, buff);
+            sprintf(buff, "additional_interval=%d\n", global_morse_char_add_wait);
+            strcat(setting_text, buff);
+            write_file_from_buff("/Settings/Morse", setting_text);
+            free(setting_text);
+          }
+          else {
+            drawError("Unable to reserve memory");
+          }
+        }
+      }
+      touchExitActionReset();
+      return;
+    }
+
+    touchWaitRelease();
+  }
+}
+
 // Преобразует цвет из 16-битного в 4-битный
 int color_to_index(int color) {
   int i;
@@ -17963,7 +18264,116 @@ int color_read_to_index(int color) {
     if(colors_read[i] == color) return i;
   }
   Serial.printf("Color not found: %04X\n", color);
-  return 0;
+  return -1;
+}
+
+// Ищем ближайший цвет из 16 цветов для 256 цветов
+int rgb_256_to_16(int color_index) {
+  int i;
+  int n = 0;
+  int red, green, blue;
+  int red_in, green_in, blue_in;
+  int d, min_d;
+
+  // Первые 16 цветов остаются как есть
+  if(color_index < 16) return color_index;
+  // Последние 16 цветов - оттенки серого
+  if(color_index >= 232) {
+    if(color_index < 238) return 0;
+    if(color_index < 244) return 8;
+    if(color_index < 250) return 7;
+    if(color_index < 256) return 15;
+    return 0;
+  }
+
+  // Получаем входящий цвет, число от 0-6 на канал
+  color_index -= 16;
+  red_in = color_index / (6 * 6);
+  green_in = (color_index / 6) % 6;
+  blue_in = color_index % 6;
+
+  for(i = 0; i < 16; i++) {
+    // Получаем цвета RGB
+    red = ((colors[i] >> 11) * 5 + 15) / 31;
+    green = (((colors[i] >> 5) & 63) * 5 + 31) / 63;
+    blue = ((colors[i] & 31) * 5 + 15) / 31;
+
+    // Вычисляем расстояние, ищем ближайший цвет
+    d = 2 * (red_in - red) * (red_in - red) + 4 * (green_in - green) * (green_in - green) + (blue_in - blue) * (blue_in - blue);
+    if(i == 0 || min_d > d) {
+      min_d = d;
+      n = i;
+    }
+  }
+  return n;
+}
+
+// Ищем ближайший цвет из 16 цветов для 565
+int rgb_565_to_16(int color) {
+  int i;
+  int n = 0;
+  int red, green, blue;
+  int red_in, green_in, blue_in;
+  long d, min_d;
+
+  red_in = color >> (5 + 6);
+  green_in = (color >> 5) & B00111111;
+  blue_in = color & B00011111;
+
+  // Масштабируем входящий цвет до 6 бит на канал
+  red_in *= 2;
+  blue_in *= 2;
+      
+  for(i = 0; i < 16; i++) {
+    // Получаем цвета RGB из 565
+    red = colors[i] >> (5 + 6);
+    green = (colors[i] >> 5) & B00111111;
+    blue = colors[i] & B00011111;
+
+    // Масштабируем до 6 бит на канал
+    red *= 2;
+    blue *= 2;
+
+    // Вычисляем расстояние, ищем ближайший цвет
+    d = 2 * (red_in - red) * (red_in - red) + 4 * (green_in - green) * (green_in - green) + (blue_in - blue) * (blue_in - blue);
+    if(i == 0 || min_d > d) {
+      min_d = d;
+      n = i;
+    }
+  }
+  return n;
+}
+
+// Ищем ближайший цвет из 16 цветов для 24-бит
+int rgb_24_to_16(int red_in, int green_in, int blue_in) {
+  int i;
+  int n = 0;
+  int red, green, blue;
+  long d, min_d;
+
+  // Масштабируем входящий цвет до 6 бит на канал
+  red_in /= 4;
+  green_in /= 4;
+  red_in /= 4;
+      
+  for(i = 0; i < 16; i++) {
+    // Получаем цвета RGB из 565
+    red = colors[i] >> (5 + 6);
+    green = (colors[i] >> 5) & B00111111;
+    blue = colors[i] & B00011111;
+
+    // Масштабируем до 6 бит на канал
+    red *= 2;
+    blue *= 2;
+
+    // Вычисляем расстояние, ищем ближайший цвет
+    d = 2 * (red_in - red) * (red_in - red) + 4 * (green_in - green) * (green_in - green) + (blue_in - blue) * (blue_in - blue);
+    if(i == 0 || min_d > d) {
+      min_d = d;
+      n = i;
+    }
+  }
+  return n;
 }
 
 #ifdef IS_WIFI_ENABLED
@@ -19729,10 +20139,10 @@ void rss_action(int action_index, char *filename) {
   int offset;
   int http_code;
 
-Serial.printf("%d\n", __LINE__);
+//Serial.printf("%d\n", __LINE__);
   if(action_index && !filename) return;
 
-Serial.printf("%d\n", __LINE__);
+//Serial.printf("%d\n", __LINE__);
   if(action_index == 0) {
     // Редактируем новый файл
     sprintf(buff, "%s/%s", RSS_PATH, "__New");
@@ -19814,7 +20224,7 @@ void rss_view_source(char *source_name, char *source_url) {
     return;
   }
 
-Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
+//Serial.printf("%d rss_view_source %s %s\n", __LINE__, source_name, source_url);
 
   drawProcessWindow("Getting RSS feed...");
 
@@ -20922,6 +21332,8 @@ void irc(char mode, char *io_buff) {
     return;
   }
 
+  terminal_send_mouse = 0;
+
   pim_app("IRC", IRC_PATH, irc_file_to_list, buttons, irc_action);
 }
 
@@ -21771,13 +22183,9 @@ void dashboard(char mode, char *io_buff) {
 
 void dashboard_calendar(char mode, char *io_buff) {
   char buff[80];
-
-  long unix_timestamp;
   int hour;
   int min;
   int sec;
-  long days_since_epoch;
-  long days_remain;
   int day_of_week;
   int year;
   int month;
@@ -21841,8 +22249,6 @@ void dashboard_calendar(char mode, char *io_buff) {
     if(millis() - prev_update_millis > CLOCK_UPDATE_SCREEN_INTERVAL) {
       prev_update_millis = millis();
 
-      //set_local_time_from_unix_timestamp();
-
       day_of_week = global_day_of_week;
       year = global_year;
       month = global_month;
@@ -21891,15 +22297,8 @@ void dashboard_calendar(char mode, char *io_buff) {
           }
           else {
             if(cal_row == 1 && cal_col < cal_dow) continue;
+            if(is_valid_date(year, month, cal_day) == 0) break;
             sprintf(buff, "%d", cal_day);
-            if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
-              if(cal_day > 31) break;
-            }
-            if(month == 2 || month == 4 || month == 6 || month == 9 || month == 11) {
-              if(cal_day > 30) break;
-            }
-            if(global_is_lap_year && month == 2 && cal_day > 29) break;
-            if(!global_is_lap_year && month == 2 && cal_day > 28) break;
             cal_day++;
           }
           if((day + 1) == cal_day) {
@@ -22819,6 +23218,9 @@ void dashboard_intervals() {
           else if(interval_type == 'd') {
             sprintf(buff, "%0.2f %c", (double)interval / 86400, interval_type);
           }
+          else if(interval_type == 'w') {
+            sprintf(buff, "%0.2f %c", (double)interval / (86400 * 7), interval_type);
+          }
           tft.drawRightString(buff, tft.width() - 2, 96 + y * 16, FONT_DEFAULT);
           j = tft.textWidth(buff, FONT_DEFAULT);
           //Serial.println(buff);
@@ -22859,6 +23261,7 @@ void dashboard_intervals() {
         if(interval_type == 's') interval_type = 'm';
         else if(interval_type == 'm') interval_type = 'h';
         else if(interval_type == 'h') interval_type = 'd';
+        else if(interval_type == 'd') interval_type = 'w';
         else interval_type = 's';
       }
       // Set intervals
@@ -23856,6 +24259,7 @@ void settings(char mode, char *io_buff) {
     "Manual",
     "Power",
     "Wi-Fi",
+    "Morse",
     NULL
   };
   char app_icon[] = {
@@ -23964,6 +24368,9 @@ void settings(char mode, char *io_buff) {
 #ifdef IS_WIFI_ENABLED
         wifi(APP_MODE_LAUNCH, NULL);
 #endif // IS_WIFI_ENABLED
+      }
+      if(button_pressed == 16) {
+        morse_settings(APP_MODE_LAUNCH, NULL);
       }
       
       clearScreen();
@@ -25900,6 +26307,11 @@ char char1251_lowercase(char in) {
   return in;
 }
 
+// Обновляет переменные года, месяца, дня, дня недели, часов, минут, секунд по внутренним счётчикам
+// Действия на смену суток
+// Действия на смену часа, четверти часа
+// Действия на будильник
+// Можно доработать чтобы использовалось get_datetime_from_unixtime
 void set_local_time_from_unix_timestamp() {
   unsigned long unix_timestamp;
   unsigned long days_since_epoch;
@@ -25911,6 +26323,7 @@ void set_local_time_from_unix_timestamp() {
   int minute;
   char lap_year_flag;
   char retry_retrieve = 0;
+  char beep_hour_flag = 0;
   int prev_day;
 
   // Если время уже было откуда-то загружено и день был установлен, то есть эта функция уже отработала раз
@@ -25992,7 +26405,7 @@ void set_local_time_from_unix_timestamp() {
   }
   // Смена часа и переход минут с 59 на 00 (иначе при настройке времени срабатывает)
   else if(global_hours + 1 == hour && minute == 0 && global_minutes == 59) {
-    beep_hour();
+    beep_hour_flag = 1;
   }
   else if(global_hours == hour) {
     if(minute == 15 && global_minutes == 14) beep_quarter();
@@ -26005,6 +26418,10 @@ void set_local_time_from_unix_timestamp() {
   global_seconds = (unix_timestamp + global_timezone) % 60;
 
   global_moon_day = fmod(25 + days_since_epoch, 29.53059);
+
+  if(beep_hour_flag) {
+    beep_hour();
+  }
 }
 
 time_t get_unixtime_from_datetime(long timezone, int year, int month, int day, int hour, int minute, int second) {
@@ -26168,15 +26585,95 @@ void get_datetime_from_unixtime(unsigned long unix_timestamp, long timezone, int
     break;
   }
 
-  *hour = ((unix_timestamp + global_timezone) / 3600) % 24;
-  *minute = ((unix_timestamp + global_timezone) / 60) % 60;
-  *second = (unix_timestamp + global_timezone) % 60;
+  *hour = ((unix_timestamp + timezone) / 3600) % 24;
+  *minute = ((unix_timestamp + timezone) / 60) % 60;
+  *second = (unix_timestamp + timezone) % 60;
 }
 
 // Високосный ли год
 char is_lap_year(int year) {
   if(year % 4 == 0 && (year % 100 == 0 || year % 400 != 0)) return 1;
   return 0;
+}
+
+// Предыдущий месяц
+void get_prev_month(int *year, int *month) {
+  (*month)--;
+  if(*month == 0) {
+    (*year)--;
+    *month = 12;
+  }
+}
+
+// Следующий месяц
+void get_next_month(int *year, int *month) {
+  (*month)++;
+  if(*month == 13) {
+    (*year)++;
+    *month = 1;
+  }
+}
+
+// Предыдущий день
+void get_prev_day(int *year, int *month, int *day) {
+  (*day)--;
+  if(!is_valid_date(*year, *month, *day)) {
+    get_prev_month(year, month);
+    *day = last_day_of_month(*year, *month);
+  }
+}
+
+// Следующий день
+void get_next_day(int *year, int *month, int *day) {
+  (*day)++;
+  if(!is_valid_date(*year, *month, *day)) {
+    get_next_month(year, month);
+    *day = 0;
+  }
+}
+
+// Проверка валидности даты
+char is_valid_date(int year, int month, int day) {
+  if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
+    if(day >= 1 && day <= 31) return 1;
+  }
+  else if(month == 4 || month == 6 || month == 9 || month == 11 ) {
+    if(day >= 1 && day <= 30) return 1;
+  }
+  else if(month == 2) {
+    if(is_lap_year(year)) {
+      if(day >= 1 && day <= 29) return 1;
+    }
+    else {
+      if(day >= 1 && day <= 28) return 1;
+    }
+  }
+  return 0;
+}
+
+int last_day_of_month(int year, int month) {
+  if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
+    return 31;
+  }
+  else if(month == 4 || month == 6 || month == 9 || month == 11 ) {
+    return 30;
+  }
+  else if(month == 2) {
+    if(is_lap_year(year)) {
+      return 29;
+    }
+    else {
+      return 28;
+    }
+  }
+  return 0;
+}
+
+int get_day_of_week(int year, int month, int day) {
+  static const int anchor[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+
+  if (month < 3) year--;
+  return (year + year/4 - year/100 + year/400 + anchor[month - 1] + day + 6) % 7;
 }
 
 void get_sunrise_sunset(int month, int day, double lat, double lon, double *sunrise, double *solar_noon, double *sunset) {
@@ -26229,6 +26726,47 @@ void get_sunrise_sunset(int month, int day, double lat, double lon, double *sunr
 
   //Serial.printf("month %d day %d sunrise %d:%02d noon %d:%02d sunset %d:%02d\n",
   //  month, day, (int)(*sunrise / 60), (int)(*sunrise) % 60, (int)(solar_noon / 60), (int)(solar_noon) % 60, (int)(*sunset / 60), (int)(*sunset) % 60);
+}
+
+void qth_to_lat_lon(char *qth, double *lat, double *lon, double *dist_lat_result, double *dist_lon_result) {
+  double dist_lat = 0, dist_lon = 0;
+  *lat = -90.0;
+  *lon = -180.0;
+  if(strlen(qth) >= 2) {
+    dist_lat = 180.0 / (18);
+    dist_lon = 360.0 / (18);
+    // Uppercase
+    *lon += dist_lon * ((qth[0] & B01011111) - 'A');
+    *lat += dist_lat * ((qth[1] & B01011111) - 'A');
+  }
+  if(strlen(qth) >= 4) {
+    dist_lat = 180.0 / (18 * 10);
+    dist_lon = 360.0 / (18 * 10);
+    *lon += dist_lon * (qth[2] - '0');
+    *lat += dist_lat * (qth[3] - '0');
+  }
+  if(strlen(qth) >= 6) {
+    dist_lat = 180.0 / (18 * 10 * 24);
+    dist_lon = 360.0 / (18 * 10 * 24);
+    // Uppercase
+    *lon += dist_lon * ((qth[4] & B01011111) - 'A');
+    *lat += dist_lat * ((qth[5] & B01011111) - 'A');
+  }
+  if(strlen(qth) >= 8) {
+    dist_lat = 180.0 / (18 * 10 * 24 * 10);
+    dist_lon = 360.0 / (18 * 10 * 24 * 10);
+    *lon += dist_lon * (qth[6] - '0');
+    *lat += dist_lat * (qth[7] - '0');
+  }
+  *lat += dist_lat / 2;
+  *lon += dist_lon / 2;
+
+  if(dist_lat_result) {
+    *dist_lat_result = dist_lat / 2;
+  }
+  if(dist_lon_result) {
+    *dist_lon_result = dist_lon / 2;
+  }
 }
 
 // Сохранить текущую дату в ФС
@@ -32361,6 +32899,7 @@ void metronome(char mode, char *io_buff) {
           tempo = strtol(buff, NULL, 10);
         }
         clearPrompt();
+        redraw_flag = 1;
       }
     }
 
@@ -32483,7 +33022,7 @@ void saveScreenshot() {
 
   // Проверяем число цветов на экране
   // Потом можно сделать чтобы сохранять полноцветные скриншоты по необходимости
-  color_bits = is_screen_has_only_16_colors() ? 4 : 24;
+  //color_bits = is_screen_has_only_16_colors() ? 4 : 24;
 
   // Сохраняем скриншот
   file = Storage->open(filename, FILE_WRITE);
@@ -32497,22 +33036,16 @@ void saveScreenshot() {
     for(i = 0; i < 60; i++) {
       byte = 0;
       pixel_color = tft.readPixel(x, y);
-      for(color_index = 0; color_index < 16; color_index++) {
-        if(pixel_color == colors_read[color_index]) break;
-      }
-      if(color_index == 16) {
-        color_index = 7; // LIGHTGREY
-        //Serial.printf("Unknown color: %04X\n", pixel_color);
+      color_index = color_read_to_index(pixel_color);
+      if(color_index == -1) {
+        color_index = rgb_565_to_16(pixel_color);
       }
       byte |= color_index << 4;
       x++;
       pixel_color = tft.readPixel(x, y);
-      for(color_index = 0; color_index < 16; color_index++) {
-        if(pixel_color == colors_read[color_index]) break;
-      }
-      if(color_index == 16) {
-        color_index = 7; // LIGHTGREY
-        //Serial.printf("Unknown color: %04X\n", pixel_color);
+      color_index = color_read_to_index(pixel_color);
+      if(color_index == -1) {
+        color_index = rgb_565_to_16(pixel_color);
       }
       byte |= color_index;
       x++;
@@ -33336,6 +33869,10 @@ void drawTextBar(char *str, int offset_x, int offset_y, int width, int height, i
   }
 }
 
+void drawTextBarDefault(char *str, int offset_x, int offset_y, int width, int height) {
+  drawTextBar(str, offset_x, offset_y, width, height, color_scheme_fg, color_scheme_bg, FONT_DEFAULT);
+}
+
 void getListItemParts(char *item, char *left, char *right) {
   char *tab_ptr;
   strcpy(left, item);
@@ -34110,27 +34647,24 @@ void image_from_bits_scaled(int scale, int start_x, int start_y, char *image, in
   }
 }
 
-#define MORSE_FREQ 1000
-#define MORSE_DOT_LEN 50
-
 void morse_dit() {
   //Serial.printf("morse_dit global_beeper_pin %d\n", global_beeper_pin);
-  tone(global_beeper_pin, MORSE_FREQ, MORSE_DOT_LEN);
-  delay(MORSE_DOT_LEN);
+  tone(global_beeper_pin, global_morse_freq, global_dot_len);
+  delay(global_dot_len);
   noTone(global_beeper_pin);
-  delay(MORSE_DOT_LEN);
+  delay(global_dot_len);
 }
 
 void morse_dah() {
   //Serial.printf("morse_dah global_beeper_pin %d\n", global_beeper_pin);
-  tone(global_beeper_pin, MORSE_FREQ, MORSE_DOT_LEN * 3);
-  delay(MORSE_DOT_LEN * 3);
+  tone(global_beeper_pin, global_morse_freq, global_dot_len * 3);
+  delay(global_dot_len * 3);
   noTone(global_beeper_pin);
-  delay(MORSE_DOT_LEN);
+  delay(global_dot_len);
 }
 
 void morse_wait() {
-  delay(MORSE_DOT_LEN);
+  delay(global_dot_len);
 }
 
 TaskHandle_t MorseTaskHandle = NULL;
@@ -34139,10 +34673,11 @@ void beep_morse_task(void *pvParameters) {
   char *str = (char *)pvParameters;
   int i;
   for(i = 0; i < strlen(str); i++) {
-    //Serial.println(str[i]);
+    Serial.println(str[i]);
     beep_morse_perform(str[i]);
     morse_wait();
     morse_wait();
+    delay(global_morse_char_add_wait);
   }
   MorseTaskHandle = NULL;
   vTaskDelete(NULL);
@@ -34342,14 +34877,14 @@ void beep_alarm() {
     }
 
     // Модифицированный А
-    tone(global_beeper_pin, 2000, MORSE_DOT_LEN);
-    delay(MORSE_DOT_LEN);
+    tone(global_beeper_pin, 2000, global_dot_len);
+    delay(global_dot_len);
     noTone(global_beeper_pin);
-    delay(MORSE_DOT_LEN);
-    tone(global_beeper_pin, 3000, MORSE_DOT_LEN * 3);
-    delay(MORSE_DOT_LEN * 3);
+    delay(global_dot_len);
+    tone(global_beeper_pin, 3000, global_dot_len * 3);
+    delay(global_dot_len * 3);
     noTone(global_beeper_pin);
-    delay(MORSE_DOT_LEN * 3);
+    delay(global_dot_len * 3);
 
     if(global_touch_present_flag && i > 1) {
       Serial.println("Break");
@@ -34509,7 +35044,7 @@ int bmp_show_image(char *filename, int start_x, int start_y) {
     }
     // Читаем палитру, актуально до 256 цветов
 
-    Serial.printf("%d Offset %d data_offset %d\n", __LINE__, current_offset, data_offset);
+    //Serial.printf("%d Offset %d data_offset %d\n", __LINE__, current_offset, data_offset);
     if(bpp <= 8) {
       for(i = 0; i < pow(2, bpp); i++) {
         byte1 = file.read();
@@ -34523,7 +35058,7 @@ int bmp_show_image(char *filename, int start_x, int start_y) {
         palette[i] = (byte3 >> 3) << 11 | (byte2 >> 2) << 5 | byte1 >> 3;
       }
     }
-    Serial.printf("%d Offset %d data_offset %d\n", __LINE__, current_offset, data_offset);
+    //Serial.printf("%d Offset %d data_offset %d\n", __LINE__, current_offset, data_offset);
     while(current_offset < data_offset) {
       file.read();
       current_offset++;
@@ -34532,7 +35067,7 @@ int bmp_show_image(char *filename, int start_x, int start_y) {
         return 0;
       }
     }
-    Serial.printf("%d Offset %d data_offset %d\n", __LINE__, current_offset, data_offset);
+    //Serial.printf("%d Offset %d data_offset %d\n", __LINE__, current_offset, data_offset);
 
     // Выводим картинку с указанным числом битов на пиксель (максимум 32)
     x = 0;
@@ -34658,21 +35193,24 @@ void bmp_save_image(char *filename, int start_x, int start_y, int width, int hei
 // Считать указанный участок экрана (16-цветный) в буфер
 void screen_area_to_buffer(char *buff, int x0, int y0, int width, int height) {
   int x, y;
-  int pixel;
-  int index;
+  int pixel_color;
+  int color_index;
   int offset = 0;
   char hi_flag = 0;
   for(y = 0; y < height; y++) {
     for(x = 0; x < width; x++) {
-      pixel = tft.readPixel(x0 + x, y0 + y);
-      index = color_read_to_index(pixel);
+      pixel_color = tft.readPixel(x0 + x, y0 + y);
+      color_index = color_read_to_index(pixel_color);
+      if(color_index == -1) {
+          color_index = rgb_565_to_16(pixel_color);
+      }
       if(hi_flag) {
-        buff[offset] |= (index & 0xF) << 4;
+        buff[offset] |= (color_index & 0xF) << 4;
         hi_flag = 0;
         offset++;
       }
       else {
-        buff[offset] = index & 0xF;
+        buff[offset] = color_index & 0xF;
         hi_flag = 1;
       }
     }
@@ -35853,6 +36391,17 @@ void setup() {
       global_music_pin = strtol(buff, NULL, 10);
     }
     pinMode(global_music_pin, OUTPUT);
+
+    // Настройки азбуки Морзе
+    if(read_key_value_from_file("/Settings/Morse", "frequency", buff)) {
+      global_morse_freq = strtol(buff, NULL, 10);
+    }
+    if(read_key_value_from_file("/Settings/Morse", "dot_length", buff)) {
+      global_dot_len = strtol(buff, NULL, 10);
+    }
+    if(read_key_value_from_file("/Settings/Morse", "additional_interval", buff)) {
+      global_morse_char_add_wait = strtol(buff, NULL, 10);
+    }
 
     // Настройки клавиатуры
     if(read_key_value_from_file("/Settings/Keyboard", "alt_keyboard_enabled_flag", buff)) {
