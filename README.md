@@ -353,6 +353,7 @@ Networking:
 * iperf {host} [port] - iperf 2 client
 * help - show current help
 * app {app_name} - run GUI app with app name
+
 app command possible arguments: calculator, files, notes, contacts, todo, schedule, expenses, flashcards, books, passwords, totp, barcode, tables, screenshots, tunes, music, webradio, system_info, torch, draw, wifi, gopher, rss, irc, chat, weather, file_server, translate, wikipedia, counter, random_numbers, timer, stopwatch, breathe, piano, metronome, screensaver, user_manual, security, brightness, touch_calibration, touch_calibration_3point, touch_calibration_multipoint, oscilloscope, voltmeter, generator, life, l_system, dashboard, fuzzy_clock, view_font, fifteen, lights_off, snake, turkish_kerchief, memory_match, hanoi_towers, match_three, simon, n_back, mental_math, game2048, minesweeper, chess, tetris, sokoban, screen_settings, keyboard_control, sound_control, set_clock, autorun, select_storage, backups, search, random
 
 # Terms of use
