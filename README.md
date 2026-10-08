@@ -172,9 +172,9 @@ Date and time:
 * millis - milliseconds after boot
 * micros - microseconds after boot
 * uptime - human-readable uptime
-* date - current date
-* utc - current time in UTC
-* unixtime - current unix timestamp
+* date [unixtime] - current date or date by unix timestamp
+* utc [unixtime] - current time in UTC or UTC date by unix timestamp
+* unixtime [datetime] - current unix timestamp or datetime's unix timestamp
 * ticks - current time in .NET ticks
 * beats - current time in @beats
 * cal - show current month
@@ -230,7 +230,7 @@ Converters:
 * hexbin {hexadecimal} - hexadecimal to binary
 * hexoct {hexadecimal} - hexadecimal to octal
 * hexdec {hexadecimal} - hexadecimal to decimal
-* qth - ham QTH locator
+* qth [locator]|{[lat] [lon]} - ham QTH locator, see https://en.wikipedia.org/wiki/Maidenhead_Locator_System
 
 Math and statistics:
 * bc {expression} - calculate expressions
@@ -347,89 +347,13 @@ Networking:
 * bitcoin - show current bitcoin info
 * myextip - show current external IP
 * translate {lang_from|auto} {lang_to} {query} - translate with google translate
-* weather [lat] [lon] - current weather
+* weather [qth]|[{lat} {lon}] - current weather
 * chat [{nick} {message}]- chat read and post
 * ruf - random useless fact
 * iperf {host} [port] - iperf 2 client
 * help - show current help
 * app {app_name} - run GUI app with app name
-
-app arguments:
-* calculator
-* files
-* notes
-* contacts
-* todo
-* schedule
-* expenses
-* flashcards
-* books
-* passwords
-* totp
-* barcode
-* tables
-* screenshots
-* tunes
-* music
-* webradio
-* system_info
-* torch
-* draw
-* wifi
-* gopher
-* rss
-* irc
-* chat
-* weather
-* file_server
-* translate
-* wikipedia
-* counter
-* random_numbers
-* timer
-* stopwatch
-* breathe
-* piano
-* metronome
-* screensaver
-* user_manual
-* security
-* brightness
-* touch_calibration
-* touch_calibration_3point
-* touch_calibration_multipoint
-* oscilloscope
-* voltmeter
-* generator
-* life
-* l_system
-* dashboard
-* fuzzy_clock
-* view_font
-* fifteen
-* lights_off
-* snake
-* turkish_kerchief
-* memory_match
-* hanoi_towers
-* match_three
-* simon
-* n_back
-* mental_math
-* game2048
-* minesweeper
-* chess
-* tetris
-* sokoban
-* screen_settings
-* keyboard_control
-* sound_control
-* set_clock
-* autorun
-* select_storage
-* backups
-* search
-* random
+app command possible arguments: calculator, files, notes, contacts, todo, schedule, expenses, flashcards, books, passwords, totp, barcode, tables, screenshots, tunes, music, webradio, system_info, torch, draw, wifi, gopher, rss, irc, chat, weather, file_server, translate, wikipedia, counter, random_numbers, timer, stopwatch, breathe, piano, metronome, screensaver, user_manual, security, brightness, touch_calibration, touch_calibration_3point, touch_calibration_multipoint, oscilloscope, voltmeter, generator, life, l_system, dashboard, fuzzy_clock, view_font, fifteen, lights_off, snake, turkish_kerchief, memory_match, hanoi_towers, match_three, simon, n_back, mental_math, game2048, minesweeper, chess, tetris, sokoban, screen_settings, keyboard_control, sound_control, set_clock, autorun, select_storage, backups, search, random
 
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
