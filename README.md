@@ -45,6 +45,7 @@ Check instructions at https://randomnerdtutorials.com/cheap-yellow-display-esp32
 * For screensavers touch and hold anywhere to exit
 * To force perform calibration on start hold touchscreen during reboot
 * You can set password in Security app. Password asked when power on. Password stored in a plaintext, no encryption
+* Tap top right corner for menu (brightness, inversion, rotation, silent mode, exit)
 
 # Status bar symbols
 * Alarm clock - alarm enabled
