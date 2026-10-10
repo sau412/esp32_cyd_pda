@@ -229,7 +229,7 @@
   терминал многопараметрические ^[...m, поддержка мыши в терминале, баг метронома отрисовка
 2026-10-09 Терминал сдвиг курсора при вводе через границу экрана, ESC ]0; для смены заголовка (пропустить),
   цветные значки в лаунчере
-2026-10-10 Исправлен значок 2048, значок info переделан, расписание выбран текущий день, переименование в utf8 в pim-приложениях
+2026-10-10 Исправлен значок 2048, значок info переделан, расписание выбран текущий день, переименование в utf8 в pim-приложениях, du
 
 - Кнопка в random useless facts
 - Дата и время в указанном формате (12-24)
@@ -240,7 +240,6 @@
 - Уникальные строки в файле
 - Сортировка файла
 - Показывать размер файлов в ls (или ещё как)
-- du
 - dd if=zero/random/file of=file bs count skip
 
 Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
@@ -2752,6 +2751,7 @@ void terminal_execute_single(char *str) {
   int arg_count;
   long l;
   long i1, i2;
+  long long ll;
   double d1, d2, d3, d4;
   char *cmdline_params[40];
 
@@ -4118,7 +4118,21 @@ void terminal_execute_single(char *str) {
     }
     else {
       terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      sprintf(buff, "%d", size_recursive(Storage, buff));
+      ll = size_recursive(Storage, buff);
+      if(ll >= (4096LL * 1024 * 1024)) {
+        sprintf(buff, "%d GiB", ll / (1024 * 1024 * 1024));
+      }
+      else if(ll >= (4096LL * 1024)) {
+        sprintf(buff, "%d MiB", ll / (1024 * 1024));
+      }
+      else if(ll >= 4096) {
+        sprintf(buff, "%d kiB", ll / (1024));
+      }
+      else {
+        sprintf(buff, "%d bytes", ll);
+      }
+      //sprintf(buff, "%d bytes", i1);
+      terminal_println(buff);
     }
   }
   else if(strcmp(cmdline_params[0], "mkdir") == 0) {
@@ -27026,8 +27040,8 @@ void cp_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_
 }
 
 void cp_recursive_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
-  char path_next_from[80];
-  char path_next_to[80];
+  char path_next_from[240];
+  char path_next_to[240];
   fs::File file_from;
   fs::File file_to;
 
@@ -27071,7 +27085,7 @@ void cp_recursive_between_storages(fs::FS *Storage_from, char *path_from, fs::FS
 }
 
 void delete_recursive(fs::FS *Storage_from, char *path) {
-  char buff[80];
+  char buff[240];
   fs::File file;
   fs::File current_dir;
   current_dir = Storage_from->open(path);
@@ -27101,15 +27115,17 @@ void delete_recursive(fs::FS *Storage_from, char *path) {
   }
 }
 
-long size_recursive(fs::FS *Storage_from, char *path) {
-  char buff[80];
-  long size = 0;
+long long size_recursive(fs::FS *Storage_from, char *path) {
+  char buff[240];
+  long long size = 0;
+
+  Serial.println(path);
   fs::File file;
   fs::File current_dir;
   current_dir = Storage_from->open(path);
   if(current_dir.isDirectory()) {
     while(file = current_dir.openNextFile()) {
-      //sprintf(buff, "%s/%s", path, file.name());
+      sprintf(buff, "%s/%s", path, file.name());
       if(file.isDirectory()) {
         size += size_recursive(Storage_from, buff);
       }
@@ -27123,6 +27139,9 @@ long size_recursive(fs::FS *Storage_from, char *path) {
     size += current_dir.size();
   }
   current_dir.close();
+
+  Serial.printf("%s %llu\n", path, size);
+  return size;
 }
 
 void screen_test(char mode, char *io_buff) {
