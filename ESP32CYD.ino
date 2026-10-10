@@ -227,15 +227,15 @@
 2026-10-08 Доработка расписания (ускорение работы, оптимизация), функции get_next_month, get_prev_month, get_next_day, get_prev_date, is_valid_date,
   get_day_of_week, last_day_of_month, конвертер 256 цветов в 16, конвертер 565 в 16, конвертер 24 бит в 16 цветов,
   терминал многопараметрические ^[...m, поддержка мыши в терминале, баг метронома отрисовка
-2026-10-09 Терминал сдвиг курсора при вводе через границу экрана, ESC ]0; для смены заголовка (пропустить)
+2026-10-09 Терминал сдвиг курсора при вводе через границу экрана, ESC ]0; для смены заголовка (пропустить),
+  цветные значки в лаунчере
+2026-10-10 Исправлен значок 2048, значок info переделан, расписание выбран текущий день, переименование в utf8 в pim-приложениях
 
+- Кнопка в random useless facts
 - Дата и время в указанном формате (12-24)
 - новый обзор(ы)
-- чат обрезать переводы строк
 - циклическое переключение дашбордов
 - последние приложения приложением
-- терминал таб в крайней правой позиции
-- терминал клавиши курсора
 - терминал ввод поддержка передвижения курсора
 - Уникальные строки в файле
 - Сортировка файла
@@ -1590,18 +1590,18 @@ void system_info(char mode, char *io_buff) {
     16, 16,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
     0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF4, 0x4F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF4, 0x4F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x44, 0x4F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF4, 0x4F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF4, 0x4F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF4, 0x4F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF4, 0x4F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x44, 0x44, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
+    0xF0, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x0F, 
+    0xF0, 0x44, 0x44, 0x4F, 0xF4, 0x44, 0x44, 0x0F, 
+    0xF0, 0x44, 0x44, 0x4F, 0xF4, 0x44, 0x44, 0x0F, 
+    0xF0, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x0F, 
+    0xF0, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x0F, 
+    0xF0, 0x44, 0x44, 0xFF, 0xF4, 0x44, 0x44, 0x0F, 
+    0xF0, 0x44, 0x44, 0x4F, 0xF4, 0x44, 0x44, 0x0F, 
+    0xF0, 0x44, 0x44, 0x4F, 0xF4, 0x44, 0x44, 0x0F, 
+    0xF0, 0x44, 0x44, 0x4F, 0xF4, 0x44, 0x44, 0x0F, 
+    0xF0, 0x44, 0x44, 0x4F, 0xF4, 0x44, 0x44, 0x0F, 
+    0xF0, 0x44, 0x44, 0xFF, 0xFF, 0x44, 0x44, 0x0F, 
+    0xF0, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x0F, 
     0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
   };
@@ -2500,6 +2500,8 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         if(drawPrompt("Rename file name", user_input) == 0) {
           if(strlen(user_input) != 0) {
+            cp1251_to_utf8(user_input, buff);
+            strcpy(user_input, buff);
             terminal_get_file_path_with_current_path((char *)file.name(), buff);
             if(Storage->exists(buff)) {
               terminal_get_file_path_with_current_path(user_input, filename_to);
@@ -4108,6 +4110,15 @@ void terminal_execute_single(char *str) {
     }
     else {
       terminal_println("Unable to open directory");
+    }
+  }
+  else if(strcmp(cmdline_params[0], "du") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: du {directory|file}");
+    }
+    else {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      sprintf(buff, "%d", size_recursive(Storage, buff));
     }
   }
   else if(strcmp(cmdline_params[0], "mkdir") == 0) {
@@ -9272,6 +9283,7 @@ void notes(char mode, char *io_buff) {
 void tables_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
+  char new_name[80];
   char new_path_filename[80];
   char old_path_filename[80];
 
@@ -9297,14 +9309,17 @@ void tables_action(int action_index, char *filename) {
   else if(action_index == 1) {
     // Редактируем существующий файл
     sprintf(buff, "%s/%s", TABLES_PATH, filename);
-    edit_csv("Edit note", buff);
+    utf8_to_cp1251(filename);
+    edit_csv(filename, buff);
   }
   else if(action_index == 2) {
     // Переименование
-    strcpy(buff, filename);
-    if(drawPrompt("New table name", buff) == 0) {
+    strcpy(new_name, filename);
+    utf8_to_cp1251(new_name);
+    if(drawPrompt("New table name", new_name) == 0) {
       // Если название не пустое
-      if(strcmp(buff, "")) {
+      if(strcmp(new_name, "")) {
+        cp1251_to_utf8(new_name, buff);
         sprintf(old_path_filename, "%s/%s", TABLES_PATH, filename);
         sprintf(new_path_filename, "%s/%s", TABLES_PATH, buff);
         Storage->rename(old_path_filename, new_path_filename);
@@ -9377,6 +9392,7 @@ void tables(char mode, char *io_buff) {
 void basic_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
+  char new_name[80];
   char new_path_filename[80];
   char old_path_filename[80];
 
@@ -9402,7 +9418,8 @@ void basic_action(int action_index, char *filename) {
   else if(action_index == 1) {
     // Редактируем существующий файл
     sprintf(buff, "%s/%s", BASIC_PATH, filename);
-    edit_file("Edit program", buff);
+    utf8_to_cp1251(filename);
+    edit_file(filename, buff);
   }
   else if(action_index == 2) {
     // Запускаем существующий файл
@@ -9422,10 +9439,12 @@ void basic_action(int action_index, char *filename) {
   }
   else if(action_index == 3) {
     // Переименование
-    strcpy(buff, filename);
-    if(drawPrompt("New program name", buff) == 0) {
+    strcpy(new_name, filename);
+    utf8_to_cp1251(new_name);
+    if(drawPrompt("New program name", new_name) == 0) {
       // Если название не пустое
-      if(strcmp(buff, "")) {
+      if(strcmp(new_name, "")) {
+        cp1251_to_utf8(new_name, buff);
         sprintf(old_path_filename, "%s/%s", BASIC_PATH, filename);
         sprintf(new_path_filename, "%s/%s", BASIC_PATH, buff);
         Storage->rename(old_path_filename, new_path_filename);
@@ -9933,6 +9952,7 @@ TaskHandle_t AudioTaskHandle = NULL;
 void music_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
+  char new_name[80];
   char old_path_filename[80];
   char new_path_filename[80];
 
@@ -9963,10 +9983,12 @@ void music_action(int action_index, char *filename) {
   }
   else if(action_index == 1) {
     // Переименование
-    strcpy(buff, filename);
-    if(drawPrompt("New file name", buff) == 0) {
+    strcpy(new_name, filename);
+    utf8_to_cp1251(new_name);
+    if(drawPrompt("New file name", new_name) == 0) {
       // Если название не пустое
-      if(strcmp(buff, "")) {
+      if(strcmp(new_name, "")) {
+        cp1251_to_utf8(new_name, buff);
         sprintf(old_path_filename, "%s/%s", MUSIC_PATH, filename);
         sprintf(new_path_filename, "%s/%s", MUSIC_PATH, buff);
         Storage->rename(old_path_filename, new_path_filename);
@@ -10374,6 +10396,7 @@ void webradio(char mode, char *io_buff) {
 void chip8_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
+  char new_name[80];
   char old_path_filename[80];
   char new_path_filename[80];
 
@@ -10386,10 +10409,12 @@ void chip8_action(int action_index, char *filename) {
   }
   else if(action_index == 1) {
     // Переименование
-    strcpy(buff, filename);
-    if(drawPrompt("New rom name", buff) == 0) {
+    strcpy(new_name, filename);
+    utf8_to_cp1251(new_name);
+    if(drawPrompt("New rom name", new_name) == 0) {
       // Если название не пустое
-      if(strcmp(buff, "")) {
+      if(strcmp(new_name, "")) {
+        cp1251_to_utf8(new_name, buff);
         sprintf(old_path_filename, "%s/%s", CHIP8_PATH, filename);
         sprintf(new_path_filename, "%s/%s", CHIP8_PATH, buff);
         Storage->rename(old_path_filename, new_path_filename);
@@ -10398,7 +10423,7 @@ void chip8_action(int action_index, char *filename) {
   }
   else if(action_index == 2) {
     if(drawConfirm("Delete this rom?") == 0) {
-      // Удаляем заметку с соответствующим названием
+      // Удаляем файл с соответствующим названием
       sprintf(buff, "%s/%s", CHIP8_PATH, filename);
       Storage->remove(buff);
     }
@@ -10914,6 +10939,7 @@ void passwords_action(int action_index, char *filename) {
   else if(action_index == 1) {
     // Редактируем существующий файл
     sprintf(filename_with_path, "%s/%s", PASSWORDS_PATH, filename);
+    utf8_to_cp1251(filename);
     passwords_edit_file(filename, filename_with_path);
   }
   else if(action_index == 2) {
@@ -12036,7 +12062,7 @@ void contacts_action(int action_index, char *filename) {
   else if(action_index == 1) {
     // Редактируем существующий файл
     sprintf(buff, "%s/%s", CONTACTS_PATH, filename);
-    edit_file("Edit note", buff);
+    edit_file("Edit contact", buff);
 
     // Меняем название в соответствии с содержимым
     pim_rename_file(CONTACTS_PATH, filename, NULL);
@@ -12356,14 +12382,17 @@ void books_action(int action_index, char *filename) {
   if(action_index == 0) {
     // Чтение
     sprintf(buff, "%s/%s", BOOKS_PATH, filename);
+    utf8_to_cp1251(filename);
     view_file(filename, buff);
   }
   else if(action_index == 1) {
     // Переименование
-    strcpy(buff, filename);
-    if(drawPrompt("New book name", buff) == 0) {
+    strcpy(new_name, filename);
+    utf8_to_cp1251(new_name);
+    if(drawPrompt("New book name", new_name) == 0) {
       // Если название не пустое
-      if(strcmp(buff, "")) {
+      if(strcmp(new_name, "")) {
+        cp1251_to_utf8(new_name, buff);
         sprintf(old_path_filename, "%s/%s", BOOKS_PATH, filename);
         sprintf(new_path_filename, "%s/%s", BOOKS_PATH, buff);
         Storage->rename(old_path_filename, new_path_filename);
@@ -12444,6 +12473,7 @@ void books(char mode, char *io_buff) {
 
 void screenshots_action(int action_index, char *filename) {
   fs::File file;
+  char buff[80];
   char new_name[80];
   char old_path_filename[80];
   char new_path_filename[80];
@@ -12463,11 +12493,13 @@ void screenshots_action(int action_index, char *filename) {
   else if(action_index == 1) {
     // Переименование
     strcpy(new_name, filename);
+    utf8_to_cp1251(new_name);
     if(drawPrompt("New screenshot name", new_name) == 0) {
       // Если название не пустое
       if(strcmp(new_name, "")) {
+        cp1251_to_utf8(new_name, buff);
         sprintf(old_path_filename, "%s/%s", SCREENSHOTS_PATH, filename);
-        sprintf(new_path_filename, "%s/%s", SCREENSHOTS_PATH, new_name);
+        sprintf(new_path_filename, "%s/%s", SCREENSHOTS_PATH, buff);
         Storage->rename(old_path_filename, new_path_filename);
       }
     }
@@ -12546,6 +12578,7 @@ void screenshots(char mode, char *io_buff) {
 void draw_action(int action_index, char *filename) {
   fs::File file;
   char buff[80];
+  char new_name[80];
   char old_path_filename[80];
   char new_path_filename[80];
   int index;
@@ -12569,14 +12602,17 @@ void draw_action(int action_index, char *filename) {
   else if(action_index == 1) {
     // Редактируем существующий файл
     sprintf(buff, "%s/%s", DRAW_PATH, filename);
+    utf8_to_cp1251(filename);
     draw_edit(filename, buff);
   }
   else if(action_index == 2) {
     // Переименование
-    strcpy(buff, filename);
-    if(drawPrompt("New image name", buff) == 0) {
+    strcpy(new_name, filename);
+    utf8_to_cp1251(new_name);
+    if(drawPrompt("New image name", new_name) == 0) {
       // Если название не пустое
-      if(strcmp(buff, "")) {
+      if(strcmp(new_name, "")) {
+        cp1251_to_utf8(new_name, buff);
         sprintf(old_path_filename, "%s/%s", DRAW_PATH, filename);
         sprintf(new_path_filename, "%s/%s", DRAW_PATH, buff);
         Storage->rename(old_path_filename, new_path_filename);
@@ -13447,7 +13483,7 @@ void schedule(char mode, char *io_buff) {
   year = global_year;
   month = global_month;
   day = 1;
-  selected_day = -1;
+  selected_day = global_day;
   prev_selected_day = -1;
 
   for(i = 0; i < 32; i++) {
@@ -16265,7 +16301,9 @@ void sokoban_select_level(char *filename) {
   char buff[80];
 
   clearScreen();
-  drawAppTitle(filename);
+  strcpy(buff, filename);
+  utf8_to_cp1251(buff);
+  drawAppTitle(buff);
 
   while(1) {
     strcpy(level_text,
@@ -27059,7 +27097,32 @@ void delete_recursive(fs::FS *Storage_from, char *path) {
   else {
     Serial.printf("rm %s\n", path);
     Storage_from->remove(path);
+    current_dir.close();
   }
+}
+
+long size_recursive(fs::FS *Storage_from, char *path) {
+  char buff[80];
+  long size = 0;
+  fs::File file;
+  fs::File current_dir;
+  current_dir = Storage_from->open(path);
+  if(current_dir.isDirectory()) {
+    while(file = current_dir.openNextFile()) {
+      //sprintf(buff, "%s/%s", path, file.name());
+      if(file.isDirectory()) {
+        size += size_recursive(Storage_from, buff);
+      }
+      else {
+        //Serial.printf("rm %s\n", buff);
+        size += file.size();
+      }
+    }
+  }
+  else {
+    size += current_dir.size();
+  }
+  current_dir.close();
 }
 
 void screen_test(char mode, char *io_buff) {
@@ -30173,6 +30236,7 @@ void game2048(char mode, char *io_buff) {
   };
   char app_icon[] = {
     16, 16,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
     0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
     0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
     0xF0, 0xF0, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x0F, 
