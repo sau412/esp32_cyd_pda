@@ -236,16 +236,19 @@
   recpol, polrec
 2026-10-14 Чат с ИИ (только для себя), прокрутка в обычном чате, тренировка шахматных координат, шашечная доска
 2026-10-15 Текст справки через ИИ, пятнашки фикс цвета текста, цветные значки
-2026-10-16 Цветные значки
+2026-10-16 Цветные значки, заставка множество Жюлиа
+2026-10-17 Формулировки в гитхабе, 18 цветов для Жюлиа
+2026-10-18 Автоматическое новое имя таблицы, Жюлиа случайный начальный цвет, баг начального названия без префикса в списке дел,
+  пятнашки фикс рамки вокруг фишек, баг с выбором случайного приложения (ошибка в названии макроса)
+2026-10-19 Скриншоты 24 бита, пианино шире и две клавиатуры, ускорение работы счётчика, заставка правило 30,
+  возможность переставлять курсор в Prompt, новый значок Life
 
 - новый обзор(ы)
 
-Улучшения тут и там б - баг, д - доработка, н - необязательное, и - исследование, п - периодическое, т - тестирование:
+Улучшения тут и там:
+- Баг - буфер при создании новой таблицы не пустой? Мусор в ячейке, но не сразу. Вылет при сохранении (не воспроизвелось)
 - Визуализация работы тача
 - Убрать многоуровневые настройки (больше двух уровней)
-- Пятнашки - цвет плиток
-- Прогнать справку через ИИ
-- Прогнать текст на гитхабе через ИИ
 - Справка терминала через ИИ
 - Режим без хранилища - использовать NVS, одна заметка, один пароль, одна таблица
 - Сообщение с точкой для разблокировки
@@ -315,7 +318,6 @@
 - Basic рисование: plot, draw, rect, fillrect, triangle, fillscreen, drawString, drawCentreString, drawCircle, fillCircle
 - Basic строки
 - Basic работа с файлами
-- Полноцветные скриншоты (24 бита) если нужно
 - tftp
 - Совет от ИИ - экран История/продолжить - чем занимался в каких приложениях, как задачи
 - Терминал переменные окружения
@@ -329,9 +331,7 @@
 - Заставка гравитация
 - Заставка бегущая строка
 - Заставка точки вверх-вниз как в 3д-кубе
-- Заставка множество мандельброта, Жюлиа
 - Заставка бассейны Ньютона
-- Заставка колебания точек с разной частотой
 - Спирограф
 - Летающие квадратики (как в Song in lines)
 - Четырёхмерный куб
@@ -367,7 +367,6 @@
 - urlencode
 - port - получить порт по названию или название по порту
 - Физические преобразования (градусы, длина, площадь, объём)
-- deg - преобразование градусов в дробь и обратно
 - rgb2hex()
 - hex2rgb()
 - rgb2565()
@@ -417,7 +416,6 @@
 - Выделение в prompt, копирование, вставка
 - Автоопределение кодировки файла при просмотре
 - Не прокручивать при редактировании дальше конца файла
-- Prompt - возможность переставлять курсор
 - Prompt - возможность выделять
 Сторонние библиотеки:
 - QR-код
@@ -1121,11 +1119,6 @@ void search(char mode, char *io_buff);
 void random_app(char mode, char *io_buff);
 void chat_ai(char mode, char *io_buff);
 
-void time_and_date_group(char mode, char *io_buff);
-void games_group(char mode, char *io_buff);
-void settings_group(char mode, char *io_buff);
-void launcher_return_back(char mode, char *io_buff);
-
 typedef void (*function_application_pointer) (char mode, char *io_buff);
 typedef void (*function_action_pointer) (int action, char *filename);
 typedef int (*function_conversion_pointer) (fs::File file, char *buff);
@@ -1336,6 +1329,14 @@ void launcher(char mode, char *io_buff) {
           icon16_from_bytes(7 + col * tft.width() / 8, 4 + 16 + row * 32, app_icon);
           // Выделение вокруг значка
           tft.drawRect(6 + col * tft.width() / 8, 3 + 16 + row * 32, 18, 18, app_bg);
+          // Выделение вокруг названия
+          tft.drawRect(
+            col * tft.width() / 8 + 15 - 1 - tft.textWidth(app_name, FONT_MONOSPACE) / 2,
+            2 + 4 + 16 + 16 + row * 32 - 1,
+            tft.textWidth(app_name, FONT_MONOSPACE) + 2,
+            tft.fontHeight(FONT_MONOSPACE) + 2,
+            app_bg
+          );
         }
       }
       
@@ -1786,7 +1787,7 @@ void user_manual(char mode, char *io_buff) {
   "== Tips & Tricks ==\n"
   "* Touch and hold an app's title for more than one second to exit.\n"
   "* Touch the top-right corner to open the system menu.\n"
-  "* Press the BOOT button to take a screenshot..\n"
+  "* Press the BOOT button to take a screenshot.\n"
   "* To force calibration at startup, hold the touchscreen while rebooting.\n"
   "* To exit a screensaver, touch and hold anywhere on the screen.\n"
   "* Use multipoint calibration if you experience touchscreen nonlinearity or glitches. Alternatively, use keyboard indent.\n"
@@ -2115,7 +2116,7 @@ const char global_terminal_help[] PROGMEM =
   "gateway - current gateway\n"
   "dns - current DNS\n"
   "rssi - current RSSI\n"
-  "host - resovle host with DNS\n"
+  "host {hostname} - resovle host with DNS\n"
   "arp - show ARP\n"
   "arpscan - scan subnet with ARP\n"
   "ping {hostname} - ping host\n"
@@ -9463,13 +9464,21 @@ void tables_action(int action_index, char *filename) {
   char new_name[80];
   char new_path_filename[80];
   char old_path_filename[80];
+  int file_index = 0;
 
   if(action_index && !filename) return;
 
   if(action_index == 0) {
+    file_index = 0;
+    do {
+      file_index++;
+      sprintf(buff, "%s/Table_%d", TABLES_PATH, file_index);
+      sprintf(new_name, "Table_%d", file_index);
+    } while(Storage->exists(buff));
+
     // Редактируем новый файл
-    sprintf(buff, "%s/%s", TABLES_PATH, "New_table");
-    edit_csv("New table", buff);
+    //sprintf(buff, "%s/%s", TABLES_PATH, "New_table");
+    edit_csv(new_name, buff);
 
     file = Storage->open(buff);
     if(!file) {
@@ -12336,7 +12345,7 @@ void todo_action(int action_index, char *filename) {
     else {
       file.close();
       // Меняем название в соответствии с содержимым
-      pim_rename_file(TODO_PATH, "__New", NULL);
+      pim_rename_file(TODO_PATH, "__New", "0_");
     }
   }
   else if(action_index == 1) {
@@ -13353,6 +13362,7 @@ void search(char mode, char *io_buff) {
 
 void random_app(char mode, char *io_buff) {
   int i;
+  int app_index = 0;
   char app_icon[] = {
     16, 16,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
@@ -13394,7 +13404,9 @@ void random_app(char mode, char *io_buff) {
   delay(1000);
 
   // Выбор случайного приложения
-  switch(random(0, 107)) {
+  app_index = random(0, 107);
+  Serial.println(app_index);
+  switch(app_index) {
     // First line
     case 0: calculator(APP_MODE_LAUNCH, NULL); break;
     case 1: files(APP_MODE_LAUNCH, NULL); break;
@@ -13423,7 +13435,7 @@ void random_app(char mode, char *io_buff) {
     case 20: system_info(APP_MODE_LAUNCH, NULL); break;
     case 21: torch(APP_MODE_LAUNCH, NULL); break;
     case 22: draw(APP_MODE_LAUNCH, NULL); break;
-#ifdef IS_WIFI_WNABLED
+#ifdef IS_WIFI_ENABLED
     case 23: wifi(APP_MODE_LAUNCH, NULL); break;
 
     // Fourth line
@@ -13435,7 +13447,7 @@ void random_app(char mode, char *io_buff) {
     case 29: http_file_access(APP_MODE_LAUNCH, NULL); break;
     case 30: translate(APP_MODE_LAUNCH, NULL); break;
     case 31: wikipedia(APP_MODE_LAUNCH, NULL); break;
-#endif // IS_WIFI_WNABLED
+#endif // IS_WIFI_ENABLED
 
     // Fifth line
     case 32: counter(APP_MODE_LAUNCH, NULL); break;
@@ -14132,7 +14144,19 @@ void counter(char mode, char *io_buff) {
     drawButtonMatrix(0, tft.height() - 64, tft.width(), 64, buttons_other, 2, 1);
 
     touchWaitPress();
-    button_pressed = touchCheckMatrix(0, 100, tft.width(), 100, buttons_inc, 1, 1);
+    if(global_touch_present_flag && global_touch_y >= 100 && global_touch_y < 200) {
+      if(millis() - prev_touch_millis > 30) {
+        counter++;
+        if(prev_touch_millis) {
+          bpm = (bpm + 60000 / ((float)(millis() - prev_touch_millis))) / 2;
+        }
+        prev_touch_millis = millis();
+      }
+      beep_tap_if_enabled();
+      touchWaitRelease();
+      continue;
+    }
+    /*button_pressed = touchCheckMatrix(0, 100, tft.width(), 100, buttons_inc, 1, 1);
     if(button_pressed != -1) {
       // Защита от двойного срабатывания
       if(millis() - prev_touch_millis > 100) {
@@ -14142,7 +14166,7 @@ void counter(char mode, char *io_buff) {
         }
         prev_touch_millis = millis();
       }
-    }
+    }*/
     button_pressed = touchCheckMatrix(0, tft.height() - 64, tft.width(), 64, buttons_other, 2, 1);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
@@ -15200,20 +15224,20 @@ void life(char mode, char *io_buff) {
   char app_icon[] = {
     16, 16,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-    0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0xFF, 0xF0, 0x0F, 0x00, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0xFF, 0xF0, 0x0F, 0x00, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 
-    0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 
+    0x0F, 0xFF, 0xF0, 0xFF, 0xFF, 0x04, 0x44, 0x40, 
+    0x0F, 0xFF, 0xF0, 0xFF, 0xFF, 0x04, 0x44, 0x40, 
+    0x0F, 0xFF, 0xF0, 0xFF, 0xFF, 0x04, 0x44, 0x40, 
+    0x0F, 0xFF, 0xF0, 0xFF, 0xFF, 0x04, 0x44, 0x40, 
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x04, 0x44, 0x40, 0xFF, 0xFF, 0x04, 0x44, 0x40, 
+    0x04, 0x44, 0x40, 0xFF, 0xFF, 0x04, 0x44, 0x40, 
+    0x04, 0x44, 0x40, 0xFF, 0xFF, 0x04, 0x44, 0x40, 
+    0x04, 0x44, 0x40, 0xFF, 0xFF, 0x04, 0x44, 0x40, 
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x0F, 0xFF, 0xF0, 0x44, 0x44, 0x04, 0x44, 0x40, 
+    0x0F, 0xFF, 0xF0, 0x44, 0x44, 0x04, 0x44, 0x40, 
+    0x0F, 0xFF, 0xF0, 0x44, 0x44, 0x04, 0x44, 0x40, 
+    0x0F, 0xFF, 0xF0, 0x44, 0x44, 0x04, 0x44, 0x40, 
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
   };
 
@@ -17350,7 +17374,8 @@ void screensaver(char mode, char *io_buff) {
     "Through Universe",
     "Gas",
     "Defrag",
-    "Jolia set",
+    "Julia set",
+    "Rule 30",
     NULL
   };
   char app_icon[] = {
@@ -17438,6 +17463,10 @@ void screensaver(char mode, char *io_buff) {
       // Julia set
       if(button_pressed == 10) {
         screensaver_julia_set();
+      }
+      // Rule 30
+      if(button_pressed == 11) {
+        screensaver_rule_30();
       }
       clearScreen();
       drawAppTitle("Screensavers");
@@ -17955,6 +17984,33 @@ void screensaver_gas() {
 }
 
 void screensaver_julia_set() {
+  int julia_colors[] = {
+  // BBBBBGGGGGGRRRRR
+    0b0000000000011111, //RED
+    0b0000001000011111,
+    0b0000010000011111,
+    0b0000011000011111,
+    0b0000011111111111,
+    0b0000011111111000,
+    0b0000011111110000,
+    0b0000011111101000,
+    0b0000011111100000, //GREEN
+    0b0100011111100000,
+    0b1000011111100000,
+    0b1100011111100000,
+    0b1111111111100000,
+    0b1111111000000000,
+    0b1111110000000000,
+    0b1111101000000000,
+    0b1111100000000000, //BLUE
+    0b1111100000001000,
+    0b1111100000010000,
+    0b1111100000011000,
+    0b1111100000011111,
+    0b1100000000011111,
+    0b1000000000011111,
+    0b0100000000011111,
+  };
   int i;
   float x, y;
   float zi, zr;
@@ -17972,11 +18028,11 @@ void screensaver_julia_set() {
   while(1) {
     pixel = (pixel + 7) % 76800;
     if(pixel == 0) {
-      delay(3000);
+      delayOrTouchWait(30000);
       tft.fillScreen(TFT_BLACK);
       ci = random(-10, 10) * 1.0 / 10;
       cr = random(-10, 10) * 1.0 / 10;
-      color_shift++;
+      color_shift = random(0, 24);
     }
     //x = random(0, tft.width()) - tft.width() / 2;
     //y = random(0, tft.height()) - tft.height() / 2;
@@ -17984,20 +18040,104 @@ void screensaver_julia_set() {
     y = floor(pixel / tft.width()) - tft.height() / 2;
     zr = x / 100;
     zi = y / 100;
-    for(i = 0; i < 65536; i++) {
+    for(i = 0; i < 256; i++) {
       if(zr * zr + zi * zi > 100) break;
       zr_new = zr * zr - zi * zi + cr;
       zi_new = 2 * zr * zi + ci;
       zr = zr_new;
       zi = zi_new;
     }
-    if(i == 65536) {
+    if(i == 256) {
       tft.drawPixel(x + tft.width() / 2, y + tft.height() / 2, 0);
     }
     else {
-      tft.drawPixel(x + tft.width() / 2, y + tft.height() / 2, colors[1 + (color_shift + i) % 15]);
+      tft.drawPixel(x + tft.width() / 2, y + tft.height() / 2, julia_colors[(color_shift + i) % 24]);
     }
 
+    if(touchCheckNowait()) {
+      touchWaitRelease();
+      break;
+    }
+  }
+}
+
+void screensaver_rule_30() {
+  char bits[30];
+  char next_bits[30];
+  
+  int line_colors[] = {
+  // BBBBBGGGGGGRRRRR
+    0b0000000000011111, //RED
+    0b0000001000011111,
+    0b0000010000011111,
+    0b0000011000011111,
+    0b0000011111111111,
+    0b0000011111111000,
+    0b0000011111110000,
+    0b0000011111101000,
+    0b0000011111100000, //GREEN
+    0b0100011111100000,
+    0b1000011111100000,
+    0b1100011111100000,
+    0b1111111111100000,
+    0b1111111000000000,
+    0b1111110000000000,
+    0b1111101000000000,
+    0b1111100000000000, //BLUE
+    0b1111100000001000,
+    0b1111100000010000,
+    0b1111100000011000,
+    0b1111100000011111,
+    0b1100000000011111,
+    0b1000000000011111,
+    0b0100000000011111,
+  };
+  int i;
+  int x, y;
+  int color_shift = 0;
+  int color_shift_delay = 0;
+  char left, center, right;
+  int width = tft.width();
+  
+  disableAppTitle();
+  tft.fillScreen(TFT_BLACK);
+  
+  y = 0;
+  memset(bits, 0, 30);
+  array_set_bit(bits, width / 2, 0, width, 1, 1);
+
+  while(1) {
+    tft.drawBitmap(0, y, (uint8_t*)(bits), width, 1, ~line_colors[color_shift], TFT_BLACK);
+
+    memset(next_bits, 0, 30);
+    for(i = 0; i < width; i++) {
+      left = array_get_bit(bits, (i + width - 1) % width, 0, width, 1);
+      center = array_get_bit(bits, i % width, 0, width, 1);
+      right = array_get_bit(bits, (i + 1) % width, 0, width, 1);
+      if(
+        (left != 0 && center == 0 && right == 0)
+        ||
+        (left == 0 && center != 0 && right != 0)
+        ||
+        (left == 0 && center != 0 && right == 0)
+        ||
+        (left == 0 && center == 0 && right != 0)
+      ) {
+        array_set_bit(next_bits, i, 0, width, 1, 1);
+      }
+    }
+    memcpy(bits, next_bits, 30);
+    
+    color_shift_delay++;
+    if(color_shift_delay == 50) {
+      color_shift_delay = 0;
+      color_shift = (color_shift + 1) % 24;
+    }
+    y = (y + 1) % 320;
+    // Зачистка следующей линии
+    tft.drawLine(0, y, width - 1, y, TFT_BLACK);
+
+    delayOrTouchWait(100);
     if(touchCheckNowait()) {
       touchWaitRelease();
       break;
@@ -18159,6 +18299,12 @@ void screensaver_defrag() {
           }
           image16_from_bytes(4 + x * DEFRAG_ICON_WIDTH, 18 + y * DEFRAG_ICON_HEIGHT, cluster);
           delayOrTouchWait(10);
+          if(touchCheckNowait()) {
+            break;
+          }
+        }
+        if(touchCheckNowait()) {
+          break;
         }
       }
 
@@ -18286,7 +18432,7 @@ char array_get_bit(char *arr, int x, int y, int width, int height) {
   int bit_offset = (x + y * width) % 8;
   if(x < 0 || y < 0) return 0;
   if(byte_offset >= (width * height) / 8) return 0;
-  return arr[byte_offset] & (1 << bit_offset);
+  return arr[byte_offset] & (1 << (7 - bit_offset));
 }
 
 void array_set_bit(char *arr, int x, int y, int width, int height, char bit) {
@@ -18295,10 +18441,10 @@ void array_set_bit(char *arr, int x, int y, int width, int height, char bit) {
   if(x < 0 || y < 0) return;
   if(x >= width || y >= height) return;
   if(bit) {
-    arr[byte_offset] |= (1 << bit_offset);
+    arr[byte_offset] |= (1 << (7 - bit_offset));
   }
   else {
-    arr[byte_offset] &= ~(1 << bit_offset);
+    arr[byte_offset] &= ~(1 << (7 - bit_offset));
   }
 }
 
@@ -19088,6 +19234,12 @@ int rgb_24_to_16(int red_in, int green_in, int blue_in) {
     }
   }
   return n;
+}
+
+void rgb_16_to_24(int color, int *red_out, int *green_out, int *blue_out) {
+  *blue_out = (color & B11111) * 255 / 31;
+  *green_out = ((color >> 5) & B111111) * 255 / 63;
+  *red_out = (color >> 11) * 255 / 31;
 }
 
 #ifdef IS_WIFI_ENABLED
@@ -30817,10 +30969,10 @@ void fifteen_show_tiles(int offset_y, char **tiles) {
   for(y = 0; y < 4; y++) {
     for(x = 0; x < 4; x++) {
       if(strcmp(tiles[x + y * 4], " ") == 0) {
-        tft.fillRect(x * tft.width() / 4, offset_y + y * tft.width() / 4, tft.width() / 4, tft.width() / 4, TFT_WHITE);
+        tft.fillRect(x * tft.width() / 4, offset_y + y * tft.width() / 4, tft.width() / 4, tft.width() / 4, color_scheme_bg);
       }
       else {
-        //tft.fillRect(x * tft.width() / 4, y * tft.width() / 4, tft.width() / 4, tft.width() / 4, TFT_WHITE);
+        tft.drawRect(x * tft.width() / 4, offset_y + y * tft.width() / 4, tft.width() / 4, tft.width() / 4, color_scheme_bg);
         tft.drawRect(x * tft.width() / 4 + 1, offset_y + y * tft.width() / 4 + 1, tft.width() / 4 - 2, tft.width() / 4 - 2, TFT_BLACK);
         tft.fillRect(x * tft.width() / 4 + 2, offset_y + y * tft.width() / 4 + 2, tft.width() / 4 - 4, tft.width() / 4 - 4, TFT_LIGHTGREY);
         tft.drawCentreString(tiles[x + y * 4], x * tft.width() / 4 + tft.width() / 8, offset_y + y * tft.width() / 4 + 18, FONT_BIG);
@@ -34045,6 +34197,7 @@ void piano(char mode, char *io_buff) {
   TouchPoint p;
   int touch_x, touch_y;
   int i;
+  int y;
   char buff[80];
   int note_index;
   int active_note_index;
@@ -34095,17 +34248,18 @@ void piano(char mode, char *io_buff) {
   drawAppTitle("Piano");
 
   // Рисуем клавиатуру
-  // Белые
-  for(i = 0; i < 16; i++) {
-    tft.drawRect(i * tft.width() / 16, 240 - 32, tft.width() / 16, 64, TFT_BLACK);
-    tft.fillRect(i * tft.width() / 16 + 1, 240 - 32 + 1, tft.width() / 16 - 2, 64 - 2, TFT_WHITE);
-
-  }
-  // Чёрные
-  for(i = 0; i < 16; i++) {
-    if(i % 7 == 0) continue;
-    if(i % 7 == 3) continue;
-    tft.fillRect(i * tft.width() / 16 - tft.width() / 32 + 1, 240 - 32 + 1, tft.width() / 16 - 2, 32 - 2, TFT_BLACK);
+  for(y = 0; y < 2; y++) {
+    // Белые
+    for(i = 0; i < 8; i++) {
+      tft.drawRect(i * tft.width() / 8, tft.height() - 96 - 0 - y * 128, tft.width() / 8, 96, TFT_BLACK);
+      tft.fillRect(i * tft.width() / 8, tft.height() - 96 + 1 - y * 128, tft.width() / 8 - 2, 96 - 2, TFT_WHITE);
+    }
+    // Чёрные
+    for(i = 0; i < 8; i++) {
+      if(i % 7 == 0) continue;
+      if(i % 7 == 3) continue;
+      tft.fillRect(i * tft.width() / 8 - tft.width() / 16 + 1, tft.height() - 96 - y * 128, tft.width() / 8 - 2, 96 / 2, TFT_BLACK);
+    }
   }
   while(1) {
     if(touchCheckNowait() == 0) {
@@ -34118,17 +34272,33 @@ void piano(char mode, char *io_buff) {
         touch_x = global_touch_x;
         touch_y = global_touch_y;
 
-        // Белые
-        if(touch_y >= 240 && touch_y < 272) {
-          note_index = touch_x / (tft.width() / 16);
+        // Белые верх
+        if(touch_y >= tft.height() - 96 / 2 - 128 && touch_y < tft.height() - 128) {
+          note_index = touch_x / (tft.width() / 8);
+          if(note_index != active_note_index - 8) {
+            tone(global_beeper_pin, note_to_freq_white[note_index + 7]);
+            active_note_index = note_index + 8;
+          }
+        }
+        // Чёрные верх
+        else if(touch_y >= tft.height() - 96 - 128 && touch_y < tft.height() - 96 / 2 - 128) {
+          note_index = (touch_x + 16)/ (tft.width() / 8);
+          if(note_index != active_note_index - 32 - 8) {
+            tone(global_beeper_pin, note_to_freq_black[note_index + 7]);
+            active_note_index = note_index + 32 + 8;
+          }
+        }
+        // Белые низ
+        else if(touch_y >= tft.height() - 96 / 2 && touch_y < tft.height()) {
+          note_index = touch_x / (tft.width() / 8);
           if(note_index != active_note_index) {
             tone(global_beeper_pin, note_to_freq_white[note_index]);
             active_note_index = note_index;
           }
         }
-        // Чёрные
-        else if(touch_y >= 240 - 32 && touch_y < 240) {
-          note_index = (touch_x + 8)/ (tft.width() / 16);
+        // Чёрные низ
+        else if(touch_y >= tft.height() - 96 && touch_y < tft.height() - 96 / 2) {
+          note_index = (touch_x + 16)/ (tft.width() / 8);
           if(note_index != active_note_index - 32) {
             tone(global_beeper_pin, note_to_freq_black[note_index]);
             active_note_index = note_index + 32;
@@ -34356,12 +34526,13 @@ void saveScreenshot() {
   int x;
   int y;
   int i;
+  int red, green, blue;
   char buff[80];
   char filename[80];
   char byte;
   int color_bits = 4;
   int pixel_color;
-  unsigned char bmp_header[118] = {
+  unsigned char bmp_header_16col[118] = {
     0x42, 0x4D, 0x76, 0x96, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x76, 0x00,
     0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0xF0, 0x00, 0x00, 0x00, 0x40, 0x01,
     0x00, 0x00, 0x01, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x96,
@@ -34372,6 +34543,13 @@ void saveScreenshot() {
     0x80, 0x00, 0xC0, 0xC0, 0xC0, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF,
     0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x00,
     0xFF, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00
+  };
+  unsigned char bmp_header_24bit[54] = {
+    0x42, 0x4D, 0x36, 0x84, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x00,
+    0x00, 0x00, 0x28, 0x00, 0x00, 0x00, 0xF0, 0x00, 0x00, 0x00, 0x40, 0x01,
+    0x00, 0x00, 0x01, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x84,
+    0x03, 0x00, 0xC3, 0x0E, 0x00, 0x00, 0xC3, 0x0E, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00
   };
 
   int color_index;
@@ -34396,52 +34574,64 @@ void saveScreenshot() {
 
   // Ищем несущестующее имя файла
   i = 0;
-  while(1) {
-    sprintf(filename, "/Screenshots/%d.bmp", i);
-    file = Storage->open(filename);
-    if(file) {
-      file.close();
-    }
-    else {
-      break;
-    }
+  do {
     i++;
-  }
+    sprintf(filename, "/Screenshots/%d.bmp", i);
+  } while(Storage->exists(filename));
 
   // Проверяем число цветов на экране
   // Потом можно сделать чтобы сохранять полноцветные скриншоты по необходимости
-  //color_bits = is_screen_has_only_16_colors() ? 4 : 24;
+  color_bits = is_screen_has_only_16_colors() ? 4 : 24;
 
   // Сохраняем скриншот
   file = Storage->open(filename, FILE_WRITE);
-  file.write((const uint8_t *)bmp_header, 118);
+  if(color_bits == 4) {
+    file.write((const uint8_t *)bmp_header_16col, 118);
+  }
+  else {
+    file.write((const uint8_t *)bmp_header_24bit, 54);
+  }
 
   // Записываем данные изображения с экрана
   x = 0;
   y = tft.height() - 1;
   while(y >= 0) {
-    // Половина ширины картинки (120) должна без остатка делиться на размер буфера
-    for(i = 0; i < 60; i++) {
-      byte = 0;
-      pixel_color = tft.readPixel(x, y);
-      color_index = color_read_to_index(pixel_color);
-      if(color_index == -1) {
-        color_index = rgb_565_to_16(pixel_color);
+    if(color_bits == 4) {
+      // Половина ширины картинки (120) должна без остатка делиться на размер буфера
+      for(i = 0; i < 60; i++) {
+        byte = 0;
+        pixel_color = tft.readPixel(x, y);
+        color_index = color_read_to_index(pixel_color);
+        if(color_index == -1) {
+          color_index = rgb_565_to_16(pixel_color);
+        }
+        byte |= color_index << 4;
+        x++;
+        pixel_color = tft.readPixel(x, y);
+        color_index = color_read_to_index(pixel_color);
+        if(color_index == -1) {
+          color_index = rgb_565_to_16(pixel_color);
+        }
+        byte |= color_index;
+        x++;
+        //file.write(byte);
+        buff[i] = byte;
       }
-      byte |= color_index << 4;
-      x++;
-      pixel_color = tft.readPixel(x, y);
-      color_index = color_read_to_index(pixel_color);
-      if(color_index == -1) {
-        color_index = rgb_565_to_16(pixel_color);
-      }
-      byte |= color_index;
-      x++;
-      //file.write(byte);
-      buff[i] = byte;
+      
+      file.write((const uint8_t *)buff, 60);
     }
-    
-    file.write((const uint8_t *)buff, 60);
+    else {
+      // Строка экрана это 3 * 240 = 720 байт
+      for(i = 0; i < 20; i++) {
+        pixel_color = tft.readPixel(x, y);
+        rgb_16_to_24(pixel_color, &red, &green, &blue);
+        buff[0 + i * 3] = blue;
+        buff[1 + i * 3] = green;
+        buff[2 + i * 3] = red;
+        x++;
+      }
+      file.write((const uint8_t *)buff, 60);
+    }
 
     if(x >= tft.width()) {
       // Мигаем светодиодом для индикации прогресса
@@ -34710,7 +34900,11 @@ int drawPrompt(char *message, char *user_input) {
   char alt_flag = 0;
   char input[80] = "";
   char visible_input[80];
+  char tmp;
+  int cursor_char = 0;
+  int cursor_visible_char = 0;
   int cursor_pos = 0;
+  int input_width;
   int i;
   int byte;
   char update_required_flag = 0;
@@ -34732,24 +34926,46 @@ int drawPrompt(char *message, char *user_input) {
   // Заголовок
   tft.setTextColor(color_scheme_title_fg, color_scheme_title_bg);
   tft.drawString(message, 16, PROMPT_OFFSET_Y + 1, FONT_DEFAULT);
-  
+  // Положение курсора
+  cursor_char = strlen(user_input);
+
   while(1) {
-    tft.setTextColor(color_scheme_fg, color_scheme_bg);
-    tft.fillRect(1, PROMPT_OFFSET_Y + 20, tft.width() - 2, 16, color_scheme_bg);
     strcpy(visible_input, input);
+
+    // Если текст шире экрана, то укорачиваем его с той стороны, где больше символов от курсора
+    cursor_visible_char = cursor_char;
     while(tft.textWidth(visible_input, FONT_DEFAULT) > tft.width() - 8 * 2) {
-      for(i = 0; i < strlen(visible_input); i++) {
-        visible_input[i] = visible_input[i + 1];
+      //Serial.printf("visible_input = %s, %d %d\n", visible_input, cursor_visible_char, strlen(visible_input));
+      // Если курсор ближе к концу, чем к началу
+      if(cursor_visible_char >= strlen(visible_input) - cursor_visible_char) {
+        // Обрезаем строку с начала
+        for(i = 0; i < strlen(visible_input); i++) {
+          visible_input[i] = visible_input[i + 1];
+        }
+        cursor_visible_char--;
+      }
+      else {
+        // Обрезаем строку с конца
+        visible_input[strlen(visible_input) - 1] = 0;
       }
     }
-    if(strcmp(visible_input, input)) {
-      cursor_pos = tft.drawRightString(visible_input, tft.width() - 8, PROMPT_OFFSET_Y + 20, FONT_DEFAULT);
-    }
-    else {
-      cursor_pos = tft.drawString(visible_input, 8, PROMPT_OFFSET_Y + 20, FONT_DEFAULT);
-    }
-    
-    tft.fillRect(8 + cursor_pos + 1, PROMPT_OFFSET_Y + 20, 2, 16, color_scheme_selection_bg);
+
+    //Serial.printf("input = %s\n", input);
+    //Serial.printf("cursor_char = %d\n", cursor_char);
+    //Serial.printf("visible_input = %s\n", visible_input);
+    //Serial.printf("cursor_visible_char = %d\n", cursor_visible_char);
+
+    //drawTextBarDefault(visible_input, )
+    tft.setTextColor(color_scheme_fg, color_scheme_bg);
+    tft.drawString(visible_input, 8, PROMPT_OFFSET_Y + 20, FONT_DEFAULT);
+    input_width = tft.textWidth(visible_input, FONT_DEFAULT);
+    tft.fillRect(8 + input_width, PROMPT_OFFSET_Y + 20, tft.width() - 2 * 8 - input_width + 2, 16, color_scheme_bg);
+    tmp = visible_input[cursor_visible_char];
+    visible_input[cursor_visible_char] = 0;
+    cursor_pos = tft.textWidth(visible_input, FONT_DEFAULT);
+    visible_input[cursor_visible_char] = tmp;
+    // Рисуем курсор
+    tft.fillRect(8 + cursor_pos, PROMPT_OFFSET_Y + 20, 2, 16, color_scheme_selection_bg);
 
     drawButtonMatrix(8, PROMPT_OFFSET_Y + 180, tft.width() - 8 * 2, 32, buttons, 3, 1);
 
@@ -34790,16 +35006,22 @@ int drawPrompt(char *message, char *user_input) {
         }
         // Бэкспейс
         if(byte == 0x08 || byte == 0x7F) {
-          if(strlen(input) > 0) {
-            input[strlen(input) - 1] = 0;
+          if(cursor_char > 0) {
+            for(i = cursor_char - 1; i < strlen(input); i++) {
+              input[i] = input[i + 1];
+            }
+            cursor_char--;
           }
         }
         // Печатаемые символы
         else if(byte >= 0x20 && byte != 0x7F) {
           update_required_flag = 1;
           if(strlen(input) >= 79) continue;
-          input[strlen(input) + 1] = 0;
-          input[strlen(input)] = byte;
+          for(i = strlen(input); i >= cursor_char; i--) {
+            input[i + 1] = input[i];
+          }
+          input[cursor_char] = byte;
+          cursor_char++;
         }
       }
       if(update_required_flag) {
@@ -34810,13 +35032,33 @@ int drawPrompt(char *message, char *user_input) {
       update_required_flag = 0;
       continue;
     }
-    //touchWaitPress();
+    
+    // Смотрим где касание
+    // Если касание в строке ввода
+    if(global_touch_x >= 8 && global_touch_x <= tft.width() - 8 && global_touch_y >= PROMPT_OFFSET_Y + 20 && global_touch_y < PROMPT_OFFSET_Y + 20 + 16) {
+      // Выбираем перед каким символом касание
+      // укорачиваем текст, пока не строка не будет левее касания
+      //Serial.printf("visible_input %s, textWidth %d, global_touch_x %d\n", visible_input, tft.textWidth(visible_input, FONT_DEFAULT), global_touch_x);
+      while(8 + tft.textWidth(visible_input, FONT_DEFAULT) > global_touch_x) {
+        visible_input[strlen(visible_input) - 1] = 0;
+      }
+      // Переставляем курсор в новое место
+      // Смещение курсора и видимого курсора (сколько пропущено в начале) + длина остатка строки
+      //Serial.printf("cursor %d - %d + %d\n", cursor_char, cursor_visible_char, strlen(visible_input));
+      cursor_char = cursor_char - cursor_visible_char + strlen(visible_input);
+    }
+
+    // Касание клавиатуры
     button = touchCheckMatrix(indent_left, PROMPT_OFFSET_Y + 40, tft.width() - indent_width, 120, keyboard_current, 12, 4);
     
     if(button != -1) {
+      // Backspace
       if(button == 11) {
-        if(strlen(input) > 0) {
-          input[strlen(input) - 1] = 0;
+        if(cursor_char > 0) {
+          for(i = cursor_char - 1; i < strlen(input); i++) {
+            input[i] = input[i + 1];
+          }
+          cursor_char--;
         }
       }
       // Tab ?
@@ -34843,8 +35085,13 @@ int drawPrompt(char *message, char *user_input) {
       }
       else {
         if(strlen(input) >= 79) continue;
-        strcat(input, keyboard_current[button]);
+        for(i = strlen(input); i >= cursor_char; i--) {
+          input[i + 1] = input[i];
+        }
+        input[cursor_char] = keyboard_current[button][0];
+        //strcat(input, keyboard_current[button]);
         caps_flag = 0;
+        cursor_char++;
       }
     }
 
@@ -35150,6 +35397,7 @@ void drawList(int left_x, int top_y, int width, int height, char **str, int rows
   int y;
   int last_row = 0;
   char is_eol = 0;
+  int padding;
   char up[] = " [scroll up] ";
   char down[] = " [scroll down] ";
   char left[80];
@@ -35165,9 +35413,12 @@ void drawList(int left_x, int top_y, int width, int height, char **str, int rows
     *offset = 0;
   }
 
-  // Тонкие полоски по краям
-  tft.fillRect(left_x, top_y, 1, height, color_scheme_bg);
-  tft.fillRect(left_x + width - 1, top_y, 1, height, color_scheme_bg);
+  // Отступ сверху и снизу (для широких элментов)
+  padding = height / (2 * rows_to_show) - tft.fontHeight(FONT_DEFAULT) / 2;
+
+  // Полоски по краям
+  tft.fillRect(left_x, top_y, 1 + padding, height, color_scheme_bg);
+  tft.fillRect(left_x + width - 1 - padding, top_y, 1 + padding, height, color_scheme_bg);
 
   // Пустой список - показываем что тут мог быть список
   if(str[0] == NULL) {
@@ -35212,8 +35463,8 @@ void drawList(int left_x, int top_y, int width, int height, char **str, int rows
               right[strlen(right) - 1] = 0;
             }
           }
-          tft.drawString(left, left_x + 1, top_y + y * height / rows_to_show, FONT_DEFAULT);
-          tft.drawRightString(right, left_x + width - 1, top_y + y * height / rows_to_show, FONT_DEFAULT);
+          tft.drawString(left, left_x + 1 + padding, top_y + y * height / rows_to_show + padding, FONT_DEFAULT);
+          tft.drawRightString(right, left_x + width - 1 - padding, top_y + y * height / rows_to_show + padding, FONT_DEFAULT);
         }
       }
       else {
@@ -35340,15 +35591,12 @@ int show_system_menu() {
   if(global_touch_present_flag) {
     touchWaitRelease();
   }
-  selected = show_menu(tft.width() / 2, 16, tft.width() / 2, 2 + 16 * 6, items);
+  selected = show_menu(tft.width() / 2, 16, tft.width() / 2, 2 + 24 * 6, items);
   if(selected == 0) {
     if(get_brightness() == 255) {
-      set_brightness(64);
+      set_brightness(32);
     }
-    else if(get_brightness() == 255) {
-      set_brightness(64);
-    }
-    else if(get_brightness() == 64) {
+    else if(get_brightness() == 32) {
       set_brightness(2);
     }
     else {
@@ -35396,7 +35644,14 @@ int show_menu(int x0, int y0, int width, int height, char **items) {
   int selected = -1;
   int selected_prev = -1;
   int in_menu = 0;
+  int items_count = 0;
+  int item_height = 16;
   char *buff = NULL;
+
+  while(items[items_count] != NULL) items_count++;
+  if(items_count > 0) {
+    item_height = height / items_count;
+  }
   // Сохраняем часть экрана где будет меню
   buff = (char *)malloc(width * height / 2 * sizeof(char));
   screen_area_to_buffer(buff, x0, y0, width, height);
@@ -35406,16 +35661,16 @@ int show_menu(int x0, int y0, int width, int height, char **items) {
   tft.fillRect(x0 + 1, y0 + 1, width - 2, height - 2, color_scheme_bg);
 
   // Рисуем элементы
-  drawList(x0 + 1, y0 + 1, width - 2, height - 2, items, (height - 2) / 16 , &offset, &selected);
+  drawList(x0 + 1, y0 + 1, width - 2, height - 2, items, (height - 2) / item_height , &offset, &selected);
   selected_prev = selected;
   touchWaitPress();
   while(touchCheckNowait()) {
-    in_menu = touchCheckList(x0 + 1, y0 + 1, width - 2, height - 2, items, (height - 2) / 16 , &offset, &selected);
+    in_menu = touchCheckList(x0 + 1, y0 + 1, width - 2, height - 2, items, (height - 2) / item_height , &offset, &selected);
     if(in_menu == -1) {
       selected = -1;
     }
     if(selected_prev != selected) {
-      drawList(x0 + 1, y0 + 1, width - 2, height - 2, items, (height - 2) / 16 , &offset, &selected);
+      drawList(x0 + 1, y0 + 1, width - 2, height - 2, items, (height - 2) / item_height , &offset, &selected);
       selected_prev = selected;
     }
   }
@@ -35734,7 +35989,16 @@ char touchCheckNowait() {
 
 int delayOrTouchWait(long milliseconds) {
   long begin = millis();
+  long boot_low_begin;
   while(millis() - begin < milliseconds) {
+    if(digitalRead(BOOT_BUTTON_PIN) == LOW) {
+      // Защита от помех
+      boot_low_begin = millis();
+      while(digitalRead(BOOT_BUTTON_PIN) == LOW);
+      if(Storage && millis() - boot_low_begin > 100) {
+        saveScreenshot();
+      }
+    }
     if(touchPollTouchStatus()) {
       return 1;
     }
@@ -36043,8 +36307,8 @@ void image_from_bits(int start_x, int start_y, char *image, int color, int bg_co
   int byte_index, bit_index;
   int x, y;
   char bit;
-  int width = (int)image[0];
-  int height = (int)image[1];
+  int width = (unsigned int)image[0];
+  int height = (unsigned int)image[1];
 
   tft.drawBitmap(start_x, start_y, (uint8_t*)(image + 2), width, height, color, bg_color);
 }
@@ -37356,8 +37620,9 @@ void sleep_until_boot() {
   set_brightness(0);
   delay(100);
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
-  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
+  //esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
   esp_sleep_enable_ext0_wakeup((gpio_num_t)BOOT_BUTTON_PIN, LOW);
+  Serial.flush();
   esp_light_sleep_start();
   set_brightness(brighness);
   while(digitalRead(BOOT_BUTTON_PIN) == LOW);
@@ -37366,33 +37631,72 @@ void sleep_until_boot() {
 void sleep_until_touch_or_boot() {
   int brighness;
   int touch_count = 0;
+  char *buff = NULL;
+  int offset_x, offset_y;
+  long millis_touch_start = millis();
   brighness = get_brightness();
 
-  set_brightness(0);
+  buff = (char *)malloc(tft.width() * tft.height() / 6 * sizeof(char));
+  if(!buff) return;
+  offset_x = 0;
+  offset_y = tft.height() / 3;
+  screen_area_to_buffer(buff, offset_x, offset_y, tft.width(), tft.height() / 6);
+
+  tft.drawRect(offset_x, offset_y, tft.width(), tft.height() / 6, TFT_RED);
+  tft.drawRect(offset_x + 1, offset_y + 1, tft.width() - 2, tft.height() / 6 - 2, TFT_RED);
+  tft.fillRect(offset_x + 2, offset_y + 2, tft.width() - 4, tft.height() / 6 - 4, TFT_WHITE);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
+  tft.drawCentreString("Touch square for 4 s to wake up", tft.width() / 2, offset_y + 4, FONT_DEFAULT);
+  tft.drawRect(tft.width() / 2 - 8, offset_y + 24, 16, 16, TFT_BLACK);
+
+
   touchWaitRelease();
   delay(100);
   while(touch_count < 3) {
+    // Включаем подсветку, но не более 3 секунд если касание не на мишени
+    if(millis() - millis_touch_start < 3000) {
+      set_brightness(brighness);
+    }
+    else {
+      set_brightness(0);
+    }
+
+    // Ожидаем завершения морзе
+    while(MorseTaskHandle != NULL) {
+      delay(1000);
+    }
+
+    // Уходим в сон
     esp_sleep_enable_timer_wakeup(1000000);
-    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
+    //esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
+    Serial.flush();
     esp_light_sleep_start();
     if(digitalRead(BOOT_BUTTON_PIN) == LOW) {
       while(digitalRead(BOOT_BUTTON_PIN) == LOW);
       break;
     }
     if(touchCheckNowait() == 1) {
-      set_brightness(brighness);
-      delay(10);
-      set_brightness(0);
-      touch_count++;
+      millis_touch_start = millis();
+      // Проверяем касание
+      if(abs(tft.width() / 2 - global_touch_x) < 8 && abs(global_touch_y - (offset_y + 24 + 8)) < 8) {
+        // Чтобы подсветка не гасла пока касание в квадратике
+        tft.fillRect(tft.width() / 2 - 8 + 2, offset_y + 24 + 2, 12, 12, TFT_BLACK);
+        delay(10);
+        touch_count++;
+      }
+      else {
+        tft.fillRect(tft.width() / 2 - 8 + 2, offset_y + 24 + 2, 12, 12, TFT_WHITE);
+        touch_count = 0;
+      }
     }
     else {
       touch_count = 0;
     }
-    while(MorseTaskHandle != NULL) {
-      delay(100);
-    }
     delay(1);
   }
+
+  buffer_to_screen_area(buff, 0, tft.height() / 3, tft.width(), tft.height() / 6);
+  free(buff);
   set_brightness(brighness);
   touchWaitRelease();
 }
@@ -37419,8 +37723,9 @@ void deep_sleep_until_boot() {
   set_brightness(0);
   delay(100);
   esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
-  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
+  //esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
   esp_sleep_enable_ext0_wakeup((gpio_num_t)BOOT_BUTTON_PIN, LOW);
+  Serial.flush();
   esp_deep_sleep_start();
 }
 
