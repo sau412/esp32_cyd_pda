@@ -242,6 +242,7 @@
   пятнашки фикс рамки вокруг фишек, баг с выбором случайного приложения (ошибка в названии макроса)
 2026-10-19 Скриншоты 24 бита, пианино шире и две клавиатуры, ускорение работы счётчика, заставка правило 30,
   возможность переставлять курсор в Prompt, новый значок Life
+2026-10-20 Life убрал лишнее ожидание нажатия, редактирование - перенос по словам
 
 - новый обзор(ы)
 
@@ -266,7 +267,7 @@
 - Дашборд орбиты и положение планет
 - Дашборд знаки зодиака
 - Дашборд ZPG - можно idlerpg: персонаж качается, встречает монстров, находит/теряет предметы; а можно как годвиль; ИИ предлагает целый город
-- Flightradar https://api.adsb.lol/docs
+- Flightradar https://api.adsb.lol/docs - плохо находит самолёты по координатам
 - Настройка: не показывать значки статуса AFMSWT
 - Настройка: не показывать время
 - Bluetooth музыка и радио - похоже не хватает на это памяти
@@ -420,7 +421,7 @@
 Сторонние библиотеки:
 - QR-код
 - Datamatrix
-- Распаковка zip
+- Распаковка zip (ошибка при линковке)
 - Распаковка gz
 
 
@@ -435,6 +436,7 @@
 //#define IS_BLE_ENABLED
 //#define IS_BLUETOOTH_ENABLED
 //#define IS_SSH_ENABLED
+//#define IS_UNZIP_ENABLED
 
 // CYD
 #include <SPI.h>
@@ -540,6 +542,11 @@ WiFiClient *global_client = NULL;
 
 // NVS
 #include <Preferences.h>
+
+#ifdef IS_UNZIP_ENABLED
+// Unzip
+#include <unzipLIB.h>
+#endif
 
 #define CHECKSUM_CRC 1
 #define CHECKSUM_MD5 2
@@ -4758,6 +4765,22 @@ void terminal_execute_single(char *str) {
       file_aes_decrypt(cmdline_params[1], buff, buff2);
     }
   }
+#ifdef IS_UNZIP_ENABLED
+  else if(strcmp(cmdline_params[0], "unzip") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: unzip {archive} [destination]");
+    }
+    else if(arg_count == 2) {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      file_unzip(cmdline_params[1], NULL);
+    }
+    else {
+      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      file_unzip(cmdline_params[1], buff);
+    }
+  }
+#endif
   else if(strcmp(cmdline_params[0], "sizeof") == 0) {
     sprintf(buff, "sizeof(char) = %d", sizeof(char));
     terminal_println(buff);
@@ -15446,7 +15469,7 @@ void life_show(char *rule_name, int rule_index, char *field) {
 
     drawButtonMatrix(0, 280, tft.width(), 40, buttons, 5, 1);
 
-    touchWaitPress();
+    //touchWaitPress();
     // Смотрим, нет ли попадания в поле
     touch_x = global_touch_x;
     touch_y = global_touch_y;
@@ -26748,6 +26771,124 @@ void file_aes_decrypt(char *password, char *from_filename, char *to_filename) {
   }
 }
 
+#ifdef IS_UNZIP_ENABLED
+
+UNZIP *zip = NULL;
+fs::File zip_file;
+
+void * openZIP(const char *filename, int32_t *size) {
+  zip_file = Storage->open(filename);
+  *size = zip_file.size();
+  return (void *)&zip_file;
+}
+
+// Функция обратного вызова для чтения порций данных из ZIP-файла
+int32_t readZIP(void *p, uint8_t *buffer, int32_t length) {
+  ZIPFILE *pzf = (ZIPFILE *)p;
+  fs::File *f = (File *)pzf->fHandle;
+  return f->read(buffer, length);
+}
+
+// Функция обратного вызова для перемещения указателя в файле ZIP
+int32_t seekZIP(void *p, int32_t position, int iType) {
+  ZIPFILE *pzf = (ZIPFILE *)p;
+  fs::File *f = (File *)pzf->fHandle;
+  if (iType == SEEK_SET)
+    return f->seek(position);
+  else if (iType == SEEK_END) {
+    return f->seek(position + pzf->iSize); 
+  } else { // SEEK_CUR
+    long l = f->position();
+    return f->seek(l + position);
+  }
+}
+
+void closeZIP(void *p) {
+  ZIPFILE *pzf = (ZIPFILE *)p;
+  fs::File *f = (File *)pzf->fHandle;
+  if (f) f->close();
+}
+
+void file_unzip(char *archive_filename, char *destination) {
+  char dest_forder[160];
+  char src_filename[256];
+  char dst_filename[256];
+  unz_file_info fi;
+  uint32_t fileSize;
+  int result;
+  int rc;
+  // Буфер для извлечения данных
+  uint8_t buffer[512];
+  fs::File outFile;
+  fs::File zipFile;
+
+  // Проверка и подготовка данных
+  if(!Storage->exists(archive_filename)) {
+    terminal_println("Archive not exists");
+    return;
+  }
+  if(destination == 0) {
+    strcpy(dest_forder, terminal_current_path);
+  }
+  else {
+    strcpy(dest_forder, destination);
+  }
+  
+  // Распаковка
+  zipFile = Storage->open(archive_filename);
+  if(!zipFile) {
+    terminal_println("Unable to open archive file");
+    return;
+  }
+  zipFile.close();
+
+  zip = new UNZIP;
+  rc = zip->openZIP(archive_filename, openZIP, closeZIP, readZIP, seekZIP);
+  if (rc != UNZ_OK) {
+    terminal_println("Unable to open ZIP: %d");
+    zipFile.close();
+    delete zip;
+    return;
+  }
+    
+  // Перебираем файлы внутри архива
+  zip->gotoFirstFile();
+  do {
+    // Получаем информацию о текущем файле в архиве
+    zip->getFileInfo(&fi, src_filename, sizeof(src_filename), NULL, 0, NULL, NULL);
+    terminal_println(src_filename);
+    
+    // Создаем такой же файл в ФС
+    sprintf(dst_filename, "%s/%s", dest_forder, src_filename);
+    outFile = Storage->open(dst_filename, FILE_WRITE);
+    
+    if(outFile) {
+      uint32_t bytesLeft = fileSize;
+      while (bytesLeft > 0) {
+        int32_t toRead = min((uint32_t)sizeof(buffer), bytesLeft);
+        zip->readCurrentFile(buffer, toRead);
+        outFile.write(buffer, toRead);
+        bytesLeft -= toRead;
+      }
+      outFile.close();
+      terminal_println("Completed");
+    } else {
+      terminal_println("Unable to open file");
+    }
+  } while(zip->gotoNextFile() == UNZ_OK);
+    
+  delete zip;
+  // Обработка результата
+  if(result == 0) {
+    terminal_println("Success");
+  }
+  else {
+    terminal_println("Error occured");
+  }
+}
+
+#endif // IS_UNZIP_ENABLED
+
 void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
   int byte1, byte2, byte3;
   int byte_out;
@@ -26767,7 +26908,9 @@ void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
       if(byte1 == 0xE2 && byte2 == 0x80) {
         byte3 = file_from.read();
         byte_out = '?';
-        if(byte3 == 0x90) byte_out = '-'; // дефис
+        if(byte3 == 0x85) byte_out = ' '; // пробел шириной в четверть кегля / четверть квадрата
+        else if(byte3 == 0x88) byte_out = ' '; // Punctuation Space 
+        else if(byte3 == 0x90) byte_out = '-'; // дефис
         else if(byte3 == 0x91) byte_out = '-'; // неразрывный дефис
         else if(byte3 == 0x92) byte_out = '-'; // фигурное тире (по ширине цифры)
         else if(byte3 == 0x93) byte_out = 0x96; // N dash
@@ -28275,6 +28418,14 @@ void screen_test(char mode, char *io_buff) {
   touchWaitRelease();
 }
 
+
+// На какое смещение было нажатие
+int draw_text_formatted_touch_offset = 0;
+// Где на экране определённое смещение
+int draw_text_formatted_cursor_offset = 0;
+int draw_text_formatted_cursor_pos_x = 0;
+int draw_text_formatted_cursor_pos_y = 0;
+
 // Вывести одну страницу текста с переносом по словам
 // Возвращает число выведенных байтов
 // text - текст, который нужно выводить
@@ -28293,14 +28444,16 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
   int line_index = 0;
   int text_offset = 0;
   int newline_symbols;
+  int start_line_offset;
   int line_height;
   int i;
 
+  draw_text_formatted_cursor_pos_x = -1;
+  draw_text_formatted_cursor_pos_y = -1;
+  
   //Serial.println("draw_text_formatted");
 
-  if(font == FONT_MONOSPACE) line_height = 8;
-  else if(font == FONT_DEFAULT) line_height = 16;
-  else line_height = 16;
+  line_height = tft.fontHeight(font);
 
   strcpy(current_line, "");
   strcpy(current_word, "");
@@ -28384,6 +28537,7 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
         tft.drawString(current_line, start_x, start_y + line_height * line_index, font);
         //delay(1000);
         //Serial.println(current_line);
+        // Заполняем пространство от конца строки до края
         tft.fillRect(
           start_x + tft.textWidth(current_line, font),
           start_y + line_height * line_index,
@@ -28392,6 +28546,44 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
           color_scheme_bg
         );
       }
+
+      // Если есть касание, и попадание на текущую строку
+      if(global_touch_present_flag
+        &&
+        global_touch_y >= start_y + line_height * line_index
+        &&
+        global_touch_y < start_y + line_height * (line_index + 1)
+        &&
+        global_touch_x >= start_x
+        &&
+        global_touch_x < start_x + width
+      ) {
+        Serial.printf("Touch line %d\n", line_index);
+        // Смещение конца текущей строки
+        draw_text_formatted_touch_offset = text_offset - strlen(current_word) - newline_symbols;
+
+        // Убавляем символы из текущей строки, смотрим когда строка не окажется слева от касания
+        while(global_touch_x < start_x + tft.textWidth(current_line, font)) {
+          current_line[strlen(current_line) - 1] = 0;
+          draw_text_formatted_touch_offset--;
+        }
+      }
+
+      // Выясняем, где стоит курсор на экране
+      // Если на текущую строку выпадает позиция курсора
+      if(newline_symbols > 0 || strlen(current_line) > 0 || strlen(current_word) > 0) {
+        start_line_offset = text_offset - strlen(current_line) - strlen(current_word) - newline_symbols;
+        if(draw_text_formatted_cursor_offset >= start_line_offset && draw_text_formatted_cursor_offset <= start_line_offset + strlen(current_line)) {
+          draw_text_formatted_cursor_pos_x = start_x + tft.textWidth(current_line, font);
+          draw_text_formatted_cursor_pos_y = start_y + line_height * line_index;
+          // Нужно сместить курсор на определённое количество символов
+          while(strlen(current_line) > 0 && draw_text_formatted_cursor_offset < start_line_offset + strlen(current_line)) {
+            current_line[strlen(current_line) - 1] = 0;
+            draw_text_formatted_cursor_pos_x = start_x + tft.textWidth(current_line, font);
+          }
+        }
+      }
+
       line_index++;
       new_line_flag_line = 0;
       strcpy(current_line, "");
@@ -28767,33 +28959,21 @@ char edit_text(char *title, char *contents, long max_len) {
   int file_offset_bytes = 0;
   // Позиция курсора в байтах, перед каким символом стоит курсор
   int cursor_offset_bytes = 0;
-  // Позиция курсора на экране
-  int cursor_screen_pos_x = 0;
-  int cursor_screen_pos_y = 0;
-  // Флаги если курсор не на экране
-  char cursor_too_high = 0;
-  char cursor_too_low = 0;
-  char cursor_line_number = 0;
-  char set_cursor_from_touch = 0;
+  int screen_offset_bytes = 0;
+  int screen_visible_bytes = 0;
   char changes_present = 0;
   char update_required_flag = 0;
 
-  int string_offset;
-  int file_line_number = 0; // Номер текущей строки в файле
-  int screen_line_number = 0; // Номер строки на экране в процессе вывода
   int file_skip_lines = 0; // Сколько строк файла пропустить
-  int touch_x = 0, touch_y = 0;
   int button;
+  int i;
   char byte;
   char buff[80];
-  char current_string[80];
   char caps_flag = 0;
   char symbol_flag = 0;
   char alt_flag = 0;
-  int prev_width = 0;
   int indent_left = (keyboard_indent_left ? KEYBOARD_INDENT_SIZE : 0);
   int indent_width = (keyboard_indent_left ? KEYBOARD_INDENT_SIZE : 0) + (keyboard_indent_right ? KEYBOARD_INDENT_SIZE : 0);
-  TouchPoint p;
   char **keyboard_current = keyboard_nocaps;
   long last_save_millis = millis();
   char changed_since_autosave = 0;
@@ -28803,153 +28983,84 @@ char edit_text(char *title, char *contents, long max_len) {
   tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
   file_skip_lines = 0;
+  // Положение курсора
+  draw_text_formatted_cursor_offset = 0;
+  screen_offset_bytes = 0;
+  cursor_offset_bytes = 0;
+
   while(1) {
-    // Вывести текст по текущему смещению
-    // Начинаем с начала файла и читаем пока не попадём на отображаемую часть
-    current_string[0] = 0;
-    //tft.fillRect(0, 16, tft.width(), 200 - 16, color_scheme_bg);
+    // Перематываем строки с начала файла
+    Serial.printf("file_skip_lines %d\n", file_skip_lines);
+    screen_offset_bytes = 0;
+    if(file_skip_lines < 0) file_skip_lines = 0;
+    for(i = 0; i < file_skip_lines; i++) {
+      screen_offset_bytes += draw_text_formatted(contents + screen_offset_bytes, 1, 16, tft.width() - 2, 1, FONT_DEFAULT, 0);
+    }
 
-    cursor_too_low = 0;
-    cursor_too_high = 0;
-    file_offset_bytes = 0;
-    file_line_number = 0;
-    screen_line_number = 0;
-    cursor_line_number = -1;
-    // Файл может быть пустым, в этом случае курсор стоит в начале первой строки
-    if(contents[file_offset_bytes] == 0) {
-      cursor_screen_pos_x = 0;
-      cursor_screen_pos_y = 16 + screen_line_number * 16;
+    if(cursor_offset_bytes > strlen(contents)) {
+      Serial.println("Cursor after the text");
+      cursor_offset_bytes = strlen(contents);
+    }
+    if(cursor_offset_bytes < 0) {
+      Serial.println("Cursor before the text");
       cursor_offset_bytes = 0;
-      cursor_line_number = screen_line_number;
-    }
-    while(contents[file_offset_bytes] != 0) {
-      // Читаем символы в буфер пока текст помещается по ширине в экран
-      string_offset = 0;
-      buff[0] = 0;
-      prev_width = 0;
-      // Читаем строку пока строка не закончится по какому-либо условию
-      while(contents[file_offset_bytes] != 0) {
-        byte = contents[file_offset_bytes];
-        // Если курсор не перемещали касанием, то находим его место
-        if(set_cursor_from_touch == 0 && cursor_offset_bytes == file_offset_bytes) {
-          cursor_screen_pos_x = tft.textWidth(buff, FONT_DEFAULT);
-          cursor_screen_pos_y = 16 + screen_line_number * 16;
-          cursor_line_number = screen_line_number;
-        }
-
-        if(set_cursor_from_touch) {
-          // Если нажатие от текущего символа до конца строки, то переставить курсор сюда
-          // Таким образом курсор может оказаться от начала строки до конца строки
-          if(touch_y >= 16 + screen_line_number * 16
-            && touch_y < 16 + (screen_line_number + 1) * 16
-            && touch_x >= tft.textWidth(buff, FONT_DEFAULT)
-          ) {
-            cursor_screen_pos_x = tft.textWidth(buff, FONT_DEFAULT);
-            cursor_offset_bytes = file_offset_bytes;
-
-            // Если это последний символ в файле, то если касание правее него, то нужно поставить курсор после последнего символа
-            if(contents[file_offset_bytes + 1] == 0) {
-              // Добавляем символ в строку, получаем ширину, удаляем символ
-              buff[string_offset] = byte;
-              buff[string_offset + 1] = 0;
-              if(touch_x >= tft.textWidth(buff, FONT_DEFAULT)) {
-                cursor_screen_pos_x = tft.textWidth(buff, FONT_DEFAULT);
-                cursor_offset_bytes = file_offset_bytes + 1;
-              }
-              buff[string_offset] = 0;
-            }
-
-            cursor_screen_pos_y = 16 + screen_line_number * 16;
-            cursor_line_number = screen_line_number;
-          }
-        }
-
-        file_offset_bytes++;
-
-        // Переводы строк завершают текущую строку, сам байт в строку не добавляется
-        if(byte == '\n' || byte == '\r') {
-          // Но из-за него курсор может оказаться на следующей строке!
-          if(set_cursor_from_touch == 0 && cursor_offset_bytes == file_offset_bytes) {
-            cursor_screen_pos_x = 0;
-            cursor_screen_pos_y = 16 + (screen_line_number + 1) * 16;
-            cursor_line_number = screen_line_number + 1;
-          }
-          break;
-        }
-
-        // Добавляем байт в строку
-        buff[string_offset] = byte;
-        string_offset++;
-        buff[string_offset] = 0;
-
-        prev_width = tft.textWidth(buff, FONT_DEFAULT);
-        if(tft.textWidth(buff, FONT_DEFAULT) + 10 >= tft.width()) {
-          break;
-        }
-        if(string_offset >= 60) {
-          break;
-        }
-      }
-      
-      // Если курсор стоит после последнего символа, этот кусок не отрабатывает
-      // Если курсор не перемещали касанием, то находим его место
-      if(set_cursor_from_touch == 0 && cursor_offset_bytes == file_offset_bytes && (byte != '\n' && byte != '\r')) {
-        cursor_screen_pos_x = tft.textWidth(buff, FONT_DEFAULT);
-        cursor_screen_pos_y = 16 + screen_line_number * 16;
-        cursor_line_number = screen_line_number;
-      }
-
-      // Если файл сдвинут на несколько строк - пропускаем их
-      if(file_skip_lines > file_line_number) {
-        file_line_number++;
-        continue;
-      }
-      file_line_number++;
-
-      // Пора показать строку
-      tft.setTextColor(color_scheme_fg, color_scheme_bg);
-      // Узкая полоска слева, иногда там бывают следы курсора
-      tft.fillRect(0, 16 + screen_line_number * 16, 1, 16, color_scheme_bg);
-      tft.drawString(buff, 1, 16 + screen_line_number * 16, FONT_DEFAULT);
-      // Зачищаем остальную строку
-      tft.fillRect(1 + tft.textWidth(buff, FONT_DEFAULT), 16 + screen_line_number * 16, tft.width() - 1 - tft.textWidth(buff, FONT_DEFAULT), 16, color_scheme_bg);
-      screen_line_number++;
-
-      // Если экран заполнен - выходим
-      if(screen_line_number > 10) {
-        break;
-      }
-    }
-    // Зачищаем остальной экран
-    if(screen_line_number <= 10) {
-      tft.fillRect(0, 16 + screen_line_number * 16, tft.width(), 200 - 16 - screen_line_number * 16, color_scheme_bg);
     }
 
-    // Если курсор не был достигнут, нужно перезапустить вывод
-    if(cursor_offset_bytes > file_offset_bytes) {
-      cursor_too_low = 1;
-    }
-    if(cursor_line_number >= 10) {
-      cursor_too_low = 1;
-    }
-    if(cursor_line_number <= 0) {
-      cursor_too_high = 1;
-    }
+    // Ставим курсор
+    draw_text_formatted_cursor_offset = cursor_offset_bytes - screen_offset_bytes;
+    Serial.printf("draw_text_formatted_cursor_offset %d = cursor_offset_bytes %d - screen_offset_bytes %d\n", draw_text_formatted_cursor_offset, cursor_offset_bytes, screen_offset_bytes);
 
-    // Если экран заполнен, а курсор не на экране - прокручиваем экран в нужную сторону и перезапускаем вывод
-    set_cursor_from_touch = 0;
-    if(file_skip_lines > 0 && cursor_too_high) {
-      file_skip_lines--;
+    // Ищем позицию чтобы курсор был на экране
+    screen_visible_bytes = draw_text_formatted(contents + screen_offset_bytes, 1, 16, tft.width() - 2, 11, FONT_DEFAULT, 0);
+    Serial.printf("draw_text_formatted_cursor_pos_x = %d, draw_text_formatted_cursor_pos_y = %d\n", draw_text_formatted_cursor_pos_x, draw_text_formatted_cursor_pos_y);
+    // Курсор до экрана
+    if(cursor_offset_bytes < screen_offset_bytes) {
+      Serial.println("Cursor before the screen, scroll two up");
+      file_skip_lines -= 2;
       continue;
     }
-    if(cursor_too_low) {
+
+    // Курсор на первой строке экрана, и это не начало файла
+    if(file_skip_lines > 0 && draw_text_formatted_cursor_pos_y == 16) {
+      Serial.println("Cursor first line, scroll up");
+      file_skip_lines -= 1;
+      continue;
+    }
+    
+    // Курсор после экрана
+    Serial.printf("cursor_offset_bytes %d > screen_offset_bytes %d + screen_visible_bytes%d\n", cursor_offset_bytes, screen_offset_bytes, screen_visible_bytes);
+    if(cursor_offset_bytes > screen_offset_bytes + screen_visible_bytes) {
+      Serial.println("Cursor after the screen, scroll down");
+      // Сдвигаем на строку
       file_skip_lines++;
       continue;
     }
+    
+    // Если впереди есть текст
+    if(screen_offset_bytes + screen_visible_bytes < strlen(contents)) {
+      // Если курсор на нижней строке, то прокрутить ещё на строку
+      if(draw_text_formatted_cursor_pos_y + 16 >= 16 + 16 * 11) {
+        Serial.println("Cursor last line, scroll down");
+        file_skip_lines++;
+        continue;
+      }
+    }
 
-    // Рисуем курсор где нужно
-    tft.fillRect(cursor_screen_pos_x, cursor_screen_pos_y, 2, 16, color_scheme_selection_bg);
+    // Рисуем текст по смещению
+    draw_text_formatted(contents + screen_offset_bytes, 1, 16, tft.width() - 2, 11, FONT_DEFAULT, 1);
 
+    // Рисуем курсор
+    if(draw_text_formatted_cursor_pos_x != -1 && draw_text_formatted_cursor_pos_y != -1) {
+      // Зачистка полосок сбоку экрана - там могут оставаться артефакты
+      tft.drawLine(0, 16, 0, 16 + 16 * 11 + 16, color_scheme_bg);
+      tft.drawLine(tft.width() - 1, 16, tft.width() - 1, 16 + 16 * 11 + 16, color_scheme_bg);
+      tft.fillRect(draw_text_formatted_cursor_pos_x - 1, draw_text_formatted_cursor_pos_y, 2, tft.fontHeight(FONT_DEFAULT), color_scheme_selection_bg);
+    }
+    else {
+      Serial.println("Cursor is not set!");
+    }
+
+    // Клавиатура
     if(symbol_flag) {
       if(caps_flag) {
         keyboard_current = keyboard_symbol_caps;
@@ -29032,6 +29143,14 @@ char edit_text(char *title, char *contents, long max_len) {
       continue;
     }
 
+    // Касание в текст
+    if(global_touch_present_flag && global_touch_y >= 16 && global_touch_y < 16 + 16 * 11) {
+      // Получаем смещение по касанию
+      draw_text_formatted(contents + screen_offset_bytes, 1, 16, tft.width() - 2, 11, FONT_DEFAULT, 0);
+      // Ставим курсор по касанию
+      cursor_offset_bytes = screen_offset_bytes + draw_text_formatted_touch_offset;
+    }
+
     //touchWaitPress();
     button = touchCheckMatrix(indent_left, 200, tft.width() - indent_width, 120, keyboard_current, 12, 4);
     if(button != -1) {
@@ -29076,15 +29195,6 @@ char edit_text(char *title, char *contents, long max_len) {
           changed_since_autosave = 1;
         }
       }
-    }
-
-    // Смотрим куда нажатие, ставим курсор в ближайшее место
-    touch_x = global_touch_x;
-    touch_y = global_touch_y;
-    // В текстовую часть экрана
-    set_cursor_from_touch = 0;
-    if(touch_y >= 16 && touch_y < 192) {
-      set_cursor_from_touch = 1;
     }
 
     touchWaitReleaseOrExit();
