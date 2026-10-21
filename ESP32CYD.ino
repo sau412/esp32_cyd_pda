@@ -242,11 +242,26 @@
   пятнашки фикс рамки вокруг фишек, баг с выбором случайного приложения (ошибка в названии макроса)
 2026-10-19 Скриншоты 24 бита, пианино шире и две клавиатуры, ускорение работы счётчика, заставка правило 30,
   возможность переставлять курсор в Prompt, новый значок Life
-2026-10-20 Life убрал лишнее ожидание нажатия, редактирование - перенос по словам
+2026-10-20 Life убрал лишнее ожидание нажатия, редактирование - перенос по словам, unzip ошибка при линковке,
+  UTF-8 ещё два вида пробела
+2026-10-21 UTF-8 улучшение работы, UTF-8 декодирование в одном месте, RSS улучшение UTF-8, визуальный тест калибровки,
+  исправил баг курсора на последней пустой строке
 
 - новый обзор(ы)
 
 Улучшения тут и там:
+- Убрать многоуровневые настройки
+- Символы UTF-8 с акцентами декодировать
+- Можно сделать декодирование UTF-8 через получение кода символа из байтов, тогда можно использовать это в декодинге XML RSS
+- Заставка Диаграммы Вороного
+- Заставка Коралл (диффузионная агрегация)
+- Заставка Лиссажу спирограф
+- Приложение Графики функций
+- Заставка Аттрактор Клиффорда
+- Цвета и линии для аттрактора Лоренца
+- Таблицы: квази-функции суммы столбца, строки
+- Смена кодировки с одним и тем же файлом (перекодировать, старый удалить, переименовать)
+- Увеличить тайм-аут get_file_https
 - Баг - буфер при создании новой таблицы не пустой? Мусор в ячейке, но не сразу. Вылет при сохранении (не воспроизвелось)
 - Визуализация работы тача
 - Убрать многоуровневые настройки (больше двух уровней)
@@ -416,7 +431,6 @@
 - Выделение в редактировании, копирование, вставка
 - Выделение в prompt, копирование, вставка
 - Автоопределение кодировки файла при просмотре
-- Не прокручивать при редактировании дальше конца файла
 - Prompt - возможность выделять
 Сторонние библиотеки:
 - QR-код
@@ -6381,7 +6395,7 @@ void terminal_input_string(char *input_buff) {
       byte = Serial.read();
       if(byte >= 0xC0) {
         if(Serial.available()) {
-          byte = utf8_to_cp1251_byte(byte, Serial.read());
+          byte = utf8_to_cp1251_double_byte(byte, Serial.read());
         }
       }
     }
@@ -8397,7 +8411,7 @@ int terminal_telnet(int arg_count, char **args, char ssl_flag) {
           }
         }
         else if(client->available()) {
-          byte = utf8_to_cp1251_byte(byte, client->read());
+          byte = utf8_to_cp1251_double_byte(byte, client->read());
         }
       }
       Serial.printf("Visible symbol: %02X %c\n", byte, byte);
@@ -8430,7 +8444,7 @@ int terminal_telnet(int arg_count, char **args, char ssl_flag) {
       byte = Serial.read();
       if(byte >= 0xC0) {
         if(Serial.available()) {
-          byte = utf8_to_cp1251_byte(byte, Serial.read());
+          byte = utf8_to_cp1251_double_byte(byte, Serial.read());
         }
       }
     }
@@ -21199,7 +21213,6 @@ char * http_get_error_text(int httpResponseCode, char *buff) {
 // ====================================================
 
 #define RSS_PATH "/RSS"
-#define RSS_MAX_LENGTH 50000
 
 void rss_action(int action_index, char *filename) {
   fs::File file;
@@ -21268,10 +21281,15 @@ void rss_action(int action_index, char *filename) {
 void rss_view_source(char *source_name, char *source_url) {
   char *data = NULL;
   char buff[80];
+  char buff2[80];
   char chunk_header_bytes[10];
   char chunked = 0;
   char chunk_header = 0;
   long chunk_size;
+  long bytes_read = 0;
+  long rss_max_length = 0;
+  char chunk_size_zero = 0;
+  char stream_timeout = 0;
   int http_code;
   HTTPClient http;
   WiFiClient *stream = NULL;
@@ -21280,6 +21298,8 @@ void rss_view_source(char *source_name, char *source_url) {
   int offset = 0;
   int buff_offset;
   int shift_length = 0;
+  int utf8_char_begin;
+  char additional_bytes = 0;
   int i;
   char is_inside_tag = 0;
   char new_line_flag = 0;
@@ -21333,15 +21353,16 @@ void rss_view_source(char *source_name, char *source_url) {
 //Serial.printf("%d\n", __LINE__);
   stream = http.getStreamPtr();
 
-  // Резервируем память
-//Serial.printf("%d\n", __LINE__);
-  data = (char *)malloc(RSS_MAX_LENGTH * sizeof(char));
+  // Резервируем память, столько, скольно возможно
+  rss_max_length = ESP.getMaxAllocHeap();
+  Serial.printf("RSS max length = %d\n", rss_max_length);
+  data = (char *)malloc(rss_max_length * sizeof(char));
   if(!data) {
     drawError("Unable to reserve memory");
     return;
   }
 //Serial.printf("%d\n", __LINE__);
-  memset(data, 0, RSS_MAX_LENGTH);
+  memset(data, 0, rss_max_length);
 
   // Читаем поток, перекодируем, убираем лишнее
 //Serial.printf("%d\n", __LINE__);
@@ -21357,8 +21378,11 @@ void rss_view_source(char *source_name, char *source_url) {
   is_header_tag = 1;
   // По умолчанию считать utf-8
   convert_from_utf8 = 1;
-  while(stream->available()) {
+  while(1) {
     if(shift_length > 0) {
+      if(shift_length > strlen(buff)) {
+        shift_length = strlen(buff);
+      }
       for(i = 0; i < 20; i++) {
         buff[i] = buff[i + shift_length];
       }
@@ -21366,17 +21390,37 @@ void rss_view_source(char *source_name, char *source_url) {
     }
 
     // В буфере около 20 байт, достаточно чтобы смотреть вперёд
-    while(buff_offset < 20 && stream->available()) {
+    additional_bytes = 0;
+    while((buff_offset < 20 || additional_bytes) && stream->available()) {
       byte = stream->read();
-      /*
-      if(chunk_size == 0 && chunk_header == 0) {
+      bytes_read++;
+
+      if(chunked && chunk_size == 0 && chunk_header == 0) {
+        // Для отладки
+        cp1251_to_utf8(buff, buff2);
+        Serial.printf("Before end of chunk: %s\n", buff2);
+
         // Читаем ещё два байта
+        if(!stream->available()) {
+          Serial.println("Stream not available, waiting...");
+          millis_start_wait = millis();
+          while(millis() - millis_start_wait < 30000) {
+            if(stream->available()) break;
+          }
+        }
         byte = stream->read();
+        if(!stream->available()) {
+          Serial.println("Stream not available, waiting...");
+          millis_start_wait = millis();
+          while(millis() - millis_start_wait < 30000) {
+            if(stream->available()) break;
+          }
+        }
         byte = stream->read();
         chunk_header = 1;
         chunk_header_bytes[0] = 0;
       }
-      if(chunk_header) {
+      if(chunked && chunk_header) {
         Serial.printf("Chunk header byte %02x\n", byte);
         chunk_header_bytes[strlen(chunk_header_bytes) + 1] = 0;
         chunk_header_bytes[strlen(chunk_header_bytes)] = byte;
@@ -21384,55 +21428,60 @@ void rss_view_source(char *source_name, char *source_url) {
           sscanf(chunk_header_bytes, "%X", &chunk_size);
           Serial.printf("Chunk size %d (%X)\n", chunk_size, chunk_size);
           chunk_header = 0;
+          if(chunk_size == 0) {
+            // Читаем остаток
+            while(stream->available()) {
+              byte = stream->read();
+              Serial.printf("Byte after end: %02X %c\n", byte, byte);
+            }
+            chunk_size_zero = 1;
+            break;
+          }
         }
         continue;
       }
       chunk_size--;
       //Serial.print((char)byte);
-*/
+
       // Пропустить непечатаемые символы (код меньше пробела)
       if(byte < ' ') continue;
 
-      // UTF-8 в CP1251
-      if(byte >= 0xC0 && convert_from_utf8) {
-        byte2 = stream->read();
-        // Трёхбайтовые символы
-        if(byte == 0xE2 && byte2 == 0x80) {
-          byte3 = stream->read();
-          if(byte3 == 0x90) byte = '-';  // дефис
-          if(byte3 == 0x91) byte = '-'; // неразрывный дефис
-          if(byte3 == 0x92) byte = '-'; // фигурное тире (по ширине цифры)
-          if(byte3 == 0x93) byte = 0x96; // N dash
-          if(byte3 == 0x94) byte = 0x97; // M dash
-          if(byte3 == 0x95) byte = '-'; // Горизонтальная черта
-          if(byte3 == 0x98) byte = 0x91; // Левая одинарная кавычка
-          if(byte3 == 0x99) byte = 0x92; // Правая одинарная кавычка
-          if(byte3 == 0x9A) byte = 0x83; // 
-          if(byte3 == 0x9C) byte = 0x93; // Открывающая кавычка (верх)
-          if(byte3 == 0x9D) byte = 0x94; // Правая двойная кавычка
-          if(byte3 == 0x9E) byte = 0x84; // Нижняя открывающая двойная кавычка
-          if(byte3 == 0xA0) byte = 0x86; // Типографский крестик
-          if(byte3 == 0xA1) byte = 0x87; // Двойной типографский крестик
-          if(byte3 == 0xA2) byte = 0x95; // Буллет
-          if(byte3 == 0xA6) byte = 0x85; // Троеточие
-          if(byte3 == 0xB0) byte = 0x89; // Промилле
-          if(byte3 == 0xB9) byte = 0x8B; // Открывающая одиночная ёлочка
-          if(byte3 == 0xBA) byte = 0x9B; // Закрывающая одиночная ёлочка
-        }
-        else if(byte == 0xE2 && byte2 == 0x82) {
-          if(byte3 == 0xAC) byte = 0x88; // Евро
-        }
-        else if(byte == 0xE2 && byte2 == 0x84) {
-          if(byte3 == 0x96) byte = 0xB9; // №
-          if(byte3 == 0xA2) byte = 0x99; // TM
-        }
-        else {
-          byte = utf8_to_cp1251_byte(byte, byte2);
+      //Serial.printf("Read byte %02X %c, buff: %s\n", byte, byte, buff);
+
+      // UTF-8 в cp1251
+      if(convert_from_utf8) {
+        if(additional_bytes == 0) {
+          if(utf8_is_double_byte(byte)) {
+            utf8_char_begin = buff_offset;
+            additional_bytes = 2;
+          }
+          else if(utf8_is_triple_byte(byte)) {
+            utf8_char_begin = buff_offset;
+            additional_bytes = 3;
+          }
+          else if(utf8_is_quad_byte(byte)) {
+            utf8_char_begin = buff_offset;
+            additional_bytes = 4;
+          }
         }
       }
+
       buff[buff_offset] = byte;
       buff_offset++;
       buff[buff_offset] = 0;
+
+      if(convert_from_utf8 && additional_bytes) {
+        additional_bytes--;
+        // Если был прочитан последний байт символа - пора конвертировать
+        if(additional_bytes == 0) {
+          // Конвертируем один последний) символ прямо в буфере
+          //Serial.printf("Convert from utf8, before buff: %s\n", buff);
+          utf8_to_cp1251(buff + utf8_char_begin);
+          // Cдвигаем указатель на нулевой символ
+          buff_offset = utf8_char_begin + 1;
+          //Serial.printf("Convert from utf8, after buff: %s\n", buff);
+        }
+      }
     }
 
     if(is_header_tag && memcmp(buff, "windows-1251", 12) == 0) {
@@ -21442,103 +21491,218 @@ void rss_view_source(char *source_name, char *source_url) {
 
     //Serial.printf("Buff: %s\n", buff);
 
-    shift_length = 1;
-    if(buff[0] == '\n' || buff[0] == '\r') {
-      new_line_flag = 1;
-      //Serial.printf("New line flag\n");
-      continue;
-    }
-    if(is_inside_tag) {
-      if(buff[0] == '>') {
-        is_inside_tag = 0;
-        is_header_tag = 0;
+    if(strlen(buff) > 0) {
+      shift_length = 1;
+      if(buff[0] == '\n' || buff[0] == '\r') {
         new_line_flag = 1;
+        //Serial.printf("New line flag\n");
+        continue;
       }
-      //Serial.printf("Inside tag\n");
-      continue;
-    }
-    if(buff[0] == '<') {
-      if(memcmp(buff, "<![CDATA[", 9) == 0) {
-        //Serial.printf("Inside CDATA\n");
-        inside_cdata = 1;
-        shift_length = 9;
+      if(is_inside_tag) {
+        if(buff[0] == '>') {
+          is_inside_tag = 0;
+          is_header_tag = 0;
+          new_line_flag = 1;
+        }
+        //Serial.printf("Inside tag\n");
+        continue;
       }
-      else {
-        if(memcmp(buff, "<item>", 6) == 0) {
-          shift_length = 6;
+      if(buff[0] == '<') {
+        if(memcmp(buff, "<![CDATA[", 9) == 0) {
+          //Serial.printf("Inside CDATA\n");
+          inside_cdata = 1;
+          shift_length = 9;
+        }
+        else {
+          if(memcmp(buff, "<item>", 6) == 0) {
+            shift_length = 6;
+            data[offset] = '\n';
+            offset++;
+            data[offset] = 0;
+          }
+          if(memcmp(buff, "<guid", 5) == 0) {
+            skip_tag_contents = 1;
+            shift_length = 5;
+          }
+          if(memcmp(buff, "<url>", 5) == 0) {
+            skip_tag_contents = 1;
+            shift_length = 5;
+          }
+          if(memcmp(buff, "</rss>", 6) == 0) {
+            strcat(data, "\n\nEND OF RSS");
+            offset = strlen(data);
+            skip_tag_contents = 1;
+            shift_length = 5;
+          }
+          if(buff[1] == '/') {
+            skip_tag_contents = 0;
+          }
+          //Serial.printf("Inside tag begin\n");
+          is_inside_tag = 1;
+        }
+        continue;
+      }
+
+      if(inside_cdata && memcmp(buff, "]]>", 3) == 0) {
+        //Serial.printf("End of CDATA\n");
+        inside_cdata = 0;
+        shift_length = 3;
+        continue;
+      }
+
+      // Если этот тег пропускаем, то пропускаем
+      if(skip_tag_contents) {
+        //Serial.printf("Skip tag contents\n");
+        continue;
+      }
+
+      if(new_line_flag && buff[0] == ' ') {
+        //Serial.printf("Skip newline on empty string\n");
+        continue;
+      }
+
+      // Если нужна новая строка - добавляем
+      if(new_line_flag) {
+        if(offset != 0) {
           data[offset] = '\n';
           offset++;
-          data[offset] = 0;
         }
-        if(memcmp(buff, "<guid", 5) == 0) {
-          skip_tag_contents = 1;
-          shift_length = 5;
-        }
-        if(memcmp(buff, "<url>", 5) == 0) {
-          skip_tag_contents = 1;
-          shift_length = 5;
-        }
-        if(buff[1] == '/') {
-          skip_tag_contents = 0;
-        }
-        //Serial.printf("Inside tag begin\n");
-        is_inside_tag = 1;
+        new_line_flag = 0;
       }
-      continue;
-    }
 
-    if(inside_cdata && memcmp(buff, "]]>", 3) == 0) {
-      //Serial.printf("End of CDATA\n");
-      inside_cdata = 0;
-      shift_length = 3;
-      continue;
-    }
-
-    // Если этот тег пропускаем, то пропускаем
-    if(skip_tag_contents) {
-      //Serial.printf("Skip tag contents\n");
-      continue;
-    }
-
-    if(new_line_flag && buff[0] == ' ') {
-      //Serial.printf("Skip newline on empty string\n");
-      continue;
-    }
-
-    // Если нужна новая строка - добавляем
-    if(new_line_flag) {
-      if(offset != 0) {
-        data[offset] = '\n';
-        offset++;
+      // Неразрывный пробел это пробел
+      if(memcmp(buff, "&amp;nbsp;", 10) == 0) {
+        buff[0] = ' ';
+        shift_length = 10;
       }
-      new_line_flag = 0;
+      else if(memcmp(buff, "&nbsp;", 6) == 0) {
+        buff[0] = ' ';
+        shift_length = 6;
+      }
+      else if(memcmp(buff, "&amp;quot;", 10) == 0) {
+        buff[0] = '"';
+        shift_length = 10;
+      }
+      else if(memcmp(buff, "&quot;", 6) == 0) {
+        buff[0] = '"';
+        shift_length = 6;
+      }
+      else if(memcmp(buff, "&amp;lt;", 8) == 0) {
+        buff[0] = '<';
+        shift_length = 8;
+      }
+      else if(memcmp(buff, "&lt;", 4) == 0) {
+        buff[0] = '<';
+        shift_length = 4;
+      }
+      else if(memcmp(buff, "&amp;gt;", 8) == 0) {
+        buff[0] = '>';
+        shift_length = 8;
+      }
+      else if(memcmp(buff, "&gt;", 4) == 0) {
+        buff[0] = '>';
+        shift_length = 4;
+      }
+      // Кавычки-ёлочки
+      else if(memcmp(buff, "&amp;#171;", 10) == 0) {
+        buff[0] = 0xAB;
+        shift_length = 10;
+      }
+      else if(memcmp(buff, "&#171;", 6) == 0) {
+        buff[0] = 0xAB;
+        shift_length = 6;
+      }
+      // Кавычки-ёлочки
+      else if(memcmp(buff, "&amp;#187;", 10) == 0) {
+        buff[0] = 0xBB;
+        shift_length = 10;
+      }
+      else if(memcmp(buff, "&#187;", 6) == 0) {
+        buff[0] = 0xBB;
+        shift_length = 6;
+      }
+      // A с ударением
+      else if(memcmp(buff, "&amp;#224;", 10) == 0) {
+        buff[0] = 'A';
+        shift_length = 10;
+      }
+      else if(memcmp(buff, "&#224;", 6) == 0) {
+        buff[0] = 'A';
+        shift_length = 6;
+      }
+      // E с ударением
+      else if(memcmp(buff, "&amp;#233;", 10) == 0) {
+        buff[0] = 'e';
+        shift_length = 10;
+      }
+      else if(memcmp(buff, "&#233;", 6) == 0) {
+        buff[0] = 'e';
+        shift_length = 6;
+      }
+      // Ударение
+      else if(memcmp(buff, "&amp;#769;", 10) == 0) {
+        buff[0] = '`';
+        shift_length = 10;
+      }
+      else if(memcmp(buff, "&#769;", 6) == 0) {
+        buff[0] = '`';
+        shift_length = 6;
+      }
+      // Тире
+      else if(memcmp(buff, "&amp;#8212;", 11) == 0) {
+        buff[0] = '-';
+        shift_length = 11;
+      }
+      else if(memcmp(buff, "&#8212;", 7) == 0) {
+        buff[0] = '-';
+        shift_length = 7;
+      }
+      // Символ рубля, меняем на букву Р (0xD0)
+      else if(memcmp(buff, "&amp;#8381;", 11) == 0) {
+        buff[0] = 0xD0;
+        shift_length = 11;
+      }
+      else if(memcmp(buff, "&#8381;", 7) == 0) {
+        buff[0] = 0xD0;
+        shift_length = 7;
+      }
+      // Троеточие
+      else if(memcmp(buff, "&amp;#8230;", 11) == 0) {
+        buff[0] = 0x85;
+        shift_length = 11;
+      }
+      else if(memcmp(buff, "&#8230;", 7) == 0) {
+        buff[0] = 0x85;
+        shift_length = 7;
+      }
+
+
+      // Добавить байт
+      data[offset] = buff[0];
+      offset++;
+      data[offset] = 0;
+
+      if(offset >= rss_max_length - 30) {
+        strcat(data, "\n\nRSS MAX LENGTH REACHED");
+        offset = strlen(data);
+        Serial.printf("RSS size limit reached\n");
+        break;
+      }
     }
 
-    // Неразрывный пробел это пробел
-    if(memcmp(buff, "&amp;nbsp;", 10) == 0) {
-      buff[0] = ' ';
-      shift_length = 10;
-    }
-
-    // Добавить байт
-    data[offset] = buff[0];
-    offset++;
-    data[offset] = 0;
-
-    if(offset >= RSS_MAX_LENGTH - 1) {
-      Serial.printf("RSS size limit reached\n");
-      break;
-    }
-
+    // Проверяем,  пора ли закрыть соединение
     // Тайм-аут
-    if(millis() - millis_start_query > 10000) {
+    if(millis() - millis_start_query > 30000) {
+      Serial.printf("Timeout\n");
       break;
     }
 
-    // Если в потоке пусто, а размер содержимого ещё не подошёл ждём ещё
+    // Если в потоке пусто
     if(!stream->available()) {
-      if(http.getSize() > 0 && strlen(data) < http.getSize()) {
-        Serial.printf("Steam empty, but %d < %d, waiting...\n", strlen(data), http.getSize());
+      //Serial.println("Inside: not available");
+      // Если указан размер содержимого и он не подошёл ждём ещё
+      if(http.getSize() > 0 && bytes_read < http.getSize()) {
+        Serial.printf("Steam empty, but %d < %d, waiting...\n", bytes_read, http.getSize());
         millis_start_wait = millis();
         while(millis() - millis_start_wait < 10000) {
           if(stream->available()) break;
@@ -21548,25 +21712,33 @@ void rss_view_source(char *source_name, char *source_url) {
         }
         else {
           Serial.printf("Steam empty\n");
+          stream_timeout = 1;
         }
       }
+      // Если размера нет
       else {
-        Serial.printf("Steam empty, size unknown...\n");
-        delay(1000);
-        millis_start_wait = millis();
-        while(millis() - millis_start_wait < 10000) {
-          if(stream->available()) break;
-        }
-        if(stream->available()) {
-          Serial.printf("Steam available\n");
-        }
-        else {
-          Serial.printf("Steam empty\n");
-          break;
+        if(!chunk_size_zero) {
+          Serial.printf("Steam empty, size unknown...\n");
+          delay(1000);
+          millis_start_wait = millis();
+          while(millis() - millis_start_wait < 30000) {
+            if(stream->available()) break;
+          }
+          if(stream->available()) {
+            Serial.printf("Steam available\n");
+          }
+          else {
+            Serial.printf("Steam empty\n");
+            stream_timeout = 1;
+          }
         }
       }
     }
+
+    // Заканчиваем цикл когда поток пустой и все символы из буфера обработаны
+    if((stream_timeout || chunk_size_zero) && strlen(buff) == 0) break;
   }
+
   data[offset] = 0;
 
 //Serial.printf("%d %s\n", __LINE__, data);
@@ -22074,7 +22246,7 @@ void irc_chat(char *name, char *host, char *port_text, char *pass, char *nick, c
       byte = Serial.read();
       if(byte >= 0xC0) {
         if(Serial.available()) {
-          byte = utf8_to_cp1251_byte(byte, Serial.read());
+          byte = utf8_to_cp1251_double_byte(byte, Serial.read());
         }
       }
     }
@@ -26890,63 +27062,56 @@ void file_unzip(char *archive_filename, char *destination) {
 #endif // IS_UNZIP_ENABLED
 
 void file_utf8_to_cp1251(char *from_filename, char *to_filename) {
-  int byte1, byte2, byte3;
+  int byte;
   int byte_out;
   char buff[80];
+  int offset;
   fs::File file_from;
   fs::File file_to;
   file_from = Storage->open(from_filename);
   file_to = Storage->open(to_filename, FILE_WRITE);
+  offset = 0;
   while(file_from.available()) {
-    byte1 = file_from.read();
-    if(byte1 < 0xC0) {
-      byte_out = byte1;
+    byte = file_from.read();
+    buff[offset] = byte;
+    offset++;
+
+    if(utf8_is_double_byte(byte)) {
+      // Ещё байт
+      byte = file_from.read();
+      buff[offset] = byte;
+      offset++;
     }
-    else {
-      byte2 = file_from.read();
-      // Трёхбайтовые символы
-      if(byte1 == 0xE2 && byte2 == 0x80) {
-        byte3 = file_from.read();
-        byte_out = '?';
-        if(byte3 == 0x85) byte_out = ' '; // пробел шириной в четверть кегля / четверть квадрата
-        else if(byte3 == 0x88) byte_out = ' '; // Punctuation Space 
-        else if(byte3 == 0x90) byte_out = '-'; // дефис
-        else if(byte3 == 0x91) byte_out = '-'; // неразрывный дефис
-        else if(byte3 == 0x92) byte_out = '-'; // фигурное тире (по ширине цифры)
-        else if(byte3 == 0x93) byte_out = 0x96; // N dash
-        else if(byte3 == 0x94) byte_out = 0x97; // M dash
-        else if(byte3 == 0x95) byte_out = '-'; // Горизонтальная черта
-        else if(byte3 == 0x98) byte_out = 0x91; // Левая одинарная кавычка
-        else if(byte3 == 0x99) byte_out = 0x92; // Правая одинарная кавычка
-        else if(byte3 == 0x9A) byte_out = 0x83; // 
-        else if(byte3 == 0x9C) byte_out = 0x93; // Открывающая кавычка (верх)
-        else if(byte3 == 0x9D) byte_out = 0x94; // Правая двойная кавычка
-        else if(byte3 == 0x9E) byte_out = 0x84; // Нижняя открывающая двойная кавычка
-        else if(byte3 == 0xA0) byte_out = 0x86; // Типографский крестик
-        else if(byte3 == 0xA1) byte_out = 0x87; // Двойной типографский крестик
-        else if(byte3 == 0xA2) byte_out = 0x95; // Буллет
-        else if(byte3 == 0xA6) byte_out = 0x85; // Троеточие
-        else if(byte3 == 0xB0) byte_out = 0x89; // Промилле
-        else if(byte3 == 0xB9) byte_out = 0x8B; // Открывающая одиночная ёлочка
-        else if(byte3 == 0xBA) byte_out = 0x9B; // Закрывающая одиночная ёлочка
-        else {
-          sprintf(buff, "Unknown 3-byte symbol: %02X %02X %02X", byte1, byte2, byte3);
-          terminal_println(buff);
-          Serial.println(buff);
-        }
-      }
-      else if(byte1 == 0xE2 && byte2 == 0x82) {
-        if(byte3 == 0xAC) byte_out = 0x88; // Евро
-      }
-      else if(byte1 == 0xE2 && byte2 == 0x84) {
-        if(byte3 == 0x96) byte_out = 0xB9; // №
-        if(byte3 == 0xA2) byte_out = 0x99; // TM
-      }
-      else {
-        byte_out = utf8_to_cp1251_byte(byte1, byte2);
-      }
+    else if(utf8_is_triple_byte(byte)) {
+      // Ещё два байта
+      byte = file_from.read();
+      buff[offset] = byte;
+      offset++;
+      byte = file_from.read();
+      buff[offset] = byte;
+      offset++;
     }
-    file_to.write(byte_out);
+    else if(utf8_is_quad_byte(byte)) {
+      // Ещё три байта
+      byte = file_from.read();
+      buff[offset] = byte;
+      offset++;
+      byte = file_from.read();
+      buff[offset] = byte;
+      offset++;
+      byte = file_from.read();
+      buff[offset] = byte;
+      offset++;
+    }
+
+    // Если буфер заполнен, или файл закончился
+    if(offset >= 70 || !file_from.available()) {
+      buff[offset] = 0;
+      utf8_to_cp1251(buff);
+      file_to.print(buff);
+      offset = 0;
+      buff[offset] = 0;
+    }
   }
   file_to.close();
   file_from.close();
@@ -26979,75 +27144,140 @@ void file_cp1251_to_utf8(char *from_filename, char *to_filename) {
 }
 
 // Конвертировать два байта в cp1251
-char utf8_to_cp1251_byte(char byte1, char byte2) {
-  char byte;
-  byte = byte1;
+char utf8_to_cp1251_double_byte(char byte1, char byte2) {
+  char byte_out = 0;
+
+  if(byte1 == 0xC3) {
+    if(byte2 == 0x8B) byte_out = 0xA8; // Ё
+    if(byte2 == 0xAB) byte_out = 0xB8; // ё
+  }
   if(byte1 == 0xD0) {
-    if(byte2 == 0x81) byte = 0xA8; // Ё
-    else if(byte2 == 0x82) byte = 0x80; // Ђ
-    else if(byte2 == 0x83) byte = 0x81; // Ѓ
-    else if(byte2 == 0x84) byte = 0xAA; // Є
-    else if(byte2 == 0x85) byte = 0xBD; // Ѕ
-    else if(byte2 == 0x86) byte = 0xB2; // І
-    else if(byte2 == 0x87) byte = 0xAF; // Ї
-    else if(byte2 == 0x88) byte = 0xA3; // Ј
-    else if(byte2 == 0x89) byte = 0x8A; // Љ
-    else if(byte2 == 0x8A) byte = 0x8C; // Њ
-    else if(byte2 == 0x8B) byte = 0x8E; // Ћ
-    else if(byte2 == 0x8C) byte = 0x8D; // Ќ
-    else if(byte2 == 0x8E) byte = 0xA1; // Ў
-    else if(byte2 == 0x8F) byte = 0x8F; // Џ
+    if(byte2 == 0x81) byte_out = 0xA8; // Ё
+    else if(byte2 == 0x82) byte_out = 0x80; // Ђ
+    else if(byte2 == 0x83) byte_out = 0x81; // Ѓ
+    else if(byte2 == 0x84) byte_out = 0xAA; // Є
+    else if(byte2 == 0x85) byte_out = 0xBD; // Ѕ
+    else if(byte2 == 0x86) byte_out = 0xB2; // І
+    else if(byte2 == 0x87) byte_out = 0xAF; // Ї
+    else if(byte2 == 0x88) byte_out = 0xA3; // Ј
+    else if(byte2 == 0x89) byte_out = 0x8A; // Љ
+    else if(byte2 == 0x8A) byte_out = 0x8C; // Њ
+    else if(byte2 == 0x8B) byte_out = 0x8E; // Ћ
+    else if(byte2 == 0x8C) byte_out = 0x8D; // Ќ
+    else if(byte2 == 0x8E) byte_out = 0xA1; // Ў
+    else if(byte2 == 0x8F) byte_out = 0x8F; // Џ
     else if(byte2 < 0xA0) {
-      byte = 0xC0 + byte2 - 0x90; // А-П
+      byte_out = 0xC0 + byte2 - 0x90; // А-П
     }
     else {
-      byte = 0xD0 + byte2 - 0xA0; // Р-Я а-п
+      byte_out = 0xD0 + byte2 - 0xA0; // Р-Я а-п
     }
   }
   else if(byte1 == 0xD1) {
-    if(byte2 == 0x91) byte = 0xB8; // ё
-    else if(byte2 == 0x92) byte = 0x90; // ђ
-    else if(byte2 == 0x93) byte = 0x83; // ѓ
-    else if(byte2 == 0x94) byte = 0xBA; // є
-    else if(byte2 == 0x95) byte = 0xBE; // ѕ
-    else if(byte2 == 0x96) byte = 0xB3; // і
-    else if(byte2 == 0x97) byte = 0xBF; // ї
-    else if(byte2 == 0x98) byte = 0xBC; // ј
-    else if(byte2 == 0x99) byte = 0x9A; // љ
-    else if(byte2 == 0x9A) byte = 0x9C; // њ
-    else if(byte2 == 0x9B) byte = 0x9E; // ћ
-    else if(byte2 == 0x9C) byte = 0x9D; // ќ
-    else if(byte2 == 0x9E) byte = 0xA2; // ў
-    else if(byte2 == 0x9F) byte = 0x9F; // џ
+    if(byte2 == 0x91) byte_out = 0xB8; // ё
+    else if(byte2 == 0x92) byte_out = 0x90; // ђ
+    else if(byte2 == 0x93) byte_out = 0x83; // ѓ
+    else if(byte2 == 0x94) byte_out = 0xBA; // є
+    else if(byte2 == 0x95) byte_out = 0xBE; // ѕ
+    else if(byte2 == 0x96) byte_out = 0xB3; // і
+    else if(byte2 == 0x97) byte_out = 0xBF; // ї
+    else if(byte2 == 0x98) byte_out = 0xBC; // ј
+    else if(byte2 == 0x99) byte_out = 0x9A; // љ
+    else if(byte2 == 0x9A) byte_out = 0x9C; // њ
+    else if(byte2 == 0x9B) byte_out = 0x9E; // ћ
+    else if(byte2 == 0x9C) byte_out = 0x9D; // ќ
+    else if(byte2 == 0x9E) byte_out = 0xA2; // ў
+    else if(byte2 == 0x9F) byte_out = 0x9F; // џ
     else {
-      byte = 0xF0 + byte2 - 0x80; // р-я
+      byte_out = 0xF0 + byte2 - 0x80; // р-я
     }
   }
   else if(byte1 == 0xD2) {
-    if(byte2 == 0x90) byte = 0x81; // Ґ
-    if(byte2 == 0x91) byte = 0x83; // ґ
+    if(byte2 == 0x90) byte_out = 0x81; // Ґ
+    if(byte2 == 0x91) byte_out = 0x83; // ґ
   }
   else if(byte1 == 0xC2) {
-    if(byte2 == 0xA0) byte = 0xA0; // Неразрывный пробел
-    if(byte2 == 0xA4) byte = 0xA4; // ¤
-    if(byte2 == 0xA6) byte = 0xA6; // ¦
-    if(byte2 == 0xA7) byte = 0xA7; // §
-    if(byte2 == 0xA9) byte = 0xA9; // ©
-    if(byte2 == 0xAB) byte = 0xAB; // Кавычка ёлочка открывающая
-    if(byte2 == 0xAC) byte = 0xAC; // ¬
-    if(byte2 == 0xAD) byte = 0xAD; // Мягкий перенос
-    if(byte2 == 0xAE) byte = 0xAE; // ®
-    if(byte2 == 0xB0) byte = 0xB0; // °
-    if(byte2 == 0xB1) byte = 0xB1; // ±
-    if(byte2 == 0xB5) byte = 0xB5; // µ
-    if(byte2 == 0xB6) byte = 0xB6; // ¶
-    if(byte2 == 0xB7) byte = 0xB7; // ·
-    if(byte2 == 0xBB) byte = 0xBB; // Кавычка ёлочка закрывающая
+    if(byte2 == 0xA0) byte_out = 0xA0; // Неразрывный пробел
+    if(byte2 == 0xA4) byte_out = 0xA4; // ¤
+    if(byte2 == 0xA6) byte_out = 0xA6; // ¦
+    if(byte2 == 0xA7) byte_out = 0xA7; // §
+    if(byte2 == 0xA9) byte_out = 0xA9; // ©
+    if(byte2 == 0xAB) byte_out = 0xAB; // Кавычка ёлочка открывающая
+    if(byte2 == 0xAC) byte_out = 0xAC; // ¬
+    if(byte2 == 0xAD) byte_out = 0xAD; // Мягкий перенос
+    if(byte2 == 0xAE) byte_out = 0xAE; // ®
+    if(byte2 == 0xB0) byte_out = 0xB0; // °
+    if(byte2 == 0xB1) byte_out = 0xB1; // ±
+    if(byte2 == 0xB5) byte_out = 0xB5; // µ
+    if(byte2 == 0xB6) byte_out = 0xB6; // ¶
+    if(byte2 == 0xB7) byte_out = 0xB7; // ·
+    if(byte2 == 0xBB) byte_out = 0xBB; // Кавычка ёлочка закрывающая
   }
 
-  return byte;
+  if(byte_out == 0) {
+    Serial.printf("Unknown 2-byte: %02X %02X\n", byte1, byte2);
+    byte_out = '?';
+  }
+
+  return byte_out;
 }
 
+// Конвертировать три байта в cp1251
+char utf8_to_cp1251_triple_byte(char byte1, char byte2, char byte3) {
+  char byte_out = 0;
+
+  if(byte1 == 0xE2 && byte2 == 0x80) {
+    if(byte3 >= 0x80 && byte3 <= 0x8B) byte_out = ' '; // разные виды пробелов
+    else if(byte3 == 0x90) byte_out = '-'; // дефис
+    else if(byte3 == 0x91) byte_out = '-'; // неразрывный дефис
+    else if(byte3 == 0x92) byte_out = '-'; // фигурное тире (по ширине цифры)
+    else if(byte3 == 0x93) byte_out = 0x96; // N dash
+    else if(byte3 == 0x94) byte_out = 0x97; // M dash
+    else if(byte3 == 0x95) byte_out = '-'; // Горизонтальная черта
+    else if(byte3 == 0x98) byte_out = 0x91; // Левая одинарная кавычка
+    else if(byte3 == 0x99) byte_out = 0x92; // Правая одинарная кавычка
+    else if(byte3 == 0x9A) byte_out = 0x83; // 
+    else if(byte3 == 0x9C) byte_out = 0x93; // Открывающая кавычка (верх)
+    else if(byte3 == 0x9D) byte_out = 0x94; // Правая двойная кавычка
+    else if(byte3 == 0x9E) byte_out = 0x84; // Нижняя открывающая двойная кавычка
+    else if(byte3 == 0xA0) byte_out = 0x86; // Типографский крестик
+    else if(byte3 == 0xA1) byte_out = 0x87; // Двойной типографский крестик
+    else if(byte3 == 0xA2) byte_out = 0x95; // Буллет
+    else if(byte3 == 0xA6) byte_out = 0x85; // Троеточие
+    else if(byte3 == 0xB0) byte_out = 0x89; // Промилле
+    else if(byte3 == 0xB9) byte_out = 0x8B; // Открывающая одиночная ёлочка
+    else if(byte3 == 0xBA) byte_out = 0x9B; // Закрывающая одиночная ёлочка
+  }
+  else if(byte1 == 0xE2 && byte2 == 0x82) {
+    if(byte3 == 0xAC) byte_out = 0x88; // Евро
+  }
+  else if(byte1 == 0xE2 && byte2 == 0x84) {
+    if(byte3 == 0x96) byte_out = 0xB9; // №
+    if(byte3 == 0xA2) byte_out = 0x99; // TM
+  }
+
+  if(byte_out == 0) {
+    Serial.printf("Unknown 3-byte: %02X %02X %02X\n", byte1, byte2, byte3);
+    byte_out = '?';
+  }
+
+  return byte_out;
+}
+
+// Конвертировать четыре байта в cp1251
+char utf8_to_cp1251_quad_byte(char byte1, char byte2, char byte3, char byte4) {
+  char byte_out = 0;
+
+  if(byte_out == 0) {
+    Serial.printf("Unknown 4-byte: %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
+    byte_out = '?';
+  }
+
+  return byte_out;
+}
+
+// Преобразование строки из utf8 в cp1251
+// Строка всегда короче, поэтому преобразование в том же буфере
 void utf8_to_cp1251(char *buff) {
   int read_offset = 0;
   int write_offset = 0;
@@ -27057,65 +27287,21 @@ void utf8_to_cp1251(char *buff) {
     byte = buff[read_offset];
     read_offset++;
     if(utf8_is_double_byte(byte)) {
-      //Serial.printf("2-byte: %02X %02X\n", byte, buff[read_offset]);
-      byte = utf8_to_cp1251_byte(byte, buff[read_offset]);
+      byte = utf8_to_cp1251_double_byte(byte, buff[read_offset]);
       read_offset++;
     }
     else if(utf8_is_triple_byte(byte)) {
       byte2 = buff[read_offset + 0];
       byte3 = buff[read_offset + 1];
-
-      // Трёхбайтовые символы
-      if(byte == 0xE2 && byte2 == 0x80) {
-        byte = '?';
-        if(byte3 == 0x90) byte = '-'; // дефис
-        else if(byte3 == 0x91) byte = '-'; // неразрывный дефис
-        else if(byte3 == 0x92) byte = '-'; // фигурное тире (по ширине цифры)
-        else if(byte3 == 0x93) byte = 0x96; // N dash
-        else if(byte3 == 0x94) byte = 0x97; // M dash
-        else if(byte3 == 0x95) byte = '-'; // Горизонтальная черта
-        else if(byte3 == 0x98) byte = 0x91; // Левая одинарная кавычка
-        else if(byte3 == 0x99) byte = 0x92; // Правая одинарная кавычка
-        else if(byte3 == 0x9A) byte = 0x83; // 
-        else if(byte3 == 0x9C) byte = 0x93; // Открывающая кавычка (верх)
-        else if(byte3 == 0x9D) byte = 0x94; // Правая двойная кавычка
-        else if(byte3 == 0x9E) byte = 0x84; // Нижняя открывающая двойная кавычка
-        else if(byte3 == 0xA0) byte = 0x86; // Типографский крестик
-        else if(byte3 == 0xA1) byte = 0x87; // Двойной типографский крестик
-        else if(byte3 == 0xA2) byte = 0x95; // Буллет
-        else if(byte3 == 0xA6) byte = 0x85; // Троеточие
-        else if(byte3 == 0xB0) byte = 0x89; // Промилле
-        else if(byte3 == 0xB9) byte = 0x8B; // Открывающая одиночная ёлочка
-        else if(byte3 == 0xBA) byte = 0x9B; // Закрывающая одиночная ёлочка
-        else {
-          sprintf(buff, "Unknown 3-byte symbol: %02X %02X %02X", byte, byte2, byte3);
-          terminal_println(buff);
-          Serial.println(buff);
-        }
-      }
-      else if(byte == 0xE2 && byte2 == 0x82) {
-        if(byte3 == 0xAC) byte = 0x88; // Евро
-      }
-      else if(byte == 0xE2 && byte2 == 0x84) {
-        if(byte3 == 0x96) byte = 0xB9; // №
-        if(byte3 == 0xA2) byte = 0x99; // TM
-      }
-      else {
-        Serial.printf("3-byte: %02X %02X %02X\n", byte, byte2, byte3);
-        byte = '?';
-      }
+      byte = utf8_to_cp1251_triple_byte(byte, byte2, byte3);
       read_offset += 2;
     }
     else if(utf8_is_quad_byte(byte)) {
       byte2 = buff[read_offset + 0];
       byte3 = buff[read_offset + 1];
       byte4 = buff[read_offset + 2];
-      //Serial.printf("4-byte: %02X %02X %02X %02X\n", byte, buff[read_offset], buff[read_offset + 1], buff[read_offset + 2]);
-      byte = '?';
+      byte = utf8_to_cp1251_quad_byte(byte, byte2, byte3, byte4);
       read_offset += 3;
-    }
-    else {
-      //Serial.printf("1-byte: %02X\n", byte);
     }
     
     buff[write_offset] = byte;
@@ -28439,11 +28625,12 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
   char current_word[80];
   char new_line_flag_word = 0;
   char new_line_flag_line = 0;
+  char newline_symbols = 0;
+  char newline_symbols_prev = 0;
   char byte;
   int word_offset = 0;
   int line_index = 0;
   int text_offset = 0;
-  int newline_symbols;
   int start_line_offset;
   int line_height;
   int i;
@@ -28512,7 +28699,6 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
       if(!new_line_flag_line && text[text_offset] > 0) continue;
     }
 
-
     while(line_index < total_lines) {
       //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
       // Если строка сейчас пустая, а слово нет, значит слово целиком на экран не влезает, и нужно вывести часть слова (пока влезает)
@@ -28558,7 +28744,7 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
         &&
         global_touch_x < start_x + width
       ) {
-        Serial.printf("Touch line %d\n", line_index);
+        //Serial.printf("Touch line %d\n", line_index);
         // Смещение конца текущей строки
         draw_text_formatted_touch_offset = text_offset - strlen(current_word) - newline_symbols;
 
@@ -28570,10 +28756,14 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
       }
 
       // Выясняем, где стоит курсор на экране
-      // Если на текущую строку выпадает позиция курсора
-      if(newline_symbols > 0 || strlen(current_line) > 0 || strlen(current_word) > 0) {
+      // Если на текущую строку может выпадать позиция курсора - была строка, осталась строка, перевод строки или прошлая строка закончилась переводом строки
+      //Serial.printf("line %d , newline_symbols %d, strlen(current_line) %d, strlen(current_word) %d\n", line_index, newline_symbols, strlen(current_line), strlen(current_word));
+      if(newline_symbols > 0 || strlen(current_line) > 0 || strlen(current_word) > 0 || newline_symbols_prev > 0) {
         start_line_offset = text_offset - strlen(current_line) - strlen(current_word) - newline_symbols;
-        if(draw_text_formatted_cursor_offset >= start_line_offset && draw_text_formatted_cursor_offset <= start_line_offset + strlen(current_line)) {
+        //Serial.printf("line %d , draw_text_formatted_cursor_offset %d, start_line_offset %d, start_line_offset + strlen(current_line) + newline_symbols %d \n",
+        //  line_index, draw_text_formatted_cursor_offset, start_line_offset, start_line_offset + strlen(current_line) + newline_symbols);
+        if(draw_text_formatted_cursor_offset >= start_line_offset && draw_text_formatted_cursor_offset <= start_line_offset + strlen(current_line) + newline_symbols) {
+          //Serial.printf("Cursor within the line %d\n", line_index);
           draw_text_formatted_cursor_pos_x = start_x + tft.textWidth(current_line, font);
           draw_text_formatted_cursor_pos_y = start_y + line_height * line_index;
           // Нужно сместить курсор на определённое количество символов
@@ -28587,6 +28777,10 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
       line_index++;
       new_line_flag_line = 0;
       strcpy(current_line, "");
+      if(strcmp(current_word, "") == 0) {
+        newline_symbols_prev = newline_symbols;
+        newline_symbols = 0;
+      }
 
       // Если остаток слова ещё длиннее экрана - выводим (заходим на следующий цикл)
       if(strlen(current_word) > 0 && tft.textWidth(current_word, font) >= width) {
@@ -28600,6 +28794,7 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
           word_offset = 0;
           new_line_flag_word = 0;
           new_line_flag_line = 1;
+          // Если в текущей строке ничего не осталось, то обнуляем число сом
           continue;
         }
       }
@@ -28618,6 +28813,12 @@ int draw_text_formatted(char *text, int start_x, int start_y, int width, int tot
       }
       break;
     }
+  }
+
+  // Если текста нет, то курсор в начале
+  if(strlen(text) == 0) {
+    draw_text_formatted_cursor_pos_x = start_x;
+    draw_text_formatted_cursor_pos_y = start_y;
   }
 
   // Возвращаем число выведенных байтов = число считанных - число невыведенных - переводы строки
@@ -29028,7 +29229,7 @@ char edit_text(char *title, char *contents, long max_len) {
     }
     
     // Курсор после экрана
-    Serial.printf("cursor_offset_bytes %d > screen_offset_bytes %d + screen_visible_bytes%d\n", cursor_offset_bytes, screen_offset_bytes, screen_visible_bytes);
+    Serial.printf("cursor_offset_bytes %d > screen_offset_bytes %d + screen_visible_bytes %d\n", cursor_offset_bytes, screen_offset_bytes, screen_visible_bytes);
     if(cursor_offset_bytes > screen_offset_bytes + screen_visible_bytes) {
       Serial.println("Cursor after the screen, scroll down");
       // Сдвигаем на строку
@@ -29103,7 +29304,7 @@ char edit_text(char *title, char *contents, long max_len) {
         byte = Serial.read();
         if(byte >= 0xC0) {
           if(Serial.available()) {
-            byte = utf8_to_cp1251_byte(byte, Serial.read());
+            byte = utf8_to_cp1251_double_byte(byte, Serial.read());
           }
         }
         if(byte == '\r') byte = '\n';
@@ -29961,6 +30162,7 @@ void touch_calibration(char mode, char *io_buff) {
     "Three-point calibration is faster, but less accurate. Used by default. Suits if touch works well.\n\n"
     "Multipoint calibration requires 63 points, and can solve problem with glithy touch-screens (dead zones, nonlinears, etc.).";
   char *buttons[] = {
+    "Test calibration",
     "Three-point calibration",
     "Multipoint calibration",
     NULL
@@ -30005,16 +30207,19 @@ void touch_calibration(char mode, char *io_buff) {
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     draw_text_formatted(message, 1, 20, tft.width() - 2, 13, FONT_DEFAULT, 1);
 
-    drawButtonMatrix(0, tft.height() - 32 * 2, tft.width(), 32 * 2, buttons, 1, 2);
+    drawButtonMatrix(0, tft.height() - 32 * 3, tft.width(), 32 * 3, buttons, 1, 3);
 
     touchWaitPress();
 
-    button_pressed = touchCheckMatrix(0, tft.height() - 32 * 2, tft.width(), 32 * 2, buttons, 1, 2);
+    button_pressed = touchCheckMatrix(0, tft.height() - 32 * 3, tft.width(), 32 * 3, buttons, 1, 3);
     if(button_pressed != -1) {
       if(button_pressed == 0) {
-        touch_calibration_3point(APP_MODE_LAUNCH, NULL);
+        calibration_visual_test();
       }
       if(button_pressed == 1) {
+        touch_calibration_3point(APP_MODE_LAUNCH, NULL);
+      }
+      if(button_pressed == 2) {
         touch_calibration_multipoint(APP_MODE_LAUNCH, NULL);
       }
       clearScreen();
@@ -30221,6 +30426,158 @@ void touch_calibration_load_multipoint() {
     file.close();
 
     calibration_multipoint = 1;
+  }
+}
+
+void calibration_visual_test() {
+  int x1, y1, prev_x1 = 0, prev_y1 = 0;
+  int x2, y2, prev_x2 = 0, prev_y2 = 0;
+  int x3, y3, prev_x3 = 0, prev_y3 = 0;
+  int x, y, i, best1;
+  int x_raw;
+  int y_raw;
+  int best_x, best_y;
+  double d_min, d_current;
+  int prev_touch_x = 0, prev_touch_y = 0;
+  long millis_last_touch = millis();
+
+  disableAppTitle();
+  clearScreen();
+
+  if(calibration_multipoint == 1) {
+    for(y = 0; y < CALIBRATION_POINTS_Y; y++) {
+      for(x = 0; x < CALIBRATION_POINTS_X; x++) {
+        tft.fillRect(x * CALIBRATION_QUANT - 1, y * CALIBRATION_QUANT - 1, 3, 3, color_scheme_fg);
+      }
+    }
+  }
+  else {
+    x1 = 10;
+    y1 = 10;
+    x2 = 10;
+    y2 = tft.height() - 10;
+    x3 = tft.width() - 10;
+    y3 = 10;
+
+    tft.fillRect(x1 - 1, y1 - 1, 3, 3, color_scheme_fg);
+    tft.fillRect(x2 - 1, y2 - 1, 3, 3, color_scheme_fg);
+    tft.fillRect(x3 - 1, y3 - 1, 3, 3, color_scheme_fg);
+  }
+
+  while(1) {
+    while(touchCheckNowait() == 0) {
+      if(millis() - millis_last_touch > 10000) {
+        return;
+      }
+    }
+
+    millis_last_touch = millis();
+
+    // Ищем опорные точки касания
+    if(calibration_multipoint == 1) {
+      x1 = 0;
+      y1 = 0;
+      x2 = 0;
+      y2 = 0;
+      x3 = 0;
+      y3 = 0;
+      x_raw = global_touch_p.xRaw;
+      y_raw = global_touch_p.yRaw;
+
+      // Ищем ближайшую точку
+      d_min = 100000;
+      for(y = 0; y < CALIBRATION_POINTS_Y; y++) {
+        for(x = 0; x < CALIBRATION_POINTS_X; x++) {
+          i = x + CALIBRATION_POINTS_X * y;
+          d_current = abs(x_raw - calibration_x[i]) + abs(y_raw - calibration_y[i]);
+          if(d_current < d_min) {
+            best1 = i;
+            x1 = x * CALIBRATION_QUANT;
+            y1 = y * CALIBRATION_QUANT;
+            d_min = d_current;
+          }
+        }
+      }
+      Serial.printf("First x=%d y=%d\n", x1, y1);
+
+      // Ищем ближайшую точку по оси x, исключая текущую
+      d_min = 10000;
+      y = best1 / CALIBRATION_POINTS_X;
+      for(x = 0; x < CALIBRATION_POINTS_X; x++) {
+        i = x + CALIBRATION_POINTS_X * y;
+        if(i == best1) continue;
+        d_current = abs(x_raw - calibration_x[i]) + abs(y_raw - calibration_y[i]);
+        if(d_current < d_min) {
+          x2 = x * CALIBRATION_QUANT;
+          y2 = y * CALIBRATION_QUANT;
+          d_min = d_current;
+        }
+      }
+      Serial.printf("Second x=%d y=%d\n", x2, y2);
+
+      // Ищем ближайшую точку по оси y, исключая текущую
+      d_min = 10000;
+      x = best1 % CALIBRATION_POINTS_X;
+      for(y = 0; y < CALIBRATION_POINTS_Y; y++) {
+        i = x + CALIBRATION_POINTS_X * y;
+        if(i == best1) continue;
+        d_current = abs(x_raw - calibration_x[i]) + abs(y_raw - calibration_y[i]);
+        if(d_current < d_min) {
+          x3 = x * CALIBRATION_QUANT;
+          y3 = y * CALIBRATION_QUANT;
+          d_min = d_current;
+        }
+      }
+      Serial.printf("Third x=%d y=%d\n", x3, y3);
+    }
+    else {
+      // По честному тут бы вычислять эти точки, а не использовать константы
+      // Но у меня не получается представить
+      x1 = 10;
+      y1 = 10;
+      x2 = 10;
+      y2 = tft.height() - 10;
+      x3 = tft.width() - 10;
+      y3 = 10;
+    }
+
+    if(prev_touch_x != global_touch_x || prev_touch_y != global_touch_y) {
+      // Стираем старые линии
+      tft.drawLine(prev_x1, prev_y1, prev_touch_x, prev_touch_y, color_scheme_bg);
+      tft.drawLine(prev_x2, prev_y2, prev_touch_x, prev_touch_y, color_scheme_bg);
+      tft.drawLine(prev_x3, prev_y3, prev_touch_x, prev_touch_y, color_scheme_bg);
+
+      // Рисуем опорные точки
+      if(calibration_multipoint == 1) {
+        for(y = 0; y < CALIBRATION_POINTS_Y; y++) {
+          for(x = 0; x < CALIBRATION_POINTS_X; x++) {
+            tft.fillRect(x * CALIBRATION_QUANT - 1, y * CALIBRATION_QUANT - 1, 3, 3, color_scheme_fg);
+          }
+        }
+      }
+      else {
+        tft.fillRect(x1 - 1, y1 - 1, 3, 3, color_scheme_fg);
+        tft.fillRect(x2 - 1, y2 - 1, 3, 3, color_scheme_fg);
+        tft.fillRect(x3 - 1, y3 - 1, 3, 3, color_scheme_fg);
+      }
+
+      // Рисуем новые линии
+      tft.drawLine(x1, y1, global_touch_x, global_touch_y, color_scheme_fg);
+      tft.drawLine(x2, y2, global_touch_x, global_touch_y, color_scheme_fg);
+      tft.drawLine(x3, y3, global_touch_x, global_touch_y, color_scheme_fg);
+    }
+
+    prev_touch_x = global_touch_x;
+    prev_touch_y = global_touch_y;
+    prev_x1 = x1;
+    prev_y1 = y1;
+    prev_x2 = x2;
+    prev_y2 = y2;
+    prev_x3 = x3;
+    prev_y3 = y3;
+    
+    delay(20);
+    Serial.println(millis());
   }
 }
 
@@ -35111,7 +35468,7 @@ int drawPrompt(char *message, char *user_input) {
         byte = Serial.read();
         if(byte >= 0xC0) {
           if(Serial.available()) {
-            byte = utf8_to_cp1251_byte(byte, Serial.read());
+            byte = utf8_to_cp1251_double_byte(byte, Serial.read());
           }
         }
         // Бэкспейс
