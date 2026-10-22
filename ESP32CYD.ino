@@ -254,11 +254,12 @@
   uniq, sort, dd, мануал по выражениям и функциям
 
 - новый обзор(ы)
-- Справка по выражениям, константам, функциям
 - Символы UTF-8 с акцентами декодировать
 - Можно сделать декодирование UTF-8 через получение кода символа из байтов, тогда можно использовать это в декодинге XML RSS
 - Кодирование UTF-8 через коды символов
 - Bluetooth в отдельном потоке
+- Справка по командам бейсика
+- Справка по синусам и подобным в справке терминала
 
 Улучшения тут и там:
 - Заставка Диаграммы Вороного
@@ -1849,6 +1850,33 @@ void user_manual(char mode, char *io_buff) {
   "== Basic ==\n"
   "BASIC interpreter. Advanced calculations.\n"
   "Operators:\n"
+  "stop - end of program\n"
+  "end - end of program\n"
+  "rem [anything] - comment\n"
+  "cls - clear screen\n"
+  "let {variable} = {expression} - assign expression to variable\n"
+  "cursor {col} {row}\n"
+  "print {expression|\"string\"} ... - print expression or string\n"
+  "input {variable|\"text\"} ... - print text and input variable value\n"
+  "if {expression1} {=|!=|>|<|>=|<=} {expression2} [then] {operator} - do operator if condition true\n"
+  "goto {label} - go to label\n"
+  "gosub {label} - call subroutine\n"
+  "for {variable} = {expression} to {expression} [step {expression}] - cycle with variable\n"
+  "next - next cycle iteration\n"
+  "return - return from subroutine\n"
+  "pause - wait for key press\n"
+  "delay {expression} - wait specific amount of time\n"
+  "pin_mode {pin} {mode} - set pin mode\n"
+  "digital_write {pin} {value} - write digital value to pin\n"
+  "analog_write {pin} {value} - write analog value to pin\n"
+  "beep - make single beep\n"
+  "tone {pin} {freq} [length] - tone at specific pin with specific frequency, lentgh optional\n"
+  "notone {pin} - stop tone\n"
+  "{label}: - label for goto or gosub\n"
+  "\n"
+  "== Tables ==\n"
+  "To use expressions start cell value with equal sign. See Expressions section below.\n"
+  "Use \"=summ()\" with no parameters to calculate sum of column above. This is table-only special function.\n"
   "\n"
   "== Weather ==\n"
   "Uses api.open-meteo.com for data.\n"
@@ -1865,7 +1893,6 @@ void user_manual(char mode, char *io_buff) {
   "Constants: pi, exp1, pi_2, half_pi, two_pi, true, false, nan, inf, adc_max, high, low, input, output, input_pullup, "
   "deg2rad, rad2deg, sqrt2, sqrt3, sqrt5, bl_pin, ldr_pin, red_pin, green_pin, blue_pin, boot_pin, buzzer_pin, sda_pin, scl_pin\n"
   "Some examples: 2+3, 7*8, 3+(4*5), sin(1), 2*PI\n"
-  ""
   "\n"
   "== Terminal ==\n"
   "Type \"help\" in the terminal to view the help text.\n"
@@ -2277,7 +2304,7 @@ const char global_terminal_help[] PROGMEM =
   "search - Search app\n"
   "totp - TOTP app\n"
   "\n"
-  "";
+  ;
 
 void terminal_manual() {
   view_text("Terminal Manual", (char *)global_terminal_help);
