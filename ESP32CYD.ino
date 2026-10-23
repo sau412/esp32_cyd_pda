@@ -251,15 +251,11 @@
     year, month, day, hour, minute, second, analog_read, digital_read
   Функции и выражения: tgamma, lgamma, factorial, parity, popcount, ctz, clz, ror, rol, digit_sum, reverse, factorial
   Квази-функция summ() в таблицах, баг в таблицах не сбрасывался кэш
-  uniq, sort, dd, мануал по выражениям и функциям
+  uniq, sort, dd, мануал по выражениям и функциям, мануал по командам бейсика в мануале
+2026-10-23 Скачивание FFat фикс скорости, фикс создания HTTPServer, улучшение стабильности веб-сервера, поддержка UTF-8,
+  структурирование кода, режим NVS в заметках, рисовании, фикс долгого ожидания для chunked, страница статуса в сервере
 
 - новый обзор(ы)
-- Символы UTF-8 с акцентами декодировать
-- Можно сделать декодирование UTF-8 через получение кода символа из байтов, тогда можно использовать это в декодинге XML RSS
-- Кодирование UTF-8 через коды символов
-- Bluetooth в отдельном потоке
-- Справка по командам бейсика
-- Справка по синусам и подобным в справке терминала
 
 Улучшения тут и там:
 - Заставка Диаграммы Вороного
@@ -271,11 +267,9 @@
 - Смена кодировки с одним и тем же файлом (перекодировать, старый удалить, переименовать)
 - Увеличить тайм-аут get_file_https
 - Баг - буфер при создании новой таблицы не пустой? Мусор в ячейке, но не сразу. Вылет при сохранении (не воспроизвелось)
-- Визуализация работы тача
 - Убрать многоуровневые настройки (больше двух уровней)
 - Настройки - горизонтальный переход к сходным настройкам
-- Справка терминала через ИИ
-- Режим без хранилища - использовать NVS, одна заметка, один пароль, рисунки не сохранять
+- Справка терминала - прогнать через ИИ, поправить формулировки
 - Просмотреть справку, может быть что-то добавить
 - Мини-калькулятор в меню
 - Конвертер валют, единиц измерения
@@ -425,19 +419,25 @@
 - последние приложения приложением
 - терминал ввод поддержка передвижения курсора
 - drawTextFormatted блок выделения или курсор в указанном месте
+- Автоопределение кодировки файла при просмотре
+- QR-код
+- Datamatrix
+- Распаковка zip (ошибка при линковке)
+- Распаковка gz
+- Веб-сервер: плеер музыки
+- Веб-сервер: читалка книг
+- Веб-сервер: контакты, расписание, заметки, и прочие PIM-приложения он-лайн
+- Веб-сервер: прокси
+- Символы UTF-8 с акцентами декодировать
+- Можно сделать декодирование UTF-8 через получение кода символа из байтов, тогда можно использовать это в декодинге XML RSS
+- Кодирование UTF-8 через коды символов
+- Bluetooth в отдельном потоке
 
 Буфер обмена
 - Буфер обмена
 - Выделение в просмотре, копирование
 - Выделение в редактировании, копирование, вставка
 - Выделение в prompt, копирование, вставка
-- Автоопределение кодировки файла при просмотре
-- Prompt - возможность выделять
-Сторонние библиотеки:
-- QR-код
-- Datamatrix
-- Распаковка zip (ошибка при линковке)
-- Распаковка gz
 
 */
 
@@ -898,16 +898,15 @@ public:
       }
       return 1;
     }
-    // Core Stream implementation requirements
+
     int available() override {
-      if(!buff) return 0;
-      if(!partition) return 0;
-      return offset < partition->size;
+      if (!partition) return 0;
+      return partition->size - offset;
     }
 
     int read() override {
-      if(!buff) return 0;
-      if(!partition) return 0;
+      if (!buff || !partition) return -1;
+
       int result = -1;
       if(buff_offset >= chunk_size) {
         Serial.printf("Reading offset %d\n", offset);
@@ -924,6 +923,40 @@ public:
       else {
         return -1;
       }
+    }
+
+    int read(uint8_t *buffer, size_t length) {
+      if (!buff || !partition) return -1;
+
+      size_t count = 0;
+
+      while (count < length && offset < partition->size) {
+        if (buff_offset >= chunk_size) {
+          size_t n = min((size_t)chunk_size, (size_t)(partition->size - offset));
+          if (esp_partition_read(partition, offset, buff, n) != ESP_OK) break;
+          buff_offset = 0;
+        }
+
+        size_t n = min(length - count, (size_t)(chunk_size - buff_offset));
+        n = min(n, (size_t)(partition->size - offset));
+
+        memcpy(buffer + count, buff + buff_offset, n);
+        buff_offset += n;
+        offset += n;
+        count += n;
+      }
+
+      return count;
+    }
+
+    size_t readBytes(char *buffer, size_t length) {
+      size_t count = 0;
+      while(count < length) {
+        int c = read();
+        if (c < 0) break;
+        buffer[count++] = (char)c;
+      }
+      return count;
     }
 
     int peek() override {
@@ -1044,6 +1077,14 @@ Ticker minuteTicker;
 
 #define PREFS_NAMESPACE "cyd-pda"
 Preferences preferences;
+
+// Глобальные переменные draw_text_formatted
+// На какое смещение было нажатие
+int draw_text_formatted_touch_offset = 0;
+// Где на экране определённое смещение
+int draw_text_formatted_cursor_offset = 0;
+int draw_text_formatted_cursor_pos_x = 0;
+int draw_text_formatted_cursor_pos_y = 0;
 
 // Параметры приложений
 char current_app_title[80];
@@ -2105,33 +2146,33 @@ const char global_terminal_help[] PROGMEM =
   "combination {of_n} {taken_k} - combinations count\n"
   "sin {real number} - calculate sine\n"
   "cos {real number} - calculate cosine\n"
-  "tan {real number} - calculate tan\n"
+  "tan {real number} - calculate tangent\n"
   "asin {real number} - calculate arcsine\n"
-  "acos {real number} - calculate arccos\n"
-  "atan {real number} - calculate arctan\n"
-  "sqr {real number} - square root\n"
-  "sqrt {real number} - square root\n"
-  "exp {real number} - exponent\n"
-  "log {real number} - natural logarithm\n"
-  "log10 {real number} - logarithm base 10\n"
-  "log1p {real number} - natural logarithm 1 + p\n"
-  "log2 {real number} - logarithm base 2\n"
-  "tgamma {real number} - gamma(x)\n"
-  "lgamma {real number} - log(gamma(x))\n"
-  "abs {real number} - a\n"
-  "sgn {real number} - sign function\n"
-  "floor {real number} - floor\n"
-  "ceil {real number} - ceil\n"
-  "round {real number} - round\n"
-  "rnd - random float\n"
-  "year - current year\n"
-  "month - current month\n"
-  "day - current day\n"
-  "hour - current hour\n"
-  "minute - current minute\n"
-  "second - current second\n"
-  "analog_read {pin} - read analog value from pin\n"
-  "digital_read {pin} - read digital value from pin\n"
+  "acos {real number} - calculate arccosine\n"
+  "atan {real number} - calculate arctangent\n"
+  "sqr {real number} - calculate square root\n"
+  "sqrt {real number} - calculate square root\n"
+  "exp {real number} - calculate e raised to x\n"
+  "log {real number} - calculate natural logarithm\n"
+  "log10 {real number} - calculate base-10 logarithm\n"
+  "log1p {real number} - calculate ln(1 + x)\n"
+  "log2 {real number} - calculate base-2 logarithm\n"
+  "tgamma {real number} - calculate gamma function\n"
+  "lgamma {real number} - calculate log-gamma function\n"
+  "abs {real number} - calculate absolute value\n"
+  "sgn {real number} - calculate sign\n"
+  "floor {real number} - round down to integer\n"
+  "ceil {real number} - round up to integer\n"
+  "round {real number} - round to nearest integer\n"
+  "rnd - generate random float\n"
+  "year - get current year\n"
+  "month - get current month\n"
+  "day - get current day\n"
+  "hour - get current hour\n"
+  "minute - get current minute\n"
+  "second - get current second\n"
+  "analog_read {pin} - read analog pin value\n"
+  "digital_read {pin} - read digital pin value\n"
   "subnet {subnet}/{netmask} - subnet calculator\n"
   "\n"
   "Storage settings:\n"
@@ -2945,7 +2986,6 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "date") == 0) {
     if(arg_count == 1) {
-      set_local_time_from_unix_timestamp();
       get_current_datetime_formatted(buff);
       //sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
     }
@@ -2961,7 +3001,6 @@ void terminal_execute_single(char *str) {
   else if(strcmp(cmdline_params[0], "utc") == 0) {
     int year, month, day, day_of_week, hour, minute, second;
     if(arg_count == 1) {
-      set_local_time_from_unix_timestamp();
       i1 = get_unixtime_from_current_datetime();
     }
     else {
@@ -2975,7 +3014,6 @@ void terminal_execute_single(char *str) {
     terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "unixtime") == 0) {
-    set_local_time_from_unix_timestamp();
     if(arg_count == 1) {
       i1 = get_unixtime_from_current_datetime();
     }
@@ -3228,7 +3266,7 @@ void terminal_execute_single(char *str) {
     else {
       // Шифр цезаря - сдвиг на 3
       for(i = 1; i < arg_count; i++) {
-        terminal_rot_string(cmdline_params[i], 3);
+        rot_string(cmdline_params[i], 3);
         terminal_print(cmdline_params[i]);
         if(i + 1 != arg_count) terminal_print(" ");
       }
@@ -3242,7 +3280,7 @@ void terminal_execute_single(char *str) {
     else {
       // rot13 - сдвиг на 13
       for(i = 1; i < arg_count; i++) {
-        terminal_rot_string(cmdline_params[i], 13);
+        rot_string(cmdline_params[i], 13);
         terminal_print(cmdline_params[i]);
         if(i + 1 != arg_count) terminal_print(" ");
       }
@@ -6371,188 +6409,6 @@ void terminal_ansi_clear_screen() {
   terminal_print("\e[2J");
 }
 
-void terminal_stack_push(char *str) {
-  fs::File file;
-  if(!Storage) return;
-  file = Storage->open(TERMINAL_STACK, FILE_APPEND);
-  file.println(str);
-  file.close();
-}
-
-void terminal_stack_pop(char *str) {
-  int i = 0;
-  int offset;
-  fs::File file;
-  char *buff = NULL;
-  char *tmp = NULL;
-
-  if(!Storage) return;
-
-  buff = (char *)malloc(4096 * sizeof(char));
-  if(!buff) {
-    terminal_println("Unable to reserve memory");
-    return;
-  }
-
-  // Читаем файл в буфер
-  file = Storage->open(TERMINAL_STACK);
-  offset = 0;
-  buff[offset] = 0;
-  while(file.available()) {
-    buff[offset] = file.read();
-    offset++;
-    buff[offset] = 0;
-  }
-  file.close();
-
-  // Последнюю строку в буфер
-  offset -= 3;
-  strcpy(str, "");
-  while(offset >= 0) {
-    if(buff[offset] == '\n' || buff[offset] == '\r') {
-      strcpy(str, buff + offset + 1);
-      tmp = strchr(str, '\n');
-      if(tmp) *tmp = 0;
-      tmp = strchr(str, '\r');
-      if(tmp) *tmp = 0;
-      break;
-    }
-    offset--;
-  }
-
-  // Остальное в файл
-  file = Storage->open(TERMINAL_STACK, FILE_WRITE);
-  if(offset > 0) {
-    file.write((const uint8_t *)buff, offset + 1);
-  }
-  file.close();
-
-  free(buff);
-}
-
-void terminal_stack_shift(char *str) {
-  int i = 0;
-  int offset;
-  int size;
-  fs::File file;
-  char *buff = NULL;
-  char *tmp = NULL;
-
-  if(!Storage) return;
-
-  buff = (char *)malloc(4096 * sizeof(char));
-  if(!buff) {
-    terminal_println("Unable to reserve memory");
-    return;
-  }
-
-  // Читаем файл в буфер
-  file = Storage->open(TERMINAL_STACK);
-  size = file.size();
-  offset = 0;
-  buff[offset] = 0;
-  while(file.available()) {
-    buff[offset] = file.read();
-    offset++;
-    buff[offset] = 0;
-  }
-  file.close();
-
-  // Первую строку в буфер
-  offset = 0;
-  tmp = strchr(buff, '\n');
-  if(tmp) {
-    offset = tmp - buff + 2;
-    memcpy(str, buff, offset);
-    tmp = strchr(str, '\n');
-    if(tmp) *tmp = 0;
-    tmp = strchr(str, '\r');
-    if(tmp) *tmp = 0;
-
-  }
-  else {
-    strcpy(str, buff);
-  }
-
-  // Остальное в файл
-  file = Storage->open(TERMINAL_STACK, FILE_WRITE);
-  if(tmp != NULL) {
-    file.write((const uint8_t *)buff + offset - 1, size - offset + 1);
-  }
-  file.close();
-
-  free(buff);
-}
-
-void terminal_stack_unshift(char *str) {
-  int i = 0;
-  int offset;
-  int size;
-  fs::File file;
-  char *buff = NULL;
-  char *tmp = NULL;
-
-  if(!Storage) return;
-
-  buff = (char *)malloc(4096 * sizeof(char));
-  if(!buff) {
-    terminal_println("Unable to reserve memory");
-    return;
-  }
-
-  // Читаем файл в буфер
-  file = Storage->open(TERMINAL_STACK);
-  size = file.size();
-  offset = 0;
-  buff[offset] = 0;
-  while(file.available()) {
-    buff[offset] = file.read();
-    offset++;
-    buff[offset] = 0;
-  }
-  file.close();
-
-  // Пишем в файл
-  file = Storage->open(TERMINAL_STACK, FILE_WRITE);
-  file.println(str);
-  file.write((const uint8_t *)buff, size);
-  file.close();
-
-  free(buff);
-}
-
-void terminal_rot_string(char *str, int shift) {
-  char next[] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50,
-    0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70,
-    0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xA8, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0,
-    0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF, 0xC0,
-    0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xB8, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF, 0xF0,
-    0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF, 0xE0,
-  };
-  int i, j;
-  char c;
-  for(i = 0; i < strlen(str); i++) {
-    c = str[i];
-    if(next[c] != 0) {
-      for(j = 0; j < shift; j++) {
-        c = next[c];
-      }
-      str[i] = c;
-    }
-  }
-}
-
 void terminal_show_screen() {
   int row, col;
   int color_fg;
@@ -7105,6 +6961,160 @@ void terminal_parse_cmdline(char *cmdline, int *arg_count, char **parsed_cmdline
       space_flag = 1;
     }
   }
+}
+
+// ====================================================
+// Прикладные приложения терминала
+// ====================================================
+
+void terminal_stack_push(char *str) {
+  fs::File file;
+  if(!Storage) return;
+  file = Storage->open(TERMINAL_STACK, FILE_APPEND);
+  file.println(str);
+  file.close();
+}
+
+void terminal_stack_pop(char *str) {
+  int i = 0;
+  int offset;
+  fs::File file;
+  char *buff = NULL;
+  char *tmp = NULL;
+
+  if(!Storage) return;
+
+  buff = (char *)malloc(4096 * sizeof(char));
+  if(!buff) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  // Читаем файл в буфер
+  file = Storage->open(TERMINAL_STACK);
+  offset = 0;
+  buff[offset] = 0;
+  while(file.available()) {
+    buff[offset] = file.read();
+    offset++;
+    buff[offset] = 0;
+  }
+  file.close();
+
+  // Последнюю строку в буфер
+  offset -= 3;
+  strcpy(str, "");
+  while(offset >= 0) {
+    if(buff[offset] == '\n' || buff[offset] == '\r') {
+      strcpy(str, buff + offset + 1);
+      tmp = strchr(str, '\n');
+      if(tmp) *tmp = 0;
+      tmp = strchr(str, '\r');
+      if(tmp) *tmp = 0;
+      break;
+    }
+    offset--;
+  }
+
+  // Остальное в файл
+  file = Storage->open(TERMINAL_STACK, FILE_WRITE);
+  if(offset > 0) {
+    file.write((const uint8_t *)buff, offset + 1);
+  }
+  file.close();
+
+  free(buff);
+}
+
+void terminal_stack_shift(char *str) {
+  int i = 0;
+  int offset;
+  int size;
+  fs::File file;
+  char *buff = NULL;
+  char *tmp = NULL;
+
+  if(!Storage) return;
+
+  buff = (char *)malloc(4096 * sizeof(char));
+  if(!buff) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  // Читаем файл в буфер
+  file = Storage->open(TERMINAL_STACK);
+  size = file.size();
+  offset = 0;
+  buff[offset] = 0;
+  while(file.available()) {
+    buff[offset] = file.read();
+    offset++;
+    buff[offset] = 0;
+  }
+  file.close();
+
+  // Первую строку в буфер
+  offset = 0;
+  tmp = strchr(buff, '\n');
+  if(tmp) {
+    offset = tmp - buff + 2;
+    memcpy(str, buff, offset);
+    tmp = strchr(str, '\n');
+    if(tmp) *tmp = 0;
+    tmp = strchr(str, '\r');
+    if(tmp) *tmp = 0;
+
+  }
+  else {
+    strcpy(str, buff);
+  }
+
+  // Остальное в файл
+  file = Storage->open(TERMINAL_STACK, FILE_WRITE);
+  if(tmp != NULL) {
+    file.write((const uint8_t *)buff + offset - 1, size - offset + 1);
+  }
+  file.close();
+
+  free(buff);
+}
+
+void terminal_stack_unshift(char *str) {
+  int i = 0;
+  int offset;
+  int size;
+  fs::File file;
+  char *buff = NULL;
+  char *tmp = NULL;
+
+  if(!Storage) return;
+
+  buff = (char *)malloc(4096 * sizeof(char));
+  if(!buff) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  // Читаем файл в буфер
+  file = Storage->open(TERMINAL_STACK);
+  size = file.size();
+  offset = 0;
+  buff[offset] = 0;
+  while(file.available()) {
+    buff[offset] = file.read();
+    offset++;
+    buff[offset] = 0;
+  }
+  file.close();
+
+  // Пишем в файл
+  file = Storage->open(TERMINAL_STACK, FILE_WRITE);
+  file.println(str);
+  file.write((const uint8_t *)buff, size);
+  file.close();
+
+  free(buff);
 }
 
 int terminal_serial(int arg_count, char **args) {
@@ -7831,867 +7841,6 @@ void terminal_checksum(char *filename, int checksum_type) {
   }
 }
 
-void file_append(char *filename, char *data) {
-  fs::File file;
-
-  file = Storage->open(filename, FILE_APPEND);
-  if(file) {
-    file.print(data);
-    file.close();
-  }
-}
-
-void file_append_line(char *filename, char *data) {
-  fs::File file;
-  if(!Storage) return;
-  file = Storage->open(filename, FILE_APPEND);
-  if(file) {
-    file.print(data);
-    file.print("\n");
-    file.close();
-  }
-}
-
-// ====================================================
-// Интерпретатор Brainfuck
-// ====================================================
-
-#define BRAINFUCK_CELLS 30000
-#define BRAINFUCK_STACK 100
-
-void terminal_brainfuck(char *filename) {
-  fs::File file;
-  int i;
-  int byte;
-  int ch;
-  int pc = 0;
-  int sp = 0;
-  int cell = 0;
-  int level = 0;
-  char buff[80];
-  char *mem;
-  int stack[BRAINFUCK_STACK];
-
-  terminal_send_mouse = 0;
-
-  mem = (char *)malloc(BRAINFUCK_CELLS * sizeof(char));
-  for(i = 0; i < BRAINFUCK_CELLS; i++) {
-    mem[i] = 0;
-  }
-  file = Storage->open(filename);
-  if(file) {
-    while(file.available()) {
-      byte = file.read();
-      //Serial.printf("byte=%c pc=%d sp=%d\n", byte, pc, sp);
-      //delay(100);
-      if(byte == '+') {
-        mem[cell]++;
-        pc++;
-      }
-      else if(byte == '-') {
-        mem[cell]--;
-        pc++;
-      }
-      else if(byte == '>') {
-        cell++;
-        pc++;
-      }
-      else if(byte == '<') {
-        cell--;
-        pc++;
-      }
-      else if(byte == '.') {
-        terminal_print_char(mem[cell]);
-        if(mem[cell] == '\n') {
-          terminal_print_char('\r');
-        }
-        terminal_show_screen();
-        pc++;
-      }
-      else if(byte == ',') {
-        do {
-          ch = terminal_input_char();
-          if(ch == 0x03) break;
-        } while(ch == -1);
-        if(ch == 0x03) {
-          terminal_println("Interrupted");
-          break;
-        }
-        mem[cell] = ch;
-        pc++;
-      }
-      else if(byte == '[') {
-        if(mem[cell] == 0) {
-          // Перемотать на ] с учётом вложенности
-          level = 0;
-          while(file.available()) {
-            byte = file.read();
-            pc++;
-            if(byte == '[') {
-              level++;
-            }
-            if(byte == ']') {
-              level--;
-            }
-            if(level < 0) break;
-          }
-          if(level >= 0) {
-            terminal_println("No mathing ] found");
-            break;
-          }
-          pc++;
-        }
-        else {
-          if(sp == BRAINFUCK_STACK) {
-            terminal_println("Stack overflow on [");
-            break;
-          }
-          stack[sp] = pc + 1;
-          sp++;
-          pc++;
-        }
-      }
-      else if(byte == ']') {
-        if(mem[cell] == 0) {
-          if(sp == 0) {
-            terminal_println("Stack empty on ]");
-            break;
-          }
-          sp--;
-          pc++;
-        }
-        else {
-          pc = stack[sp - 1];
-          file.seek(pc);
-        }
-      }
-      else {
-        pc++;
-      }
-
-      if(cell >= BRAINFUCK_CELLS) cell = 0;
-      if(cell < 0) cell = BRAINFUCK_CELLS - 1;
-
-      ch = terminal_input_char();
-      if(ch == 0x03) {
-        terminal_println("Interrupted");
-        break;
-      }
-    }
-
-    if(!file.available()) {
-      terminal_println("Finished");
-    }
-    file.close();
-  }
-  else {
-    terminal_println("File not found");
-  }
-
-  free(mem);
-}
-
-// ====================================================
-// Интерпретатор BASIC
-// ====================================================
-
-#define BASIC_VARS_COUNT 80
-#define BASIC_STACK_LEN 80
-
-double *basic_vars = NULL;
-char **basic_var_names = NULL;
-long *basic_stack = NULL;
-int basic_stack_pointer = 0;
-
-void terminal_basic(char *filename) {
-  int i;
-  char cont_flag = 1;
-  char str[80];
-  fs::File file;
-
-  terminal_send_mouse = 0;
-
-  basic_stack = (long*)malloc(BASIC_STACK_LEN * sizeof(long));
-  basic_vars = (double*)malloc(BASIC_VARS_COUNT * sizeof(double));
-  basic_var_names = (char**)malloc(BASIC_VARS_COUNT * sizeof(char *));
-  for(i = 0; i < BASIC_VARS_COUNT; i++) {
-    basic_vars[i] = 0;
-    basic_var_names[i] = NULL;
-  }
-  basic_stack_pointer = 0;
-
-  file = Storage->open(filename);
-  if(file) {
-    while(file.available()) {
-      strcpy(str, file.readStringUntil('\n').c_str());
-      basic_execute_command(str, &cont_flag, &file);
-      terminal_show_screen();
-      if(!cont_flag) break;
-    }
-    file.close();
-  }
-
-  for(i = 0; i < BASIC_VARS_COUNT; i++) {
-    if(basic_var_names[i] != NULL) {
-      free(basic_var_names[i]);
-    }
-  }
-  free(basic_var_names);
-  free(basic_vars);
-  free(basic_stack);
-}
-
-// Получить номер переменной по названию
-int basic_get_variable_index_exists(char *var_name) {
-  //Serial.printf("basic_get_variable_index %s\n", var_name);
-  int i;
-  // Пробуем найти
-  for(i = 0; i < BASIC_VARS_COUNT; i++) {
-    if(basic_var_names[i] != NULL && strcmp(var_name, basic_var_names[i]) == 0) {
-      //Serial.printf("found exists %s index %d\n", var_name, i);
-      return i;
-    }
-  }
-
-  return -1;
-}
-
-int basic_get_variable_index(char *var_name) {
-  //Serial.printf("basic_get_variable_index %s\n", var_name);
-  int i;
-  i = basic_get_variable_index_exists(var_name);
-  if(i >= 0) return i;
-
-  // Пробуем добавить
-  for(i = 0; i < BASIC_VARS_COUNT; i++) {
-    if(basic_var_names[i] == NULL) {
-      basic_var_names[i] = (char *)malloc(strlen(var_name) + 1);
-      strcpy(basic_var_names[i], var_name);
-      //Serial.printf("new %s index %d\n", var_name, i);
-      return i;
-    }
-  }
-
-  // Возвращаем ошибку
-  if(i == BASIC_VARS_COUNT) {
-    Serial.printf("var not found\n");
-    return -1;
-  }
-  return -1;
-}
-
-// Уничтожить переменную
-void basic_unset_variable(char *var_name) {
-  int index;
-  index = basic_get_variable_index(var_name);
-  if(index >= 0) {
-    if(basic_var_names[index]) {
-      free(basic_var_names[index]);
-      basic_var_names[index] = NULL;
-      basic_vars[index] = 0;
-    }
-  }
-}
-
-// Получить значение переменной по названию (для вычислений выражений)
-double basic_get_variable_by_name(char *var_name) {
-  int index = basic_get_variable_index_exists(var_name);
-  if(index >= 0) {
-    return basic_vars[index];
-  }
-  else {
-    return parse_expr_constant_by_name(var_name);
-  }
-}
-
-// Разделить команду на токены
-void basic_parse_cmdline(char *str, int *arg_count, char **params) {
-  int i = 0;
-  int param_index = 0;
-  int len = strlen(str);
-  char quoted = 0;
-  char spaces = 1;
-  char escaped = 0;
-  char op_flag = 0;
-
-  for(i = 0; i < len; i++) {
-    if(escaped) {
-      escaped = 0;
-      continue;
-    }
-    else {
-      if(spaces && str[i] == ' ') {
-        str[i] = 0;
-        continue;
-      }
-      if(str[i] == '\\') {
-        escaped = 1;
-        continue;
-      }
-      else if(str[i] == ' ') {
-        if(quoted == 0) {
-          str[i] = 0;
-          spaces = 1;
-          op_flag = 0;
-        }
-      }
-      else {
-        spaces = 0;
-        if(str[i] == '"') {
-          if(quoted == 0) {
-            quoted = 1;
-          }
-          else {
-            quoted = 0;
-          }
-        }
-        if(!op_flag) {
-          params[param_index] = str + i;
-          param_index++;
-          op_flag = 1;
-        }
-      }
-    }
-  }
-  *arg_count = param_index;
-}
-
-void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
-  int arg_count;
-  char *cmdline_params[20];
-  int i;
-  int index;
-  int expr_offset;
-  char error_flag;
-  char is_true;
-  char buff[80];
-  double val = 0, left = 0, right = 0;
-
-  //Serial.printf("%s\n", str);
-  basic_parse_cmdline(str, &arg_count, cmdline_params);
-  if(arg_count == 0) {
-    // Пустая строка - ничего не делаем
-  }
-  else if(arg_count == 1 && cmdline_params[0][strlen(cmdline_params[0]) - 1] == ':') {
-    // Метка - ничего не делаем
-  }
-  else if(strcmp(cmdline_params[0], "stop") == 0) {
-    if(arg_count != 1) {
-      terminal_println("Invalid syntax: stop");
-      *cont_flag = 0;
-      return;
-    }
-    *cont_flag = 0;
-  }
-  else if(strcmp(cmdline_params[0], "end") == 0) {
-    if(arg_count != 1) {
-      terminal_println("Invalid syntax: end");
-      *cont_flag = 0;
-      return;
-    }
-    *cont_flag = 0;
-  }
-  else if(strcmp(cmdline_params[0], "rem") == 0) {
-    // Комментарий - ничего не делаем
-  }
-  else if(strcmp(cmdline_params[0], "cls") == 0) {
-    if(arg_count != 1) {
-      terminal_println("Invalid syntax: cls");
-      *cont_flag = 0;
-      return;
-    }
-    terminal_clear_screen();
-  }
-  else if(strcmp(cmdline_params[0], "let") == 0) {
-    if(arg_count < 4) {
-      terminal_println("Invalid syntax: let");
-      *cont_flag = 0;
-      return;
-    }
-    if(strcmp(cmdline_params[2], "=")) {
-      terminal_println("Invalid syntax: let =");
-      *cont_flag = 0;
-      return;
-    }
-
-    index = basic_get_variable_index(cmdline_params[1]);
-    if(index >= 0) {
-      buff[0] = 0;
-      for(i = 3; i < arg_count; i++) {
-        if(strcmp(buff, "")) {
-          strcat(buff, " ");
-        }
-        strcat(buff, cmdline_params[i]);
-      }
-      expr_offset = 0;
-      error_flag = 0;
-      basic_vars[index] = parse_expression(buff, basic_get_variable_by_name, &error_flag, &expr_offset);
-    }
-    else {
-      terminal_println("Out of variable memory");
-      *cont_flag = 0;
-      return;
-    }
-  }
-  else if(strcmp(cmdline_params[0], "cursor") == 0) {
-    if(arg_count < 3) {
-      terminal_println("Invalid syntax: cursor");
-      *cont_flag = 0;
-      return;
-    }
-    error_flag = 0;
-    expr_offset = 0;
-    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-    error_flag = 0;
-    expr_offset = 0;
-    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
-    
-    terminal_ansi_set_cursor(left, right);
-  }
-  else if(strcmp(cmdline_params[0], "print") == 0) {
-    if(arg_count < 2) {
-      terminal_println("Invalid syntax: print");
-      *cont_flag = 0;
-      return;
-    }
-    for(i = 1; i < arg_count; i++) {
-      if(cmdline_params[i][0] == '"') {
-        basic_unquote_string(cmdline_params[i]);
-        terminal_print(cmdline_params[i]);
-      }
-      else {
-        expr_offset = 0;
-        error_flag = 0;
-        val = parse_expression(cmdline_params[i], basic_get_variable_by_name, &error_flag, &expr_offset);
-        sprintf(buff, "%g", val);
-        terminal_print(buff);
-      }
-    }
-    terminal_println("");
-  }
-  else if(strcmp(cmdline_params[0], "input") == 0) {
-    if(arg_count < 2) {
-      terminal_println("Invalid syntax: input");
-      *cont_flag = 0;
-      return;
-    }
-
-    for(i = 1; i < arg_count; i++) {
-      if(cmdline_params[i][0] == '"') {
-        basic_unquote_string(cmdline_params[i]);
-        terminal_print(cmdline_params[i]);
-      }
-      else {
-        expr_offset = 0;
-        error_flag = 0;
-        terminal_show_screen();
-        terminal_input_string(buff);
-        //Serial.printf("terminal_input_string %s\n", buff);
-        val = parse_expression(buff, basic_get_variable_by_name, &error_flag, &expr_offset);
-        index = basic_get_variable_index(cmdline_params[i]);
-        if(index >= 0) {
-          basic_vars[index] = val;
-        }
-        else {
-          terminal_println("Out of variable memory");
-          *cont_flag = 0;
-          return;
-        }
-      }
-    }
-  }
-  else if(strcmp(cmdline_params[0], "if") == 0) {
-    if(arg_count < 5) {
-      terminal_println("Invalid syntax: if");
-      *cont_flag = 0;
-      return;
-    }
-    is_true = 0;
-    expr_offset = 0;
-    error_flag = 0;
-    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-    //Serial.printf("left (%s) = %g\n", cmdline_params[1], left);
-    expr_offset = 0;
-    error_flag = 0;
-    right = parse_expression(cmdline_params[3], basic_get_variable_by_name, &error_flag, &expr_offset);
-    //Serial.printf("right (%s) = %g\n", cmdline_params[3], right);
-
-    if(strcmp(cmdline_params[2], "=") == 0) { if(left == right) is_true = 1; }
-    else if(strcmp(cmdline_params[2], "==") == 0) { if(left == right) is_true = 1; }
-    else if(strcmp(cmdline_params[2], ">") == 0) { if(left > right) is_true = 1; }
-    else if(strcmp(cmdline_params[2], ">=") == 0) { if(left >= right) is_true = 1; }
-    else if(strcmp(cmdline_params[2], "<") == 0) { if(left < right) is_true = 1; }
-    else if(strcmp(cmdline_params[2], "<=") == 0) { if(left <= right) is_true = 1; }
-    else if(strcmp(cmdline_params[2], "<>") == 0) { if(left != right) is_true = 1; }
-    else if(strcmp(cmdline_params[2], "!=") == 0) { if(left != right) is_true = 1; }
-    else {
-      terminal_println("Invalid syntax: if expression");
-      terminal_println(cmdline_params[2]);
-      *cont_flag = 0;
-      return;
-    }
-    if(is_true) {
-      //Serial.printf("true\n");
-      // Формируем команду
-      buff[0] = 0;
-      for(i = 4; i < arg_count; i++) {
-        // Пропускаем ключевое слово then
-        if(i == 4 && strcmp(cmdline_params[i], "then") == 0) continue;
-        if(strcmp(buff, "") != 0) {
-          strcat(buff, " ");
-        }
-        strcat(buff, cmdline_params[i]);
-      }
-      // Запускаем
-      basic_execute_command(buff, cont_flag, file);
-    }
-    else {
-      //Serial.printf("false\n");
-    }
-  }
-  else if(strcmp(cmdline_params[0], "goto") == 0) {
-    if(arg_count != 2) {
-      terminal_println("Invalid syntax: goto");
-      *cont_flag = 0;
-      return;
-    }
-    strcat(cmdline_params[1], ":");
-    // Ищем в файле метку
-    file->seek(0);
-    while(file->available()) {
-      strcpy(buff, file->readStringUntil('\n').c_str());
-      if(strcmp(cmdline_params[1], buff) == 0) {
-        //Serial.println("Label found");
-        break;
-      }
-    }
-  }
-  else if(strcmp(cmdline_params[0], "gosub") == 0) {
-    if(arg_count != 2) {
-      terminal_println("Invalid syntax: gosub");
-      *cont_flag = 0;
-      return;
-    }
-    if(basic_stack_pointer >= BASIC_STACK_LEN) {
-      terminal_println("Out of stack memory");
-      *cont_flag = 0;
-      return;
-    }
-    
-    basic_stack[basic_stack_pointer] = file->position();
-    basic_stack_pointer++;
-    strcat(cmdline_params[1], ":");
-    // Ищем в файле метку
-    file->seek(0);
-    while(file->available()) {
-      strcpy(buff, file->readStringUntil('\n').c_str());
-      if(strcmp(cmdline_params[1], buff) == 0) {
-        //Serial.println("Label found");
-        break;
-      }
-    }
-  }
-  // for var = a to b [step c]
-  else if(strcmp(cmdline_params[0], "for") == 0) {
-    if(arg_count != 6 && arg_count != 8) {
-      terminal_println("Invalid syntax: for");
-      *cont_flag = 0;
-      return;
-    }
-    if(strcmp(cmdline_params[2], "=")) {
-      terminal_println("Invalid syntax: for =");
-      *cont_flag = 0;
-      return;
-    }
-    if(strcmp(cmdline_params[4], "to")) {
-      terminal_println("Invalid syntax: for to");
-      *cont_flag = 0;
-      return;
-    }
-    if(arg_count == 8 && strcmp(cmdline_params[6], "step")) {
-      terminal_println("Invalid syntax: for step");
-      *cont_flag = 0;
-      return;
-    }
-    if(basic_stack_pointer >= BASIC_STACK_LEN) {
-      terminal_println("Out of stack memory");
-      *cont_flag = 0;
-      return;
-    }
-    
-    basic_stack[basic_stack_pointer] = file->position();
-    basic_stack_pointer++;
-
-    // Записываем первое значение переменной
-    index = basic_get_variable_index(cmdline_params[1]);
-    expr_offset = 0;
-    error_flag = 0;
-    val = parse_expression(cmdline_params[3], basic_get_variable_by_name, &error_flag, &expr_offset);
-    basic_vars[index] = val;
-
-    // Добавляем пару технических переменных - индекс переменной, максимальное значение и шаг
-    sprintf(buff, "%d_index", basic_stack[basic_stack_pointer - 1]);
-    i = basic_get_variable_index(buff);
-    basic_vars[i] = index;
-
-    sprintf(buff, "%d_to", basic_stack[basic_stack_pointer - 1]);
-    i = basic_get_variable_index(buff);
-    expr_offset = 0;
-    error_flag = 0;
-    val = parse_expression(cmdline_params[5], basic_get_variable_by_name, &error_flag, &expr_offset);
-    basic_vars[i] = val;
-
-    sprintf(buff, "%d_step", basic_stack[basic_stack_pointer - 1]);
-    i = basic_get_variable_index(buff);
-    basic_vars[i] = 1;
-    if(arg_count == 8) {
-      expr_offset = 0;
-      error_flag = 0;
-      val = parse_expression(cmdline_params[7], basic_get_variable_by_name, &error_flag, &expr_offset);
-      basic_vars[i] = val;
-    }
-  }
-  else if(strcmp(cmdline_params[0], "next") == 0) {
-    if(arg_count != 1) {
-      terminal_println("Invalid syntax: next");
-      *cont_flag = 0;
-      return;
-    }
-    if(basic_stack_pointer == 0) {
-      terminal_println("Next without for");
-      *cont_flag = 0;
-      return;
-    }
-
-    // Получаем переменную по которой цикл
-    sprintf(buff, "%d_index", basic_stack[basic_stack_pointer - 1]);
-    i = basic_get_variable_index(buff);
-    index = basic_vars[i];
-    
-    // Получаем максимальное значение
-    sprintf(buff, "%d_to", basic_stack[basic_stack_pointer - 1]);
-    i = basic_get_variable_index(buff);
-    if(i >= 0) {
-      left = basic_vars[i];
-    }
-
-    // Получаем шаг цикла
-    sprintf(buff, "%d_step", basic_stack[basic_stack_pointer - 1]);
-    i = basic_get_variable_index(buff);
-    if(i >= 0) {
-      right = basic_vars[i];
-    }
-
-    basic_vars[index] += right;
-    // Прекращаем цикл?
-    if(basic_vars[index] > left) {
-      // Уничтожаем переменные
-      sprintf(buff, "%d_index", basic_stack[basic_stack_pointer - 1]);
-      basic_unset_variable(buff);
-      sprintf(buff, "%d_to", basic_stack[basic_stack_pointer - 1]);
-      basic_unset_variable(buff);
-      sprintf(buff, "%d_step", basic_stack[basic_stack_pointer - 1]);
-      basic_unset_variable(buff);
-      // Прекращаем цикл
-      basic_stack_pointer--;
-    }
-    else {
-      // Новый виток цикла
-      file->seek(basic_stack[basic_stack_pointer - 1]);
-    }
-  }
-  else if(strcmp(cmdline_params[0], "return") == 0) {
-    if(arg_count != 1) {
-      terminal_println("Invalid syntax: return");
-      *cont_flag = 0;
-      return;
-    }
-    if(basic_stack_pointer == 0) {
-      terminal_println("Return without gosub");
-      *cont_flag = 0;
-      return;
-    }
-    basic_stack_pointer--;
-    file->seek(basic_stack[basic_stack_pointer]);
-  }
-  else if(strcmp(cmdline_params[0], "pause") == 0) {
-    if(arg_count != 1) {
-      terminal_println("Invalid syntax: pause");
-      *cont_flag = 0;
-      return;
-    }
-    while(terminal_input_char() == -1);
-  }
-  else if(strcmp(cmdline_params[0], "delay") == 0) {
-    if(arg_count != 2) {
-      terminal_println("Invalid syntax: delay");
-      *cont_flag = 0;
-      return;
-    }
-
-    right = millis();
-    expr_offset = 0;
-    error_flag = 0;
-    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-
-    while(millis() - right < left) {
-      if(terminal_input_char() == 0x3) {
-        terminal_println("Break");
-        *cont_flag = 0;
-        return;
-      }
-    }
-  }
-  else if(strcmp(cmdline_params[0], "pin_mode") == 0) {
-    if(arg_count != 3) {
-      terminal_println("Invalid syntax: pin_mode");
-      *cont_flag = 0;
-      return;
-    }
-    expr_offset = 0;
-    error_flag = 0;
-    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-    expr_offset = 0;
-    error_flag = 0;
-    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
-    pinMode(left, right);
-  }
-  else if(strcmp(cmdline_params[0], "digital_write") == 0) {
-    if(arg_count != 3) {
-      terminal_println("Invalid syntax: digital_write");
-      *cont_flag = 0;
-      return;
-    }
-    expr_offset = 0;
-    error_flag = 0;
-    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-    expr_offset = 0;
-    error_flag = 0;
-    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
-    digitalWrite(left, right);
-  }
-  else if(strcmp(cmdline_params[0], "analog_write") == 0) {
-    if(arg_count != 3) {
-      terminal_println("Invalid syntax: analog_write");
-      *cont_flag = 0;
-      return;
-    }
-    expr_offset = 0;
-    error_flag = 0;
-    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-    expr_offset = 0;
-    error_flag = 0;
-    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
-    analogWrite(left, right);
-  }
-  else if(strcmp(cmdline_params[0], "beep") == 0) {
-    if(arg_count != 1) {
-      terminal_println("Invalid syntax: beep");
-      *cont_flag = 0;
-      return;
-    }
-    beep_if_enabled();
-  }
-  else if(strcmp(cmdline_params[0], "tone") == 0) {
-    if(arg_count != 2 && arg_count != 3) {
-      terminal_println("Invalid syntax: tone");
-      *cont_flag = 0;
-      return;
-    }
-    if(global_is_beep_enabled && !global_silent_mode) {
-      if(arg_count == 3) {
-        expr_offset = 0;
-        error_flag = 0;
-        val = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-        expr_offset = 0;
-        error_flag = 0;
-        left = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
-        tone(val, left);
-      }
-      else {
-        expr_offset = 0;
-        error_flag = 0;
-        val = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-        expr_offset = 0;
-        error_flag = 0;
-        left = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
-        expr_offset = 0;
-        error_flag = 0;
-        right = parse_expression(cmdline_params[3], basic_get_variable_by_name, &error_flag, &expr_offset);
-        tone(val, left, right);
-      }
-    }
-  }
-  else if(strcmp(cmdline_params[0], "notone") == 0) {
-    if(arg_count != 2) {
-      terminal_println("Invalid syntax: notone");
-      *cont_flag = 0;
-      return;
-    }
-    expr_offset = 0;
-    error_flag = 0;
-    val = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
-
-    noTone(val);
-  }
-  else {
-    terminal_println("Unknown basic command");
-    *cont_flag = 0;
-    return;
-  }
-
-  if(terminal_input_char() == 0x3) {
-    terminal_println("Break");
-    *cont_flag = 0;
-    return;
-  }
-
-  // Exit
-  if(global_exit_flag) {
-    terminal_println("Break");
-    *cont_flag = 0;
-    return;
-  }
-}
-
-void basic_unquote_string(char *str) {
-  int read_offset = 1;
-  char escape = 0;
-  int write_offset = 0;
-  while(str[read_offset] != '"' && str[read_offset] != 0) {
-    if(escape) {
-      if(str[read_offset] == 'n') {
-        str[write_offset] = '\n';
-      }
-      else if(str[read_offset] == 'r') {
-        str[write_offset] = '\r';
-      }
-      else if(str[read_offset] == 't') {
-        str[write_offset] = '\t';
-      }
-      else if(str[read_offset] == 'e') {
-        str[write_offset] = '\e';
-      }
-      else {
-          str[write_offset] = str[read_offset];
-      }
-      write_offset++;
-      read_offset++;
-      escape = 0;
-      continue;
-    }
-    if(str[read_offset] == '\\') {
-      escape = 1;
-    }
-    else {
-      str[write_offset] = str[read_offset];
-      write_offset++;
-      read_offset++;
-    }
-  }
-  str[write_offset] = 0;
-}
-
 // Показать текущий месяц
 void terminal_cal() {
   char buff[80];
@@ -9033,6 +8182,7 @@ int terminal_wget(char *url, char *filename) {
   char buff[80];
   char chunked = 0;
   char chunk_header = 0;
+  char chunk_size_zero = 0;
   long chunk_size;
   fs::File file;
   int offset;
@@ -9075,7 +8225,7 @@ int terminal_wget(char *url, char *filename) {
     }
     if(result) {
       httpResponseCode = http.GET();
-      if (httpResponseCode > 0) {
+      if(httpResponseCode > 0) {
         if(filename) {
           sprintf(buff, "Received code %d, contents length %d", httpResponseCode, http.getSize());
           terminal_println(buff);
@@ -9119,6 +8269,15 @@ int terminal_wget(char *url, char *filename) {
               sscanf(buff, "%X", &chunk_size);
               Serial.printf("Chunk size %d (%X)\n", chunk_size, chunk_size);
               chunk_header = 0;
+              if(chunk_size == 0) {
+                // Читаем остаток
+                while(stream->available()) {
+                  byte = stream->read();
+                  Serial.printf("Byte after end: %02X %c\n", byte, byte);
+                }
+                chunk_size_zero = 1;
+                break;
+              }
             }
             continue;
           }
@@ -9152,6 +8311,10 @@ int terminal_wget(char *url, char *filename) {
             break;
           }
         }
+        if(chunked && chunk_size_zero == 1) {
+          sprintf(buff, "OK", bytes_count);
+        }
+
         if(filename) {
           file.close();
         }
@@ -9945,6 +9108,846 @@ Serial.println(__LINE__); delay(100);
 #endif // IS_WIFI_ENABLED
 
 // ====================================================
+// Интерпретатор Brainfuck
+// ====================================================
+
+#define BRAINFUCK_CELLS 30000
+#define BRAINFUCK_STACK 100
+
+void terminal_brainfuck(char *filename) {
+  fs::File file;
+  int i;
+  int byte;
+  int ch;
+  int pc = 0;
+  int sp = 0;
+  int cell = 0;
+  int level = 0;
+  char buff[80];
+  char *mem;
+  int stack[BRAINFUCK_STACK];
+
+  terminal_send_mouse = 0;
+
+  mem = (char *)malloc(BRAINFUCK_CELLS * sizeof(char));
+  for(i = 0; i < BRAINFUCK_CELLS; i++) {
+    mem[i] = 0;
+  }
+  file = Storage->open(filename);
+  if(file) {
+    while(file.available()) {
+      byte = file.read();
+      //Serial.printf("byte=%c pc=%d sp=%d\n", byte, pc, sp);
+      //delay(100);
+      if(byte == '+') {
+        mem[cell]++;
+        pc++;
+      }
+      else if(byte == '-') {
+        mem[cell]--;
+        pc++;
+      }
+      else if(byte == '>') {
+        cell++;
+        pc++;
+      }
+      else if(byte == '<') {
+        cell--;
+        pc++;
+      }
+      else if(byte == '.') {
+        terminal_print_char(mem[cell]);
+        if(mem[cell] == '\n') {
+          terminal_print_char('\r');
+        }
+        terminal_show_screen();
+        pc++;
+      }
+      else if(byte == ',') {
+        do {
+          ch = terminal_input_char();
+          if(ch == 0x03) break;
+        } while(ch == -1);
+        if(ch == 0x03) {
+          terminal_println("Interrupted");
+          break;
+        }
+        mem[cell] = ch;
+        pc++;
+      }
+      else if(byte == '[') {
+        if(mem[cell] == 0) {
+          // Перемотать на ] с учётом вложенности
+          level = 0;
+          while(file.available()) {
+            byte = file.read();
+            pc++;
+            if(byte == '[') {
+              level++;
+            }
+            if(byte == ']') {
+              level--;
+            }
+            if(level < 0) break;
+          }
+          if(level >= 0) {
+            terminal_println("No mathing ] found");
+            break;
+          }
+          pc++;
+        }
+        else {
+          if(sp == BRAINFUCK_STACK) {
+            terminal_println("Stack overflow on [");
+            break;
+          }
+          stack[sp] = pc + 1;
+          sp++;
+          pc++;
+        }
+      }
+      else if(byte == ']') {
+        if(mem[cell] == 0) {
+          if(sp == 0) {
+            terminal_println("Stack empty on ]");
+            break;
+          }
+          sp--;
+          pc++;
+        }
+        else {
+          pc = stack[sp - 1];
+          file.seek(pc);
+        }
+      }
+      else {
+        pc++;
+      }
+
+      if(cell >= BRAINFUCK_CELLS) cell = 0;
+      if(cell < 0) cell = BRAINFUCK_CELLS - 1;
+
+      ch = terminal_input_char();
+      if(ch == 0x03) {
+        terminal_println("Interrupted");
+        break;
+      }
+    }
+
+    if(!file.available()) {
+      terminal_println("Finished");
+    }
+    file.close();
+  }
+  else {
+    terminal_println("File not found");
+  }
+
+  free(mem);
+}
+
+// ====================================================
+// Интерпретатор BASIC (терминал)
+// ====================================================
+
+#define BASIC_VARS_COUNT 80
+#define BASIC_STACK_LEN 80
+
+double *basic_vars = NULL;
+char **basic_var_names = NULL;
+long *basic_stack = NULL;
+int basic_stack_pointer = 0;
+
+void terminal_basic(char *filename) {
+  int i;
+  char cont_flag = 1;
+  char str[80];
+  fs::File file;
+
+  terminal_send_mouse = 0;
+
+  basic_stack = (long*)malloc(BASIC_STACK_LEN * sizeof(long));
+  basic_vars = (double*)malloc(BASIC_VARS_COUNT * sizeof(double));
+  basic_var_names = (char**)malloc(BASIC_VARS_COUNT * sizeof(char *));
+  for(i = 0; i < BASIC_VARS_COUNT; i++) {
+    basic_vars[i] = 0;
+    basic_var_names[i] = NULL;
+  }
+  basic_stack_pointer = 0;
+
+  file = Storage->open(filename);
+  if(file) {
+    while(file.available()) {
+      strcpy(str, file.readStringUntil('\n').c_str());
+      basic_execute_command(str, &cont_flag, &file);
+      terminal_show_screen();
+      if(!cont_flag) break;
+    }
+    file.close();
+  }
+
+  for(i = 0; i < BASIC_VARS_COUNT; i++) {
+    if(basic_var_names[i] != NULL) {
+      free(basic_var_names[i]);
+    }
+  }
+  free(basic_var_names);
+  free(basic_vars);
+  free(basic_stack);
+}
+
+// Получить номер переменной по названию
+int basic_get_variable_index_exists(char *var_name) {
+  //Serial.printf("basic_get_variable_index %s\n", var_name);
+  int i;
+  // Пробуем найти
+  for(i = 0; i < BASIC_VARS_COUNT; i++) {
+    if(basic_var_names[i] != NULL && strcmp(var_name, basic_var_names[i]) == 0) {
+      //Serial.printf("found exists %s index %d\n", var_name, i);
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+int basic_get_variable_index(char *var_name) {
+  //Serial.printf("basic_get_variable_index %s\n", var_name);
+  int i;
+  i = basic_get_variable_index_exists(var_name);
+  if(i >= 0) return i;
+
+  // Пробуем добавить
+  for(i = 0; i < BASIC_VARS_COUNT; i++) {
+    if(basic_var_names[i] == NULL) {
+      basic_var_names[i] = (char *)malloc(strlen(var_name) + 1);
+      strcpy(basic_var_names[i], var_name);
+      //Serial.printf("new %s index %d\n", var_name, i);
+      return i;
+    }
+  }
+
+  // Возвращаем ошибку
+  if(i == BASIC_VARS_COUNT) {
+    Serial.printf("var not found\n");
+    return -1;
+  }
+  return -1;
+}
+
+// Уничтожить переменную
+void basic_unset_variable(char *var_name) {
+  int index;
+  index = basic_get_variable_index(var_name);
+  if(index >= 0) {
+    if(basic_var_names[index]) {
+      free(basic_var_names[index]);
+      basic_var_names[index] = NULL;
+      basic_vars[index] = 0;
+    }
+  }
+}
+
+// Получить значение переменной по названию (для вычислений выражений)
+double basic_get_variable_by_name(char *var_name) {
+  int index = basic_get_variable_index_exists(var_name);
+  if(index >= 0) {
+    return basic_vars[index];
+  }
+  else {
+    return parse_expr_constant_by_name(var_name);
+  }
+}
+
+// Разделить команду на токены
+void basic_parse_cmdline(char *str, int *arg_count, char **params) {
+  int i = 0;
+  int param_index = 0;
+  int len = strlen(str);
+  char quoted = 0;
+  char spaces = 1;
+  char escaped = 0;
+  char op_flag = 0;
+
+  for(i = 0; i < len; i++) {
+    if(escaped) {
+      escaped = 0;
+      continue;
+    }
+    else {
+      if(spaces && str[i] == ' ') {
+        str[i] = 0;
+        continue;
+      }
+      if(str[i] == '\\') {
+        escaped = 1;
+        continue;
+      }
+      else if(str[i] == ' ') {
+        if(quoted == 0) {
+          str[i] = 0;
+          spaces = 1;
+          op_flag = 0;
+        }
+      }
+      else {
+        spaces = 0;
+        if(str[i] == '"') {
+          if(quoted == 0) {
+            quoted = 1;
+          }
+          else {
+            quoted = 0;
+          }
+        }
+        if(!op_flag) {
+          params[param_index] = str + i;
+          param_index++;
+          op_flag = 1;
+        }
+      }
+    }
+  }
+  *arg_count = param_index;
+}
+
+void basic_execute_command(char *str, char *cont_flag, fs::File *file) {
+  int arg_count;
+  char *cmdline_params[20];
+  int i;
+  int index;
+  int expr_offset;
+  char error_flag;
+  char is_true;
+  char buff[80];
+  double val = 0, left = 0, right = 0;
+
+  //Serial.printf("%s\n", str);
+  basic_parse_cmdline(str, &arg_count, cmdline_params);
+  if(arg_count == 0) {
+    // Пустая строка - ничего не делаем
+  }
+  else if(arg_count == 1 && cmdline_params[0][strlen(cmdline_params[0]) - 1] == ':') {
+    // Метка - ничего не делаем
+  }
+  else if(strcmp(cmdline_params[0], "stop") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: stop");
+      *cont_flag = 0;
+      return;
+    }
+    *cont_flag = 0;
+  }
+  else if(strcmp(cmdline_params[0], "end") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: end");
+      *cont_flag = 0;
+      return;
+    }
+    *cont_flag = 0;
+  }
+  else if(strcmp(cmdline_params[0], "rem") == 0) {
+    // Комментарий - ничего не делаем
+  }
+  else if(strcmp(cmdline_params[0], "cls") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: cls");
+      *cont_flag = 0;
+      return;
+    }
+    terminal_clear_screen();
+  }
+  else if(strcmp(cmdline_params[0], "let") == 0) {
+    if(arg_count < 4) {
+      terminal_println("Invalid syntax: let");
+      *cont_flag = 0;
+      return;
+    }
+    if(strcmp(cmdline_params[2], "=")) {
+      terminal_println("Invalid syntax: let =");
+      *cont_flag = 0;
+      return;
+    }
+
+    index = basic_get_variable_index(cmdline_params[1]);
+    if(index >= 0) {
+      buff[0] = 0;
+      for(i = 3; i < arg_count; i++) {
+        if(strcmp(buff, "")) {
+          strcat(buff, " ");
+        }
+        strcat(buff, cmdline_params[i]);
+      }
+      expr_offset = 0;
+      error_flag = 0;
+      basic_vars[index] = parse_expression(buff, basic_get_variable_by_name, &error_flag, &expr_offset);
+    }
+    else {
+      terminal_println("Out of variable memory");
+      *cont_flag = 0;
+      return;
+    }
+  }
+  else if(strcmp(cmdline_params[0], "cursor") == 0) {
+    if(arg_count < 3) {
+      terminal_println("Invalid syntax: cursor");
+      *cont_flag = 0;
+      return;
+    }
+    error_flag = 0;
+    expr_offset = 0;
+    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+    error_flag = 0;
+    expr_offset = 0;
+    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
+    
+    terminal_ansi_set_cursor(left, right);
+  }
+  else if(strcmp(cmdline_params[0], "print") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Invalid syntax: print");
+      *cont_flag = 0;
+      return;
+    }
+    for(i = 1; i < arg_count; i++) {
+      if(cmdline_params[i][0] == '"') {
+        basic_unquote_string(cmdline_params[i]);
+        terminal_print(cmdline_params[i]);
+      }
+      else {
+        expr_offset = 0;
+        error_flag = 0;
+        val = parse_expression(cmdline_params[i], basic_get_variable_by_name, &error_flag, &expr_offset);
+        sprintf(buff, "%g", val);
+        terminal_print(buff);
+      }
+    }
+    terminal_println("");
+  }
+  else if(strcmp(cmdline_params[0], "input") == 0) {
+    if(arg_count < 2) {
+      terminal_println("Invalid syntax: input");
+      *cont_flag = 0;
+      return;
+    }
+
+    for(i = 1; i < arg_count; i++) {
+      if(cmdline_params[i][0] == '"') {
+        basic_unquote_string(cmdline_params[i]);
+        terminal_print(cmdline_params[i]);
+      }
+      else {
+        expr_offset = 0;
+        error_flag = 0;
+        terminal_show_screen();
+        terminal_input_string(buff);
+        //Serial.printf("terminal_input_string %s\n", buff);
+        val = parse_expression(buff, basic_get_variable_by_name, &error_flag, &expr_offset);
+        index = basic_get_variable_index(cmdline_params[i]);
+        if(index >= 0) {
+          basic_vars[index] = val;
+        }
+        else {
+          terminal_println("Out of variable memory");
+          *cont_flag = 0;
+          return;
+        }
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "if") == 0) {
+    if(arg_count < 5) {
+      terminal_println("Invalid syntax: if");
+      *cont_flag = 0;
+      return;
+    }
+    is_true = 0;
+    expr_offset = 0;
+    error_flag = 0;
+    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+    //Serial.printf("left (%s) = %g\n", cmdline_params[1], left);
+    expr_offset = 0;
+    error_flag = 0;
+    right = parse_expression(cmdline_params[3], basic_get_variable_by_name, &error_flag, &expr_offset);
+    //Serial.printf("right (%s) = %g\n", cmdline_params[3], right);
+
+    if(strcmp(cmdline_params[2], "=") == 0) { if(left == right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], "==") == 0) { if(left == right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], ">") == 0) { if(left > right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], ">=") == 0) { if(left >= right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], "<") == 0) { if(left < right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], "<=") == 0) { if(left <= right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], "<>") == 0) { if(left != right) is_true = 1; }
+    else if(strcmp(cmdline_params[2], "!=") == 0) { if(left != right) is_true = 1; }
+    else {
+      terminal_println("Invalid syntax: if expression");
+      terminal_println(cmdline_params[2]);
+      *cont_flag = 0;
+      return;
+    }
+    if(is_true) {
+      //Serial.printf("true\n");
+      // Формируем команду
+      buff[0] = 0;
+      for(i = 4; i < arg_count; i++) {
+        // Пропускаем ключевое слово then
+        if(i == 4 && strcmp(cmdline_params[i], "then") == 0) continue;
+        if(strcmp(buff, "") != 0) {
+          strcat(buff, " ");
+        }
+        strcat(buff, cmdline_params[i]);
+      }
+      // Запускаем
+      basic_execute_command(buff, cont_flag, file);
+    }
+    else {
+      //Serial.printf("false\n");
+    }
+  }
+  else if(strcmp(cmdline_params[0], "goto") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Invalid syntax: goto");
+      *cont_flag = 0;
+      return;
+    }
+    strcat(cmdline_params[1], ":");
+    // Ищем в файле метку
+    file->seek(0);
+    while(file->available()) {
+      strcpy(buff, file->readStringUntil('\n').c_str());
+      if(strcmp(cmdline_params[1], buff) == 0) {
+        //Serial.println("Label found");
+        break;
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "gosub") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Invalid syntax: gosub");
+      *cont_flag = 0;
+      return;
+    }
+    if(basic_stack_pointer >= BASIC_STACK_LEN) {
+      terminal_println("Out of stack memory");
+      *cont_flag = 0;
+      return;
+    }
+    
+    basic_stack[basic_stack_pointer] = file->position();
+    basic_stack_pointer++;
+    strcat(cmdline_params[1], ":");
+    // Ищем в файле метку
+    file->seek(0);
+    while(file->available()) {
+      strcpy(buff, file->readStringUntil('\n').c_str());
+      if(strcmp(cmdline_params[1], buff) == 0) {
+        //Serial.println("Label found");
+        break;
+      }
+    }
+  }
+  // for var = a to b [step c]
+  else if(strcmp(cmdline_params[0], "for") == 0) {
+    if(arg_count != 6 && arg_count != 8) {
+      terminal_println("Invalid syntax: for");
+      *cont_flag = 0;
+      return;
+    }
+    if(strcmp(cmdline_params[2], "=")) {
+      terminal_println("Invalid syntax: for =");
+      *cont_flag = 0;
+      return;
+    }
+    if(strcmp(cmdline_params[4], "to")) {
+      terminal_println("Invalid syntax: for to");
+      *cont_flag = 0;
+      return;
+    }
+    if(arg_count == 8 && strcmp(cmdline_params[6], "step")) {
+      terminal_println("Invalid syntax: for step");
+      *cont_flag = 0;
+      return;
+    }
+    if(basic_stack_pointer >= BASIC_STACK_LEN) {
+      terminal_println("Out of stack memory");
+      *cont_flag = 0;
+      return;
+    }
+    
+    basic_stack[basic_stack_pointer] = file->position();
+    basic_stack_pointer++;
+
+    // Записываем первое значение переменной
+    index = basic_get_variable_index(cmdline_params[1]);
+    expr_offset = 0;
+    error_flag = 0;
+    val = parse_expression(cmdline_params[3], basic_get_variable_by_name, &error_flag, &expr_offset);
+    basic_vars[index] = val;
+
+    // Добавляем пару технических переменных - индекс переменной, максимальное значение и шаг
+    sprintf(buff, "%d_index", basic_stack[basic_stack_pointer - 1]);
+    i = basic_get_variable_index(buff);
+    basic_vars[i] = index;
+
+    sprintf(buff, "%d_to", basic_stack[basic_stack_pointer - 1]);
+    i = basic_get_variable_index(buff);
+    expr_offset = 0;
+    error_flag = 0;
+    val = parse_expression(cmdline_params[5], basic_get_variable_by_name, &error_flag, &expr_offset);
+    basic_vars[i] = val;
+
+    sprintf(buff, "%d_step", basic_stack[basic_stack_pointer - 1]);
+    i = basic_get_variable_index(buff);
+    basic_vars[i] = 1;
+    if(arg_count == 8) {
+      expr_offset = 0;
+      error_flag = 0;
+      val = parse_expression(cmdline_params[7], basic_get_variable_by_name, &error_flag, &expr_offset);
+      basic_vars[i] = val;
+    }
+  }
+  else if(strcmp(cmdline_params[0], "next") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: next");
+      *cont_flag = 0;
+      return;
+    }
+    if(basic_stack_pointer == 0) {
+      terminal_println("Next without for");
+      *cont_flag = 0;
+      return;
+    }
+
+    // Получаем переменную по которой цикл
+    sprintf(buff, "%d_index", basic_stack[basic_stack_pointer - 1]);
+    i = basic_get_variable_index(buff);
+    index = basic_vars[i];
+    
+    // Получаем максимальное значение
+    sprintf(buff, "%d_to", basic_stack[basic_stack_pointer - 1]);
+    i = basic_get_variable_index(buff);
+    if(i >= 0) {
+      left = basic_vars[i];
+    }
+
+    // Получаем шаг цикла
+    sprintf(buff, "%d_step", basic_stack[basic_stack_pointer - 1]);
+    i = basic_get_variable_index(buff);
+    if(i >= 0) {
+      right = basic_vars[i];
+    }
+
+    basic_vars[index] += right;
+    // Прекращаем цикл?
+    if(basic_vars[index] > left) {
+      // Уничтожаем переменные
+      sprintf(buff, "%d_index", basic_stack[basic_stack_pointer - 1]);
+      basic_unset_variable(buff);
+      sprintf(buff, "%d_to", basic_stack[basic_stack_pointer - 1]);
+      basic_unset_variable(buff);
+      sprintf(buff, "%d_step", basic_stack[basic_stack_pointer - 1]);
+      basic_unset_variable(buff);
+      // Прекращаем цикл
+      basic_stack_pointer--;
+    }
+    else {
+      // Новый виток цикла
+      file->seek(basic_stack[basic_stack_pointer - 1]);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "return") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: return");
+      *cont_flag = 0;
+      return;
+    }
+    if(basic_stack_pointer == 0) {
+      terminal_println("Return without gosub");
+      *cont_flag = 0;
+      return;
+    }
+    basic_stack_pointer--;
+    file->seek(basic_stack[basic_stack_pointer]);
+  }
+  else if(strcmp(cmdline_params[0], "pause") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: pause");
+      *cont_flag = 0;
+      return;
+    }
+    while(terminal_input_char() == -1);
+  }
+  else if(strcmp(cmdline_params[0], "delay") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Invalid syntax: delay");
+      *cont_flag = 0;
+      return;
+    }
+
+    right = millis();
+    expr_offset = 0;
+    error_flag = 0;
+    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+
+    while(millis() - right < left) {
+      if(terminal_input_char() == 0x3) {
+        terminal_println("Break");
+        *cont_flag = 0;
+        return;
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "pin_mode") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Invalid syntax: pin_mode");
+      *cont_flag = 0;
+      return;
+    }
+    expr_offset = 0;
+    error_flag = 0;
+    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+    expr_offset = 0;
+    error_flag = 0;
+    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
+    pinMode(left, right);
+  }
+  else if(strcmp(cmdline_params[0], "digital_write") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Invalid syntax: digital_write");
+      *cont_flag = 0;
+      return;
+    }
+    expr_offset = 0;
+    error_flag = 0;
+    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+    expr_offset = 0;
+    error_flag = 0;
+    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
+    digitalWrite(left, right);
+  }
+  else if(strcmp(cmdline_params[0], "analog_write") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Invalid syntax: analog_write");
+      *cont_flag = 0;
+      return;
+    }
+    expr_offset = 0;
+    error_flag = 0;
+    left = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+    expr_offset = 0;
+    error_flag = 0;
+    right = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
+    analogWrite(left, right);
+  }
+  else if(strcmp(cmdline_params[0], "beep") == 0) {
+    if(arg_count != 1) {
+      terminal_println("Invalid syntax: beep");
+      *cont_flag = 0;
+      return;
+    }
+    beep_if_enabled();
+  }
+  else if(strcmp(cmdline_params[0], "tone") == 0) {
+    if(arg_count != 2 && arg_count != 3) {
+      terminal_println("Invalid syntax: tone");
+      *cont_flag = 0;
+      return;
+    }
+    if(global_is_beep_enabled && !global_silent_mode) {
+      if(arg_count == 3) {
+        expr_offset = 0;
+        error_flag = 0;
+        val = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+        expr_offset = 0;
+        error_flag = 0;
+        left = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
+        tone(val, left);
+      }
+      else {
+        expr_offset = 0;
+        error_flag = 0;
+        val = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+        expr_offset = 0;
+        error_flag = 0;
+        left = parse_expression(cmdline_params[2], basic_get_variable_by_name, &error_flag, &expr_offset);
+        expr_offset = 0;
+        error_flag = 0;
+        right = parse_expression(cmdline_params[3], basic_get_variable_by_name, &error_flag, &expr_offset);
+        tone(val, left, right);
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "notone") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Invalid syntax: notone");
+      *cont_flag = 0;
+      return;
+    }
+    expr_offset = 0;
+    error_flag = 0;
+    val = parse_expression(cmdline_params[1], basic_get_variable_by_name, &error_flag, &expr_offset);
+
+    noTone(val);
+  }
+  else {
+    terminal_println("Unknown basic command");
+    *cont_flag = 0;
+    return;
+  }
+
+  if(terminal_input_char() == 0x3) {
+    terminal_println("Break");
+    *cont_flag = 0;
+    return;
+  }
+
+  // Exit
+  if(global_exit_flag) {
+    terminal_println("Break");
+    *cont_flag = 0;
+    return;
+  }
+}
+
+void basic_unquote_string(char *str) {
+  int read_offset = 1;
+  char escape = 0;
+  int write_offset = 0;
+  while(str[read_offset] != '"' && str[read_offset] != 0) {
+    if(escape) {
+      if(str[read_offset] == 'n') {
+        str[write_offset] = '\n';
+      }
+      else if(str[read_offset] == 'r') {
+        str[write_offset] = '\r';
+      }
+      else if(str[read_offset] == 't') {
+        str[write_offset] = '\t';
+      }
+      else if(str[read_offset] == 'e') {
+        str[write_offset] = '\e';
+      }
+      else {
+          str[write_offset] = str[read_offset];
+      }
+      write_offset++;
+      read_offset++;
+      escape = 0;
+      continue;
+    }
+    if(str[read_offset] == '\\') {
+      escape = 1;
+    }
+    else {
+      str[write_offset] = str[read_offset];
+      write_offset++;
+      read_offset++;
+    }
+  }
+  str[write_offset] = 0;
+}
+
+// ====================================================
 // Заметки
 // ====================================================
 
@@ -9998,6 +10001,7 @@ int notes_file_to_list(fs::File file, char *buff) {
 }
 
 void notes(char mode, char *io_buff) {
+  char *contents = NULL;
   char *buttons[] = {
     "New", "Edit", "Delete",
     NULL
@@ -10035,7 +10039,21 @@ void notes(char mode, char *io_buff) {
     return;
   }
 
-  pim_app("Notes", NOTES_PATH, notes_file_to_list, buttons, notes_action);
+  if(Storage && storage_type != STORAGE_TYPE_NONE) {
+    pim_app("Notes", NOTES_PATH, notes_file_to_list, buttons, notes_action);
+  }
+  else {
+    // Режим NVS
+    contents = (char*)malloc(EDIT_FILE_LENGTH_MAX * sizeof(char));
+    if(!contents) {
+      drawError("Unable to reserve memory");
+      return;
+    }
+    strcpy(contents, preferences.getString("note", "").c_str());
+    edit_text("Note", contents, EDIT_FILE_LENGTH_MAX);
+    preferences.putString("note", contents);
+    free(contents);
+  }
 }
 
 // ====================================================
@@ -10156,7 +10174,7 @@ void tables(char mode, char *io_buff) {
 }
 
 // ====================================================
-// Интерпретатор BASIC
+// Интерпретатор BASIC (графическое приложение)
 // ====================================================
 
 #define BASIC_PATH "/Basic"
@@ -13450,7 +13468,14 @@ void draw(char mode, char *io_buff) {
     return;
   }
 
-  pim_app("Draw", DRAW_PATH, draw_file_to_list, buttons, draw_action);
+  if(Storage && storage_type != STORAGE_TYPE_NONE) {
+    pim_app("Draw", DRAW_PATH, draw_file_to_list, buttons, draw_action);
+  }
+  else {
+    // Режим NVS - давать порисовать, никуда не сохранять
+    drawInfo("Storage unavailable. You can draw, but image cannot be saved.");
+    draw_edit("Draw", "");
+  }
 }
 
 void draw_edit(char *title, char *filename) {
@@ -13554,7 +13579,7 @@ void draw_edit(char *title, char *filename) {
       if(global_exit_flag) {
         drawAppTitle("Exit");
         touchWaitRelease();
-        if(modified) {
+        if(Storage && storage_type != STORAGE_TYPE_NONE && modified) {
           drawAppTitle("Saving...");
           file = Storage->open(filename, FILE_WRITE);
           file.write((const uint8_t *)draw_header, 118);
@@ -14255,7 +14280,6 @@ void schedule(char mode, char *io_buff) {
   }
 
   redraw_flag = 1;
-  //set_local_time_from_unix_timestamp();
 
   // Создать папку если её нет
   if(!Storage->exists(SCHEDULE_PATH)) {
@@ -14914,25 +14938,7 @@ void brightness_app(char mode, char *io_buff) {
     "75 %", "Max",
     NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0x00, 0x00, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0xF0, 0xF0, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0xF0, 0xF0, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0xF0, 0xF0, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0xF0, 0xF0, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0xF0, 0xF0, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0xF0, 0xF0, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Brightness");
@@ -15018,25 +15024,7 @@ void select_storage_app(char mode, char *io_buff) {
     "SD card",
     NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 
-    0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xFF, 0x0F, 0xFF, 
-    0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xFF, 0xF0, 0xFF, 
-    0xF0, 0xF0, 0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Select Storage");
@@ -19065,25 +19053,7 @@ void color_settings(char mode, char *io_buff) {
   char *buttons_inversion[] = {
     "Inversion", NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Color Settings");
@@ -19392,25 +19362,7 @@ void screen_settings(char mode, char *io_buff) {
     "Gamma",
     NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Screen Settings");
@@ -19581,25 +19533,7 @@ void morse_settings(char mode, char *io_buff) {
     "Interval",
     NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Morse Settings");
@@ -21372,7 +21306,7 @@ int chat_ai_send_message(char *ai_token, char *message, char *response) {
 // Доступ к файлам через веб
 // ====================================================
 
-WebServer httpServer(80);
+WebServer *httpServer = NULL;
 
 void http_file_access(char mode, char *io_buff) {
   HTTPClient http;
@@ -21447,20 +21381,24 @@ void http_file_access(char mode, char *io_buff) {
   sprintf(buff, "http://%s/", WiFi.localIP().toString().c_str());
   tft.drawString(buff, 1, 36, FONT_DEFAULT);
 
-  httpServer.begin();
-  httpServer.on("/", http_file_access_handle);
-  httpServer.on("/backup_and_restore", http_file_backup_and_restore_handle);
-  httpServer.on("/backup", http_fs_backup_handle);
-  httpServer.on("/restore", HTTP_POST, http_file_upload_handle_done, http_fs_restore_handle);
-  httpServer.on("/upload", HTTP_POST, http_file_upload_handle_done, http_file_upload_handle);
+  httpServer = new WebServer(80);
+  httpServer->begin();
+  httpServer->on("/", http_file_access_handle);
+  httpServer->on("/status", http_status_page);
+  httpServer->on("/backup_and_restore", http_file_backup_and_restore_handle);
+  httpServer->on("/backup", http_fs_backup_handle);
+  httpServer->on("/restore", HTTP_POST, http_file_upload_handle_done, http_fs_restore_handle);
+  httpServer->on("/upload", HTTP_POST, http_file_upload_handle_done, http_file_upload_handle);
 
   while(1) {
-    httpServer.handleClient();
+    httpServer->handleClient();
     if(touchCheckNowait() == 0) continue;
     touchWaitReleaseOrExit();
     if(global_exit_flag) {
       global_exit_flag = 0;
       drawAppTitle("Exit");
+      httpServer->stop();
+      delete httpServer;
       touchWaitRelease();
       touchExitActionReset();
       return;
@@ -21470,19 +21408,58 @@ void http_file_access(char mode, char *io_buff) {
 }
 
 void http_file_backup_and_restore_handle() {
-  char *contents = "<a href='/'>Back</a> or <a href='/backup'>Download FFat backup</a><br>"
-  "<form method='POST' action='/restore' enctype='multipart/form-data'>"
-  "<p>Upload file to restore:</p>"
-  "<input type=file name=file>\n<input type=submit value='Upload'>\n"
-  "</form>"
+  char *contents = "<!DOCTYPE html><html><head><title>CYD</title><meta charset=\"utf-8\" /></head><body>"
+    "<a href='/'>Back</a> or <a href='/backup'>Download FFat backup</a><br>"
+    "<form method='POST' action='/restore' enctype='multipart/form-data'>"
+    "<p>Upload file to restore:</p>"
+    "<input type=file name=file>\n<input type=submit value='Upload'>\n"
+    "</form>"
   ;
-  httpServer.send(200, "text/html", contents);
+  httpServer->send(200, "text/html", contents);
+}
+
+void http_status_page() {
+  char contents[1024];
+  sprintf(contents,
+    "<!DOCTYPE html><html><head><title>CYD</title><meta charset=\"utf-8\" /></head><body>"
+    "<a href='/'>Back</a> or <a href='/backup'>Download FFat backup</a><br>"
+    "ESP32 CYD PDA v1.8 by sau412<br>"
+    "Build time: %s %s<br>"
+    "SDK: %s<br>"
+    "Chip model: %s<br>"
+    "Chip cores, speed: %d @ %d MHz<br>"
+    "Heap Total: %d bytes<br>"
+    "Heap Free: %d bytes (%d%%)<br>"
+    "Heap Min Free: %d bytes<br>"
+    "Heap Max Alloc: %d bytes<br>"
+    "Flash: %d bytes<br>"
+    "Sketch: %d bytes<br>"
+    "Date: %04d-%02d-%02d<br>"
+    "Time: %d:%02d:%02d<br>"
+    "Uptime: %d s<br>"
+    ,
+    __DATE__, __TIME__,
+    ESP.getSdkVersion(),
+    ESP.getChipModel(),
+    ESP.getChipCores(), ESP.getCpuFreqMHz(),
+    ESP.getHeapSize(),
+    ESP.getFreeHeap(), (int)floor(100 * ESP.getFreeHeap() / ESP.getHeapSize()),
+    ESP.getMinFreeHeap(),
+    ESP.getMaxAllocHeap(),
+    ESP.getFlashChipSize(),
+    ESP.getSketchSize(),
+    global_year, global_month, global_day,
+    global_hours, global_minutes, global_seconds,
+    millis() / 1000
+  );
+  httpServer->send(200, "text/html", contents);
+
 }
 
 void http_fs_backup_handle() {
   FFatContentsStream ffat_stream;
-  httpServer.sendHeader("Content-Disposition", "attachment; filename=\"fs.bin\"");
-  httpServer.streamFile(ffat_stream, "text/plain");
+  httpServer->sendHeader("Content-Disposition", "attachment; filename=\"fs.bin\"");
+  httpServer->streamFile(ffat_stream, "application/octet-stream");
 }
 
 fs::File uploadFile;
@@ -21490,7 +21467,7 @@ FFatContentsStream *ffat_restore_stream = NULL;
 
 void http_fs_restore_handle() {
   int i;
-  HTTPUpload& upload = httpServer.upload();
+  HTTPUpload& upload = httpServer->upload();
 
   if(ffat_restore_stream == NULL) {
     ffat_restore_stream = new FFatContentsStream();
@@ -21520,12 +21497,16 @@ void http_file_access_handle() {
   char *contents = NULL;
   char upload_form_begin[] = "<br>\n<form method='POST' action='/upload' enctype='multipart/form-data'>";
   char upload_form_end[] = "<input type=file name=file>\n<input type=submit value='Upload'>\n</form>\n";
-  char filename[80];
-  char buff[80];
+  char filename[320];
+  char buff[160];
   fs:File file;
   // Если есть filename - выдать содержимое
-  if(httpServer.hasArg("filename")) {
-    strcpy(filename, httpServer.arg("filename").c_str());
+  if(httpServer->hasArg("filename")) {
+    if(strlen(httpServer->arg("filename").c_str()) >= 319) {
+      httpServer->send(500, "text/plain", "Filename too long");
+      return;
+    }
+    strcpy(filename, httpServer->arg("filename").c_str());
   }
   else {
     strcpy(filename, "/");
@@ -21535,32 +21516,58 @@ void http_file_access_handle() {
     if(file.isDirectory()) {
       contents = (char *)malloc(20000 * sizeof(char));
       strcpy(contents, "");
+      strcat(contents, "<!DOCTYPE html><html><head><title>CYD</title><meta charset=\"utf-8\" /></head><body>");
       if(storage_type == STORAGE_TYPE_FFAT) {
-        sprintf(buff, "Used: %d bytes of %d bytes (%d %%)", FFat.usedBytes(), FFat.totalBytes(), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
+        sprintf(buff, "FFat used: %d bytes of %d bytes (%d %%)", FFat.usedBytes(), FFat.totalBytes(), (int)floor(100 * FFat.usedBytes() / FFat.totalBytes()));
       }
       else if(storage_type == STORAGE_TYPE_SD) {
-        sprintf(buff, "Used: %llu MiB of %llu MiB (%d %%)", SD.usedBytes() / (1024 * 1024), SD.totalBytes() / (1024 * 1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
+        sprintf(buff, "SD used: %llu MiB of %llu MiB (%d %%)", SD.usedBytes() / (1024 * 1024), SD.totalBytes() / (1024 * 1024), (int)floor(100 * SD.usedBytes() / SD.totalBytes()));
       }
       strcat(contents, buff);
-      strcat(contents, " (<a href='/backup_and_restore'>backup and restore</a>)<br>\n");
+      strcat(contents, " (<a href='/status'>status</a>, <a href='/backup_and_restore'>backup and restore</a>)<br>\n");
       strcat(contents, "<b>Files:</b><br>\n<br>\n");
       http_file_access_show_dir(filename, contents);
       strcat(contents, upload_form_begin);
       sprintf(buff, "<input type=hidden name=path value='%s'>", filename);
       strcat(contents, buff);
       strcat(contents, upload_form_end);
-      httpServer.send(200, "text/html", contents);
+      strcat(contents, "</body></html>");
+
+      httpServer->send(200, "text/html", contents);
       free(contents);
     }
     else {
-      sprintf(buff, "attachment; filename=\"%s\"", file.name());
-      httpServer.sendHeader("Content-Disposition", buff);
-      httpServer.streamFile(file, "text/plain");
+      // Текстовый файл отображать, двоичный скачивать
+      if(is_bmp_file(filename)) {
+        httpServer->streamFile(file, "image/bmp");
+      }
+      else if(is_png_file(filename)) {
+        httpServer->streamFile(file, "image/png");
+      }
+      else if(is_jpeg_file(filename)) {
+        httpServer->streamFile(file, "image/jpeg");
+      }
+      else if(is_webp_file(filename)) {
+        httpServer->streamFile(file, "image/webp");
+      }
+      else if(is_mp3_file(filename)) {
+        httpServer->streamFile(file, "audio/mpeg");
+      }
+      else if(is_wav_file(filename)) {
+        httpServer->streamFile(file, "audio/wav");
+      }
+      else if(is_binary_file(filename)) {
+        sprintf(buff, "attachment; filename=\"%s\"", file.name());
+        httpServer->sendHeader("Content-Disposition", buff);
+      }
+      else {
+        httpServer->streamFile(file, "text/plain");
+      }
     }
     file.close();
   }
   else {
-    httpServer.send(404, "text/plain", "No such file");
+    httpServer->send(404, "text/plain", "No such file");
   }
 }
 
@@ -21568,17 +21575,22 @@ void http_file_access_show_dir(char *path, char *contents) {
   //Serial.println(path);
   fs::File file;
   fs::File current_dir;
-  char buff[80];
-  char updir[80];
+  char buff[320];
+  char updir[160];
   current_dir = Storage->open(path);
   if(current_dir.isDirectory()) {
     // Если это не корневая папка, то добавляем ссылки
     if(strcmp(path, "/")) {
       strcpy(updir, path);
+      // Убираем всё до первого /
       while(strlen(updir) > 0 && updir[strlen(updir) - 1] != '/') {
         updir[strlen(updir) - 1] = 0;
       }
-      sprintf(buff, "<a href='?filename=%s'>..</a><br>\n", updir);
+      // И слеш тоже убираем
+      if(strlen(updir) > 1 && updir[strlen(updir) - 1] == '/') {
+        updir[strlen(updir) - 1] = 0;
+      }
+      sprintf(buff, "<a href='?filename=%s'>&lt;-- .. </a> (up)<br>\n", updir);
       strcat(contents, buff);
     }
     while(file = current_dir.openNextFile()) {
@@ -21604,14 +21616,13 @@ void http_file_access_show_dir(char *path, char *contents) {
 }
 
 void http_file_upload_handle() {
-  char buff[80];
-  HTTPUpload& upload = httpServer.upload();
+  HTTPUpload& upload = httpServer->upload();
 
   if (upload.status == UPLOAD_FILE_START) {
     String filename = upload.filename;
 
-    if(httpServer.hasArg("path")) {
-      filename = httpServer.arg("path") + "/" + filename;
+    if(httpServer->hasArg("path")) {
+      filename = httpServer->arg("path") + "/" + filename;
     }
     else if(!filename.startsWith("/")) {
       filename = "/" + filename;
@@ -21632,19 +21643,19 @@ void http_file_upload_handle() {
       uploadFile.close(); // Save and close file
       //Serial.printf("Upload success: %u bytes\n", upload.totalSize);
     } else {
-      httpServer.send(500, "text/plain", "File creation failed");
+      httpServer->send(500, "text/plain", "File creation failed");
     }
   }
 }
 
 void http_file_upload_handle_done() {
-  if(httpServer.hasArg("path")) {
-    httpServer.sendHeader("Location", "/?filename=" + httpServer.arg("path"));
+  if(httpServer->hasArg("path")) {
+    httpServer->sendHeader("Location", "/?filename=" + httpServer->arg("path"));
   }
   else {
-    httpServer.sendHeader("Location", "/");
+    httpServer->sendHeader("Location", "/");
   }
-  httpServer.send(301, "text/html", "");
+  httpServer->send(301, "text/html", "");
 }
 
 int get_file_http(char *url, char *buff, long max_length) {
@@ -21682,6 +21693,7 @@ int get_file_https(char *url, char *buff, long max_length) {
   long chunk_size;
   long millis_last_byte;
   char chunk_header_bytes[10];
+  char chunk_size_zero = 0;
   HTTPClient https;
   WiFiClientSecure *client = NULL;
   WiFiClient *stream = NULL;
@@ -21737,6 +21749,15 @@ int get_file_https(char *url, char *buff, long max_length) {
               sscanf(chunk_header_bytes, "%X", &chunk_size);
               Serial.printf("Chunk size %d (%X)\n", chunk_size, chunk_size);
               chunk_header = 0;
+              if(chunk_size == 0) {
+                // Читаем остаток
+                while(stream->available()) {
+                  byte = stream->read();
+                  Serial.printf("Byte after end: %02X %c\n", byte, byte);
+                }
+                chunk_size_zero = 1;
+                break;
+              }
             }
             continue;
           }
@@ -24009,25 +24030,7 @@ void dashboard_calendar(char mode, char *io_buff) {
     "", "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x0F, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x0F, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Clock & Calendar");
@@ -25424,25 +25427,7 @@ void fuzzy_clock(char mode, char *io_buff) {
     "SEVENMNINEZ", // 8
     "FIVEXOCLOCK"  // 9
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x00, 0xF0, 0xF0, 0xF0, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xFF, 0xF0, 0xF0, 0xF0, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x0F, 0xF0, 0xFF, 0x0F, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xF0, 0xF0, 0xF0, 0xF0, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0x0F, 0xF0, 0xF0, 0xF0, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Fuzzy Clock");
@@ -25693,26 +25678,8 @@ void set_clock(char mode, char *io_buff) {
   char *buttons_sync[] = {
     "Sync via Wi-Fi", NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x0F, 0xFF, 
-    0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0xFF, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0x00, 0x00, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0xFF, 
-    0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x0F, 0xFF, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
-
+  char *app_icon = app_default_icon;
+  
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Set Clock");
     return;
@@ -25733,8 +25700,6 @@ void set_clock(char mode, char *io_buff) {
   redraw_flag = 1;
   something_changed = 0;
   while(1) {
-    // Обновляем время
-    //set_local_time_from_unix_timestamp();
     // Рисуем время
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
 
@@ -25893,25 +25858,7 @@ void view_font(char mode, char *io_buff) {
   int width1, width2;
   unsigned char byte;
   char buff[80];
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x0F, 0xF0, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xF0, 0xFF, 0xFF, 0x0F, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x0F, 0xFF, 0xFF, 0xF0, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x0F, 0xFF, 0xFF, 0xF0, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x0F, 0xFF, 0xFF, 0xF0, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x0F, 0xFF, 0xFF, 0xF0, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "View Font");
@@ -25985,25 +25932,7 @@ void autorun(char mode, char *io_buff) {
     "Reboot",
     NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x0F, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xF0, 0xFF, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x0F, 0xFF, 0x00, 0x00, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0x00, 0x00, 0xFF, 0xF0, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0x0F, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xF0, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Autorun");
@@ -26256,10 +26185,100 @@ void settings(char mode, char *io_buff) {
 
 }
 
-// ====================================================
-// Перезагрузка
-// ====================================================
+// Тест экрана
+void screen_test(char mode, char *io_buff) {
+  int i;
+  int j;
+  int colors[] = {TFT_WHITE, TFT_RED, TFT_GREEN, TFT_BLUE, TFT_MAGENTA, TFT_CYAN, TFT_YELLOW, TFT_BLACK};
+  char *app_icon = app_default_icon;
 
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Screen Test");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "ScrT");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 130);
+    return;
+  }
+
+  disableAppTitle();
+
+  for(i = 0; i < 8; i++) {
+    tft.fillScreen(colors[i]);
+
+    touchWaitPress();
+    touchWaitRelease();
+  }
+
+  tft.fillScreen(TFT_WHITE);
+  for(i = 0; i != 160; i++) {
+    tft.drawLine(0, i * 2, tft.width(), i * 2, TFT_BLACK);
+  }
+  touchWaitPress();
+  touchWaitRelease();
+
+  tft.fillScreen(TFT_WHITE);
+  for(i = 0; i != 160; i++) {
+    tft.drawLine(0, i * 2 + 1, tft.width(), i * 2 + 1, TFT_BLACK);
+  }
+  touchWaitPress();
+  touchWaitRelease();
+  
+  tft.fillScreen(TFT_WHITE);
+  for(i = 0; i != 120; i++) {
+    tft.drawLine(i * 2, 0, i * 2, tft.height(), TFT_BLACK);
+  }
+  touchWaitPress();
+  touchWaitRelease();
+
+  tft.fillScreen(TFT_WHITE);
+  for(i = 0; i != 120; i++) {
+    tft.drawLine(i * 2 + 1, 0, i * 2 + 1, tft.height(), TFT_BLACK);
+  }
+  touchWaitPress();
+  touchWaitRelease();
+
+  tft.fillScreen(TFT_BLACK);
+  for(j = 0; j < tft.height(); j++) {
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 0, j, i);
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 1, j, i << 6);
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 2, j, i << 11);
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 3, j, (i << 6) + (i << 11));
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 4, j, i + (i << 11));
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 5, j, i + (i << 6));
+    }
+    for(i = 0; i < 32; i++) {
+      tft.drawPixel(i + 32 * 6, j, i + (i << 6) + (i << 11));
+    }
+  }
+  touchWaitPress();
+  touchWaitRelease();
+
+  for(j = 16; j < tft.height(); j++) {
+    for(i = 0; i < tft.width(); i++) {
+      tft.drawPixel(i, j, tft.readPixel(i, j));
+    }
+  }
+  touchWaitPress();
+  touchWaitRelease();
+}
+
+// Перезагрузка
 void reboot(char mode, char *io_buff) {
   int i;
   unsigned char byte;
@@ -26273,25 +26292,7 @@ void reboot(char mode, char *io_buff) {
     "Deep sleep (BOOT wake up)",
     NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x0F, 0xF0, 0x0F, 0xF0, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xFF, 0xF0, 0x0F, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xFF, 0xF0, 0x0F, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xFF, 0x0F, 0xFF, 0xFF, 0xF0, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xF0, 0x00, 0x00, 0x0F, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Power");
@@ -26348,10 +26349,7 @@ void reboot(char mode, char *io_buff) {
   }
 }
 
-// ====================================================
 // Управление клавиатурой
-// ====================================================
-
 void keyboard_control(char mode, char *io_buff) {
   int i;
   unsigned char byte;
@@ -26365,25 +26363,7 @@ void keyboard_control(char mode, char *io_buff) {
     "Indent right",
     NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x0F, 
-    0xF0, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0x0F, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xFF, 0xF0, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0x00, 0x0F, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xFF, 0x0F, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xFF, 0xF0, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0x0F, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x0F, 
-    0xF0, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Keyboard");
@@ -26500,25 +26480,7 @@ void sound_control(char mode, char *io_buff) {
     "Beeper pin",
     NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x0F, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xF0, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0x00, 0x00, 0xFF, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xFF, 0xF0, 0xFF, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0xFF, 0xF0, 0xFF, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xF0, 0x00, 0x00, 0xFF, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xF0, 0xFF, 0x0F, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x0F, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Sound");
@@ -26666,25 +26628,7 @@ void clock_control(char mode, char *io_buff) {
     "NTP sync",
     NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x0F, 0xFF, 
-    0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0xFF, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0x00, 0x00, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 0xFF, 
-    0xFF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x0F, 0xFF, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Clock Settings");
@@ -27776,1689 +27720,9 @@ void file_cp1251_to_utf8(char *from_filename, char *to_filename_arg) {
   }
 }
 
-// Конвертировать два байта в cp1251
-char utf8_to_cp1251_double_byte(char byte1, char byte2) {
-  char byte_out = 0;
-
-  if(byte1 == 0xC3) {
-    if(byte2 == 0x8B) byte_out = 0xA8; // Ё
-    if(byte2 == 0xAB) byte_out = 0xB8; // ё
-  }
-  if(byte1 == 0xD0) {
-    if(byte2 == 0x81) byte_out = 0xA8; // Ё
-    else if(byte2 == 0x82) byte_out = 0x80; // Ђ
-    else if(byte2 == 0x83) byte_out = 0x81; // Ѓ
-    else if(byte2 == 0x84) byte_out = 0xAA; // Є
-    else if(byte2 == 0x85) byte_out = 0xBD; // Ѕ
-    else if(byte2 == 0x86) byte_out = 0xB2; // І
-    else if(byte2 == 0x87) byte_out = 0xAF; // Ї
-    else if(byte2 == 0x88) byte_out = 0xA3; // Ј
-    else if(byte2 == 0x89) byte_out = 0x8A; // Љ
-    else if(byte2 == 0x8A) byte_out = 0x8C; // Њ
-    else if(byte2 == 0x8B) byte_out = 0x8E; // Ћ
-    else if(byte2 == 0x8C) byte_out = 0x8D; // Ќ
-    else if(byte2 == 0x8E) byte_out = 0xA1; // Ў
-    else if(byte2 == 0x8F) byte_out = 0x8F; // Џ
-    else if(byte2 < 0xA0) {
-      byte_out = 0xC0 + byte2 - 0x90; // А-П
-    }
-    else {
-      byte_out = 0xD0 + byte2 - 0xA0; // Р-Я а-п
-    }
-  }
-  else if(byte1 == 0xD1) {
-    if(byte2 == 0x91) byte_out = 0xB8; // ё
-    else if(byte2 == 0x92) byte_out = 0x90; // ђ
-    else if(byte2 == 0x93) byte_out = 0x83; // ѓ
-    else if(byte2 == 0x94) byte_out = 0xBA; // є
-    else if(byte2 == 0x95) byte_out = 0xBE; // ѕ
-    else if(byte2 == 0x96) byte_out = 0xB3; // і
-    else if(byte2 == 0x97) byte_out = 0xBF; // ї
-    else if(byte2 == 0x98) byte_out = 0xBC; // ј
-    else if(byte2 == 0x99) byte_out = 0x9A; // љ
-    else if(byte2 == 0x9A) byte_out = 0x9C; // њ
-    else if(byte2 == 0x9B) byte_out = 0x9E; // ћ
-    else if(byte2 == 0x9C) byte_out = 0x9D; // ќ
-    else if(byte2 == 0x9E) byte_out = 0xA2; // ў
-    else if(byte2 == 0x9F) byte_out = 0x9F; // џ
-    else {
-      byte_out = 0xF0 + byte2 - 0x80; // р-я
-    }
-  }
-  else if(byte1 == 0xD2) {
-    if(byte2 == 0x90) byte_out = 0x81; // Ґ
-    if(byte2 == 0x91) byte_out = 0x83; // ґ
-  }
-  else if(byte1 == 0xC2) {
-    if(byte2 == 0xA0) byte_out = 0xA0; // Неразрывный пробел
-    if(byte2 == 0xA4) byte_out = 0xA4; // ¤
-    if(byte2 == 0xA6) byte_out = 0xA6; // ¦
-    if(byte2 == 0xA7) byte_out = 0xA7; // §
-    if(byte2 == 0xA9) byte_out = 0xA9; // ©
-    if(byte2 == 0xAB) byte_out = 0xAB; // Кавычка ёлочка открывающая
-    if(byte2 == 0xAC) byte_out = 0xAC; // ¬
-    if(byte2 == 0xAD) byte_out = 0xAD; // Мягкий перенос
-    if(byte2 == 0xAE) byte_out = 0xAE; // ®
-    if(byte2 == 0xB0) byte_out = 0xB0; // °
-    if(byte2 == 0xB1) byte_out = 0xB1; // ±
-    if(byte2 == 0xB5) byte_out = 0xB5; // µ
-    if(byte2 == 0xB6) byte_out = 0xB6; // ¶
-    if(byte2 == 0xB7) byte_out = 0xB7; // ·
-    if(byte2 == 0xBB) byte_out = 0xBB; // Кавычка ёлочка закрывающая
-  }
-
-  if(byte_out == 0) {
-    Serial.printf("Unknown 2-byte: %02X %02X\n", byte1, byte2);
-    byte_out = '?';
-  }
-
-  return byte_out;
-}
-
-// Конвертировать три байта в cp1251
-char utf8_to_cp1251_triple_byte(char byte1, char byte2, char byte3) {
-  char byte_out = 0;
-
-  if(byte1 == 0xE2 && byte2 == 0x80) {
-    if(byte3 >= 0x80 && byte3 <= 0x8B) byte_out = ' '; // разные виды пробелов
-    else if(byte3 == 0x90) byte_out = '-'; // дефис
-    else if(byte3 == 0x91) byte_out = '-'; // неразрывный дефис
-    else if(byte3 == 0x92) byte_out = '-'; // фигурное тире (по ширине цифры)
-    else if(byte3 == 0x93) byte_out = 0x96; // N dash
-    else if(byte3 == 0x94) byte_out = 0x97; // M dash
-    else if(byte3 == 0x95) byte_out = '-'; // Горизонтальная черта
-    else if(byte3 == 0x98) byte_out = 0x91; // Левая одинарная кавычка
-    else if(byte3 == 0x99) byte_out = 0x92; // Правая одинарная кавычка
-    else if(byte3 == 0x9A) byte_out = 0x83; // 
-    else if(byte3 == 0x9C) byte_out = 0x93; // Открывающая кавычка (верх)
-    else if(byte3 == 0x9D) byte_out = 0x94; // Правая двойная кавычка
-    else if(byte3 == 0x9E) byte_out = 0x84; // Нижняя открывающая двойная кавычка
-    else if(byte3 == 0xA0) byte_out = 0x86; // Типографский крестик
-    else if(byte3 == 0xA1) byte_out = 0x87; // Двойной типографский крестик
-    else if(byte3 == 0xA2) byte_out = 0x95; // Буллет
-    else if(byte3 == 0xA6) byte_out = 0x85; // Троеточие
-    else if(byte3 == 0xB0) byte_out = 0x89; // Промилле
-    else if(byte3 == 0xB9) byte_out = 0x8B; // Открывающая одиночная ёлочка
-    else if(byte3 == 0xBA) byte_out = 0x9B; // Закрывающая одиночная ёлочка
-  }
-  else if(byte1 == 0xE2 && byte2 == 0x82) {
-    if(byte3 == 0xAC) byte_out = 0x88; // Евро
-  }
-  else if(byte1 == 0xE2 && byte2 == 0x84) {
-    if(byte3 == 0x96) byte_out = 0xB9; // №
-    if(byte3 == 0xA2) byte_out = 0x99; // TM
-  }
-
-  if(byte_out == 0) {
-    Serial.printf("Unknown 3-byte: %02X %02X %02X\n", byte1, byte2, byte3);
-    byte_out = '?';
-  }
-
-  return byte_out;
-}
-
-// Конвертировать четыре байта в cp1251
-char utf8_to_cp1251_quad_byte(char byte1, char byte2, char byte3, char byte4) {
-  char byte_out = 0;
-
-  if(byte_out == 0) {
-    Serial.printf("Unknown 4-byte: %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
-    byte_out = '?';
-  }
-
-  return byte_out;
-}
-
-// Преобразование строки из utf8 в cp1251
-// Строка всегда короче, поэтому преобразование в том же буфере
-void utf8_to_cp1251(char *buff) {
-  int read_offset = 0;
-  int write_offset = 0;
-  unsigned char byte, byte2, byte3, byte4;
-  int length = strlen(buff);
-  while(read_offset < length) {
-    byte = buff[read_offset];
-    read_offset++;
-    if(utf8_is_double_byte(byte)) {
-      byte = utf8_to_cp1251_double_byte(byte, buff[read_offset]);
-      read_offset++;
-    }
-    else if(utf8_is_triple_byte(byte)) {
-      byte2 = buff[read_offset + 0];
-      byte3 = buff[read_offset + 1];
-      byte = utf8_to_cp1251_triple_byte(byte, byte2, byte3);
-      read_offset += 2;
-    }
-    else if(utf8_is_quad_byte(byte)) {
-      byte2 = buff[read_offset + 0];
-      byte3 = buff[read_offset + 1];
-      byte4 = buff[read_offset + 2];
-      byte = utf8_to_cp1251_quad_byte(byte, byte2, byte3, byte4);
-      read_offset += 3;
-    }
-    
-    buff[write_offset] = byte;
-    write_offset++;
-  }
-  buff[write_offset] = 0;
-}
-
-void cp1251_to_utf8(char *in_buff, char *out_buff) {
-  int read_offset = 0;
-  int write_offset = 0;
-  int i;
-  unsigned char byte;
-  // 1251 byte, utf8 bytes (2/3), byte1, byte2, byte3
-  char byte_to_bytes[] = {
-    0x80, 2, 0xD0, 0x82, 0x00, // Ђ
-    0x81, 2, 0xD0, 0x83, 0x00, // Ѓ
-    0x82, 3, 0xE2, 0x80, 0x9A, // ‚
-    0x83, 2, 0xD1, 0x93, 0x00, // ѓ
-    0x84, 3, 0xE2, 0x80, 0x9E, // „
-    0x85, 3, 0xE2, 0x80, 0xA6, // …
-    0x86, 3, 0xE2, 0x80, 0xA0, // †
-    0x87, 3, 0xE2, 0x80, 0xA1, // ‡
-    0x88, 3, 0xE2, 0x82, 0xAC, // €
-    0x89, 3, 0xE2, 0x80, 0xB0, // ‰
-    0x8A, 2, 0xD0, 0x89, 0x00, // Љ
-    0x8B, 3, 0xE2, 0x80, 0xB9, // ‹
-    0x8C, 2, 0xD0, 0x8A, 0x00, // Њ
-    0x8D, 2, 0xD0, 0x8C, 0x00, // Ќ
-    0x8E, 2, 0xD0, 0x8B, 0x00, // Ћ
-    0x8F, 2, 0xD0, 0x8F, 0x00, // Џ
-    0x90, 2, 0xD1, 0x92, 0x00, // ђ
-    0x91, 3, 0xE2, 0x80, 0x98, // ‘
-    0x92, 3, 0xE2, 0x80, 0x99, // ’
-    0x93, 3, 0xE2, 0x80, 0x9C, // “
-    0x94, 3, 0xE2, 0x80, 0x9D, // ”
-    0x95, 3, 0xE2, 0x80, 0xA2, // •
-    0x96, 3, 0xE2, 0x80, 0x93, // –
-    0x97, 3, 0xE2, 0x80, 0x94, // —
-    0x98, 1, 0x20, 0x00, 0x00, //  
-    0x99, 3, 0xE2, 0x84, 0xA2, // ™
-    0x9A, 2, 0xD1, 0x99, 0x00, // љ
-    0x9B, 3, 0xE2, 0x80, 0xBA, // ›
-    0x9C, 2, 0xD1, 0x9A, 0x00, // њ
-    0x9D, 2, 0xD1, 0x9C, 0x00, // ќ
-    0x9E, 2, 0xD1, 0x9B, 0x00, // ћ
-    0x9F, 2, 0xD1, 0x9F, 0x00, // џ
-    0xA0, 2, 0xC2, 0xA0, 0x00, // NBSP
-    0xA1, 2, 0xD0, 0x8E, 0x00, // Ў
-    0xA2, 2, 0xD1, 0x9E, 0x00, // ў
-    0xA3, 2, 0xD0, 0x88, 0x00, // Ј
-    0xA4, 2, 0xC2, 0xA4, 0x00, // ¤
-    0xA5, 2, 0xD2, 0x90, 0x00, // Ґ
-    0xA6, 2, 0xC2, 0xA6, 0x00, // ¦
-    0xA7, 2, 0xC2, 0xA7, 0x00, // §
-    0xA8, 2, 0xD0, 0x81, 0x00, // Ё
-    0xA9, 2, 0xC2, 0xA9, 0x00, // ©
-    0xAA, 2, 0xD0, 0x84, 0x00, // Є
-    0xAB, 2, 0xC2, 0xAB, 0x00, // «
-    0xAC, 2, 0xC2, 0xAC, 0x00, // ¬
-    0xAD, 2, 0xC2, 0xAD, 0x00, // SHY
-    0xAE, 2, 0xC2, 0xAE, 0x00, // ®
-    0xAF, 2, 0xD0, 0x87, 0x00, // Ї
-    0xB0, 2, 0xC2, 0xB0, 0x00, // °
-    0xB1, 2, 0xC2, 0xB1, 0x00, // ±
-    0xB2, 2, 0xD0, 0x86, 0x00, // І
-    0xB3, 2, 0xD1, 0x96, 0x00, // і
-    0xB4, 2, 0xD2, 0x91, 0x00, // ґ
-    0xB5, 2, 0xC2, 0xB5, 0x00, // µ
-    0xB6, 2, 0xC2, 0xB6, 0x00, // ¶
-    0xB7, 2, 0xC2, 0xB7, 0x00, // ·
-    0xB8, 2, 0xD1, 0x91, 0x00, // ё
-    0xB9, 3, 0xE2, 0x84, 0x96, // №
-    0xBA, 2, 0xD1, 0x94, 0x00, // є
-    0xBB, 2, 0xC2, 0xBB, 0x00, // »
-    0xBC, 2, 0xD1, 0x98, 0x00, // ј
-    0xBD, 2, 0xD0, 0x85, 0x00, // Ѕ
-    0xBE, 2, 0xD1, 0x95, 0x00, // ѕ
-    0xBF, 2, 0xD1, 0x97, 0x00, // ї
-    0x00
-  };
-  int length = strlen(in_buff);
-  while(read_offset < length) {
-    byte = in_buff[read_offset];
-    read_offset++;
-
-    if(byte <= 0x7F) {
-      out_buff[write_offset] = byte;
-      write_offset++;
-    }
-    else {
-      for(i = 0; byte_to_bytes[i] != 0x00; i += 5) {
-        if(byte_to_bytes[i] == byte) {
-          if(byte_to_bytes[i + 1] >= 1) {
-            out_buff[write_offset] = byte_to_bytes[i + 2];
-            write_offset++;
-          }
-          if(byte_to_bytes[i + 1] >= 2) {
-            out_buff[write_offset] = byte_to_bytes[i + 3];
-            write_offset++;
-          }
-          if(byte_to_bytes[i + 1] >= 3) {
-            out_buff[write_offset] = byte_to_bytes[i + 4];
-            write_offset++;
-          }
-          break;
-        }
-      }
-      // А-П
-      if(byte >= 0xC0 && byte <= 0xCF) {
-        out_buff[write_offset] = 0xD0;
-        write_offset++;
-        out_buff[write_offset] = 0x90 + byte - 0xC0;
-        write_offset++;
-      }
-      // Р-Я а-п
-      if(byte >= 0xD0 && byte <= 0xEF) {
-        out_buff[write_offset] = 0xD0;
-        write_offset++;
-        out_buff[write_offset] = 0xA0 + byte - 0xD0;
-        write_offset++;
-      }
-      // р-я
-      if(byte >= 0xF0 && byte <= 0xFF) {
-        out_buff[write_offset] = 0xD1;
-        write_offset++;
-        out_buff[write_offset] = 0x80 + byte - 0xF0;
-        write_offset++;
-      }
-    }
-  }
-  out_buff[write_offset] = 0;
-}
-
-void cp1251_to_translit(char *in_buff, char *out_buff) {
-  char *encoding = "ABVGDEJZIJKLMNOPRSTUFHC4WW'I'EUAabvgdejzijklmnoprstufhc4ww'i'eua";
-  int read_offset = 0;
-  int write_offset = 0;
-  unsigned char byte;
-  int length = strlen(in_buff);
-  while(read_offset < length) {
-    byte = in_buff[read_offset];
-    read_offset++;
-
-    if(byte <= 0x7F) {
-      out_buff[write_offset] = byte;
-      write_offset++;
-    }
-    else {
-      // Ё
-      if(byte == 0xA8) {
-        out_buff[write_offset] = 'E';
-        write_offset++;
-      }
-      // ё
-      if(byte == 0xB8) {
-        out_buff[write_offset] = 'e';
-        write_offset++;
-      }
-      // Остальные
-      if(byte >= 0xC0) {
-        out_buff[write_offset] = *(encoding + byte - 0xC0);
-        write_offset++;
-      }
-    }
-  }
-  out_buff[write_offset] = 0;
-}
-
-// Проверка на начало однобайтового символа
-char utf8_is_single_byte(char byte1) {
-  if(byte1 <= 0x7F) {
-    return 1;
-  }
-  return 0;
-}
-
-// Проверка на начало двухбайтового символа
-char utf8_is_double_byte(char byte1) {
-  if(byte1 > 0x7F && byte1 <= 0xDF) {
-    return 1;
-  }
-  return 0;
-}
-
-// Проверка на начало трёхбайтового символа
-char utf8_is_triple_byte(char byte1) {
-  if(byte1 > 0xDF && byte1 <= 0xEF) {
-    return 1;
-  }
-  return 0;
-}
-
-// Проверка на начало четырёхбайтового символа
-char utf8_is_quad_byte(char byte1) {
-  if(byte1 > 0xEF && byte1 <= 0xF4) {
-    return 1;
-  }
-  return 0;
-}
-
-// Проверка, является ли корректной строкой UTF-8
-int is_correct_utf8_string(char *str) {
-  int offset = 0;
-  while(offset <= strlen(str)) {
-    if(str[offset] <= 0x7F) offset++;
-    else if(str[offset] <= 0xDF) {
-      // Первый байт из диапазона 0xC2 - 0xDF - маска B110xxxxx
-      if(str[offset] < 0xC2) return 0;
-      // Второй байт из диапазона 0x80 - 0xBF - маска B10xxxxxx
-      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
-      offset += 2;
-    }
-    else if(str[offset] <= 0xDF) {
-      // Первый байт из диапазона 0xC2 - 0xDF - маска B110xxxxx
-      if(str[offset] < 0xC2) return 0;
-      // Второй байт из диапазона 0x80 - 0xBF - маска B10xxxxxx
-      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
-      offset += 2;
-    }
-    else if(str[offset] <= 0xEF) {
-      // Первый байт из диапазона 0xE0 - 0xEF - маска B1110xxxx
-      // Второй и третий байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
-      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
-      if(str[offset + 2] < 0x80 || str[offset + 2] > 0xBF) return 0;
-      offset += 3;
-    }
-    else if(str[offset] <= 0xF4) {
-      // Первый байт из диапазона 0xF0 - 0xF4 - маска B11110xxx
-      // Второй и дальше байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
-      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
-      if(str[offset + 2] < 0x80 || str[offset + 2] > 0xBF) return 0;
-      if(str[offset + 3] < 0x80 || str[offset + 3] > 0xBF) return 0;
-      offset += 4;
-    }
-    else {
-      return 0;
-    }
-  }
-  return 1;
-}
-
-// Двоичный файл или нет (содержит нули)
-// Если есть символы 0-8, 11-12, 14-19, то двочиный
-char is_binary_file(char *filename) {
-  fs::File file;
-  int offset = 0;
-  int byte;
-  char result = 0;
-  file = Storage->open(filename);
-  while(file.available()) {
-    byte = file.read();
-    if(byte >= 0 && byte <= 8 || byte == 11 || byte == 12 || byte >= 14 && byte <= 19) {
-      result = 1;
-      break;
-    }
-    offset++;
-    if(offset >= 1024) break;
-  }
-  file.close();
-  return result;
-}
-
-// Папка или нет
-char is_directory(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 0;
-  file = Storage->open(filename);
-  result = file.isDirectory();
-  file.close();
-  return result;
-}
-
-// Пустая папка или нет
-char is_empty_directory(char *filename) {
-  fs::File file;
-  fs::File current_dir;
-  int bytes;
-  char result = 1;
-  current_dir = Storage->open(filename);
-  if(!current_dir.isDirectory()) return 0;
-
-  // Смотрим содержимое папки, пропускаем . и ..
-  // Любой другой элемент - непустая папка
-  while(file = current_dir.openNextFile()) {
-    if(strcmp(file.name(), ".") == 0) continue;
-    if(strcmp(file.name(), "..") == 0) continue;
-    result = 0;
-    break;
-  }
-  current_dir.close();
-
-  return result;
-}
-
-// Пустой файл или нет
-char is_empty_file(char *filename) {
-  if(get_file_size(filename) == 0) return 1;
-  return 0;
-}
-
-long get_file_size(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 0;
-  file = Storage->open(filename);
-  result = file.size();
-  file.close();
-  return result;
-}
-
-// BMP или нет
-char is_bmp_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 54 байта
-  if(file.size() < 54) result = 0;
-  // Файл начинается буквами BM
-  if(file.read() != 'B') result = 0;
-  if(file.read() != 'M') result = 0;
-  file.close();
-  return result;
-}
-
-// PNG или нет
-char is_png_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 67 байта
-  if(file.size() < 67) result = 0;
-  // Файл начинается буквами BM
-  if(file.read() != 0x89) result = 0;
-  if(file.read() != 'P') result = 0;
-  if(file.read() != 'N') result = 0;
-  if(file.read() != 'G') result = 0;
-  file.close();
-  return result;
-}
-
-// JPEG или нет
-char is_jpeg_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 107 байт
-  if(file.size() < 107) result = 0;
-  // Файл начинается буквами BM
-  if(file.read() != 0xFF) result = 0;
-  if(file.read() != 0xD8) result = 0;
-  if(file.read() != 0xFF) result = 0;
-  file.close();
-  return result;
-}
-
-// WEBP или нет
-char is_webp_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 47 байт
-  if(file.size() < 47) result = 0;
-  // Файл начинается буквами BM
-  if(file.read() != 'R') result = 0;
-  if(file.read() != 'I') result = 0;
-  if(file.read() != 'F') result = 0;
-  if(file.read() != 'F') result = 0;
-  file.close();
-  return result;
-}
-
-// MP3 или нет
-char is_mp3_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 417 байт
-  if(file.size() < 417) result = 0;
-  // Файл начинается буквами ID3
-  if(file.read() != 'I') result = 0;
-  if(file.read() != 'D') result = 0;
-  if(file.read() != '3') result = 0;
-  file.close();
-  return result;
-}
-
-// WAV или нет
-char is_wav_file(char *filename) {
-  fs::File file;
-  int bytes;
-  char result = 1;
-  file = Storage->open(filename);
-  // Минимальный размер 44 байт
-  if(file.size() < 44) result = 0;
-  // Файл начинается буквами ID3
-  if(file.read() != 'R') result = 0;
-  if(file.read() != 'I') result = 0;
-  if(file.read() != 'F') result = 0;
-  if(file.read() != 'F') result = 0;
-  file.close();
-  return result;
-}
-
-char is_digit_string(char *str) {
-  int i;
-  for(i = 0; i < strlen(str); i++) {
-    if(str[i] < '0' || str[i] > '9') return 0;
-  }
-  return 1;
-}
-
-char char1251_lowercase(char in) {
-  // English
-  if(in >= 'A' && in <= 'Z') {
-    return in - 'A' + 'a';
-  }
-  // Русский
-  if(in >= 0xC0 && in <= 0xDF) {
-    return in - 0xC0 + 0xE0;
-  }
-  // Ё
-  if(in == 0xA8) return 0xB8;
-  // Ђ
-  if(in == 0x80) return 0x90;
-  // Ѓ
-  if(in == 0x81) return 0x83;
-  // Љ
-  if(in == 0x8A) return 0x9A;
-  // Њ
-  if(in == 0x8C) return 0x9C;
-  // Ќ
-  if(in == 0x8D) return 0x9D;
-  // Ћ
-  if(in == 0x8E) return 0x9E;
-  // Џ
-  if(in == 0x8F) return 0x9F;
-  // Ў
-  if(in == 0xA1) return 0xA2;
-  // Ј
-  if(in == 0xA3) return 0xBC;
-  // Ґ
-  if(in == 0xA5) return 0xB4;
-  // Є
-  if(in == 0xAA) return 0xBA;
-  // Ї
-  if(in == 0xAF) return 0xBF;
-  // І
-  if(in == 0xB2) return 0xB3;
-  // Ѕ
-  if(in == 0xBD) return 0xBE;
-
-  return in;
-}
-
-// Обновляет переменные года, месяца, дня, дня недели, часов, минут, секунд по внутренним счётчикам
-// Действия на смену суток
-// Действия на смену часа, четверти часа
-// Действия на будильник
-// Можно доработать чтобы использовалось get_datetime_from_unixtime
-void set_local_time_from_unix_timestamp() {
-  unsigned long unix_timestamp;
-  unsigned long days_since_epoch;
-  unsigned long days_remain;
-  int year;
-  int month;
-  int day;
-  int hour;
-  int minute;
-  char lap_year_flag;
-  char retry_retrieve = 0;
-  char beep_hour_flag = 0;
-  int prev_day;
-
-  // Если время уже было откуда-то загружено и день был установлен, то есть эта функция уже отработала раз
-  if(global_unixtime_retrieved != 0 && global_day != 0) {
-    retry_retrieve = 1;
-  }
-
-  unix_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
-
-  // Дней с начала эпохи
-  days_since_epoch = (unix_timestamp + global_timezone) / 86400;
-  // День недели
-  global_day_of_week = (days_since_epoch + 3) % 7;
-  // Высчитываем дату
-  days_remain = days_since_epoch;
-  year = 1970;
-  month = 1;
-  day = 1;
-  lap_year_flag = is_lap_year(year);
-  while(days_remain > 0) {
-    // Високосные годы
-    lap_year_flag = 0;
-    if(is_lap_year(year)) {
-      lap_year_flag = 1;
-    }
-    if(lap_year_flag && days_remain >= 366) {
-      days_remain -= 366;
-      year++;
-      continue;
-    }
-    // Обычные годы
-    if(!lap_year_flag && days_remain >= 365) {
-      days_remain -= 365;
-      year++;
-      continue;
-    }
-    //Serial.println(days_remain);
-    if((month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) && days_remain >= 31) {
-      days_remain -= 31;
-      month++;
-      continue;
-    }
-    if((month == 4 || month == 6 || month == 9 || month == 11) && days_remain >= 30) {
-      days_remain -= 30;
-      month++;
-      continue;
-    }
-    if(month == 2 && days_remain >= 29 & lap_year_flag) {
-      days_remain -= 29;
-      month++;
-      continue;
-    }
-    if(month == 2 && days_remain >= 28 & !lap_year_flag) {
-      days_remain -= 28;
-      month++;
-      continue;
-    }
-    day += days_remain;
-    break;
-  }
-
-  // Если дата изменилась
-  if(retry_retrieve && global_day != day) {
-    Serial.printf("global_day=%d\n", global_day);
-    Serial.printf("day=%d\n", day);
-    store_current_timestamp();
-  }
-
-  global_year = year;
-  global_month = month;
-  global_day = day;
-  global_is_lap_year = lap_year_flag;
-
-  hour = ((unix_timestamp + global_timezone) / 3600) % 24;
-  minute = ((unix_timestamp + global_timezone) / 60) % 60;
-  // Если есть будильник, час и минута совпадают, и минуты измениилсь
-  if(global_alarm_set && hour == global_alarm_hour && minute != global_minutes && minute == global_alarm_minute) {
-    beep_alarm();
-  }
-  // Смена часа и переход минут с 59 на 00 (иначе при настройке времени срабатывает)
-  else if(global_hours + 1 == hour && minute == 0 && global_minutes == 59) {
-    beep_hour_flag = 1;
-  }
-  else if(global_hours == hour) {
-    if(minute == 15 && global_minutes == 14) beep_quarter();
-    if(minute == 30 && global_minutes == 29) beep_quarter();
-    if(minute == 45 && global_minutes == 44) beep_quarter();
-  }
-  
-  global_hours = hour;
-  global_minutes = minute;
-  global_seconds = (unix_timestamp + global_timezone) % 60;
-
-  global_moon_day = fmod(25 + days_since_epoch, 29.53059);
-
-  if(beep_hour_flag) {
-    beep_hour();
-  }
-}
-
-time_t get_unixtime_from_datetime(long timezone, int year, int month, int day, int hour, int minute, int second) {
-  time_t result = 0;
-  int i;
-  // Учитываем годы
-  for(i = 1970; i < year; i++) {
-    // Добавялем 365 дней на каждый год
-    result += 86400 * 365;
-    // И ещё сутки на високосный
-    if(is_lap_year(i)) {
-      result += 86400;
-    }
-  }
-  // Учитываем месяцы
-  for(i = 1; i < month; i++) {
-    if(i == 1 || i == 3 || i == 5 || i == 7 || i == 8 || i == 10 || i == 12) {
-      result += 86400 * 31;
-    }
-    else if(i == 4 || i == 6 || i == 9 || i == 11) {
-      result += 86400 * 30;
-    }
-    else if(i == 2) {
-      result += 86400 * 28;
-      // Добавяем ещё день если год високосный
-      if(is_lap_year(year)) {
-        result += 86400;
-      }
-    }
-  }
-  // Учитываем дни
-  for(i = 1; i < day; i++) {
-    result += 86400;
-  }
-
-  // Часы, минуты, секунды, МИНУС таймзона
-  result += hour * 3600 + minute * 60 + second - timezone;
-
-  // Возвращаем результат
-  return result;
-}
-
-time_t get_unixtime_from_current_datetime() {
-  return get_unixtime_from_datetime(global_timezone, global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
-}
-
-time_t get_unixtime_from_current_date() {
-  return get_unixtime_from_datetime(global_timezone, global_year, global_month, global_day, 0, 0, 0);
-}
-
-// Получить дату и время из строки вида гггг-мм-дд чч:мм:сс
-int get_datetime_from_string(char *str, int *year, int *month, int *day, int *hour, int *minute, int *second) {
-  char *tmp = NULL;
-  tmp = str;
-  *year = 0;
-  *month = 0;
-  *day = 0;
-  *hour = 0;
-  *minute = 0;
-  *second = 0;
-
-  // Год
-  if(!tmp) return 0;
-  *year = strtol(tmp, NULL, 10);
-
-  // Месяц
-  tmp = strchr(tmp, '-');
-  if(!tmp) return 0;
-  tmp++;
-  *month = strtol(tmp, NULL, 10);
-
-  // День
-  tmp = strchr(tmp, '-');
-  if(!tmp) return 0;
-  tmp++;
-  *day = strtol(tmp, NULL, 10);
-
-  // Часы
-  tmp = strchr(tmp, ' ');
-  if(!tmp) return 1;
-  tmp++;
-  *hour = strtol(tmp, NULL, 10);
-
-  // Минуты
-  tmp = strchr(tmp, ':');
-  if(!tmp) return 1;
-  tmp++;
-  *minute = strtol(tmp, NULL, 10);
-
-  // Секунды
-  tmp = strchr(tmp, ':');
-  if(!tmp) return 1;
-  tmp++;
-  *second = strtol(tmp, NULL, 10);
-
-  return 1;
-}
-
-// Получить юникстайм из строки
-time_t get_unixtime_from_string(char *str) {
-    int year, month, day, day_of_week, hour, minute, second;
-    get_datetime_from_string(str, &year, &month, &day, &hour, &minute, &second);
-    return get_unixtime_from_datetime(global_timezone, year, month, day, hour, minute, second);
-}
-
-// Получить дату и время из юникстайма
-void get_datetime_from_unixtime(unsigned long unix_timestamp, long timezone, int *year, int *month, int *day, int *day_of_week, int *hour, int *minute, int *second) {
-  unsigned long days_since_epoch;
-  unsigned long days_remain;
-  char lap_year_flag;
-
-  // Дней с начала эпохи
-  days_since_epoch = (unix_timestamp + timezone) / 86400;
-  // День недели
-  *day_of_week = (days_since_epoch + 3) % 7;
-  // Высчитываем дату
-  days_remain = days_since_epoch;
-  *year = 1970;
-  *month = 1;
-  *day = 1;
-  lap_year_flag = is_lap_year(*year);
-  while(days_remain > 0) {
-    // Високосные годы
-    lap_year_flag = 0;
-    if(is_lap_year(*year)) {
-      lap_year_flag = 1;
-    }
-    if(lap_year_flag && days_remain >= 366) {
-      days_remain -= 366;
-      (*year)++;
-      continue;
-    }
-    // Обычные годы
-    if(!lap_year_flag && days_remain >= 365) {
-      days_remain -= 365;
-      (*year)++;
-      continue;
-    }
-    //Serial.println(days_remain);
-    if((*month == 1 || *month == 3 || *month == 5 || *month == 7 || *month == 8 || *month == 10 || *month == 12) && days_remain >= 31) {
-      days_remain -= 31;
-      (*month)++;
-      continue;
-    }
-    if((*month == 4 || *month == 6 || *month == 9 || *month == 11) && days_remain >= 30) {
-      days_remain -= 30;
-      (*month)++;
-      continue;
-    }
-    if(*month == 2 && days_remain >= 29 & lap_year_flag) {
-      days_remain -= 29;
-      (*month)++;
-      continue;
-    }
-    if(*month == 2 && days_remain >= 28 & !lap_year_flag) {
-      days_remain -= 28;
-      (*month)++;
-      continue;
-    }
-    *day += days_remain;
-    break;
-  }
-
-  *hour = ((unix_timestamp + timezone) / 3600) % 24;
-  *minute = ((unix_timestamp + timezone) / 60) % 60;
-  *second = (unix_timestamp + timezone) % 60;
-}
-
-// Високосный ли год
-char is_lap_year(int year) {
-  if(year % 4 == 0 && (year % 100 == 0 || year % 400 != 0)) return 1;
-  return 0;
-}
-
-// Предыдущий месяц
-void get_prev_month(int *year, int *month) {
-  (*month)--;
-  if(*month == 0) {
-    (*year)--;
-    *month = 12;
-  }
-}
-
-// Следующий месяц
-void get_next_month(int *year, int *month) {
-  (*month)++;
-  if(*month == 13) {
-    (*year)++;
-    *month = 1;
-  }
-}
-
-// Предыдущий день
-void get_prev_day(int *year, int *month, int *day) {
-  (*day)--;
-  if(!is_valid_date(*year, *month, *day)) {
-    get_prev_month(year, month);
-    *day = last_day_of_month(*year, *month);
-  }
-}
-
-// Следующий день
-void get_next_day(int *year, int *month, int *day) {
-  (*day)++;
-  if(!is_valid_date(*year, *month, *day)) {
-    get_next_month(year, month);
-    *day = 0;
-  }
-}
-
-// Проверка валидности даты
-char is_valid_date(int year, int month, int day) {
-  if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
-    if(day >= 1 && day <= 31) return 1;
-  }
-  else if(month == 4 || month == 6 || month == 9 || month == 11 ) {
-    if(day >= 1 && day <= 30) return 1;
-  }
-  else if(month == 2) {
-    if(is_lap_year(year)) {
-      if(day >= 1 && day <= 29) return 1;
-    }
-    else {
-      if(day >= 1 && day <= 28) return 1;
-    }
-  }
-  return 0;
-}
-
-int last_day_of_month(int year, int month) {
-  if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
-    return 31;
-  }
-  else if(month == 4 || month == 6 || month == 9 || month == 11 ) {
-    return 30;
-  }
-  else if(month == 2) {
-    if(is_lap_year(year)) {
-      return 29;
-    }
-    else {
-      return 28;
-    }
-  }
-  return 0;
-}
-
-int get_day_of_week(int year, int month, int day) {
-  static const int anchor[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
-
-  if (month < 3) year--;
-  return (year + year/4 - year/100 + year/400 + anchor[month - 1] + day + 6) % 7;
-}
-
-void get_current_datetime_formatted(char *buff) {
-  if(global_is_time_set) {
-    get_datetime_formatted(buff, global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
-  }
-  else {
-    sprintf(buff, "%04d-%02d-%02d --:--:--", global_year, global_month, global_day);
-  }
-}
-
-void get_datetime_formatted(char *buff, int year, int month, int day, int hours, int minutes, int seconds) {
-  if(global_is_12h_time) {
-    sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d %s", year, month, day, hours % 12 == 0 ? 12 : hours % 12, minutes, seconds, hours >= 12? "PM" : "AM");
-  }
-  else {
-    sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", year, month, day, hours, minutes, seconds);
-  }
-}
-
-void get_current_date_formatted(char *buff) {
-  sprintf(buff, "%04d-%02d-%02d", global_year, global_month, global_day);
-}
-
-void get_date_formatted(char *buff, int year, int month, int day) {
-  sprintf(buff, "%04d-%02d-%02d", year, month, day);
-}
-
-// Формат для дашбордов, для 12-часового формата AM/PM не влезает
-void get_current_time_hms_for_big(char *buff) {
-  if(global_is_time_set) {
-    get_time_hms_for_big(buff, global_hours, global_minutes, global_seconds);
-  }
-  else {
-    sprintf(buff, "--:--:--");
-  }
-}
-
-void get_time_hms_for_big(char *buff, int hours, int minutes, int seconds) {
-  if(global_is_12h_time) {
-    sprintf(buff, "%d:%02d:%02d", hours % 12 == 0 ? 12 : hours % 12, minutes, seconds);
-  }
-  else {
-    get_time_hms_formatted(buff, hours, minutes, seconds);
-  }
-}
-
-void get_current_time_hms_formatted(char *buff) {
-  if(global_is_time_set) {
-    get_time_hms_formatted(buff, global_hours, global_minutes, global_seconds);
-  }
-  else {
-    sprintf(buff, "--:--:--");
-  }
-}
-
-void get_time_hms_formatted(char *buff, int hours, int minutes, int seconds) {
-  if(global_is_12h_time) {
-    sprintf(buff, "%d:%02d:%02d %s", hours % 12 == 0 ? 12 : hours % 12, minutes, seconds, hours >= 12? "PM" : "AM");
-  }
-  else {
-    sprintf(buff, "%d:%02d:%02d", hours, minutes, seconds);
-  }
-}
-
-void get_current_time_hm_formatted(char *buff) {
-  if(global_is_time_set) {
-    get_time_hm_formatted(buff, global_hours, global_minutes);
-  }
-  else {
-    sprintf(buff, "-:--");
-  }
-}
-
-void get_time_hm_formatted(char *buff, int hours, int minutes) {
-  if(global_is_12h_time) {
-    sprintf(buff, "%d:%02d %s", hours % 12 == 0 ? 12 : hours % 12, minutes, hours >= 12? "PM" : "AM");
-  }
-  else {
-    sprintf(buff, "%d:%02d", hours, minutes);
-  }
-}
-
-void get_sunrise_sunset(int month, int day, double lat, double lon, double *sunrise, double *solar_noon, double *sunset) {
-  // Восход и закат
-  double N, v, delta, E, h0, w0;
-  int i;
-  // Номер дня года
-  N = 0;
-  for(i = 1; i < month; i++) {
-    if(i == 1 || i == 3 || i == 5 || i == 7 || i == 8 || i == 10 || i == 12) {
-      N += 31;
-    }
-    else if(i == 2) {
-      N += 28;
-    }
-    else {
-      N += 30;
-    }
-  }
-  N += day;
-
-  // Какие-то параметры
-  v = 2 * PI / 365 * (N - 1);
-  delta =
-    0.006918
-    - 0.399912 * cos(v)
-    + 0.070257 * sin(v)
-    - 0.006758 * cos(2 * v)
-    + 0.000907 * sin(2 * v)
-    - 0.002697 * cos(3 * v)
-    + 0.001480 * sin(3 * v);
-  E =
-    229.18 * (
-      0.000075
-      + 0.001868 * cos(v)
-      - 0.032077 * sin(v)
-      - 0.014615 * cos(2 * v)
-      - 0.040849 * sin(2 * v)
-    );
-  h0 = -0.833;
-  w0 = acos(
-    (sin(PI * h0 / 180) - sin(PI * lat / 180) *sin(delta))
-    / (cos(PI * lat / 180) * cos(delta))
-  );
-  *solar_noon =
-    720 - 4 * lon - E;
-  
-  *sunrise = *solar_noon - 4 * w0 * 180 / PI;
-  *sunset  = *solar_noon + 4 * w0 * 180 / PI;
-
-  //Serial.printf("month %d day %d sunrise %d:%02d noon %d:%02d sunset %d:%02d\n",
-  //  month, day, (int)(*sunrise / 60), (int)(*sunrise) % 60, (int)(solar_noon / 60), (int)(solar_noon) % 60, (int)(*sunset / 60), (int)(*sunset) % 60);
-}
-
-void qth_to_lat_lon(char *qth, double *lat, double *lon, double *dist_lat_result, double *dist_lon_result) {
-  double dist_lat = 0, dist_lon = 0;
-  *lat = -90.0;
-  *lon = -180.0;
-  if(strlen(qth) >= 2) {
-    dist_lat = 180.0 / (18);
-    dist_lon = 360.0 / (18);
-    // Uppercase
-    *lon += dist_lon * ((qth[0] & B01011111) - 'A');
-    *lat += dist_lat * ((qth[1] & B01011111) - 'A');
-  }
-  if(strlen(qth) >= 4) {
-    dist_lat = 180.0 / (18 * 10);
-    dist_lon = 360.0 / (18 * 10);
-    *lon += dist_lon * (qth[2] - '0');
-    *lat += dist_lat * (qth[3] - '0');
-  }
-  if(strlen(qth) >= 6) {
-    dist_lat = 180.0 / (18 * 10 * 24);
-    dist_lon = 360.0 / (18 * 10 * 24);
-    // Uppercase
-    *lon += dist_lon * ((qth[4] & B01011111) - 'A');
-    *lat += dist_lat * ((qth[5] & B01011111) - 'A');
-  }
-  if(strlen(qth) >= 8) {
-    dist_lat = 180.0 / (18 * 10 * 24 * 10);
-    dist_lon = 360.0 / (18 * 10 * 24 * 10);
-    *lon += dist_lon * (qth[6] - '0');
-    *lat += dist_lat * (qth[7] - '0');
-  }
-  *lat += dist_lat / 2;
-  *lon += dist_lon / 2;
-
-  if(dist_lat_result) {
-    *dist_lat_result = dist_lat / 2;
-  }
-  if(dist_lon_result) {
-    *dist_lon_result = dist_lon / 2;
-  }
-}
-
-// Сохранить текущую дату в ФС
-void store_current_timestamp() {
-  char buff[80];
-  unsigned long current_timestamp;
-
-  Serial.println("store_current_timestamp");
-  current_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
-  sprintf(buff, "%lu", current_timestamp);
-  write_file_from_buff("/Settings/Timestamp", buff);
-}
-
-void get_current_timestamp_fs() {
-  char buff[80];
-  if(read_file_to_buff("/Settings/Timestamp", 79, buff)) {
-    global_unixtime_retrieved = strtol(buff, NULL, 10);
-    global_unixtime_retrieved_millis = millis();
-  }
-}
-
-void get_current_timezone() {
-  char buff[80];
-  if(read_file_to_buff("/Settings/Timezone", 79, buff)) {
-    global_timezone = strtol(buff, NULL, 10);
-  }
-}
-
-void save_current_timezone() {
-  char buff[80];
-  sprintf(buff, "%ld", global_timezone);
-  write_file_from_buff("/Settings/Timezone", buff);
-}
-
-void cp_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
-  char *buff;
-  int size;
-  fs::File file_from;
-  fs::File file_to;
-
-  Serial.printf("Copy from %s to %s\n", path_from, path_to);
-
-  buff = (char *)malloc(4096 * sizeof(char));
-  file_from = Storage_from->open(path_from);
-  // Проверить существование файла назначения
-  if(Storage_to->exists(path_to)) {
-    file_to = Storage_to->open(path_to);
-    if(file_to) {
-      // Если это папка, то нужно копировать файл в эту папку с тем же названием файла
-      if(file_to.isDirectory()) {
-        strcat(path_to, "/");
-        strcat(path_to, file_from.name());
-      }
-      file_to.close();
-    }
-  }
-  file_to = Storage_to->open(path_to, FILE_WRITE);
-
-  while(file_from.available()) {
-    size = file_from.read((uint8_t *)buff, 4096);
-    file_to.write((const uint8_t *)buff, size);
-  }
-  
-  free(buff);
-  file_from.close();
-  file_to.close();
-}
-
-void cp_recursive_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
-  char path_next_from[240];
-  char path_next_to[240];
-  fs::File file_from;
-  fs::File file_to;
-
-  Serial.printf("Recursive from %s to %s\n", path_from, path_to);
-
-  file_from = Storage_from->open(path_from);
-  if(file_from) {
-    // Если это папка
-    if(file_from.isDirectory()) {
-      if(!Storage_to->exists(path_to)) {
-        Storage_to->mkdir(path_to);
-      }
-      // Копировать содержимое
-      while(file_to = file_from.openNextFile()) {
-        // 
-        if(strcmp("/", path_from)) {
-          sprintf(path_next_from, "%s/%s", path_from, file_to.name());
-        }
-        else {
-          sprintf(path_next_from, "/%s", file_to.name());
-        }
-        if(strcmp("/", path_to)) {
-          sprintf(path_next_to, "%s/%s", path_to, file_to.name());
-        }
-        else {
-          sprintf(path_next_to, "/%s", file_to.name());
-        }
-        if(file_to.isDirectory()) {
-          Serial.printf("mkdir %s\n", path_next_to);
-          Storage_to->mkdir(path_next_to);
-        }
-        file_to.close();
-        cp_recursive_between_storages(Storage_from, path_next_from, Storage_to, path_next_to);
-      }
-    }
-    else {
-      file_from.close();
-      cp_between_storages(Storage_from, path_from, Storage_to, path_to);
-    }
-  }
-}
-
-void delete_recursive(fs::FS *Storage_from, char *path) {
-  char buff[240];
-  fs::File file;
-  fs::File current_dir;
-  current_dir = Storage_from->open(path);
-  if(current_dir.isDirectory()) {
-    while(file = current_dir.openNextFile()) {
-      sprintf(buff, "%s/%s", path, file.name());
-      if(file.isDirectory()) {
-        Serial.printf("rmdir %s\n", buff);
-        delete_recursive(Storage_from, buff);
-      }
-      else {
-        Serial.printf("rm %s\n", buff);
-        Storage_from->remove(buff);
-      }
-    }
-    current_dir.close();
-    // Удалить папку, но не корень
-    if(strcmp(path, "/")) {
-      Serial.printf("rmdir %s\n", path);
-      Storage_from->rmdir(path);
-    }
-  }
-  else {
-    Serial.printf("rm %s\n", path);
-    Storage_from->remove(path);
-    current_dir.close();
-  }
-}
-
-long long size_recursive(fs::FS *Storage_from, char *path) {
-  char buff[240];
-  long long size = 0;
-
-  Serial.println(path);
-  fs::File file;
-  fs::File current_dir;
-  current_dir = Storage_from->open(path);
-  if(current_dir.isDirectory()) {
-    while(file = current_dir.openNextFile()) {
-      sprintf(buff, "%s/%s", path, file.name());
-      if(file.isDirectory()) {
-        size += size_recursive(Storage_from, buff);
-      }
-      else {
-        //Serial.printf("rm %s\n", buff);
-        size += file.size();
-      }
-    }
-  }
-  else {
-    size += current_dir.size();
-  }
-  current_dir.close();
-
-  Serial.printf("%s %llu\n", path, size);
-  return size;
-}
-
-void screen_test(char mode, char *io_buff) {
-  int i;
-  int j;
-  int colors[] = {TFT_WHITE, TFT_RED, TFT_GREEN, TFT_BLUE, TFT_MAGENTA, TFT_CYAN, TFT_YELLOW, TFT_BLACK};
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
-
-  if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Screen Test");
-    return;
-  }
-  if(mode == APP_MODE_RETURN_NAME_SHORT) {
-    strcpy(io_buff, "ScrT");
-    return;
-  }
-  if(mode == APP_MODE_RETURN_ICON) {
-    memcpy(io_buff, app_icon, 130);
-    return;
-  }
-
-  disableAppTitle();
-
-  for(i = 0; i < 8; i++) {
-    tft.fillScreen(colors[i]);
-
-    touchWaitPress();
-    touchWaitRelease();
-  }
-
-  tft.fillScreen(TFT_WHITE);
-  for(i = 0; i != 160; i++) {
-    tft.drawLine(0, i * 2, tft.width(), i * 2, TFT_BLACK);
-  }
-  touchWaitPress();
-  touchWaitRelease();
-
-  tft.fillScreen(TFT_WHITE);
-  for(i = 0; i != 160; i++) {
-    tft.drawLine(0, i * 2 + 1, tft.width(), i * 2 + 1, TFT_BLACK);
-  }
-  touchWaitPress();
-  touchWaitRelease();
-  
-  tft.fillScreen(TFT_WHITE);
-  for(i = 0; i != 120; i++) {
-    tft.drawLine(i * 2, 0, i * 2, tft.height(), TFT_BLACK);
-  }
-  touchWaitPress();
-  touchWaitRelease();
-
-  tft.fillScreen(TFT_WHITE);
-  for(i = 0; i != 120; i++) {
-    tft.drawLine(i * 2 + 1, 0, i * 2 + 1, tft.height(), TFT_BLACK);
-  }
-  touchWaitPress();
-  touchWaitRelease();
-
-  tft.fillScreen(TFT_BLACK);
-  for(j = 0; j < tft.height(); j++) {
-    for(i = 0; i < 32; i++) {
-      tft.drawPixel(i + 32 * 0, j, i);
-    }
-    for(i = 0; i < 32; i++) {
-      tft.drawPixel(i + 32 * 1, j, i << 6);
-    }
-    for(i = 0; i < 32; i++) {
-      tft.drawPixel(i + 32 * 2, j, i << 11);
-    }
-    for(i = 0; i < 32; i++) {
-      tft.drawPixel(i + 32 * 3, j, (i << 6) + (i << 11));
-    }
-    for(i = 0; i < 32; i++) {
-      tft.drawPixel(i + 32 * 4, j, i + (i << 11));
-    }
-    for(i = 0; i < 32; i++) {
-      tft.drawPixel(i + 32 * 5, j, i + (i << 6));
-    }
-    for(i = 0; i < 32; i++) {
-      tft.drawPixel(i + 32 * 6, j, i + (i << 6) + (i << 11));
-    }
-  }
-  touchWaitPress();
-  touchWaitRelease();
-
-  for(j = 0; j < tft.height(); j++) {
-    for(i = 0; i < tft.width(); i++) {
-      tft.drawPixel(i, j, tft.readPixel(i, j));
-    }
-  }
-  touchWaitPress();
-  touchWaitRelease();
-
-  tft.fillScreen(TFT_BLACK);
-  for(j = 0; j < 256; j++) {
-    for(i = 0; i < 256; i++) {
-      tft.drawPixel(i, j, i + j * 256);
-    }
-  }
-  touchWaitPress();
-  touchWaitRelease();
-
-  for(j = 0; j < tft.height(); j++) {
-    for(i = 0; i < tft.width(); i++) {
-      tft.drawPixel(i, j, tft.readPixel(i, j));
-    }
-  }
-  touchWaitPress();
-  touchWaitRelease();
-}
-
-
-// На какое смещение было нажатие
-int draw_text_formatted_touch_offset = 0;
-// Где на экране определённое смещение
-int draw_text_formatted_cursor_offset = 0;
-int draw_text_formatted_cursor_pos_x = 0;
-int draw_text_formatted_cursor_pos_y = 0;
-
-// Вывести одну страницу текста с переносом по словам
-// Возвращает число выведенных байтов
-// text - текст, который нужно выводить
-// start_x, start_y - левый верхний угол
-// width - ширина в пикселях
-// total_lines - число строк
-// font - шрифт
-// draw_flag - рисовать текст или только посчитать смещение
-int draw_text_formatted(char *text, int start_x, int start_y, int width, int total_lines, int font, int draw_flag) {
-  char current_line[80];
-  char current_word[80];
-  char new_line_flag_word = 0;
-  char new_line_flag_line = 0;
-  char newline_symbols = 0;
-  char newline_symbols_prev = 0;
-  char byte;
-  int word_offset = 0;
-  int line_index = 0;
-  int text_offset = 0;
-  int start_line_offset;
-  int line_height;
-  int i;
-
-  draw_text_formatted_cursor_pos_x = -1;
-  draw_text_formatted_cursor_pos_y = -1;
-  
-  //Serial.println("draw_text_formatted");
-
-  line_height = tft.fontHeight(font);
-
-  strcpy(current_line, "");
-  strcpy(current_word, "");
-
-  while(line_index < total_lines) {
-    //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
-    // Считываем очередное слово в буфер current_word
-    while(text[text_offset] > 0) {
-      //Serial.println(__LINE__);
-      byte = text[text_offset];
-
-      // Tab - пробел
-      if(byte == 0x09) byte = ' ';
-      // Всё остальное неотображаемые до пробела, кроме переводов строк
-      if(byte < ' ' && byte != '\n' && byte != '\r') byte = '_';
-      
-      // Последовательности \n\r и \r\n это один перевод строки
-      newline_symbols = 0;
-      if(byte == '\r' && text[text_offset + 1] == '\n') {
-        text_offset++;
-        newline_symbols++;
-      }
-      if(byte == '\n' && text[text_offset + 1] == '\r') {
-        text_offset++;
-        newline_symbols++;
-      }
-      if(byte == '\n' || byte == '\r' || byte == 0) {
-        newline_symbols++;
-        if(byte > 0) text_offset++;
-        new_line_flag_word = 1;
-      }
-      if(new_line_flag_word) break;
-
-      // Добавляем текущий символ в строку
-      current_word[word_offset] = byte;
-      word_offset++;
-      current_word[word_offset] = 0;
-      text_offset++;
-
-      if(strlen(current_word) >= 40) break;
-      if(byte == ' ') break;
-    }
-
-    // Проверяем, влезет ли новое слово + строка на экран
-    //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
-    //delay(1000);
-    if(tft.textWidth(current_line, font) + tft.textWidth(current_word, font) < width) {
-      strcat(current_line, current_word);
-      strcpy(current_word, "");
-      word_offset = 0;
-      if(new_line_flag_word) {
-        new_line_flag_line = 1;
-        new_line_flag_word = 0;
-      }
-      //Serial.println(__LINE__);
-      if(!new_line_flag_line && text[text_offset] > 0) continue;
-    }
-
-    while(line_index < total_lines) {
-      //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
-      // Если строка сейчас пустая, а слово нет, значит слово целиком на экран не влезает, и нужно вывести часть слова (пока влезает)
-      if(strlen(current_line) == 0 && strlen(current_word) > 0 && tft.textWidth(current_word, font) >= width) {
-        // Копируем слово в строку, убираем символы пока не начнёт влезать в строку
-        strcpy(current_line, current_word);
-        while(tft.textWidth(current_line, font) >= width) {
-          current_line[strlen(current_line) - 1] = 0;
-        }
-        // Теперь из current_word нужно убрать столько символов, сколько добавили в строку
-        for(i = 0; i < strlen(current_word) - strlen(current_line); i++) {
-          current_word[i] = current_word[i + strlen(current_line)];
-        }
-        current_word[i] = 0;
-        word_offset = strlen(current_word);
-      }
-
-      // Выводим строку
-      //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
-      if(draw_flag) {
-        tft.setTextColor(color_scheme_fg, color_scheme_bg);
-        tft.drawString(current_line, start_x, start_y + line_height * line_index, font);
-        //delay(1000);
-        //Serial.println(current_line);
-        // Заполняем пространство от конца строки до края
-        tft.fillRect(
-          start_x + tft.textWidth(current_line, font),
-          start_y + line_height * line_index,
-          width - tft.textWidth(current_line, font),
-          line_height,
-          color_scheme_bg
-        );
-      }
-
-      // Если есть касание, и попадание на текущую строку
-      if(global_touch_present_flag
-        &&
-        global_touch_y >= start_y + line_height * line_index
-        &&
-        global_touch_y < start_y + line_height * (line_index + 1)
-        &&
-        global_touch_x >= start_x
-        &&
-        global_touch_x < start_x + width
-      ) {
-        //Serial.printf("Touch line %d\n", line_index);
-        // Смещение конца текущей строки
-        draw_text_formatted_touch_offset = text_offset - strlen(current_word) - newline_symbols;
-
-        // Убавляем символы из текущей строки, смотрим когда строка не окажется слева от касания
-        while(global_touch_x < start_x + tft.textWidth(current_line, font)) {
-          current_line[strlen(current_line) - 1] = 0;
-          draw_text_formatted_touch_offset--;
-        }
-      }
-
-      // Выясняем, где стоит курсор на экране
-      // Если на текущую строку может выпадать позиция курсора - была строка, осталась строка, перевод строки или прошлая строка закончилась переводом строки
-      //Serial.printf("line %d , newline_symbols %d, strlen(current_line) %d, strlen(current_word) %d\n", line_index, newline_symbols, strlen(current_line), strlen(current_word));
-      if(newline_symbols > 0 || strlen(current_line) > 0 || strlen(current_word) > 0 || newline_symbols_prev > 0) {
-        start_line_offset = text_offset - strlen(current_line) - strlen(current_word) - newline_symbols;
-        //Serial.printf("line %d , draw_text_formatted_cursor_offset %d, start_line_offset %d, start_line_offset + strlen(current_line) + newline_symbols %d \n",
-        //  line_index, draw_text_formatted_cursor_offset, start_line_offset, start_line_offset + strlen(current_line) + newline_symbols);
-        if(draw_text_formatted_cursor_offset >= start_line_offset && draw_text_formatted_cursor_offset <= start_line_offset + strlen(current_line) + newline_symbols) {
-          //Serial.printf("Cursor within the line %d\n", line_index);
-          draw_text_formatted_cursor_pos_x = start_x + tft.textWidth(current_line, font);
-          draw_text_formatted_cursor_pos_y = start_y + line_height * line_index;
-          // Нужно сместить курсор на определённое количество символов
-          while(strlen(current_line) > 0 && draw_text_formatted_cursor_offset < start_line_offset + strlen(current_line)) {
-            current_line[strlen(current_line) - 1] = 0;
-            draw_text_formatted_cursor_pos_x = start_x + tft.textWidth(current_line, font);
-          }
-        }
-      }
-
-      line_index++;
-      new_line_flag_line = 0;
-      strcpy(current_line, "");
-      if(strcmp(current_word, "") == 0) {
-        newline_symbols_prev = newline_symbols;
-        newline_symbols = 0;
-      }
-
-      // Если остаток слова ещё длиннее экрана - выводим (заходим на следующий цикл)
-      if(strlen(current_word) > 0 && tft.textWidth(current_word, font) >= width) {
-        continue;
-      }
-      else {
-        // Если остаток слова короче экрана, но после слова был перенос строки - переносим слово в строку, выводим
-        if(new_line_flag_word) {
-          strcpy(current_line, current_word);
-          strcpy(current_word, "");
-          word_offset = 0;
-          new_line_flag_word = 0;
-          new_line_flag_line = 1;
-          // Если в текущей строке ничего не осталось, то обнуляем число сом
-          continue;
-        }
-      }
-      break;
-    }
-
-    if(byte == 0) {
-      if(line_index < total_lines) {
-        tft.fillRect(
-          start_x,
-          start_y + line_height * line_index,
-          width,
-          line_height * (total_lines - line_index),
-          color_scheme_bg
-        );
-      }
-      break;
-    }
-  }
-
-  // Если текста нет, то курсор в начале
-  if(strlen(text) == 0) {
-    draw_text_formatted_cursor_pos_x = start_x;
-    draw_text_formatted_cursor_pos_y = start_y;
-  }
-
-  // Возвращаем число выведенных байтов = число считанных - число невыведенных - переводы строки
-  //Serial.printf("text_offset = %d, current_word = '%s', current_line = '%s', newline_symbols = %d\n", text_offset, current_word, current_line, newline_symbols);
-  if(strlen(current_word) + strlen(current_line) == 0) newline_symbols = 0;
-  return text_offset - strlen(current_word) - strlen(current_line) - newline_symbols;
-}
+// ====================================================
+// Просмотр файлов, текстов
+// ====================================================
 
 // Просмотр файла
 
@@ -29614,8 +27878,6 @@ void view_file(char *title, char *filename) {
   }
 }
 
-// Почти полная копия view_file, по не файл, а буфер
-// Совместить две функции сложно
 void view_text(char *title, char *data) {
   int touch_x, touch_y;
   int data_offset = 0;
@@ -29784,6 +28046,10 @@ void hexview_file(char *title, char *filename) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Редактирование файла и текстов
+// ====================================================
 
 #define AUTOSAVE_FILE "/Settings/Autosave"
 #define AUTOSAVE_INTERVAL_MILLIS 300000
@@ -30093,6 +28359,10 @@ void edit_file(char *title, char *filename) {
   }
   free(contents);
 }
+
+// ====================================================
+// Табличный редактор
+// ====================================================
 
 // Редактирование небольшого файла CSV
 
@@ -30719,34 +28989,19 @@ double csv_get_variable_by_name(char *var_name) {
   }
 }
 
+// ====================================================
+// Калибровка экрана
+// ====================================================
+
 void touch_calibration_multipoint(char mode, char *io_buff) {
   char buff[80];
   TouchPoint p;
   int i;
   int x, y;
-  
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x0F, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0x00, 0x0F, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0x00, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x00, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xF0, 0x00, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Calibration2");
+    strcpy(io_buff, "CalibrationM");
     return;
   }
   if(mode == APP_MODE_RETURN_NAME_SHORT) {
@@ -30823,25 +29078,7 @@ void touch_calibration(char mode, char *io_buff) {
     "Multipoint calibration",
     NULL
   };
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x0F, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0x00, 0x0F, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0x00, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x00, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xF0, 0x00, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Calibration");
@@ -30901,25 +29138,7 @@ void touch_calibration_3point(char mode, char *io_buff) {
   int i;
   int offset = 10;
   
-  char app_icon[] = {
-    16, 16,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x0F, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xF0, 0x00, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0x00, 0x0F, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xF0, 0x00, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0x00, 0x0F, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xF0, 0x00, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xF0, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 
-    0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 
-  };
+  char *app_icon = app_default_icon;
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Calibration");
@@ -31237,6 +29456,10 @@ void calibration_visual_test() {
   }
 }
 
+// ====================================================
+// Осциллограф
+// ====================================================
+
 void oscilloscope(char mode, char *io_buff) {
   char app_icon[] = {
     16, 16,
@@ -31264,7 +29487,7 @@ void oscilloscope(char mode, char *io_buff) {
     NULL
   };
   char *sources_list[] = {
-    "Software Sinus 1 Hz",
+    "0.2 Hz Software Sine Wave",
     "A34 Light Sensor",
     "Wi-Fi RSSI",
     "Ping gateway",
@@ -31612,7 +29835,7 @@ int oscilloscope_get_value(int input_index) {
   }
 
   if(input_index == 0) {
-    return 100 * sin(2 * PI * millis() / 1000);
+    return 100 * sin(2 * PI * millis() / 5000);
   }
   else if(input_index == 1) {
     return  analogRead(LIGHT_SENSOR_PIN);
@@ -31660,6 +29883,10 @@ int oscilloscope_get_value(int input_index) {
   }
   return 0;
 }
+
+// ====================================================
+// Вольтметр
+// ====================================================
 
 void voltmeter(char mode, char *io_buff) {
   int button_pressed;
@@ -31775,6 +30002,10 @@ void voltmeter(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Генератор сигналов
+// ====================================================
 
 void generator(char mode, char *io_buff) {
   int button_pressed;
@@ -31940,6 +30171,10 @@ void generator(char mode, char *io_buff) {
   }
 }
 
+// ====================================================
+// Пятнашки
+// ====================================================
+
 void fifteen(char mode, char *io_buff) {
   int button_pressed;
   int empty_tile = 15;
@@ -32104,6 +30339,10 @@ void fifteen_show_tiles(int offset_y, char **tiles) {
   }
 }
 
+// ====================================================
+// Найди пару
+// ====================================================
+
 void memory_match(char mode, char *io_buff) {
   int button_pressed;
   int i;
@@ -32245,6 +30484,10 @@ void memory_match(char mode, char *io_buff) {
   }
 }
 
+// ====================================================
+// Повтори последовательность (саймон)
+// ====================================================
+
 #define SIMON_TILES 25
 #define SIMON_MAX_LEVEL 50
 
@@ -32369,6 +30612,10 @@ void simon(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// 2048
+// ====================================================
 
 void game2048(char mode, char *io_buff) {
   int button_pressed;
@@ -32610,6 +30857,10 @@ void game2048_rotate(char **level) {
   tmp = level[5]; level[5] = level[6]; level[6] = level[10]; level[10] = level[9]; level[9] = tmp;
 }
 
+// ====================================================
+// Н-назад
+// ====================================================
+
 #define N_BACK_TILES 25
 #define N_BACK_MAX_LEVEL 20
 
@@ -32745,6 +30996,10 @@ void n_back(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Счёт в уме
+// ====================================================
 
 #define MENTAL_MATH_MIN_LEVEL 3
 #define MENTAL_MATH_MAX_LEVEL 10000
@@ -32898,6 +31153,10 @@ void mental_math(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Ханойские башни
+// ====================================================
 
 #define HANOI_TOWERS_MAX_LEVEL 16
 
@@ -33097,6 +31356,10 @@ void hanoi_towers(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Три в ряд
+// ====================================================
 
 #define MATCH_THREE_FIELD_WIDTH 8
 #define MATCH_THREE_FIELD_HEIGHT 8
@@ -33651,6 +31914,10 @@ int match_three_shift_down(int * field) {
   return count;
 }
 
+// ====================================================
+// Выключи свет
+// ====================================================
+
 void lights_off(char mode, char *io_buff) {
   int button_pressed;
   int moves_remain;
@@ -33817,6 +32084,10 @@ void lights_off_show_tiles(int offset_y, char **tiles) {
     }
   }
 }
+
+// ====================================================
+// Сапёр
+// ====================================================
 
 #define MINESWEEPER_TILE_SIZE 16
 #define MINESWEEPER_FIELD_SIZE_X (240 / MINESWEEPER_TILE_SIZE)
@@ -34248,6 +32519,10 @@ void minesweeper_draw_field(char *field, char draw_mines_flag) {
     }
   }
 }
+
+// ====================================================
+// Шахматная доска
+// ====================================================
 
 #define CHESS_BOARD_CELL_SIZE (tft.width() / 8)
 #define CHESS_BOARD_CELLS_TOTAL (8 * 8)
@@ -34816,6 +33091,10 @@ void chess_draw_field(char *field) {
   }
 }
 
+// ====================================================
+// Тетрис
+// ====================================================
+
 #define TETRIS_FIELD_WIDTH 10
 #define TETRIS_CELL_SIZE 13
 #define TETRIS_FIELD_HEIGHT 20
@@ -35316,6 +33595,10 @@ void tetris_draw_field(char *field) {
   }
 }
 
+// ====================================================
+// Пианино
+// ====================================================
+
 void piano(char mode, char *io_buff) {
   TouchPoint p;
   int touch_x, touch_y;
@@ -35447,6 +33730,10 @@ void piano(char mode, char *io_buff) {
     touchWaitRelease();
   }
 }
+
+// ====================================================
+// Метроном
+// ====================================================
 
 void metronome(char mode, char *io_buff) {
   int button_pressed;
@@ -35632,6 +33919,10 @@ void metronome(char mode, char *io_buff) {
 // Начиная отсюда идут общие функции
 // ====================================================
 
+// ====================================================
+// Математика, преобразование данных без хранилища
+// ====================================================
+
 // Нахождение определителя матрицы третьего порядка
 double det3(double x11, double x12, double x13, double x21, double x22, double x23, double x31, double x32, double x33) {
   return
@@ -35641,6 +33932,1259 @@ double det3(double x11, double x12, double x13, double x21, double x22, double x
     - x13 * x22 * x31
     - x12 * x21 * x33
     - x11 * x23 * x32;
+}
+
+// Хэш пароля
+void password_sha256(char *password, char *hash) {
+  mbedtls_sha256_context sha256_ctx;
+  unsigned char result[32];
+  char buff[10];
+  int i;
+
+  mbedtls_sha256_init(&sha256_ctx);
+  mbedtls_sha256_starts(&sha256_ctx, 0); // 0 for SHA-256 (not SHA-224)
+  mbedtls_sha256_update(&sha256_ctx, (const uint8_t*)password, strlen(password));
+  mbedtls_sha256_finish(&sha256_ctx, result);
+  mbedtls_sha256_free(&sha256_ctx);
+  strcpy(hash, "");
+  for(i = 0; i < 32; i++) {
+    sprintf(buff, "%02x", result[i]);
+    strcat(hash, buff);
+  }
+}
+
+// Генерировать uuid
+void uuidgen(char *buff) {
+  char n_to_hex[17] = "0123456789abcdef";
+  int i;
+  strcpy(buff, "");
+  for(i = 0; i < 8; i++) strcat_char(buff, n_to_hex[random(0, 16)]);
+  strcat_char(buff, '-');
+  for(i = 0; i < 4; i++) strcat_char(buff, n_to_hex[random(0, 16)]);
+  strcat_char(buff, '-');
+  for(i = 0; i < 4; i++) strcat_char(buff, n_to_hex[random(0, 16)]);
+  strcat_char(buff, '-');
+  for(i = 0; i < 4; i++) strcat_char(buff, n_to_hex[random(0, 16)]);
+  strcat_char(buff, '-');
+  for(i = 0; i < 12; i++) strcat_char(buff, n_to_hex[random(0, 16)]);
+}
+
+// Генерировать случайную шестнадцатеричную строку
+void random_hexstring(char *buff, int chars) {
+  char n_to_hex[17] = "0123456789abcdef";
+  strcpy(buff, "");
+  while(chars > 0) {
+    strcat_char(buff, n_to_hex[random(0, 16)]);
+    chars--;
+  }
+}
+
+long digit_sum(long arg) {
+  char buff[20];
+  int i;
+  long result = 0;
+  sprintf(buff, "%d", arg);
+  result = 0;
+  for(i = 0; i < strlen(buff); i++) {
+    result += buff[i] - '0';
+  }
+  return result;
+}
+
+long reverse(long arg) {
+  char buff[20];
+  int i;
+  long result = 0;
+  int len = 0;
+  char tmp;
+  sprintf(buff, "%d", arg);
+  len = strlen(buff);
+  result = 0;
+  for(i = 0; i < len / 2; i++) {
+    tmp = buff[i];
+    buff[i] = buff[len - i - 1];
+    buff[len - i - 1] = tmp;
+  }
+  return strtol(buff, NULL, 10);
+}
+
+long rol(long arg, int n) {
+  char b;
+  int i;
+  for(i = 0; i < n; i++) {
+    // Перемещаем старший бит в младший, остальные сдвигаем
+    b = arg >> 31;
+    arg = arg << 1;
+    arg |= b;
+  }
+  return arg;
+}
+
+long ror(long arg, int n) {
+  char b;
+  int i;
+  for(i = 0; i < n; i++) {
+    // Перемещаем младший бит в старший, остальные сдвигаем
+    b = arg & 1;
+    arg = arg >> 1;
+    arg |= b << 31;
+  }
+  return arg;
+}
+
+int ctz(long arg) {
+  int result = 0;
+  for(result = 0; arg != 0; result++) {
+    arg = arg << 1;
+  }
+  return 32 - result;
+}
+
+int clz(long arg) {
+  int result = 0;
+  for(result = 0; arg != 0; result++) {
+    arg = arg >> 1;
+  }
+  return 32 - result;
+}
+
+int parity(long arg) {
+  return popcount(arg) % 2;
+}
+
+int popcount(long arg) {
+  char buff[40];
+  int i;
+  int result;
+  strcpy(buff, String(arg, BIN).c_str());
+  result = 0;
+  for(i = 0; i < strlen(buff); i++) {
+    if(buff[i] == '1') result++;
+  }
+  return result;
+}
+
+// НОД
+long gcd(long a, long b) {
+  if(a == 0 || b == 0) return 0;
+  while(a != b) {
+    if(a > b) {
+      if(a % b == 0) return b;
+      a = a % b;
+    }
+    if(b > a) {
+      if(b % a == 0) return a;
+      b = b % a;
+    }
+  }
+  return a;
+}
+
+// НОК
+long lcm(long a, long b) {
+  if(a == 0 || b == 0) return 0;
+  return (a / gcd(a, b)) * b;
+}
+
+// Факториал
+double factorial(double a) {
+  int i;
+  double result = 1;
+  if(a == 0) return result;
+  if(a == 1) return result;
+
+  for(i = 2; i <= a; i++) {
+    result *= i;
+  }
+  return result;
+}
+
+void strcat_char(char *str, char c) {
+  while(*str) str++;
+  *(str) = c;
+  *(str + 1) = 0;
+}
+
+time_t get_unixtime_from_datetime(long timezone, int year, int month, int day, int hour, int minute, int second) {
+  time_t result = 0;
+  int i;
+  // Учитываем годы
+  for(i = 1970; i < year; i++) {
+    // Добавялем 365 дней на каждый год
+    result += 86400 * 365;
+    // И ещё сутки на високосный
+    if(is_lap_year(i)) {
+      result += 86400;
+    }
+  }
+  // Учитываем месяцы
+  for(i = 1; i < month; i++) {
+    if(i == 1 || i == 3 || i == 5 || i == 7 || i == 8 || i == 10 || i == 12) {
+      result += 86400 * 31;
+    }
+    else if(i == 4 || i == 6 || i == 9 || i == 11) {
+      result += 86400 * 30;
+    }
+    else if(i == 2) {
+      result += 86400 * 28;
+      // Добавяем ещё день если год високосный
+      if(is_lap_year(year)) {
+        result += 86400;
+      }
+    }
+  }
+  // Учитываем дни
+  for(i = 1; i < day; i++) {
+    result += 86400;
+  }
+
+  // Часы, минуты, секунды, МИНУС таймзона
+  result += hour * 3600 + minute * 60 + second - timezone;
+
+  // Возвращаем результат
+  return result;
+}
+
+time_t get_unixtime_from_current_datetime() {
+  return get_unixtime_from_datetime(global_timezone, global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
+}
+
+time_t get_unixtime_from_current_date() {
+  return get_unixtime_from_datetime(global_timezone, global_year, global_month, global_day, 0, 0, 0);
+}
+
+// Получить дату и время из строки вида гггг-мм-дд чч:мм:сс
+int get_datetime_from_string(char *str, int *year, int *month, int *day, int *hour, int *minute, int *second) {
+  char *tmp = NULL;
+  tmp = str;
+  *year = 0;
+  *month = 0;
+  *day = 0;
+  *hour = 0;
+  *minute = 0;
+  *second = 0;
+
+  // Год
+  if(!tmp) return 0;
+  *year = strtol(tmp, NULL, 10);
+
+  // Месяц
+  tmp = strchr(tmp, '-');
+  if(!tmp) return 0;
+  tmp++;
+  *month = strtol(tmp, NULL, 10);
+
+  // День
+  tmp = strchr(tmp, '-');
+  if(!tmp) return 0;
+  tmp++;
+  *day = strtol(tmp, NULL, 10);
+
+  // Часы
+  tmp = strchr(tmp, ' ');
+  if(!tmp) return 1;
+  tmp++;
+  *hour = strtol(tmp, NULL, 10);
+
+  // Минуты
+  tmp = strchr(tmp, ':');
+  if(!tmp) return 1;
+  tmp++;
+  *minute = strtol(tmp, NULL, 10);
+
+  // Секунды
+  tmp = strchr(tmp, ':');
+  if(!tmp) return 1;
+  tmp++;
+  *second = strtol(tmp, NULL, 10);
+
+  return 1;
+}
+
+// Получить юникстайм из строки
+time_t get_unixtime_from_string(char *str) {
+    int year, month, day, day_of_week, hour, minute, second;
+    get_datetime_from_string(str, &year, &month, &day, &hour, &minute, &second);
+    return get_unixtime_from_datetime(global_timezone, year, month, day, hour, minute, second);
+}
+
+// Получить дату и время из юникстайма
+void get_datetime_from_unixtime(unsigned long unix_timestamp, long timezone, int *year, int *month, int *day, int *day_of_week, int *hour, int *minute, int *second) {
+  unsigned long days_since_epoch;
+  unsigned long days_remain;
+  char lap_year_flag;
+
+  // Дней с начала эпохи
+  days_since_epoch = (unix_timestamp + timezone) / 86400;
+  // День недели
+  *day_of_week = (days_since_epoch + 3) % 7;
+  // Высчитываем дату
+  days_remain = days_since_epoch;
+  *year = 1970;
+  *month = 1;
+  *day = 1;
+  lap_year_flag = is_lap_year(*year);
+  while(days_remain > 0) {
+    // Високосные годы
+    lap_year_flag = 0;
+    if(is_lap_year(*year)) {
+      lap_year_flag = 1;
+    }
+    if(lap_year_flag && days_remain >= 366) {
+      days_remain -= 366;
+      (*year)++;
+      continue;
+    }
+    // Обычные годы
+    if(!lap_year_flag && days_remain >= 365) {
+      days_remain -= 365;
+      (*year)++;
+      continue;
+    }
+    //Serial.println(days_remain);
+    if((*month == 1 || *month == 3 || *month == 5 || *month == 7 || *month == 8 || *month == 10 || *month == 12) && days_remain >= 31) {
+      days_remain -= 31;
+      (*month)++;
+      continue;
+    }
+    if((*month == 4 || *month == 6 || *month == 9 || *month == 11) && days_remain >= 30) {
+      days_remain -= 30;
+      (*month)++;
+      continue;
+    }
+    if(*month == 2 && days_remain >= 29 & lap_year_flag) {
+      days_remain -= 29;
+      (*month)++;
+      continue;
+    }
+    if(*month == 2 && days_remain >= 28 & !lap_year_flag) {
+      days_remain -= 28;
+      (*month)++;
+      continue;
+    }
+    *day += days_remain;
+    break;
+  }
+
+  *hour = ((unix_timestamp + timezone) / 3600) % 24;
+  *minute = ((unix_timestamp + timezone) / 60) % 60;
+  *second = (unix_timestamp + timezone) % 60;
+}
+
+// Високосный ли год
+char is_lap_year(int year) {
+  if(year % 4 == 0 && (year % 100 == 0 || year % 400 != 0)) return 1;
+  return 0;
+}
+
+// Предыдущий месяц
+void get_prev_month(int *year, int *month) {
+  (*month)--;
+  if(*month == 0) {
+    (*year)--;
+    *month = 12;
+  }
+}
+
+// Следующий месяц
+void get_next_month(int *year, int *month) {
+  (*month)++;
+  if(*month == 13) {
+    (*year)++;
+    *month = 1;
+  }
+}
+
+// Предыдущий день
+void get_prev_day(int *year, int *month, int *day) {
+  (*day)--;
+  if(!is_valid_date(*year, *month, *day)) {
+    get_prev_month(year, month);
+    *day = last_day_of_month(*year, *month);
+  }
+}
+
+// Следующий день
+void get_next_day(int *year, int *month, int *day) {
+  (*day)++;
+  if(!is_valid_date(*year, *month, *day)) {
+    get_next_month(year, month);
+    *day = 0;
+  }
+}
+
+// Проверка валидности даты
+char is_valid_date(int year, int month, int day) {
+  if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
+    if(day >= 1 && day <= 31) return 1;
+  }
+  else if(month == 4 || month == 6 || month == 9 || month == 11 ) {
+    if(day >= 1 && day <= 30) return 1;
+  }
+  else if(month == 2) {
+    if(is_lap_year(year)) {
+      if(day >= 1 && day <= 29) return 1;
+    }
+    else {
+      if(day >= 1 && day <= 28) return 1;
+    }
+  }
+  return 0;
+}
+
+int last_day_of_month(int year, int month) {
+  if(month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) {
+    return 31;
+  }
+  else if(month == 4 || month == 6 || month == 9 || month == 11 ) {
+    return 30;
+  }
+  else if(month == 2) {
+    if(is_lap_year(year)) {
+      return 29;
+    }
+    else {
+      return 28;
+    }
+  }
+  return 0;
+}
+
+int get_day_of_week(int year, int month, int day) {
+  static const int anchor[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+
+  if (month < 3) year--;
+  return (year + year/4 - year/100 + year/400 + anchor[month - 1] + day + 6) % 7;
+}
+
+void get_current_datetime_formatted(char *buff) {
+  if(global_is_time_set) {
+    get_datetime_formatted(buff, global_year, global_month, global_day, global_hours, global_minutes, global_seconds);
+  }
+  else {
+    sprintf(buff, "%04d-%02d-%02d --:--:--", global_year, global_month, global_day);
+  }
+}
+
+void get_datetime_formatted(char *buff, int year, int month, int day, int hours, int minutes, int seconds) {
+  if(global_is_12h_time) {
+    sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d %s", year, month, day, hours % 12 == 0 ? 12 : hours % 12, minutes, seconds, hours >= 12? "PM" : "AM");
+  }
+  else {
+    sprintf(buff, "%04d-%02d-%02d %d:%02d:%02d", year, month, day, hours, minutes, seconds);
+  }
+}
+
+void get_current_date_formatted(char *buff) {
+  sprintf(buff, "%04d-%02d-%02d", global_year, global_month, global_day);
+}
+
+void get_date_formatted(char *buff, int year, int month, int day) {
+  sprintf(buff, "%04d-%02d-%02d", year, month, day);
+}
+
+// Формат для дашбордов, для 12-часового формата AM/PM не влезает
+void get_current_time_hms_for_big(char *buff) {
+  if(global_is_time_set) {
+    get_time_hms_for_big(buff, global_hours, global_minutes, global_seconds);
+  }
+  else {
+    sprintf(buff, "--:--:--");
+  }
+}
+
+void get_time_hms_for_big(char *buff, int hours, int minutes, int seconds) {
+  if(global_is_12h_time) {
+    sprintf(buff, "%d:%02d:%02d", hours % 12 == 0 ? 12 : hours % 12, minutes, seconds);
+  }
+  else {
+    get_time_hms_formatted(buff, hours, minutes, seconds);
+  }
+}
+
+void get_current_time_hms_formatted(char *buff) {
+  if(global_is_time_set) {
+    get_time_hms_formatted(buff, global_hours, global_minutes, global_seconds);
+  }
+  else {
+    sprintf(buff, "--:--:--");
+  }
+}
+
+void get_time_hms_formatted(char *buff, int hours, int minutes, int seconds) {
+  if(global_is_12h_time) {
+    sprintf(buff, "%d:%02d:%02d %s", hours % 12 == 0 ? 12 : hours % 12, minutes, seconds, hours >= 12? "PM" : "AM");
+  }
+  else {
+    sprintf(buff, "%d:%02d:%02d", hours, minutes, seconds);
+  }
+}
+
+void get_current_time_hm_formatted(char *buff) {
+  if(global_is_time_set) {
+    get_time_hm_formatted(buff, global_hours, global_minutes);
+  }
+  else {
+    sprintf(buff, "-:--");
+  }
+}
+
+void get_time_hm_formatted(char *buff, int hours, int minutes) {
+  if(global_is_12h_time) {
+    sprintf(buff, "%d:%02d %s", hours % 12 == 0 ? 12 : hours % 12, minutes, hours >= 12? "PM" : "AM");
+  }
+  else {
+    sprintf(buff, "%d:%02d", hours, minutes);
+  }
+}
+
+void get_sunrise_sunset(int month, int day, double lat, double lon, double *sunrise, double *solar_noon, double *sunset) {
+  // Восход и закат
+  double N, v, delta, E, h0, w0;
+  int i;
+  // Номер дня года
+  N = 0;
+  for(i = 1; i < month; i++) {
+    if(i == 1 || i == 3 || i == 5 || i == 7 || i == 8 || i == 10 || i == 12) {
+      N += 31;
+    }
+    else if(i == 2) {
+      N += 28;
+    }
+    else {
+      N += 30;
+    }
+  }
+  N += day;
+
+  // Какие-то параметры
+  v = 2 * PI / 365 * (N - 1);
+  delta =
+    0.006918
+    - 0.399912 * cos(v)
+    + 0.070257 * sin(v)
+    - 0.006758 * cos(2 * v)
+    + 0.000907 * sin(2 * v)
+    - 0.002697 * cos(3 * v)
+    + 0.001480 * sin(3 * v);
+  E =
+    229.18 * (
+      0.000075
+      + 0.001868 * cos(v)
+      - 0.032077 * sin(v)
+      - 0.014615 * cos(2 * v)
+      - 0.040849 * sin(2 * v)
+    );
+  h0 = -0.833;
+  w0 = acos(
+    (sin(PI * h0 / 180) - sin(PI * lat / 180) *sin(delta))
+    / (cos(PI * lat / 180) * cos(delta))
+  );
+  *solar_noon =
+    720 - 4 * lon - E;
+  
+  *sunrise = *solar_noon - 4 * w0 * 180 / PI;
+  *sunset  = *solar_noon + 4 * w0 * 180 / PI;
+
+  //Serial.printf("month %d day %d sunrise %d:%02d noon %d:%02d sunset %d:%02d\n",
+  //  month, day, (int)(*sunrise / 60), (int)(*sunrise) % 60, (int)(solar_noon / 60), (int)(solar_noon) % 60, (int)(*sunset / 60), (int)(*sunset) % 60);
+}
+
+void qth_to_lat_lon(char *qth, double *lat, double *lon, double *dist_lat_result, double *dist_lon_result) {
+  double dist_lat = 0, dist_lon = 0;
+  *lat = -90.0;
+  *lon = -180.0;
+  if(strlen(qth) >= 2) {
+    dist_lat = 180.0 / (18);
+    dist_lon = 360.0 / (18);
+    // Uppercase
+    *lon += dist_lon * ((qth[0] & B01011111) - 'A');
+    *lat += dist_lat * ((qth[1] & B01011111) - 'A');
+  }
+  if(strlen(qth) >= 4) {
+    dist_lat = 180.0 / (18 * 10);
+    dist_lon = 360.0 / (18 * 10);
+    *lon += dist_lon * (qth[2] - '0');
+    *lat += dist_lat * (qth[3] - '0');
+  }
+  if(strlen(qth) >= 6) {
+    dist_lat = 180.0 / (18 * 10 * 24);
+    dist_lon = 360.0 / (18 * 10 * 24);
+    // Uppercase
+    *lon += dist_lon * ((qth[4] & B01011111) - 'A');
+    *lat += dist_lat * ((qth[5] & B01011111) - 'A');
+  }
+  if(strlen(qth) >= 8) {
+    dist_lat = 180.0 / (18 * 10 * 24 * 10);
+    dist_lon = 360.0 / (18 * 10 * 24 * 10);
+    *lon += dist_lon * (qth[6] - '0');
+    *lat += dist_lat * (qth[7] - '0');
+  }
+  *lat += dist_lat / 2;
+  *lon += dist_lon / 2;
+
+  if(dist_lat_result) {
+    *dist_lat_result = dist_lat / 2;
+  }
+  if(dist_lon_result) {
+    *dist_lon_result = dist_lon / 2;
+  }
+}
+
+void rot_string(char *str, int shift) {
+  char next[] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50,
+    0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0x70,
+    0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x61, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xA8, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0,
+    0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF, 0xC0,
+    0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xB8, 0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF, 0xF0,
+    0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE, 0xFF, 0xE0,
+  };
+  int i, j;
+  char c;
+  for(i = 0; i < strlen(str); i++) {
+    c = str[i];
+    if(next[c] != 0) {
+      for(j = 0; j < shift; j++) {
+        c = next[c];
+      }
+      str[i] = c;
+    }
+  }
+}
+
+// Конвертировать два байта в cp1251
+char utf8_to_cp1251_double_byte(char byte1, char byte2) {
+  char byte_out = 0;
+
+  if(byte1 == 0xC3) {
+    if(byte2 == 0x8B) byte_out = 0xA8; // Ё
+    if(byte2 == 0xAB) byte_out = 0xB8; // ё
+  }
+  if(byte1 == 0xD0) {
+    if(byte2 == 0x81) byte_out = 0xA8; // Ё
+    else if(byte2 == 0x82) byte_out = 0x80; // Ђ
+    else if(byte2 == 0x83) byte_out = 0x81; // Ѓ
+    else if(byte2 == 0x84) byte_out = 0xAA; // Є
+    else if(byte2 == 0x85) byte_out = 0xBD; // Ѕ
+    else if(byte2 == 0x86) byte_out = 0xB2; // І
+    else if(byte2 == 0x87) byte_out = 0xAF; // Ї
+    else if(byte2 == 0x88) byte_out = 0xA3; // Ј
+    else if(byte2 == 0x89) byte_out = 0x8A; // Љ
+    else if(byte2 == 0x8A) byte_out = 0x8C; // Њ
+    else if(byte2 == 0x8B) byte_out = 0x8E; // Ћ
+    else if(byte2 == 0x8C) byte_out = 0x8D; // Ќ
+    else if(byte2 == 0x8E) byte_out = 0xA1; // Ў
+    else if(byte2 == 0x8F) byte_out = 0x8F; // Џ
+    else if(byte2 < 0xA0) {
+      byte_out = 0xC0 + byte2 - 0x90; // А-П
+    }
+    else {
+      byte_out = 0xD0 + byte2 - 0xA0; // Р-Я а-п
+    }
+  }
+  else if(byte1 == 0xD1) {
+    if(byte2 == 0x91) byte_out = 0xB8; // ё
+    else if(byte2 == 0x92) byte_out = 0x90; // ђ
+    else if(byte2 == 0x93) byte_out = 0x83; // ѓ
+    else if(byte2 == 0x94) byte_out = 0xBA; // є
+    else if(byte2 == 0x95) byte_out = 0xBE; // ѕ
+    else if(byte2 == 0x96) byte_out = 0xB3; // і
+    else if(byte2 == 0x97) byte_out = 0xBF; // ї
+    else if(byte2 == 0x98) byte_out = 0xBC; // ј
+    else if(byte2 == 0x99) byte_out = 0x9A; // љ
+    else if(byte2 == 0x9A) byte_out = 0x9C; // њ
+    else if(byte2 == 0x9B) byte_out = 0x9E; // ћ
+    else if(byte2 == 0x9C) byte_out = 0x9D; // ќ
+    else if(byte2 == 0x9E) byte_out = 0xA2; // ў
+    else if(byte2 == 0x9F) byte_out = 0x9F; // џ
+    else {
+      byte_out = 0xF0 + byte2 - 0x80; // р-я
+    }
+  }
+  else if(byte1 == 0xD2) {
+    if(byte2 == 0x90) byte_out = 0x81; // Ґ
+    if(byte2 == 0x91) byte_out = 0x83; // ґ
+  }
+  else if(byte1 == 0xC2) {
+    if(byte2 == 0xA0) byte_out = 0xA0; // Неразрывный пробел
+    if(byte2 == 0xA4) byte_out = 0xA4; // ¤
+    if(byte2 == 0xA6) byte_out = 0xA6; // ¦
+    if(byte2 == 0xA7) byte_out = 0xA7; // §
+    if(byte2 == 0xA9) byte_out = 0xA9; // ©
+    if(byte2 == 0xAB) byte_out = 0xAB; // Кавычка ёлочка открывающая
+    if(byte2 == 0xAC) byte_out = 0xAC; // ¬
+    if(byte2 == 0xAD) byte_out = 0xAD; // Мягкий перенос
+    if(byte2 == 0xAE) byte_out = 0xAE; // ®
+    if(byte2 == 0xB0) byte_out = 0xB0; // °
+    if(byte2 == 0xB1) byte_out = 0xB1; // ±
+    if(byte2 == 0xB5) byte_out = 0xB5; // µ
+    if(byte2 == 0xB6) byte_out = 0xB6; // ¶
+    if(byte2 == 0xB7) byte_out = 0xB7; // ·
+    if(byte2 == 0xBB) byte_out = 0xBB; // Кавычка ёлочка закрывающая
+  }
+
+  if(byte_out == 0) {
+    Serial.printf("Unknown 2-byte: %02X %02X\n", byte1, byte2);
+    byte_out = '?';
+  }
+
+  return byte_out;
+}
+
+// Конвертировать три байта в cp1251
+char utf8_to_cp1251_triple_byte(char byte1, char byte2, char byte3) {
+  char byte_out = 0;
+
+  if(byte1 == 0xE2 && byte2 == 0x80) {
+    if(byte3 >= 0x80 && byte3 <= 0x8B) byte_out = ' '; // разные виды пробелов
+    else if(byte3 == 0x90) byte_out = '-'; // дефис
+    else if(byte3 == 0x91) byte_out = '-'; // неразрывный дефис
+    else if(byte3 == 0x92) byte_out = '-'; // фигурное тире (по ширине цифры)
+    else if(byte3 == 0x93) byte_out = 0x96; // N dash
+    else if(byte3 == 0x94) byte_out = 0x97; // M dash
+    else if(byte3 == 0x95) byte_out = '-'; // Горизонтальная черта
+    else if(byte3 == 0x98) byte_out = 0x91; // Левая одинарная кавычка
+    else if(byte3 == 0x99) byte_out = 0x92; // Правая одинарная кавычка
+    else if(byte3 == 0x9A) byte_out = 0x83; // 
+    else if(byte3 == 0x9C) byte_out = 0x93; // Открывающая кавычка (верх)
+    else if(byte3 == 0x9D) byte_out = 0x94; // Правая двойная кавычка
+    else if(byte3 == 0x9E) byte_out = 0x84; // Нижняя открывающая двойная кавычка
+    else if(byte3 == 0xA0) byte_out = 0x86; // Типографский крестик
+    else if(byte3 == 0xA1) byte_out = 0x87; // Двойной типографский крестик
+    else if(byte3 == 0xA2) byte_out = 0x95; // Буллет
+    else if(byte3 == 0xA6) byte_out = 0x85; // Троеточие
+    else if(byte3 == 0xB0) byte_out = 0x89; // Промилле
+    else if(byte3 == 0xB9) byte_out = 0x8B; // Открывающая одиночная ёлочка
+    else if(byte3 == 0xBA) byte_out = 0x9B; // Закрывающая одиночная ёлочка
+  }
+  else if(byte1 == 0xE2 && byte2 == 0x82) {
+    if(byte3 == 0xAC) byte_out = 0x88; // Евро
+  }
+  else if(byte1 == 0xE2 && byte2 == 0x84) {
+    if(byte3 == 0x96) byte_out = 0xB9; // №
+    if(byte3 == 0xA2) byte_out = 0x99; // TM
+  }
+
+  if(byte_out == 0) {
+    Serial.printf("Unknown 3-byte: %02X %02X %02X\n", byte1, byte2, byte3);
+    byte_out = '?';
+  }
+
+  return byte_out;
+}
+
+// Конвертировать четыре байта в cp1251
+char utf8_to_cp1251_quad_byte(char byte1, char byte2, char byte3, char byte4) {
+  char byte_out = 0;
+
+  if(byte_out == 0) {
+    Serial.printf("Unknown 4-byte: %02X %02X %02X %02X\n", byte1, byte2, byte3, byte4);
+    byte_out = '?';
+  }
+
+  return byte_out;
+}
+
+// Преобразование строки из utf8 в cp1251
+// Строка всегда короче, поэтому преобразование в том же буфере
+void utf8_to_cp1251(char *buff) {
+  int read_offset = 0;
+  int write_offset = 0;
+  unsigned char byte, byte2, byte3, byte4;
+  int length = strlen(buff);
+  while(read_offset < length) {
+    byte = buff[read_offset];
+    read_offset++;
+    if(utf8_is_double_byte(byte)) {
+      byte = utf8_to_cp1251_double_byte(byte, buff[read_offset]);
+      read_offset++;
+    }
+    else if(utf8_is_triple_byte(byte)) {
+      byte2 = buff[read_offset + 0];
+      byte3 = buff[read_offset + 1];
+      byte = utf8_to_cp1251_triple_byte(byte, byte2, byte3);
+      read_offset += 2;
+    }
+    else if(utf8_is_quad_byte(byte)) {
+      byte2 = buff[read_offset + 0];
+      byte3 = buff[read_offset + 1];
+      byte4 = buff[read_offset + 2];
+      byte = utf8_to_cp1251_quad_byte(byte, byte2, byte3, byte4);
+      read_offset += 3;
+    }
+    
+    buff[write_offset] = byte;
+    write_offset++;
+  }
+  buff[write_offset] = 0;
+}
+
+void cp1251_to_utf8(char *in_buff, char *out_buff) {
+  int read_offset = 0;
+  int write_offset = 0;
+  int i;
+  unsigned char byte;
+  // 1251 byte, utf8 bytes (2/3), byte1, byte2, byte3
+  char byte_to_bytes[] = {
+    0x80, 2, 0xD0, 0x82, 0x00, // Ђ
+    0x81, 2, 0xD0, 0x83, 0x00, // Ѓ
+    0x82, 3, 0xE2, 0x80, 0x9A, // ‚
+    0x83, 2, 0xD1, 0x93, 0x00, // ѓ
+    0x84, 3, 0xE2, 0x80, 0x9E, // „
+    0x85, 3, 0xE2, 0x80, 0xA6, // …
+    0x86, 3, 0xE2, 0x80, 0xA0, // †
+    0x87, 3, 0xE2, 0x80, 0xA1, // ‡
+    0x88, 3, 0xE2, 0x82, 0xAC, // €
+    0x89, 3, 0xE2, 0x80, 0xB0, // ‰
+    0x8A, 2, 0xD0, 0x89, 0x00, // Љ
+    0x8B, 3, 0xE2, 0x80, 0xB9, // ‹
+    0x8C, 2, 0xD0, 0x8A, 0x00, // Њ
+    0x8D, 2, 0xD0, 0x8C, 0x00, // Ќ
+    0x8E, 2, 0xD0, 0x8B, 0x00, // Ћ
+    0x8F, 2, 0xD0, 0x8F, 0x00, // Џ
+    0x90, 2, 0xD1, 0x92, 0x00, // ђ
+    0x91, 3, 0xE2, 0x80, 0x98, // ‘
+    0x92, 3, 0xE2, 0x80, 0x99, // ’
+    0x93, 3, 0xE2, 0x80, 0x9C, // “
+    0x94, 3, 0xE2, 0x80, 0x9D, // ”
+    0x95, 3, 0xE2, 0x80, 0xA2, // •
+    0x96, 3, 0xE2, 0x80, 0x93, // –
+    0x97, 3, 0xE2, 0x80, 0x94, // —
+    0x98, 1, 0x20, 0x00, 0x00, //  
+    0x99, 3, 0xE2, 0x84, 0xA2, // ™
+    0x9A, 2, 0xD1, 0x99, 0x00, // љ
+    0x9B, 3, 0xE2, 0x80, 0xBA, // ›
+    0x9C, 2, 0xD1, 0x9A, 0x00, // њ
+    0x9D, 2, 0xD1, 0x9C, 0x00, // ќ
+    0x9E, 2, 0xD1, 0x9B, 0x00, // ћ
+    0x9F, 2, 0xD1, 0x9F, 0x00, // џ
+    0xA0, 2, 0xC2, 0xA0, 0x00, // NBSP
+    0xA1, 2, 0xD0, 0x8E, 0x00, // Ў
+    0xA2, 2, 0xD1, 0x9E, 0x00, // ў
+    0xA3, 2, 0xD0, 0x88, 0x00, // Ј
+    0xA4, 2, 0xC2, 0xA4, 0x00, // ¤
+    0xA5, 2, 0xD2, 0x90, 0x00, // Ґ
+    0xA6, 2, 0xC2, 0xA6, 0x00, // ¦
+    0xA7, 2, 0xC2, 0xA7, 0x00, // §
+    0xA8, 2, 0xD0, 0x81, 0x00, // Ё
+    0xA9, 2, 0xC2, 0xA9, 0x00, // ©
+    0xAA, 2, 0xD0, 0x84, 0x00, // Є
+    0xAB, 2, 0xC2, 0xAB, 0x00, // «
+    0xAC, 2, 0xC2, 0xAC, 0x00, // ¬
+    0xAD, 2, 0xC2, 0xAD, 0x00, // SHY
+    0xAE, 2, 0xC2, 0xAE, 0x00, // ®
+    0xAF, 2, 0xD0, 0x87, 0x00, // Ї
+    0xB0, 2, 0xC2, 0xB0, 0x00, // °
+    0xB1, 2, 0xC2, 0xB1, 0x00, // ±
+    0xB2, 2, 0xD0, 0x86, 0x00, // І
+    0xB3, 2, 0xD1, 0x96, 0x00, // і
+    0xB4, 2, 0xD2, 0x91, 0x00, // ґ
+    0xB5, 2, 0xC2, 0xB5, 0x00, // µ
+    0xB6, 2, 0xC2, 0xB6, 0x00, // ¶
+    0xB7, 2, 0xC2, 0xB7, 0x00, // ·
+    0xB8, 2, 0xD1, 0x91, 0x00, // ё
+    0xB9, 3, 0xE2, 0x84, 0x96, // №
+    0xBA, 2, 0xD1, 0x94, 0x00, // є
+    0xBB, 2, 0xC2, 0xBB, 0x00, // »
+    0xBC, 2, 0xD1, 0x98, 0x00, // ј
+    0xBD, 2, 0xD0, 0x85, 0x00, // Ѕ
+    0xBE, 2, 0xD1, 0x95, 0x00, // ѕ
+    0xBF, 2, 0xD1, 0x97, 0x00, // ї
+    0x00
+  };
+  int length = strlen(in_buff);
+  while(read_offset < length) {
+    byte = in_buff[read_offset];
+    read_offset++;
+
+    if(byte <= 0x7F) {
+      out_buff[write_offset] = byte;
+      write_offset++;
+    }
+    else {
+      for(i = 0; byte_to_bytes[i] != 0x00; i += 5) {
+        if(byte_to_bytes[i] == byte) {
+          if(byte_to_bytes[i + 1] >= 1) {
+            out_buff[write_offset] = byte_to_bytes[i + 2];
+            write_offset++;
+          }
+          if(byte_to_bytes[i + 1] >= 2) {
+            out_buff[write_offset] = byte_to_bytes[i + 3];
+            write_offset++;
+          }
+          if(byte_to_bytes[i + 1] >= 3) {
+            out_buff[write_offset] = byte_to_bytes[i + 4];
+            write_offset++;
+          }
+          break;
+        }
+      }
+      // А-П
+      if(byte >= 0xC0 && byte <= 0xCF) {
+        out_buff[write_offset] = 0xD0;
+        write_offset++;
+        out_buff[write_offset] = 0x90 + byte - 0xC0;
+        write_offset++;
+      }
+      // Р-Я а-п
+      if(byte >= 0xD0 && byte <= 0xEF) {
+        out_buff[write_offset] = 0xD0;
+        write_offset++;
+        out_buff[write_offset] = 0xA0 + byte - 0xD0;
+        write_offset++;
+      }
+      // р-я
+      if(byte >= 0xF0 && byte <= 0xFF) {
+        out_buff[write_offset] = 0xD1;
+        write_offset++;
+        out_buff[write_offset] = 0x80 + byte - 0xF0;
+        write_offset++;
+      }
+    }
+  }
+  out_buff[write_offset] = 0;
+}
+
+void cp1251_to_translit(char *in_buff, char *out_buff) {
+  char *encoding = "ABVGDEJZIJKLMNOPRSTUFHC4WW'I'EUAabvgdejzijklmnoprstufhc4ww'i'eua";
+  int read_offset = 0;
+  int write_offset = 0;
+  unsigned char byte;
+  int length = strlen(in_buff);
+  while(read_offset < length) {
+    byte = in_buff[read_offset];
+    read_offset++;
+
+    if(byte <= 0x7F) {
+      out_buff[write_offset] = byte;
+      write_offset++;
+    }
+    else {
+      // Ё
+      if(byte == 0xA8) {
+        out_buff[write_offset] = 'E';
+        write_offset++;
+      }
+      // ё
+      if(byte == 0xB8) {
+        out_buff[write_offset] = 'e';
+        write_offset++;
+      }
+      // Остальные
+      if(byte >= 0xC0) {
+        out_buff[write_offset] = *(encoding + byte - 0xC0);
+        write_offset++;
+      }
+    }
+  }
+  out_buff[write_offset] = 0;
+}
+
+// Проверка на начало однобайтового символа
+char utf8_is_single_byte(char byte1) {
+  if(byte1 <= 0x7F) {
+    return 1;
+  }
+  return 0;
+}
+
+// Проверка на начало двухбайтового символа
+char utf8_is_double_byte(char byte1) {
+  if(byte1 > 0x7F && byte1 <= 0xDF) {
+    return 1;
+  }
+  return 0;
+}
+
+// Проверка на начало трёхбайтового символа
+char utf8_is_triple_byte(char byte1) {
+  if(byte1 > 0xDF && byte1 <= 0xEF) {
+    return 1;
+  }
+  return 0;
+}
+
+// Проверка на начало четырёхбайтового символа
+char utf8_is_quad_byte(char byte1) {
+  if(byte1 > 0xEF && byte1 <= 0xF4) {
+    return 1;
+  }
+  return 0;
+}
+
+// Проверка, является ли корректной строкой UTF-8
+int is_correct_utf8_string(char *str) {
+  int offset = 0;
+  while(offset <= strlen(str)) {
+    if(str[offset] <= 0x7F) offset++;
+    else if(str[offset] <= 0xDF) {
+      // Первый байт из диапазона 0xC2 - 0xDF - маска B110xxxxx
+      if(str[offset] < 0xC2) return 0;
+      // Второй байт из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      offset += 2;
+    }
+    else if(str[offset] <= 0xDF) {
+      // Первый байт из диапазона 0xC2 - 0xDF - маска B110xxxxx
+      if(str[offset] < 0xC2) return 0;
+      // Второй байт из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      offset += 2;
+    }
+    else if(str[offset] <= 0xEF) {
+      // Первый байт из диапазона 0xE0 - 0xEF - маска B1110xxxx
+      // Второй и третий байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      if(str[offset + 2] < 0x80 || str[offset + 2] > 0xBF) return 0;
+      offset += 3;
+    }
+    else if(str[offset] <= 0xF4) {
+      // Первый байт из диапазона 0xF0 - 0xF4 - маска B11110xxx
+      // Второй и дальше байты из диапазона 0x80 - 0xBF - маска B10xxxxxx
+      if(str[offset + 1] < 0x80 || str[offset + 1] > 0xBF) return 0;
+      if(str[offset + 2] < 0x80 || str[offset + 2] > 0xBF) return 0;
+      if(str[offset + 3] < 0x80 || str[offset + 3] > 0xBF) return 0;
+      offset += 4;
+    }
+    else {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+char is_digit_string(char *str) {
+  int i;
+  for(i = 0; i < strlen(str); i++) {
+    if(str[i] < '0' || str[i] > '9') return 0;
+  }
+  return 1;
+}
+
+char char1251_lowercase(char in) {
+  // English
+  if(in >= 'A' && in <= 'Z') {
+    return in - 'A' + 'a';
+  }
+  // Русский
+  if(in >= 0xC0 && in <= 0xDF) {
+    return in - 0xC0 + 0xE0;
+  }
+  // Ё
+  if(in == 0xA8) return 0xB8;
+  // Ђ
+  if(in == 0x80) return 0x90;
+  // Ѓ
+  if(in == 0x81) return 0x83;
+  // Љ
+  if(in == 0x8A) return 0x9A;
+  // Њ
+  if(in == 0x8C) return 0x9C;
+  // Ќ
+  if(in == 0x8D) return 0x9D;
+  // Ћ
+  if(in == 0x8E) return 0x9E;
+  // Џ
+  if(in == 0x8F) return 0x9F;
+  // Ў
+  if(in == 0xA1) return 0xA2;
+  // Ј
+  if(in == 0xA3) return 0xBC;
+  // Ґ
+  if(in == 0xA5) return 0xB4;
+  // Є
+  if(in == 0xAA) return 0xBA;
+  // Ї
+  if(in == 0xAF) return 0xBF;
+  // І
+  if(in == 0xB2) return 0xB3;
+  // Ѕ
+  if(in == 0xBD) return 0xBE;
+
+  return in;
+}
+
+// ====================================================
+// Работа с файлами
+// ====================================================
+
+// Двоичный файл или нет (содержит нули)
+// Если есть символы 0-8, 11-12, 14-19, то двочиный
+char is_binary_file(char *filename) {
+  fs::File file;
+  int offset = 0;
+  int byte;
+  char result = 0;
+  file = Storage->open(filename);
+  while(file.available()) {
+    byte = file.read();
+    if(byte >= 0 && byte <= 8 || byte == 11 || byte == 12 || byte >= 14 && byte <= 19) {
+      result = 1;
+      break;
+    }
+    offset++;
+    if(offset >= 1024) break;
+  }
+  file.close();
+  return result;
+}
+
+// Папка или нет
+char is_directory(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 0;
+  file = Storage->open(filename);
+  result = file.isDirectory();
+  file.close();
+  return result;
+}
+
+// Пустая папка или нет
+char is_empty_directory(char *filename) {
+  fs::File file;
+  fs::File current_dir;
+  int bytes;
+  char result = 1;
+  current_dir = Storage->open(filename);
+  if(!current_dir.isDirectory()) return 0;
+
+  // Смотрим содержимое папки, пропускаем . и ..
+  // Любой другой элемент - непустая папка
+  while(file = current_dir.openNextFile()) {
+    if(strcmp(file.name(), ".") == 0) continue;
+    if(strcmp(file.name(), "..") == 0) continue;
+    result = 0;
+    break;
+  }
+  current_dir.close();
+
+  return result;
+}
+
+// Пустой файл или нет
+char is_empty_file(char *filename) {
+  if(get_file_size(filename) == 0) return 1;
+  return 0;
+}
+
+long get_file_size(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 0;
+  file = Storage->open(filename);
+  result = file.size();
+  file.close();
+  return result;
+}
+
+// BMP или нет
+char is_bmp_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 54 байта
+  if(file.size() < 54) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 'B') result = 0;
+  if(file.read() != 'M') result = 0;
+  file.close();
+  return result;
+}
+
+// PNG или нет
+char is_png_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 67 байта
+  if(file.size() < 67) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 0x89) result = 0;
+  if(file.read() != 'P') result = 0;
+  if(file.read() != 'N') result = 0;
+  if(file.read() != 'G') result = 0;
+  file.close();
+  return result;
+}
+
+// JPEG или нет
+char is_jpeg_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 107 байт
+  if(file.size() < 107) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 0xFF) result = 0;
+  if(file.read() != 0xD8) result = 0;
+  if(file.read() != 0xFF) result = 0;
+  file.close();
+  return result;
+}
+
+// WEBP или нет
+char is_webp_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 47 байт
+  if(file.size() < 47) result = 0;
+  // Файл начинается буквами BM
+  if(file.read() != 'R') result = 0;
+  if(file.read() != 'I') result = 0;
+  if(file.read() != 'F') result = 0;
+  if(file.read() != 'F') result = 0;
+  file.close();
+  return result;
+}
+
+// MP3 или нет
+char is_mp3_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 417 байт
+  if(file.size() < 417) result = 0;
+  // Файл начинается буквами ID3
+  if(file.read() != 'I') result = 0;
+  if(file.read() != 'D') result = 0;
+  if(file.read() != '3') result = 0;
+  file.close();
+  return result;
+}
+
+// WAV или нет
+char is_wav_file(char *filename) {
+  fs::File file;
+  int bytes;
+  char result = 1;
+  file = Storage->open(filename);
+  // Минимальный размер 44 байт
+  if(file.size() < 44) result = 0;
+  // Файл начинается буквами ID3
+  if(file.read() != 'R') result = 0;
+  if(file.read() != 'I') result = 0;
+  if(file.read() != 'F') result = 0;
+  if(file.read() != 'F') result = 0;
+  file.close();
+  return result;
 }
 
 // Сохраняет скриншот в папку скриншотов
@@ -35769,6 +35313,382 @@ void saveScreenshot() {
   beep_if_enabled();
   digitalWrite(LED_RED, HIGH);
 }
+
+/*
+Прочитать файл в буфер
+filename - имя файла
+limit - максимальное количество символов, -1 без ограничений
+buff - буфер
+*/
+char read_file_to_buff(char *filename, int limit, char *buff) {
+  fs::File file;
+  char byte;
+  int offset;
+  
+  if(!Storage) return 0;
+
+  file = Storage->open(filename);
+  offset = 0;
+  buff[offset] = 0;
+  if(file) {
+    while(file.available()) {
+      byte = file.read();
+      buff[offset] = byte;
+      offset++;
+      buff[offset] = 0;
+      if(limit != -1 && offset >= limit) break;
+    }
+    return 1;
+  }
+  return 0;
+}
+
+// Записать небольшой файл из буфера
+int write_file_from_buff(char *filename, char *buff) {
+  fs::File file;
+  int offset = 0;
+
+  if(!Storage) return 0;
+
+  file = Storage->open(filename, FILE_WRITE);
+  if(file) {
+    while(buff[offset]) {
+      file.print(buff[offset]);
+      offset++;
+    }
+    file.close();
+    return 1;
+  }
+  return 0;
+}
+
+// Прочитать значение ключа из файла
+int read_key_value_from_file(char *filename, char *key, char *value) {
+  fs::File file;
+  int offset = 0;
+  char str[80];
+  char byte;
+
+  if(!Storage) return 0;
+
+  file = Storage->open(filename);
+  strcpy(value, "");
+  if(file) {
+    while(file.available()) {
+      // Читаем строку
+      offset = 0;
+      while(file.available()) {
+        byte = file.read();
+        if(byte == '\n' && file.peek() == '\r') file.read();
+        if(byte == '\r' && file.peek() == '\n') file.read();
+        if(byte == '\n' || byte == '\r') break;
+        str[offset] = byte;
+        offset++;
+        str[offset] = 0;
+      }
+      // Если строка совпадает с ключом, то копируем значение в буфер
+      if(!memcmp(key, str, strlen(key)) && str[strlen(key)] == '=') {
+        strcpy(value, str + strlen(key) + 1);
+        return 1;
+      }
+    }
+    file.close();
+    return 0;
+  }
+  return 0;
+}
+
+int write_key_value_to_file(char *filename, char *key, char *value) {
+  fs::File new_file;
+  fs::File old_file;
+  int offset = 0;
+  char buff[80];
+  char str[80];
+  char old_filename[80];
+  char byte;
+
+  if(!Storage) return 0;
+
+  sprintf(old_filename, "%s_old", filename);
+  Storage->rename(filename, old_filename);
+  new_file = Storage->open(filename, FILE_WRITE);
+  old_file = Storage->open(old_filename);
+
+  if(new_file) {
+    while(old_file && old_file.available()) {
+      // Читаем строку
+      offset = 0;
+      while(old_file.available()) {
+        byte = old_file.read();
+        str[offset] = byte;
+        offset++;
+        str[offset] = 0;
+        if(byte == '\n' && old_file.peek() == '\r') old_file.read();
+        if(byte == '\r' && old_file.peek() == '\n') old_file.read();
+        if(byte == '\n' || byte == '\r') break;
+      }
+      if(memcmp(key, str, strlen(key)) || str[strlen(key)] != '=') {
+        new_file.print(str);
+      }
+    }
+    // Записываем новые ключ и значение
+    sprintf(buff, "%s=%s", key, value);
+    new_file.println(buff);
+
+    new_file.close();
+    old_file.close();
+    Storage->remove(old_filename);
+    return 1;
+  }
+  return 0;
+}
+
+// Получить строку из файла по номеру строки (с нуля)
+int file_get_line_by_index(char *filename, int index, char *buff, int maxlen) {
+  fs::File file;
+  int result = 0;
+
+  if(!Storage) return 0;
+
+  file = Storage->open(filename);
+  if(file) {
+    result = stream_get_line_by_index(file, index, buff, maxlen);
+    file.close();
+  }
+  return result;
+}
+
+// Получить строку из потока по номеру строки (с нуля)
+int stream_get_line_by_index(fs::File file, int index, char *buff, int maxlen) {
+  int str_index = 0;
+  int byte;
+  int buff_offset = 0;
+  strcpy(buff, "");
+
+  while(file.available()) {
+    byte = file.read();
+    if(byte == '\n' && file.peek() == '\r') file.read();
+    if(byte == '\r' && file.peek() == '\n') file.read();
+    if(byte == '\n' || byte == '\r') {
+      if(index == str_index) {
+        return 1;
+      }
+      str_index++;
+      strcpy(buff, "");
+      buff_offset = 0;
+    }
+    else {
+      // Добавляем данные в буфер если в нём есть место
+      // А если нет пропускаем байты до конча строки
+      if(buff_offset < maxlen - 1) {
+        buff[buff_offset] = byte;
+        buff_offset++;
+        buff[buff_offset] = 0;
+      }
+    }
+  }
+
+  if(index == str_index) {
+    return 1;
+  }
+  return 0;
+}
+
+void cp_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
+  char *buff;
+  int size;
+  fs::File file_from;
+  fs::File file_to;
+
+  Serial.printf("Copy from %s to %s\n", path_from, path_to);
+
+  buff = (char *)malloc(4096 * sizeof(char));
+  file_from = Storage_from->open(path_from);
+  // Проверить существование файла назначения
+  if(Storage_to->exists(path_to)) {
+    file_to = Storage_to->open(path_to);
+    if(file_to) {
+      // Если это папка, то нужно копировать файл в эту папку с тем же названием файла
+      if(file_to.isDirectory()) {
+        strcat(path_to, "/");
+        strcat(path_to, file_from.name());
+      }
+      file_to.close();
+    }
+  }
+  file_to = Storage_to->open(path_to, FILE_WRITE);
+
+  while(file_from.available()) {
+    size = file_from.read((uint8_t *)buff, 4096);
+    file_to.write((const uint8_t *)buff, size);
+  }
+  
+  free(buff);
+  file_from.close();
+  file_to.close();
+}
+
+void cp_recursive_between_storages(fs::FS *Storage_from, char *path_from, fs::FS *Storage_to, char *path_to) {
+  char path_next_from[240];
+  char path_next_to[240];
+  fs::File file_from;
+  fs::File file_to;
+
+  Serial.printf("Recursive from %s to %s\n", path_from, path_to);
+
+  file_from = Storage_from->open(path_from);
+  if(file_from) {
+    // Если это папка
+    if(file_from.isDirectory()) {
+      if(!Storage_to->exists(path_to)) {
+        Storage_to->mkdir(path_to);
+      }
+      // Копировать содержимое
+      while(file_to = file_from.openNextFile()) {
+        // 
+        if(strcmp("/", path_from)) {
+          sprintf(path_next_from, "%s/%s", path_from, file_to.name());
+        }
+        else {
+          sprintf(path_next_from, "/%s", file_to.name());
+        }
+        if(strcmp("/", path_to)) {
+          sprintf(path_next_to, "%s/%s", path_to, file_to.name());
+        }
+        else {
+          sprintf(path_next_to, "/%s", file_to.name());
+        }
+        if(file_to.isDirectory()) {
+          Serial.printf("mkdir %s\n", path_next_to);
+          Storage_to->mkdir(path_next_to);
+        }
+        file_to.close();
+        cp_recursive_between_storages(Storage_from, path_next_from, Storage_to, path_next_to);
+      }
+    }
+    else {
+      file_from.close();
+      cp_between_storages(Storage_from, path_from, Storage_to, path_to);
+    }
+  }
+}
+
+void delete_recursive(fs::FS *Storage_from, char *path) {
+  char buff[240];
+  fs::File file;
+  fs::File current_dir;
+  current_dir = Storage_from->open(path);
+  if(current_dir.isDirectory()) {
+    while(file = current_dir.openNextFile()) {
+      sprintf(buff, "%s/%s", path, file.name());
+      if(file.isDirectory()) {
+        Serial.printf("rmdir %s\n", buff);
+        delete_recursive(Storage_from, buff);
+      }
+      else {
+        Serial.printf("rm %s\n", buff);
+        Storage_from->remove(buff);
+      }
+    }
+    current_dir.close();
+    // Удалить папку, но не корень
+    if(strcmp(path, "/")) {
+      Serial.printf("rmdir %s\n", path);
+      Storage_from->rmdir(path);
+    }
+  }
+  else {
+    Serial.printf("rm %s\n", path);
+    Storage_from->remove(path);
+    current_dir.close();
+  }
+}
+
+long long size_recursive(fs::FS *Storage_from, char *path) {
+  char buff[240];
+  long long size = 0;
+
+  Serial.println(path);
+  fs::File file;
+  fs::File current_dir;
+  current_dir = Storage_from->open(path);
+  if(current_dir.isDirectory()) {
+    while(file = current_dir.openNextFile()) {
+      sprintf(buff, "%s/%s", path, file.name());
+      if(file.isDirectory()) {
+        size += size_recursive(Storage_from, buff);
+      }
+      else {
+        //Serial.printf("rm %s\n", buff);
+        size += file.size();
+      }
+    }
+  }
+  else {
+    size += current_dir.size();
+  }
+  current_dir.close();
+
+  Serial.printf("%s %llu\n", path, size);
+  return size;
+}
+
+// Сохранить текущую дату в ФС
+void store_current_timestamp() {
+  char buff[80];
+  unsigned long current_timestamp;
+
+  Serial.println("store_current_timestamp");
+  current_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
+  sprintf(buff, "%lu", current_timestamp);
+  write_file_from_buff("/Settings/Timestamp", buff);
+}
+
+void get_current_timestamp_fs() {
+  char buff[80];
+  if(read_file_to_buff("/Settings/Timestamp", 79, buff)) {
+    global_unixtime_retrieved = strtol(buff, NULL, 10);
+    global_unixtime_retrieved_millis = millis();
+  }
+}
+
+void get_current_timezone() {
+  char buff[80];
+  if(read_file_to_buff("/Settings/Timezone", 79, buff)) {
+    global_timezone = strtol(buff, NULL, 10);
+  }
+}
+
+void save_current_timezone() {
+  char buff[80];
+  sprintf(buff, "%ld", global_timezone);
+  write_file_from_buff("/Settings/Timezone", buff);
+}
+
+void file_append(char *filename, char *data) {
+  fs::File file;
+
+  file = Storage->open(filename, FILE_APPEND);
+  if(file) {
+    file.print(data);
+    file.close();
+  }
+}
+
+void file_append_line(char *filename, char *data) {
+  fs::File file;
+  if(!Storage) return;
+  file = Storage->open(filename, FILE_APPEND);
+  if(file) {
+    file.print(data);
+    file.print("\n");
+    file.close();
+  }
+}
+
+// ====================================================
+// Работа с экраном
+// ====================================================
 
 void clearScreen() {
   tft.fillScreen(color_scheme_bg);
@@ -36273,6 +36193,7 @@ void drawPopupWindow(char *title, char *message, char **buttons) {
   drawButtonMatrix(8, 240 - 40, tft.width() - 8 * 2, 32, buttons, 3, 1);
 }
 
+// Запрашивать пароль пока не введут верный
 void checkPasswordUntilCorrect(char *correct_password, char is_sha256) {
   fs::File file;
   int i;
@@ -36362,24 +36283,6 @@ void checkPasswordUntilCorrect(char *correct_password, char is_sha256) {
       }
     }
     touchWaitRelease();
-  }
-}
-
-void password_sha256(char *password, char *hash) {
-  mbedtls_sha256_context sha256_ctx;
-  unsigned char result[32];
-  char buff[10];
-  int i;
-
-  mbedtls_sha256_init(&sha256_ctx);
-  mbedtls_sha256_starts(&sha256_ctx, 0); // 0 for SHA-256 (not SHA-224)
-  mbedtls_sha256_update(&sha256_ctx, (const uint8_t*)password, strlen(password));
-  mbedtls_sha256_finish(&sha256_ctx, result);
-  mbedtls_sha256_free(&sha256_ctx);
-  strcpy(hash, "");
-  for(i = 0; i < 32; i++) {
-    sprintf(buff, "%02x", result[i]);
-    strcat(hash, buff);
   }
 }
 
@@ -37177,185 +37080,6 @@ char touchPollTouchStatus() {
   return 0;
 }
 
-/*
-Прочитать файл в буфер
-filename - имя файла
-limit - максимальное количество символов, -1 без ограничений
-buff - буфер
-*/
-char read_file_to_buff(char *filename, int limit, char *buff) {
-  fs::File file;
-  char byte;
-  int offset;
-  
-  if(!Storage) return 0;
-
-  file = Storage->open(filename);
-  offset = 0;
-  buff[offset] = 0;
-  if(file) {
-    while(file.available()) {
-      byte = file.read();
-      buff[offset] = byte;
-      offset++;
-      buff[offset] = 0;
-      if(limit != -1 && offset >= limit) break;
-    }
-    return 1;
-  }
-  return 0;
-}
-
-// Записать небольшой файл из буфера
-int write_file_from_buff(char *filename, char *buff) {
-  fs::File file;
-  int offset = 0;
-
-  if(!Storage) return 0;
-
-  file = Storage->open(filename, FILE_WRITE);
-  if(file) {
-    while(buff[offset]) {
-      file.print(buff[offset]);
-      offset++;
-    }
-    file.close();
-    return 1;
-  }
-  return 0;
-}
-
-// Прочитать значение ключа из файла
-int read_key_value_from_file(char *filename, char *key, char *value) {
-  fs::File file;
-  int offset = 0;
-  char str[80];
-  char byte;
-
-  if(!Storage) return 0;
-
-  file = Storage->open(filename);
-  strcpy(value, "");
-  if(file) {
-    while(file.available()) {
-      // Читаем строку
-      offset = 0;
-      while(file.available()) {
-        byte = file.read();
-        if(byte == '\n' && file.peek() == '\r') file.read();
-        if(byte == '\r' && file.peek() == '\n') file.read();
-        if(byte == '\n' || byte == '\r') break;
-        str[offset] = byte;
-        offset++;
-        str[offset] = 0;
-      }
-      // Если строка совпадает с ключом, то копируем значение в буфер
-      if(!memcmp(key, str, strlen(key)) && str[strlen(key)] == '=') {
-        strcpy(value, str + strlen(key) + 1);
-        return 1;
-      }
-    }
-    file.close();
-    return 0;
-  }
-  return 0;
-}
-
-int write_key_value_to_file(char *filename, char *key, char *value) {
-  fs::File new_file;
-  fs::File old_file;
-  int offset = 0;
-  char buff[80];
-  char str[80];
-  char old_filename[80];
-  char byte;
-
-  if(!Storage) return 0;
-
-  sprintf(old_filename, "%s_old", filename);
-  Storage->rename(filename, old_filename);
-  new_file = Storage->open(filename, FILE_WRITE);
-  old_file = Storage->open(old_filename);
-
-  if(new_file) {
-    while(old_file && old_file.available()) {
-      // Читаем строку
-      offset = 0;
-      while(old_file.available()) {
-        byte = old_file.read();
-        str[offset] = byte;
-        offset++;
-        str[offset] = 0;
-        if(byte == '\n' && old_file.peek() == '\r') old_file.read();
-        if(byte == '\r' && old_file.peek() == '\n') old_file.read();
-        if(byte == '\n' || byte == '\r') break;
-      }
-      if(memcmp(key, str, strlen(key)) || str[strlen(key)] != '=') {
-        new_file.print(str);
-      }
-    }
-    // Записываем новые ключ и значение
-    sprintf(buff, "%s=%s", key, value);
-    new_file.println(buff);
-
-    new_file.close();
-    old_file.close();
-    Storage->remove(old_filename);
-    return 1;
-  }
-  return 0;
-}
-
-// Получить строку из файла по номеру строки (с нуля)
-int file_get_line_by_index(char *filename, int index, char *buff, int maxlen) {
-  fs::File file;
-  int result = 0;
-
-  if(!Storage) return 0;
-
-  file = Storage->open(filename);
-  if(file) {
-    result = stream_get_line_by_index(file, index, buff, maxlen);
-    file.close();
-  }
-  return result;
-}
-
-// Получить строку из потока по номеру строки (с нуля)
-int stream_get_line_by_index(fs::File file, int index, char *buff, int maxlen) {
-  int str_index = 0;
-  int byte;
-  int buff_offset = 0;
-  strcpy(buff, "");
-
-  while(file.available()) {
-    byte = file.read();
-    if(byte == '\n' && file.peek() == '\r') file.read();
-    if(byte == '\r' && file.peek() == '\n') file.read();
-    if(byte == '\n' || byte == '\r') {
-      if(index == str_index) {
-        return 1;
-      }
-      str_index++;
-      strcpy(buff, "");
-      buff_offset = 0;
-    }
-    else {
-      // Добавляем данные в буфер если в нём есть место
-      // А если нет пропускаем байты до конча строки
-      if(buff_offset < maxlen - 1) {
-        buff[buff_offset] = byte;
-        buff_offset++;
-        buff[buff_offset] = 0;
-      }
-    }
-  }
-
-  if(index == str_index) {
-    return 1;
-  }
-  return 0;
-}
 
 int get_brightness() {
   return global_brightness;
@@ -37453,439 +37177,29 @@ void image_from_bits_scaled(int scale, int start_x, int start_y, char *image, in
   }
 }
 
-// Функции общего назначения
-
-// Генерировать uuid
-void uuidgen(char *buff) {
-  char n_to_hex[17] = "0123456789abcdef";
-  int i;
-  strcpy(buff, "");
-  for(i = 0; i < 8; i++) strcat_char(buff, n_to_hex[random(0, 16)]);
-  strcat_char(buff, '-');
-  for(i = 0; i < 4; i++) strcat_char(buff, n_to_hex[random(0, 16)]);
-  strcat_char(buff, '-');
-  for(i = 0; i < 4; i++) strcat_char(buff, n_to_hex[random(0, 16)]);
-  strcat_char(buff, '-');
-  for(i = 0; i < 4; i++) strcat_char(buff, n_to_hex[random(0, 16)]);
-  strcat_char(buff, '-');
-  for(i = 0; i < 12; i++) strcat_char(buff, n_to_hex[random(0, 16)]);
-}
-
-// Генерировать случайную шестнадцатеричную строку
-void random_hexstring(char *buff, int chars) {
-  char n_to_hex[17] = "0123456789abcdef";
-  strcpy(buff, "");
-  while(chars > 0) {
-    strcat_char(buff, n_to_hex[random(0, 16)]);
-    chars--;
-  }
-}
-
-long digit_sum(long arg) {
-  char buff[20];
-  int i;
-  long result = 0;
-  sprintf(buff, "%d", arg);
-  result = 0;
-  for(i = 0; i < strlen(buff); i++) {
-    result += buff[i] - '0';
-  }
-  return result;
-}
-
-long reverse(long arg) {
-  char buff[20];
-  int i;
-  long result = 0;
-  int len = 0;
-  char tmp;
-  sprintf(buff, "%d", arg);
-  len = strlen(buff);
-  result = 0;
-  for(i = 0; i < len / 2; i++) {
-    tmp = buff[i];
-    buff[i] = buff[len - i - 1];
-    buff[len - i - 1] = tmp;
-  }
-  return strtol(buff, NULL, 10);
-}
-
-long rol(long arg, int n) {
-  char b;
-  int i;
-  for(i = 0; i < n; i++) {
-    // Перемещаем старший бит в младший, остальные сдвигаем
-    b = arg >> 31;
-    arg = arg << 1;
-    arg |= b;
-  }
-  return arg;
-}
-
-long ror(long arg, int n) {
-  char b;
-  int i;
-  for(i = 0; i < n; i++) {
-    // Перемещаем младший бит в старший, остальные сдвигаем
-    b = arg & 1;
-    arg = arg >> 1;
-    arg |= b << 31;
-  }
-  return arg;
-}
-
-int ctz(long arg) {
-  int result = 0;
-  for(result = 0; arg != 0; result++) {
-    arg = arg << 1;
-  }
-  return 32 - result;
-}
-
-int clz(long arg) {
-  int result = 0;
-  for(result = 0; arg != 0; result++) {
-    arg = arg >> 1;
-  }
-  return 32 - result;
-}
-
-int parity(long arg) {
-  return popcount(arg) % 2;
-}
-
-int popcount(long arg) {
-  char buff[40];
-  int i;
-  int result;
-  strcpy(buff, String(arg, BIN).c_str());
-  result = 0;
-  for(i = 0; i < strlen(buff); i++) {
-    if(buff[i] == '1') result++;
-  }
-  return result;
-}
-
-void morse_dit() {
-  //Serial.printf("morse_dit global_beeper_pin %d\n", global_beeper_pin);
-  tone(global_beeper_pin, global_morse_freq, global_dot_len);
-  delay(global_dot_len);
-  noTone(global_beeper_pin);
-  delay(global_dot_len);
-}
-
-void morse_dah() {
-  //Serial.printf("morse_dah global_beeper_pin %d\n", global_beeper_pin);
-  tone(global_beeper_pin, global_morse_freq, global_dot_len * 3);
-  delay(global_dot_len * 3);
-  noTone(global_beeper_pin);
-  delay(global_dot_len);
-}
-
-void morse_wait() {
-  delay(global_dot_len);
-}
-
-TaskHandle_t MorseTaskHandle = NULL;
-
-void beep_morse_task(void *pvParameters) {
-  char *str = (char *)pvParameters;
-  int i;
-  for(i = 0; i < strlen(str); i++) {
-    Serial.println(str[i]);
-    beep_morse_perform(str[i]);
-    morse_wait();
-    morse_wait();
-    delay(global_morse_char_add_wait);
-  }
-  MorseTaskHandle = NULL;
-  vTaskDelete(NULL);
-}
-
-void beep_morse_perform(char c) {
-  switch(c) {
-    // Цифры
-    case '0': morse_dah(); morse_dah(); morse_dah(); morse_dah(); morse_dah(); break;
-    case '1': morse_dit(); morse_dah(); morse_dah(); morse_dah(); morse_dah(); break;
-    case '2': morse_dit(); morse_dit(); morse_dah(); morse_dah(); morse_dah(); break;
-    case '3': morse_dit(); morse_dit(); morse_dit(); morse_dah(); morse_dah(); break;
-    case '4': morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dah(); break;
-    case '5': morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); break;
-    case '6': morse_dah(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); break;
-    case '7': morse_dah(); morse_dah(); morse_dit(); morse_dit(); morse_dit(); break;
-    case '8': morse_dah(); morse_dah(); morse_dah(); morse_dit(); morse_dit(); break;
-    case '9': morse_dah(); morse_dah(); morse_dah(); morse_dah(); morse_dit(); break;
-
-    // Латинница
-    case 'A': case 'a': morse_dit(); morse_dah(); break;
-    case 'B': case 'b': morse_dah(); morse_dit(); morse_dit(); morse_dit(); break;
-    case 'C': case 'c': morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
-    case 'D': case 'd': morse_dah(); morse_dit(); morse_dit(); break;
-    case 'E': case 'e': morse_dit(); break;
-    case 'F': case 'f': morse_dit(); morse_dit(); morse_dah(); morse_dit(); break;
-    case 'G': case 'g': morse_dah(); morse_dah(); morse_dit(); break;
-    case 'H': case 'h': morse_dit(); morse_dit(); morse_dit(); morse_dit(); break;
-    case 'I': case 'i': morse_dit(); morse_dit(); break;
-    case 'J': case 'j': morse_dit(); morse_dah(); morse_dah(); morse_dah(); break;
-    case 'K': case 'k': morse_dah(); morse_dit(); morse_dah(); break;
-    case 'L': case 'l': morse_dit(); morse_dah(); morse_dit(); morse_dit();  break;
-    case 'M': case 'm': morse_dah(); morse_dah(); break;
-    case 'N': case 'n': morse_dah(); morse_dit(); break;
-    case 'O': case 'o': morse_dah(); morse_dah(); morse_dah(); break;
-    case 'P': case 'p': morse_dit(); morse_dah(); morse_dah(); morse_dit(); break;
-    case 'Q': case 'q': morse_dah(); morse_dah(); morse_dit(); morse_dah(); break;
-    case 'R': case 'r': morse_dit(); morse_dah(); morse_dit(); break;
-    case 'S': case 's': morse_dit(); morse_dit(); morse_dit(); break;
-    case 'T': case 't': morse_dah(); break;
-    case 'U': case 'u': morse_dit(); morse_dit(); morse_dah(); break;
-    case 'V': case 'v': morse_dit(); morse_dit(); morse_dit(); morse_dah(); break;
-    case 'W': case 'w': morse_dit(); morse_dah(); morse_dah(); break;
-    case 'X': case 'x': morse_dah(); morse_dit(); morse_dit(); morse_dah(); break;
-    case 'Y': case 'y': morse_dah(); morse_dit(); morse_dah(); morse_dah(); break;
-    case 'Z': case 'z': morse_dah(); morse_dah(); morse_dit(); morse_dit(); break;
-    
-    // Русские буквы
-    case 0xC0: case 0xE0: morse_dit(); morse_dah(); break; // А
-    case 0xC1: case 0xE1: morse_dah(); morse_dit(); morse_dit(); morse_dit(); break; // Б
-    case 0xC2: case 0xE2: morse_dit(); morse_dah(); morse_dah(); break; // В
-    case 0x81: case 0x83: case 0xA5: case 0xB4:
-    case 0xC3: case 0xE3: morse_dah(); morse_dah(); morse_dit(); break; // Г
-    case 0xC4: case 0xE4: morse_dah(); morse_dit(); morse_dit(); break; // Д
-    case 0xC5: case 0xE5: morse_dit(); break; // Е
-    case 0xA8: case 0xB8: morse_dit(); break; // Ё
-    case 0xC6: case 0xE6: morse_dit(); morse_dit(); morse_dit(); morse_dah(); break; // Ж
-    case 0xC7: case 0xE7: morse_dah(); morse_dah(); morse_dit(); morse_dit(); break; // З
-    case 0xC8: case 0xE8: morse_dit(); morse_dit(); break; // И
-    case 0xA3: case 0xBC:
-    case 0xC9: case 0xE9: morse_dit(); morse_dah(); morse_dah(); morse_dah(); break; // Й
-    case 0x8D: case 0x9D:
-    case 0xCA: case 0xEA: morse_dah(); morse_dit(); morse_dah(); break; // К
-    case 0xCB: case 0xEB: morse_dit(); morse_dah(); morse_dit(); morse_dit(); break; // Л
-    case 0xCC: case 0xEC: morse_dah(); morse_dah(); break; // М
-    case 0xCD: case 0xED: morse_dah(); morse_dit(); break; // Н
-    case 0xCE: case 0xEE: morse_dah(); morse_dah(); morse_dah(); break; // О
-    case 0xCF: case 0xEF: morse_dit(); morse_dah(); morse_dah(); morse_dit(); break; // П
-    case 0xD0: case 0xF0: morse_dit(); morse_dah(); morse_dit(); break; // Р
-    case 0xBD: case 0xBE:
-    case 0xD1: case 0xF1: morse_dit(); morse_dit(); morse_dit(); break; // С
-    case 0xD2: case 0xF2: morse_dah(); break; // Т
-    case 0xA1: case 0xA2:
-    case 0xD3: case 0xF3: morse_dit(); morse_dit(); morse_dah(); break; // У
-    case 0xD4: case 0xF4: morse_dit(); morse_dit(); morse_dah(); morse_dit(); break; // Ф
-    case 0xD5: case 0xF5: morse_dit(); morse_dit(); morse_dit(); morse_dit(); break; // Х
-    case 0xD6: case 0xF6: morse_dah(); morse_dit(); morse_dah(); morse_dit(); break; // Ц
-    case 0xD7: case 0xF7: morse_dah(); morse_dah(); morse_dah(); morse_dit(); break; // Ч
-    case 0xD8: case 0xF8: morse_dah(); morse_dah(); morse_dah(); morse_dah(); break; // Ш
-    case 0xD9: case 0xF9: morse_dah(); morse_dah(); morse_dit(); morse_dah(); break; // Щ
-    case 0xDA: case 0xFA: morse_dah(); morse_dah(); morse_dit(); morse_dah(); morse_dah(); break; // Ъ
-    case 0xDB: case 0xFB: morse_dah(); morse_dit(); morse_dah(); morse_dah(); break; // Ы
-    case 0xDC: case 0xFC: morse_dah(); morse_dit(); morse_dit(); morse_dah(); break; // Ь
-    case 0xAA: case 0xBA:
-    case 0xDD: case 0xFD: morse_dit(); morse_dit(); morse_dah(); morse_dit(); morse_dit(); break; // Э
-    case 0xDE: case 0xFE: morse_dit(); morse_dit(); morse_dah(); morse_dah(); break; // Ю
-    case 0xDF: case 0xFF: morse_dit(); morse_dah(); morse_dit(); morse_dah(); break; // Я
-
-    // Знаки препинания (русский вариант)
-    case '.': morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); break;
-    case 0x82:
-    case ',': morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); morse_dah(); break;
-    case '?': morse_dit(); morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dit(); break;
-    case '!': morse_dah(); morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dah(); break;
-    case ':': morse_dah(); morse_dah(); morse_dah(); morse_dit(); morse_dit(); morse_dit(); break;
-    case ';': morse_dah(); morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
-    case '(': case ')': morse_dah(); morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dah(); break;
-    case 0x91: case 0x92:
-    case '\'': morse_dit(); morse_dah(); morse_dah(); morse_dah(); morse_dah(); morse_dit(); break;
-    case 0xAB: case 0xBB: case 0x8B: case 0x9B: case 0x84: case 0x93: case 0x94:
-    case '"': morse_dit(); morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dit(); break;
-    case '+': morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
-    case 0x96: case 0x97:
-    case '-': morse_dah(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dah(); break;
-    case '@': morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
-    case '=': morse_dah(); morse_dit(); morse_dit(); morse_dit(); morse_dah(); break;
-    case '/': morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dit(); break;
-    case '_': morse_dit(); morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dah(); break;
-    case 0x08: case 0x7F:
-      morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit();
-      break;
-    case ' ': morse_wait(); morse_wait(); morse_wait(); break;
-    default: morse_wait(); break;
-  }
-}
-
-void beep_morse_if_enabled(char *str) {
-  if(global_is_beep_enabled && !global_silent_mode) {
-    beep_morse(str);
-  }
-}
-void beep_morse(char *str) {
-  if(MorseTaskHandle == NULL) {
-    xTaskCreatePinnedToCore(
-      beep_morse_task,   /* Task function */
-      "beep_morse_task", /* name of task */
-      8192,              /* Stack size of task */
-      str,              /* parameter */
-      1,                 /* priority */
-      &MorseTaskHandle,  /* Task handle */
-      0                  /* Core ID (0 or 1) */
-    );
-  }
-}
-
-void beep_if_enabled() {
-  if(global_is_beep_enabled && !global_silent_mode) {
-    //Serial.printf("beep global_beeper_pin %d\n", global_beeper_pin);
-    tone(global_beeper_pin, 1000, 100);
-  }
-}
-
-void beep_tap_if_enabled() {
-  if(global_is_beep_tap_enabled && !global_silent_mode) {
-    tone(global_beeper_pin, 8000, 12);
-  }
-}
-
-char *hour_to_string[] = {
-  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
-  "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", 
-};
-void beep_hour() {
-  if(global_is_beep_hour_enabled && !global_silent_mode) {
-    beep_morse(hour_to_string[global_hours]);
-    //beep_morse("H");
-  }
-}
-
-void beep_quarter() {
-  if(global_is_beep_quarter_enabled && !global_silent_mode) {
-    beep_morse("Q");
-  }
-}
-
-// Будильник, работает до касания или до минуты
-void beep_alarm() {
-  int i;
-  char *buff = NULL;
-  char bl_flag = 1;
-  int brightness = global_brightness;
-  int x0 = tft.width() / 2 - 100 / 2;
-  int y0 = tft.height() / 2 - 32 / 2;
-  int width = 100;
-  int height = 32;
-
-  global_alarm_set = 0;
-  Serial.println("Alarm begin");
+// Функция задает границы скроллинга (Команда 33h в даташите ILI9341)
+void setupScrollArea(uint16_t tfa, uint16_t bfa) {
+  uint16_t vsa = tft.height() - tfa - bfa; // Высота активной зоны скроллинга
   
-/* Работает асинхронно, возможны конфликты при обновлении экрана, поэтому экран не трогаем
-  // Сохраняем часть экрана где будет сообщение
-  buff = (char *)malloc(width * height * sizeof(char));
-  screen_area_to_buffer(buff, x0, y0, width, height);
-  tft.drawRect(x0, y0, width, height, color_scheme_fg);
-  tft.fillRect(x0 + 1, y0 + 1, width - 2, height - 2, color_scheme_bg);
-  tft.setTextColor(color_scheme_fg, color_scheme_bg);
-  tft.drawCentreString("ALARM", tft.width() / 2, tft.height() / 2 - 8, FONT_DEFAULT);
-*/
-  for(i = 0; i < 150; i++) {
-    if(bl_flag) {
-      set_brightness(255);
-      bl_flag = 0;
-    }
-    else {
-      set_brightness(0);
-      bl_flag = 1;
-    }
-
-    // Модифицированный А
-    tone(global_beeper_pin, 2000, global_dot_len);
-    delay(global_dot_len);
-    noTone(global_beeper_pin);
-    delay(global_dot_len);
-    tone(global_beeper_pin, 3000, global_dot_len * 3);
-    delay(global_dot_len * 3);
-    noTone(global_beeper_pin);
-    delay(global_dot_len * 3);
-
-    if(global_touch_present_flag && i > 1) {
-      Serial.println("Break");
-      break;
-    }
-  }
-/*
-  // Вернуть как было
-  
-  buffer_to_screen_area(buff, x0, y0, width, height);
-  free(buff);
-*/
-  set_brightness(brightness);
-  global_alarm_set = 1;
-
-  Serial.println("Alarm end");
+  tft.writecommand(0x33); // VSCRDEF (Vertical Scrolling Definition)
+  tft.writedata(tfa >> 8);
+  tft.writedata(tfa & 0xFF);
+  tft.writedata(vsa >> 8);
+  tft.writedata(vsa & 0xFF);
+  tft.writedata(bfa >> 8);
+  tft.writedata(bfa & 0xFF);
 }
 
-// Функции ширования и расшифровки - минное поле
-// Скопировал их из примера, потому что переработанный вариант не работал, вылетал в Exception
-// Единственное изменение - про вектор инициализации
-
-// Encryption Function with PKCS#7 Padding
-void encryptAES(uint8_t* input, int inputLen, uint8_t* output, int paddedLen) {
-  char aes_iv[16];
-  mbedtls_aes_context aes;
-  uint8_t iv_copy[16];
-  uint8_t paddingValue;
-  uint8_t* paddedInput;
-  int i;
-
-  // Генерировать случайный новый вектор инициализации
-  for(i = 0; i < 16; i++) {
-    aes_iv[i] = random(0, 256);
-  }
-  // Create a temporary copy of IV because mbedtls modifies it during processing
-  memcpy(iv_copy, aes_iv, 16);
-
-  // Allocate a temporary buffer to apply PKCS#7 padding
-  paddedInput = (uint8_t*)malloc(paddedLen);
-  memcpy(paddedInput, input, inputLen);
-  
-  // Apply PKCS#7 padding bytes
-  paddingValue = paddedLen - inputLen;
-  for (i = inputLen; i < paddedLen; i++) {
-    paddedInput[i] = paddingValue;
-  }
-
-  mbedtls_aes_init(&aes);
-  mbedtls_aes_setkey_enc(&aes, (const unsigned char*)aes_encryption_key, PASSWORDS_AES_BITS);
-
-  mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, paddedLen, iv_copy, paddedInput, output + 16);
-  mbedtls_aes_free(&aes);
-
-  // Первые 16 байт - вектор инициализации
-  memcpy(output, aes_iv, 16);
-  free(paddedInput);
+// Функция сдвигает начальный адрес чтения памяти (Команда 37h в даташите ILI9341)
+void scrollAddress(uint16_t vsp) {
+  tft.writecommand(0x37); // VSCRSADD (Vertical Scrolling Start Address)
+  tft.writedata(vsp >> 8);
+  tft.writedata(vsp & 0xFF);
 }
 
-// Decryption Function with PKCS#7 Unpadding
-void decryptAES(uint8_t* input, int dataLen, uint8_t* output) {
-  mbedtls_aes_context aes;
-  uint8_t iv_copy[16];
-  uint8_t paddingValue;
-  int originalLen;
-  int paddedLen;
-  int i;
-
-  paddedLen = ((dataLen - 16) / 16) * 16;
-
-  // Первые 16 байт - вектор инициализации
-  memcpy(iv_copy, input, 16);
-
-  mbedtls_aes_init(&aes);
-  mbedtls_aes_setkey_dec(&aes, (const unsigned char*)aes_encryption_key, PASSWORDS_AES_BITS);
-
-  mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, paddedLen, iv_copy, input + 16, output);
-  mbedtls_aes_free(&aes);
-
-  // Read PKCS#7 padding value from the very last byte to remove it
-  paddingValue = output[paddedLen - 1];
-  originalLen = paddedLen - paddingValue;
+void setGamma(int gamma_value) {
+  tft.writecommand(0x26); // Gamma Set Command
+  tft.writedata(gamma_value);
 }
 
 // Отобразить BMP в указанном месте
@@ -37902,6 +37216,9 @@ int bmp_show_image(char *filename, int start_x, int start_y) {
   int color;
   int palette[256];
   fs::File file;
+
+  if(!Storage) return 0;
+  if(storage_type == STORAGE_TYPE_NONE) return 0;
 
   file = Storage->open(filename);
   if(file) {
@@ -38275,7 +37592,7 @@ int jpeg_show_image(char *filename, int start_x, int start_y) {
   disableAppTitle();
   clearScreen();
   jpeg = new JPEGDEC;
-  rc = jpeg->open((const char *)filename, myOpen, myClose, myRead, mySeek, JPEGDraw);
+  rc = jpeg->open((const char *)filename, jpeg_myOpen, jpeg_myClose, jpeg_myRead, jpeg_mySeek, jpeg_draw);
   if (rc) {
     int imgWidth = jpeg->getWidth();
     int imgHeight = jpeg->getHeight();
@@ -38315,25 +37632,25 @@ int jpeg_show_image(char *filename, int start_x, int start_y) {
 // Functions to access a file on the SD card
 fs::File myfile;
 
-void * myOpen(const char *filename, int32_t *size) {
+void * jpeg_myOpen(const char *filename, int32_t *size) {
   myfile = Storage->open(filename);
   *size = myfile.size();
   return &myfile;
 }
-void myClose(void *handle) {
+void jpeg_myClose(void *handle) {
   if (myfile) myfile.close();
 }
-int32_t myRead(JPEGFILE *handle, uint8_t *buffer, int32_t length) {
+int32_t jpeg_myRead(JPEGFILE *handle, uint8_t *buffer, int32_t length) {
   if (!myfile) return 0;
   return myfile.read(buffer, length);
 }
-int32_t mySeek(JPEGFILE *handle, int32_t position) {
+int32_t jpeg_mySeek(JPEGFILE *handle, int32_t position) {
   if (!myfile) return 0;
   return myfile.seek(position);
 }
 
 // Function to draw pixels to the display
-int JPEGDraw(JPEGDRAW *pDraw) {
+int jpeg_draw(JPEGDRAW *pDraw) {
   tft.pushImage(pDraw->x, pDraw->y, pDraw->iWidth, pDraw->iHeight, pDraw->pPixels);
   return 1;
 }
@@ -38361,49 +37678,558 @@ char is_screen_has_only_16_colors() {
   return 1;
 }
 
-// Стереть раздел FFat
-void ffat_erase_partition() {
-  const esp_partition_t* partition = esp_partition_find_first(
-    ESP_PARTITION_TYPE_DATA,         // Type (DATA or APP)
-    ESP_PARTITION_SUBTYPE_DATA_FAT,  // Subtype
-    NULL                             // Label name in your partition table
-  );
-  int offset = 0;
-  while(offset < partition->size) {
-    esp_partition_erase_range(partition, offset, 4096);
-    offset += 4096;
-  }
-}
+// ====================================================
+// Вывод текста в определённое место, получать где курсор, вычислять где касание
+// ====================================================
 
-// Двоичный файл или текстовый
-// Если есть символы 0-8, 11-12, 14-19, то двочиный
-int file_is_binary(char *path) {
-  fs::File file;
+// Вывести одну страницу текста с переносом по словам
+// Возвращает число выведенных байтов
+// text - текст, который нужно выводить
+// start_x, start_y - левый верхний угол
+// width - ширина в пикселях
+// total_lines - число строк
+// font - шрифт
+// draw_flag - рисовать текст или только посчитать смещение
+int draw_text_formatted(char *text, int start_x, int start_y, int width, int total_lines, int font, int draw_flag) {
+  char current_line[80];
+  char current_word[80];
+  char new_line_flag_word = 0;
+  char new_line_flag_line = 0;
+  char newline_symbols = 0;
+  char newline_symbols_prev = 0;
+  char byte;
+  int word_offset = 0;
+  int line_index = 0;
+  int text_offset = 0;
+  int start_line_offset;
+  int line_height;
   int i;
-  int file_is_binary = 0;
-  int byte;
-  file = Storage->open(path);
-  for(i = 0; i < 256; i++) {
-    byte = file.read();
-    if(byte >= 0 && byte <= 8 || byte == 11 || byte == 12 || byte >= 14 && byte <= 19) {
-      file_is_binary = 1;
+
+  draw_text_formatted_cursor_pos_x = -1;
+  draw_text_formatted_cursor_pos_y = -1;
+  
+  //Serial.println("draw_text_formatted");
+
+  line_height = tft.fontHeight(font);
+
+  strcpy(current_line, "");
+  strcpy(current_word, "");
+
+  while(line_index < total_lines) {
+    //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
+    // Считываем очередное слово в буфер current_word
+    while(text[text_offset] > 0) {
+      //Serial.println(__LINE__);
+      byte = text[text_offset];
+
+      // Tab - пробел
+      if(byte == 0x09) byte = ' ';
+      // Всё остальное неотображаемые до пробела, кроме переводов строк
+      if(byte < ' ' && byte != '\n' && byte != '\r') byte = '_';
+      
+      // Последовательности \n\r и \r\n это один перевод строки
+      newline_symbols = 0;
+      if(byte == '\r' && text[text_offset + 1] == '\n') {
+        text_offset++;
+        newline_symbols++;
+      }
+      if(byte == '\n' && text[text_offset + 1] == '\r') {
+        text_offset++;
+        newline_symbols++;
+      }
+      if(byte == '\n' || byte == '\r' || byte == 0) {
+        newline_symbols++;
+        if(byte > 0) text_offset++;
+        new_line_flag_word = 1;
+      }
+      if(new_line_flag_word) break;
+
+      // Добавляем текущий символ в строку
+      current_word[word_offset] = byte;
+      word_offset++;
+      current_word[word_offset] = 0;
+      text_offset++;
+
+      if(strlen(current_word) >= 40) break;
+      if(byte == ' ') break;
+    }
+
+    // Проверяем, влезет ли новое слово + строка на экран
+    //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
+    //delay(1000);
+    if(tft.textWidth(current_line, font) + tft.textWidth(current_word, font) < width) {
+      strcat(current_line, current_word);
+      strcpy(current_word, "");
+      word_offset = 0;
+      if(new_line_flag_word) {
+        new_line_flag_line = 1;
+        new_line_flag_word = 0;
+      }
+      //Serial.println(__LINE__);
+      if(!new_line_flag_line && text[text_offset] > 0) continue;
+    }
+
+    while(line_index < total_lines) {
+      //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
+      // Если строка сейчас пустая, а слово нет, значит слово целиком на экран не влезает, и нужно вывести часть слова (пока влезает)
+      if(strlen(current_line) == 0 && strlen(current_word) > 0 && tft.textWidth(current_word, font) >= width) {
+        // Копируем слово в строку, убираем символы пока не начнёт влезать в строку
+        strcpy(current_line, current_word);
+        while(tft.textWidth(current_line, font) >= width) {
+          current_line[strlen(current_line) - 1] = 0;
+        }
+        // Теперь из current_word нужно убрать столько символов, сколько добавили в строку
+        for(i = 0; i < strlen(current_word) - strlen(current_line); i++) {
+          current_word[i] = current_word[i + strlen(current_line)];
+        }
+        current_word[i] = 0;
+        word_offset = strlen(current_word);
+      }
+
+      // Выводим строку
+      //Serial.printf("%d current_line = '%s', current_word = '%s'\n", __LINE__, current_line, current_word);
+      if(draw_flag) {
+        tft.setTextColor(color_scheme_fg, color_scheme_bg);
+        tft.drawString(current_line, start_x, start_y + line_height * line_index, font);
+        //delay(1000);
+        //Serial.println(current_line);
+        // Заполняем пространство от конца строки до края
+        tft.fillRect(
+          start_x + tft.textWidth(current_line, font),
+          start_y + line_height * line_index,
+          width - tft.textWidth(current_line, font),
+          line_height,
+          color_scheme_bg
+        );
+      }
+
+      // Если есть касание, и попадание на текущую строку
+      if(global_touch_present_flag
+        &&
+        global_touch_y >= start_y + line_height * line_index
+        &&
+        global_touch_y < start_y + line_height * (line_index + 1)
+        &&
+        global_touch_x >= start_x
+        &&
+        global_touch_x < start_x + width
+      ) {
+        //Serial.printf("Touch line %d\n", line_index);
+        // Смещение конца текущей строки
+        draw_text_formatted_touch_offset = text_offset - strlen(current_word) - newline_symbols;
+
+        // Убавляем символы из текущей строки, смотрим когда строка не окажется слева от касания
+        while(global_touch_x < start_x + tft.textWidth(current_line, font)) {
+          current_line[strlen(current_line) - 1] = 0;
+          draw_text_formatted_touch_offset--;
+        }
+      }
+
+      // Выясняем, где стоит курсор на экране
+      // Если на текущую строку может выпадать позиция курсора - была строка, осталась строка, перевод строки или прошлая строка закончилась переводом строки
+      //Serial.printf("line %d , newline_symbols %d, strlen(current_line) %d, strlen(current_word) %d\n", line_index, newline_symbols, strlen(current_line), strlen(current_word));
+      if(newline_symbols > 0 || strlen(current_line) > 0 || strlen(current_word) > 0 || newline_symbols_prev > 0) {
+        start_line_offset = text_offset - strlen(current_line) - strlen(current_word) - newline_symbols;
+        //Serial.printf("line %d , draw_text_formatted_cursor_offset %d, start_line_offset %d, start_line_offset + strlen(current_line) + newline_symbols %d \n",
+        //  line_index, draw_text_formatted_cursor_offset, start_line_offset, start_line_offset + strlen(current_line) + newline_symbols);
+        if(draw_text_formatted_cursor_offset >= start_line_offset && draw_text_formatted_cursor_offset <= start_line_offset + strlen(current_line) + newline_symbols) {
+          //Serial.printf("Cursor within the line %d\n", line_index);
+          draw_text_formatted_cursor_pos_x = start_x + tft.textWidth(current_line, font);
+          draw_text_formatted_cursor_pos_y = start_y + line_height * line_index;
+          // Нужно сместить курсор на определённое количество символов
+          while(strlen(current_line) > 0 && draw_text_formatted_cursor_offset < start_line_offset + strlen(current_line)) {
+            current_line[strlen(current_line) - 1] = 0;
+            draw_text_formatted_cursor_pos_x = start_x + tft.textWidth(current_line, font);
+          }
+        }
+      }
+
+      line_index++;
+      new_line_flag_line = 0;
+      strcpy(current_line, "");
+      if(strcmp(current_word, "") == 0) {
+        newline_symbols_prev = newline_symbols;
+        newline_symbols = 0;
+      }
+
+      // Если остаток слова ещё длиннее экрана - выводим (заходим на следующий цикл)
+      if(strlen(current_word) > 0 && tft.textWidth(current_word, font) >= width) {
+        continue;
+      }
+      else {
+        // Если остаток слова короче экрана, но после слова был перенос строки - переносим слово в строку, выводим
+        if(new_line_flag_word) {
+          strcpy(current_line, current_word);
+          strcpy(current_word, "");
+          word_offset = 0;
+          new_line_flag_word = 0;
+          new_line_flag_line = 1;
+          // Если в текущей строке ничего не осталось, то обнуляем число сом
+          continue;
+        }
+      }
+      break;
+    }
+
+    if(byte == 0) {
+      if(line_index < total_lines) {
+        tft.fillRect(
+          start_x,
+          start_y + line_height * line_index,
+          width,
+          line_height * (total_lines - line_index),
+          color_scheme_bg
+        );
+      }
       break;
     }
   }
-  file.close();
-  return file_is_binary;
+
+  // Если текста нет, то курсор в начале
+  if(strlen(text) == 0) {
+    draw_text_formatted_cursor_pos_x = start_x;
+    draw_text_formatted_cursor_pos_y = start_y;
+  }
+
+  // Возвращаем число выведенных байтов = число считанных - число невыведенных - переводы строки
+  //Serial.printf("text_offset = %d, current_word = '%s', current_line = '%s', newline_symbols = %d\n", text_offset, current_word, current_line, newline_symbols);
+  if(strlen(current_word) + strlen(current_line) == 0) newline_symbols = 0;
+  return text_offset - strlen(current_word) - strlen(current_line) - newline_symbols;
 }
 
-// Вызывать в фоне каждую минуту
-void minutely() {
-  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+// ====================================================
+// Звук и азбука Морзе
+// ====================================================
+
+void morse_dit() {
+  //Serial.printf("morse_dit global_beeper_pin %d\n", global_beeper_pin);
+  tone(global_beeper_pin, global_morse_freq, global_dot_len);
+  delay(global_dot_len);
+  noTone(global_beeper_pin);
+  delay(global_dot_len);
 }
 
-// Вызывать в фоне каждую секунду
-void secondly() {
-  set_local_time_from_unix_timestamp();
-  //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+void morse_dah() {
+  //Serial.printf("morse_dah global_beeper_pin %d\n", global_beeper_pin);
+  tone(global_beeper_pin, global_morse_freq, global_dot_len * 3);
+  delay(global_dot_len * 3);
+  noTone(global_beeper_pin);
+  delay(global_dot_len);
 }
+
+void morse_wait() {
+  delay(global_dot_len);
+}
+
+TaskHandle_t MorseTaskHandle = NULL;
+
+void beep_morse_task(void *pvParameters) {
+  char *str = (char *)pvParameters;
+  int i;
+  for(i = 0; i < strlen(str); i++) {
+    Serial.println(str[i]);
+    beep_morse_perform(str[i]);
+    morse_wait();
+    morse_wait();
+    delay(global_morse_char_add_wait);
+  }
+  MorseTaskHandle = NULL;
+  vTaskDelete(NULL);
+}
+
+void beep_morse_perform(char c) {
+  switch(c) {
+    // Цифры
+    case '0': morse_dah(); morse_dah(); morse_dah(); morse_dah(); morse_dah(); break;
+    case '1': morse_dit(); morse_dah(); morse_dah(); morse_dah(); morse_dah(); break;
+    case '2': morse_dit(); morse_dit(); morse_dah(); morse_dah(); morse_dah(); break;
+    case '3': morse_dit(); morse_dit(); morse_dit(); morse_dah(); morse_dah(); break;
+    case '4': morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dah(); break;
+    case '5': morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); break;
+    case '6': morse_dah(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); break;
+    case '7': morse_dah(); morse_dah(); morse_dit(); morse_dit(); morse_dit(); break;
+    case '8': morse_dah(); morse_dah(); morse_dah(); morse_dit(); morse_dit(); break;
+    case '9': morse_dah(); morse_dah(); morse_dah(); morse_dah(); morse_dit(); break;
+
+    // Латинница
+    case 'A': case 'a': morse_dit(); morse_dah(); break;
+    case 'B': case 'b': morse_dah(); morse_dit(); morse_dit(); morse_dit(); break;
+    case 'C': case 'c': morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
+    case 'D': case 'd': morse_dah(); morse_dit(); morse_dit(); break;
+    case 'E': case 'e': morse_dit(); break;
+    case 'F': case 'f': morse_dit(); morse_dit(); morse_dah(); morse_dit(); break;
+    case 'G': case 'g': morse_dah(); morse_dah(); morse_dit(); break;
+    case 'H': case 'h': morse_dit(); morse_dit(); morse_dit(); morse_dit(); break;
+    case 'I': case 'i': morse_dit(); morse_dit(); break;
+    case 'J': case 'j': morse_dit(); morse_dah(); morse_dah(); morse_dah(); break;
+    case 'K': case 'k': morse_dah(); morse_dit(); morse_dah(); break;
+    case 'L': case 'l': morse_dit(); morse_dah(); morse_dit(); morse_dit();  break;
+    case 'M': case 'm': morse_dah(); morse_dah(); break;
+    case 'N': case 'n': morse_dah(); morse_dit(); break;
+    case 'O': case 'o': morse_dah(); morse_dah(); morse_dah(); break;
+    case 'P': case 'p': morse_dit(); morse_dah(); morse_dah(); morse_dit(); break;
+    case 'Q': case 'q': morse_dah(); morse_dah(); morse_dit(); morse_dah(); break;
+    case 'R': case 'r': morse_dit(); morse_dah(); morse_dit(); break;
+    case 'S': case 's': morse_dit(); morse_dit(); morse_dit(); break;
+    case 'T': case 't': morse_dah(); break;
+    case 'U': case 'u': morse_dit(); morse_dit(); morse_dah(); break;
+    case 'V': case 'v': morse_dit(); morse_dit(); morse_dit(); morse_dah(); break;
+    case 'W': case 'w': morse_dit(); morse_dah(); morse_dah(); break;
+    case 'X': case 'x': morse_dah(); morse_dit(); morse_dit(); morse_dah(); break;
+    case 'Y': case 'y': morse_dah(); morse_dit(); morse_dah(); morse_dah(); break;
+    case 'Z': case 'z': morse_dah(); morse_dah(); morse_dit(); morse_dit(); break;
+    
+    // Русские буквы
+    case 0xC0: case 0xE0: morse_dit(); morse_dah(); break; // А
+    case 0xC1: case 0xE1: morse_dah(); morse_dit(); morse_dit(); morse_dit(); break; // Б
+    case 0xC2: case 0xE2: morse_dit(); morse_dah(); morse_dah(); break; // В
+    case 0x81: case 0x83: case 0xA5: case 0xB4:
+    case 0xC3: case 0xE3: morse_dah(); morse_dah(); morse_dit(); break; // Г
+    case 0xC4: case 0xE4: morse_dah(); morse_dit(); morse_dit(); break; // Д
+    case 0xC5: case 0xE5: morse_dit(); break; // Е
+    case 0xA8: case 0xB8: morse_dit(); break; // Ё
+    case 0xC6: case 0xE6: morse_dit(); morse_dit(); morse_dit(); morse_dah(); break; // Ж
+    case 0xC7: case 0xE7: morse_dah(); morse_dah(); morse_dit(); morse_dit(); break; // З
+    case 0xC8: case 0xE8: morse_dit(); morse_dit(); break; // И
+    case 0xA3: case 0xBC:
+    case 0xC9: case 0xE9: morse_dit(); morse_dah(); morse_dah(); morse_dah(); break; // Й
+    case 0x8D: case 0x9D:
+    case 0xCA: case 0xEA: morse_dah(); morse_dit(); morse_dah(); break; // К
+    case 0xCB: case 0xEB: morse_dit(); morse_dah(); morse_dit(); morse_dit(); break; // Л
+    case 0xCC: case 0xEC: morse_dah(); morse_dah(); break; // М
+    case 0xCD: case 0xED: morse_dah(); morse_dit(); break; // Н
+    case 0xCE: case 0xEE: morse_dah(); morse_dah(); morse_dah(); break; // О
+    case 0xCF: case 0xEF: morse_dit(); morse_dah(); morse_dah(); morse_dit(); break; // П
+    case 0xD0: case 0xF0: morse_dit(); morse_dah(); morse_dit(); break; // Р
+    case 0xBD: case 0xBE:
+    case 0xD1: case 0xF1: morse_dit(); morse_dit(); morse_dit(); break; // С
+    case 0xD2: case 0xF2: morse_dah(); break; // Т
+    case 0xA1: case 0xA2:
+    case 0xD3: case 0xF3: morse_dit(); morse_dit(); morse_dah(); break; // У
+    case 0xD4: case 0xF4: morse_dit(); morse_dit(); morse_dah(); morse_dit(); break; // Ф
+    case 0xD5: case 0xF5: morse_dit(); morse_dit(); morse_dit(); morse_dit(); break; // Х
+    case 0xD6: case 0xF6: morse_dah(); morse_dit(); morse_dah(); morse_dit(); break; // Ц
+    case 0xD7: case 0xF7: morse_dah(); morse_dah(); morse_dah(); morse_dit(); break; // Ч
+    case 0xD8: case 0xF8: morse_dah(); morse_dah(); morse_dah(); morse_dah(); break; // Ш
+    case 0xD9: case 0xF9: morse_dah(); morse_dah(); morse_dit(); morse_dah(); break; // Щ
+    case 0xDA: case 0xFA: morse_dah(); morse_dah(); morse_dit(); morse_dah(); morse_dah(); break; // Ъ
+    case 0xDB: case 0xFB: morse_dah(); morse_dit(); morse_dah(); morse_dah(); break; // Ы
+    case 0xDC: case 0xFC: morse_dah(); morse_dit(); morse_dit(); morse_dah(); break; // Ь
+    case 0xAA: case 0xBA:
+    case 0xDD: case 0xFD: morse_dit(); morse_dit(); morse_dah(); morse_dit(); morse_dit(); break; // Э
+    case 0xDE: case 0xFE: morse_dit(); morse_dit(); morse_dah(); morse_dah(); break; // Ю
+    case 0xDF: case 0xFF: morse_dit(); morse_dah(); morse_dit(); morse_dah(); break; // Я
+
+    // Знаки препинания (русский вариант)
+    case '.': morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); break;
+    case 0x82:
+    case ',': morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); morse_dah(); break;
+    case '?': morse_dit(); morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dit(); break;
+    case '!': morse_dah(); morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dah(); break;
+    case ':': morse_dah(); morse_dah(); morse_dah(); morse_dit(); morse_dit(); morse_dit(); break;
+    case ';': morse_dah(); morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
+    case '(': case ')': morse_dah(); morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dah(); break;
+    case 0x91: case 0x92:
+    case '\'': morse_dit(); morse_dah(); morse_dah(); morse_dah(); morse_dah(); morse_dit(); break;
+    case 0xAB: case 0xBB: case 0x8B: case 0x9B: case 0x84: case 0x93: case 0x94:
+    case '"': morse_dit(); morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dit(); break;
+    case '+': morse_dit(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
+    case 0x96: case 0x97:
+    case '-': morse_dah(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dah(); break;
+    case '@': morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dah(); morse_dit(); break;
+    case '=': morse_dah(); morse_dit(); morse_dit(); morse_dit(); morse_dah(); break;
+    case '/': morse_dah(); morse_dit(); morse_dit(); morse_dah(); morse_dit(); break;
+    case '_': morse_dit(); morse_dit(); morse_dah(); morse_dah(); morse_dit(); morse_dah(); break;
+    case 0x08: case 0x7F:
+      morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit(); morse_dit();
+      break;
+    case ' ': morse_wait(); morse_wait(); morse_wait(); break;
+    default: morse_wait(); break;
+  }
+}
+
+void beep_morse_if_enabled(char *str) {
+  if(global_is_beep_enabled && !global_silent_mode) {
+    beep_morse(str);
+  }
+}
+void beep_morse(char *str) {
+  if(MorseTaskHandle == NULL) {
+    xTaskCreatePinnedToCore(
+      beep_morse_task,   /* Task function */
+      "beep_morse_task", /* name of task */
+      8192,              /* Stack size of task */
+      str,              /* parameter */
+      1,                 /* priority */
+      &MorseTaskHandle,  /* Task handle */
+      0                  /* Core ID (0 or 1) */
+    );
+  }
+}
+
+void beep_if_enabled() {
+  if(global_is_beep_enabled && !global_silent_mode) {
+    //Serial.printf("beep global_beeper_pin %d\n", global_beeper_pin);
+    tone(global_beeper_pin, 1000, 100);
+  }
+}
+
+void beep_tap_if_enabled() {
+  if(global_is_beep_tap_enabled && !global_silent_mode) {
+    tone(global_beeper_pin, 8000, 12);
+  }
+}
+
+char *hour_to_string[] = {
+  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
+  "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", 
+};
+void beep_hour() {
+  if(global_is_beep_hour_enabled && !global_silent_mode) {
+    beep_morse(hour_to_string[global_hours]);
+    //beep_morse("H");
+  }
+}
+
+void beep_quarter() {
+  if(global_is_beep_quarter_enabled && !global_silent_mode) {
+    beep_morse("Q");
+  }
+}
+
+// Будильник, работает до касания или до минуты
+void beep_alarm() {
+  int i;
+  char *buff = NULL;
+  char bl_flag = 1;
+  int brightness = global_brightness;
+  int x0 = tft.width() / 2 - 100 / 2;
+  int y0 = tft.height() / 2 - 32 / 2;
+  int width = 100;
+  int height = 32;
+
+  global_alarm_set = 0;
+  Serial.println("Alarm begin");
+  
+/* Работает асинхронно, возможны конфликты при обновлении экрана, поэтому экран не трогаем
+  // Сохраняем часть экрана где будет сообщение
+  buff = (char *)malloc(width * height * sizeof(char));
+  screen_area_to_buffer(buff, x0, y0, width, height);
+  tft.drawRect(x0, y0, width, height, color_scheme_fg);
+  tft.fillRect(x0 + 1, y0 + 1, width - 2, height - 2, color_scheme_bg);
+  tft.setTextColor(color_scheme_fg, color_scheme_bg);
+  tft.drawCentreString("ALARM", tft.width() / 2, tft.height() / 2 - 8, FONT_DEFAULT);
+*/
+  for(i = 0; i < 150; i++) {
+    if(bl_flag) {
+      set_brightness(255);
+      bl_flag = 0;
+    }
+    else {
+      set_brightness(0);
+      bl_flag = 1;
+    }
+
+    // Модифицированный А
+    tone(global_beeper_pin, 2000, global_dot_len);
+    delay(global_dot_len);
+    noTone(global_beeper_pin);
+    delay(global_dot_len);
+    tone(global_beeper_pin, 3000, global_dot_len * 3);
+    delay(global_dot_len * 3);
+    noTone(global_beeper_pin);
+    delay(global_dot_len * 3);
+
+    if(global_touch_present_flag && i > 1) {
+      Serial.println("Break");
+      break;
+    }
+  }
+/*
+  // Вернуть как было
+  
+  buffer_to_screen_area(buff, x0, y0, width, height);
+  free(buff);
+*/
+  set_brightness(brightness);
+  global_alarm_set = 1;
+
+  Serial.println("Alarm end");
+}
+
+// ====================================================
+// Шифрование
+// ====================================================
+
+// Функции ширования и расшифровки - минное поле
+// Скопировал их из примера, потому что переработанный вариант не работал, вылетал в Exception
+// Единственное изменение - про вектор инициализации
+
+// Encryption Function with PKCS#7 Padding
+void encryptAES(uint8_t* input, int inputLen, uint8_t* output, int paddedLen) {
+  char aes_iv[16];
+  mbedtls_aes_context aes;
+  uint8_t iv_copy[16];
+  uint8_t paddingValue;
+  uint8_t* paddedInput;
+  int i;
+
+  // Генерировать случайный новый вектор инициализации
+  for(i = 0; i < 16; i++) {
+    aes_iv[i] = random(0, 256);
+  }
+  // Create a temporary copy of IV because mbedtls modifies it during processing
+  memcpy(iv_copy, aes_iv, 16);
+
+  // Allocate a temporary buffer to apply PKCS#7 padding
+  paddedInput = (uint8_t*)malloc(paddedLen);
+  memcpy(paddedInput, input, inputLen);
+  
+  // Apply PKCS#7 padding bytes
+  paddingValue = paddedLen - inputLen;
+  for (i = inputLen; i < paddedLen; i++) {
+    paddedInput[i] = paddingValue;
+  }
+
+  mbedtls_aes_init(&aes);
+  mbedtls_aes_setkey_enc(&aes, (const unsigned char*)aes_encryption_key, PASSWORDS_AES_BITS);
+
+  mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, paddedLen, iv_copy, paddedInput, output + 16);
+  mbedtls_aes_free(&aes);
+
+  // Первые 16 байт - вектор инициализации
+  memcpy(output, aes_iv, 16);
+  free(paddedInput);
+}
+
+// Decryption Function with PKCS#7 Unpadding
+void decryptAES(uint8_t* input, int dataLen, uint8_t* output) {
+  mbedtls_aes_context aes;
+  uint8_t iv_copy[16];
+  uint8_t paddingValue;
+  int originalLen;
+  int paddedLen;
+  int i;
+
+  paddedLen = ((dataLen - 16) / 16) * 16;
+
+  // Первые 16 байт - вектор инициализации
+  memcpy(iv_copy, input, 16);
+
+  mbedtls_aes_init(&aes);
+  mbedtls_aes_setkey_dec(&aes, (const unsigned char*)aes_encryption_key, PASSWORDS_AES_BITS);
+
+  mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, paddedLen, iv_copy, input + 16, output);
+  mbedtls_aes_free(&aes);
+
+  // Read PKCS#7 padding value from the very last byte to remove it
+  paddingValue = output[paddedLen - 1];
+  originalLen = paddedLen - paddingValue;
+}
+
+// ====================================================
+// Парсер арифметических выражений
+// ====================================================
 
 // Парсер арифметических выражений
 // expr - выражение
@@ -38838,36 +38664,9 @@ double parse_expr_constant_by_name(char *name) {
   return 0;
 }
 
-// Функция задает границы скроллинга (Команда 33h в даташите ILI9341)
-void setupScrollArea(uint16_t tfa, uint16_t bfa) {
-  uint16_t vsa = tft.height() - tfa - bfa; // Высота активной зоны скроллинга
-  
-  tft.writecommand(0x33); // VSCRDEF (Vertical Scrolling Definition)
-  tft.writedata(tfa >> 8);
-  tft.writedata(tfa & 0xFF);
-  tft.writedata(vsa >> 8);
-  tft.writedata(vsa & 0xFF);
-  tft.writedata(bfa >> 8);
-  tft.writedata(bfa & 0xFF);
-}
-
-// Функция сдвигает начальный адрес чтения памяти (Команда 37h в даташите ILI9341)
-void scrollAddress(uint16_t vsp) {
-  tft.writecommand(0x37); // VSCRSADD (Vertical Scrolling Start Address)
-  tft.writedata(vsp >> 8);
-  tft.writedata(vsp & 0xFF);
-}
-
-void setGamma(int gamma_value) {
-  tft.writecommand(0x26); // Gamma Set Command
-  tft.writedata(gamma_value);
-}
-
-void strcat_char(char *str, char c) {
-  while(*str) str++;
-  *(str) = c;
-  *(str + 1) = 0;
-}
+// ====================================================
+// Сон и ждущий режим, системные утилиты
+// ====================================================
 
 char * get_reset_reason_text(esp_reset_reason_t reason) {
   switch (reason) {
@@ -38885,21 +38684,6 @@ char * get_reset_reason_text(esp_reset_reason_t reason) {
     default:                return "Unknown reset reason"; break;
   }
   return "Unknown reset reason";
-}
-
-// Запуск приложения по названию
-void run_app_by_name(char *name) {
-  char buff[80] = "";
-  int i;
-
-  i = 0;
-  while(all_apps[i]) {
-    all_apps[i](APP_MODE_RETURN_NAME, buff);
-    if(strcmp(buff, name) == 0) {
-      all_apps[i](APP_MODE_LAUNCH, NULL);
-    }
-    i++;
-  }
 }
 
 void sleep_until_timer(long interval) {
@@ -39028,40 +38812,166 @@ void deep_sleep_until_boot() {
   esp_deep_sleep_start();
 }
 
-// НОД
-long gcd(long a, long b) {
-  if(a == 0 || b == 0) return 0;
-  while(a != b) {
-    if(a > b) {
-      if(a % b == 0) return b;
-      a = a % b;
-    }
-    if(b > a) {
-      if(b % a == 0) return a;
-      b = b % a;
-    }
+// Вызывать в фоне каждую минуту
+void minutely() {
+  Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+}
+
+// Вызывать в фоне каждую секунду
+void secondly() {
+  set_local_time_from_unix_timestamp();
+  //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+}
+
+// Обновляет переменные года, месяца, дня, дня недели, часов, минут, секунд по внутренним счётчикам
+// Действия на смену суток
+// Действия на смену часа, четверти часа
+// Действия на будильник
+// Можно доработать чтобы использовалось get_datetime_from_unixtime
+void set_local_time_from_unix_timestamp() {
+  unsigned long unix_timestamp;
+  unsigned long days_since_epoch;
+  unsigned long days_remain;
+  int year;
+  int month;
+  int day;
+  int hour;
+  int minute;
+  char lap_year_flag;
+  char retry_retrieve = 0;
+  char beep_hour_flag = 0;
+  int prev_day;
+
+  // Если время уже было откуда-то загружено и день был установлен, то есть эта функция уже отработала раз
+  if(global_unixtime_retrieved != 0 && global_day != 0) {
+    retry_retrieve = 1;
   }
-  return a;
+
+  unix_timestamp = global_unixtime_retrieved + (millis() - global_unixtime_retrieved_millis) / 1000;
+
+  // Дней с начала эпохи
+  days_since_epoch = (unix_timestamp + global_timezone) / 86400;
+  // День недели
+  global_day_of_week = (days_since_epoch + 3) % 7;
+  // Высчитываем дату
+  days_remain = days_since_epoch;
+  year = 1970;
+  month = 1;
+  day = 1;
+  lap_year_flag = is_lap_year(year);
+  while(days_remain > 0) {
+    // Високосные годы
+    lap_year_flag = 0;
+    if(is_lap_year(year)) {
+      lap_year_flag = 1;
+    }
+    if(lap_year_flag && days_remain >= 366) {
+      days_remain -= 366;
+      year++;
+      continue;
+    }
+    // Обычные годы
+    if(!lap_year_flag && days_remain >= 365) {
+      days_remain -= 365;
+      year++;
+      continue;
+    }
+    //Serial.println(days_remain);
+    if((month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12) && days_remain >= 31) {
+      days_remain -= 31;
+      month++;
+      continue;
+    }
+    if((month == 4 || month == 6 || month == 9 || month == 11) && days_remain >= 30) {
+      days_remain -= 30;
+      month++;
+      continue;
+    }
+    if(month == 2 && days_remain >= 29 & lap_year_flag) {
+      days_remain -= 29;
+      month++;
+      continue;
+    }
+    if(month == 2 && days_remain >= 28 & !lap_year_flag) {
+      days_remain -= 28;
+      month++;
+      continue;
+    }
+    day += days_remain;
+    break;
+  }
+
+  // Если дата изменилась
+  if(retry_retrieve && global_day != day) {
+    Serial.printf("global_day=%d\n", global_day);
+    Serial.printf("day=%d\n", day);
+    store_current_timestamp();
+  }
+
+  global_year = year;
+  global_month = month;
+  global_day = day;
+  global_is_lap_year = lap_year_flag;
+
+  hour = ((unix_timestamp + global_timezone) / 3600) % 24;
+  minute = ((unix_timestamp + global_timezone) / 60) % 60;
+  // Если есть будильник, час и минута совпадают, и минуты измениилсь
+  if(global_alarm_set && hour == global_alarm_hour && minute != global_minutes && minute == global_alarm_minute) {
+    beep_alarm();
+  }
+  // Смена часа и переход минут с 59 на 00 (иначе при настройке времени срабатывает)
+  else if(global_hours + 1 == hour && minute == 0 && global_minutes == 59) {
+    beep_hour_flag = 1;
+  }
+  else if(global_hours == hour) {
+    if(minute == 15 && global_minutes == 14) beep_quarter();
+    if(minute == 30 && global_minutes == 29) beep_quarter();
+    if(minute == 45 && global_minutes == 44) beep_quarter();
+  }
+  
+  global_hours = hour;
+  global_minutes = minute;
+  global_seconds = (unix_timestamp + global_timezone) % 60;
+
+  global_moon_day = fmod(25 + days_since_epoch, 29.53059);
+
+  if(beep_hour_flag) {
+    beep_hour();
+  }
 }
 
-// НОК
-long lcm(long a, long b) {
-  if(a == 0 || b == 0) return 0;
-  return (a / gcd(a, b)) * b;
-}
-
-// Факториал
-double factorial(double a) {
+// Запуск приложения по названию
+void run_app_by_name(char *name) {
+  char buff[80] = "";
   int i;
-  double result = 1;
-  if(a == 0) return result;
-  if(a == 1) return result;
 
-  for(i = 2; i <= a; i++) {
-    result *= i;
+  i = 0;
+  while(all_apps[i]) {
+    all_apps[i](APP_MODE_RETURN_NAME, buff);
+    if(strcmp(buff, name) == 0) {
+      all_apps[i](APP_MODE_LAUNCH, NULL);
+    }
+    i++;
   }
-  return result;
 }
+
+// Стереть раздел FFat
+void ffat_erase_partition() {
+  const esp_partition_t* partition = esp_partition_find_first(
+    ESP_PARTITION_TYPE_DATA,         // Type (DATA or APP)
+    ESP_PARTITION_SUBTYPE_DATA_FAT,  // Subtype
+    NULL                             // Label name in your partition table
+  );
+  int offset = 0;
+  while(offset < partition->size) {
+    esp_partition_erase_range(partition, offset, 4096);
+    offset += 4096;
+  }
+}
+
+// ====================================================
+// Начало
+// ====================================================
 
 void setup() {
   char buff[80];
