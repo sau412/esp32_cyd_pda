@@ -254,6 +254,7 @@
   uniq, sort, dd, мануал по выражениям и функциям, мануал по командам бейсика в мануале
 2026-10-23 Скачивание FFat фикс скорости, фикс создания HTTPServer, улучшение стабильности веб-сервера, поддержка UTF-8,
   структурирование кода, режим NVS в заметках, рисовании, фикс долгого ожидания для chunked, страница статуса в сервере
+2026-10-25 Баг Life, Life непрерывное рисование
 
 - новый обзор(ы)
 
@@ -432,6 +433,7 @@
 - Можно сделать декодирование UTF-8 через получение кода символа из байтов, тогда можно использовать это в декодинге XML RSS
 - Кодирование UTF-8 через коды символов
 - Bluetooth в отдельном потоке
+- Life своё правило
 
 Буфер обмена
 - Буфер обмена
@@ -15895,6 +15897,7 @@ void life_show(char *rule_name, int rule_index, char *field) {
   char *field_next = NULL;
   int button_pressed;
   int x, y;
+  int prev_x, prev_y;
   int touch_x, touch_y;
   int cell_color;
   int near_count;
@@ -16014,25 +16017,35 @@ void life_show(char *rule_name, int rule_index, char *field) {
     }
 
     // Если запущено и касаний нет - обновляем
-    if(life_run && touchCheckNowait() == 0) {
-      continue;
+    if(life_run) {
+      if(touchCheckNowait() == 0) continue;
+    }
+    else {
+      //touchWaitPress();
     }
 
     drawButtonMatrix(0, 280, tft.width(), 40, buttons, 5, 1);
 
-    //touchWaitPress();
+    if(global_touch_present_flag == 0) touchWaitPress();
+    else touchCheckNowait();
+
     // Смотрим, нет ли попадания в поле
     touch_x = global_touch_x;
     touch_y = global_touch_y;
-    if(touch_y >= 17 && touch_y < 280) {
+    if(touch_y >= 16 && touch_y < 280) {
       x = touch_x / LIFE_CELL_PIXELS;
-      y = (touch_y - 17) / LIFE_CELL_PIXELS;
-      if(life_get_cell(x, y, field)) {
-        life_set_cell(x, y, field, 0);
+      y = (touch_y - 16) / LIFE_CELL_PIXELS;
+      if(prev_x != x || prev_y != y) {
+        if(life_get_cell(x, y, field)) {
+          life_set_cell(x, y, field, 0);
+        }
+        else {
+          life_set_cell(x, y, field, 1);
+        }
       }
-      else {
-        life_set_cell(x, y, field, 1);
-      }
+      prev_x = x;
+      prev_y = y;
+      continue;
     }
 
     button_pressed = touchCheckMatrix(0, 280, tft.width(), 40, buttons, 5, 1);
