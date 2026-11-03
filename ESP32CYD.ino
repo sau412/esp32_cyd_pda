@@ -255,10 +255,22 @@
 2026-10-23 Скачивание FFat фикс скорости, фикс создания HTTPServer, улучшение стабильности веб-сервера, поддержка UTF-8,
   структурирование кода, режим NVS в заметках, рисовании, фикс долгого ожидания для chunked, страница статуса в сервере
 2026-10-25 Баг Life, Life непрерывное рисование
+2026-11-02 Новый способ кодирования и декодирования UTF8 (не полностью)
+2026-11-03 Новый способ кодирования и декодирования UTF8, фикс поддержки UTF8 в операциях над файлами (не везде)
 
 - новый обзор(ы)
 
 Улучшения тут и там:
+- Баг со сном
+- Символы UTF-8 с акцентами декодировать
+- Bluetooth в отдельном потоке
+- Life своё правило
+- tar
+- xmodem отправка
+- xmodem приём
+- Gemini
+- Finger
+- Простой HTTP браузер
 - Заставка Диаграммы Вороного
 - Заставка Коралл (диффузионная агрегация)
 - Заставка Лиссажу спирограф
@@ -266,7 +278,6 @@
 - Заставка Аттрактор Клиффорда
 - Цвета и линии для аттрактора Лоренца
 - Смена кодировки с одним и тем же файлом (перекодировать, старый удалить, переименовать)
-- Увеличить тайм-аут get_file_https
 - Баг - буфер при создании новой таблицы не пустой? Мусор в ячейке, но не сразу. Вылет при сохранении (не воспроизвелось)
 - Убрать многоуровневые настройки (больше двух уровней)
 - Настройки - горизонтальный переход к сходным настройкам
@@ -337,7 +348,7 @@
 - Basic рисование: plot, draw, rect, fillrect, triangle, fillscreen, drawString, drawCentreString, drawCircle, fillCircle
 - Basic строки
 - Basic работа с файлами
-- tftp
+- tftp - требует UDP
 - Совет от ИИ - экран История/продолжить - чем занимался в каких приложениях, как задачи
 - Терминал переменные окружения
 - /Terminal/Environment
@@ -367,9 +378,6 @@
 - Дней с начала года
 - Дней до конца года
 - Номер недели
-- tar
-- xmodem отправка
-- xmodem приём
 - Можно заменить millis на esp_timer_get_time, чтобы не было переполнения времени
 - Quick launch лаунчер
 - Ланучер-список
@@ -378,9 +386,6 @@
 - Ещё один заход Bluetooth
 - Прошлые команды в терминале по стрелке вверх
 - Почта
-- Gemini
-- Finger
-- Простой HTTP браузер
 - Настройки пинов: подсветка, светодиод, звук, музыка, кнопка BOOT
 - urlencode
 - port - получить порт по названию или название по порту
@@ -429,11 +434,6 @@
 - Веб-сервер: читалка книг
 - Веб-сервер: контакты, расписание, заметки, и прочие PIM-приложения он-лайн
 - Веб-сервер: прокси
-- Символы UTF-8 с акцентами декодировать
-- Можно сделать декодирование UTF-8 через получение кода символа из байтов, тогда можно использовать это в декодинге XML RSS
-- Кодирование UTF-8 через коды символов
-- Bluetooth в отдельном потоке
-- Life своё правило
 
 Буфер обмена
 - Буфер обмена
@@ -2565,17 +2565,17 @@ void files(char mode, char *io_buff) {
       current_dir = Storage->open(terminal_current_path);
       file_index = 0;
       // Для вложенных папок индекс сдвигается на единицу, так как единица - ".."
-      if(strcmp(terminal_current_path, "/")) {
+      if(strcmp(terminal_current_path, "/") != 0) {
         file_index++;
       }
+      tmp = strchr(files[file_selected], '\t');
+      *tmp = 0;
+      cp1251_to_utf8(files[file_selected], buff);
+      *tmp = '\t';
       while(file = current_dir.openNextFile()) {
-        tmp = strchr(files[file_selected], '\t');
-        *tmp = 0;
-        if(strcmp(file.name(), files[file_selected]) == 0) {
-          *tmp = '\t';
+        if(strcmp(file.name(), buff) == 0) {
           break;
         }
-        *tmp = '\t';
         //if(file_selected == file_index) break;
         file_index++;
       }
@@ -2585,6 +2585,9 @@ void files(char mode, char *io_buff) {
         strcpy(user_input, "");
         if(drawPrompt("New file name", user_input) == 0) {
           if(strlen(user_input) > 0) {
+            // Конвертируем в UTF8
+            cp1251_to_utf8(user_input, buff);
+            strcpy(user_input, buff);
             terminal_get_file_path_with_current_path(user_input, buff);
             file = Storage->open(buff, FILE_WRITE);
             if (!file) {
@@ -2601,7 +2604,7 @@ void files(char mode, char *io_buff) {
       if(current_op == 1) {
         // Если не корень, и был выбран нулевой элемент, то переход на уровень выше
         if(strcmp(terminal_current_path, "/") && file_selected == 0) {
-          terminal_cd("..");
+          terminal_cd("..", 1);
           if(strlen(terminal_current_path) == 0) {
             strcpy(terminal_current_path, "/");
           }
@@ -2610,8 +2613,12 @@ void files(char mode, char *io_buff) {
           rescan_files = 1;
         }
         else {
+          if(!file) {
+            drawError("File not found");
+            continue;
+          }
           if(file.isDirectory()) {
-            terminal_cd((char *)file.name());
+            terminal_cd((char *)file.name(), 1);
             file_selected = 0;
             file_offset = 0;
             rescan_files = 1;
@@ -2635,10 +2642,15 @@ void files(char mode, char *io_buff) {
               drawError("WEBP is not supported");
             }
             else if(is_binary_file(buff)) {
-              hexview_file(buff, buff);
+              strcpy(filename_to, buff);
+              utf8_to_cp1251(filename_to);
+              hexview_file(filename_to, buff);
             }
             else {
-              view_file(buff, buff);
+              strcpy(filename_to, buff);
+              utf8_to_cp1251(filename_to);
+              Serial.printf("view_file %s\n", buff); Serial.flush();
+              view_file(filename_to, buff);
             }
           }
         }
@@ -2646,15 +2658,19 @@ void files(char mode, char *io_buff) {
       // Редактирование
       if(current_op == 2) {
         if(strcmp(terminal_current_path, "/") && file_selected == 0) {
-          terminal_cd("..");
+          terminal_cd("..", 1);
           file_selected = 0;
           file_offset = 0;
           rescan_files = 1;
         }
         else {
+          if(!file) {
+            drawError("File not found");
+            continue;
+          }
           terminal_get_file_path_with_current_path((char *)file.name(), buff);
           if(is_directory(buff)) {
-            terminal_cd(buff);
+            terminal_cd(buff, 1);
             file_selected = 0;
             file_offset = 0;
             rescan_files = 1;
@@ -2666,6 +2682,10 @@ void files(char mode, char *io_buff) {
       }
       // Переименование
       if(current_op == 3) {
+        if(!file) {
+          drawError("File not found");
+          continue;
+        }
         strcpy(user_input, "");
         if(drawPrompt("Rename file name", user_input) == 0) {
           if(strlen(user_input) != 0) {
@@ -2691,18 +2711,28 @@ void files(char mode, char *io_buff) {
       if(current_op == 4) {
         strcpy(user_input, "");
         if(drawPrompt("New directory name", user_input) == 0) {
-          terminal_get_file_path_with_current_path(user_input, buff);
-          if(!Storage->mkdir(buff)) {
-            drawError("Failed to create new directory");
+          if(strlen(user_input) > 0) {
+            cp1251_to_utf8(user_input, buff);
+            strcpy(user_input, buff);
+            terminal_get_file_path_with_current_path(user_input, buff);
+            if(!Storage->mkdir(buff)) {
+              drawError("Failed to create new directory");
+            }
+            rescan_files = 1;
           }
-          rescan_files = 1;
         }
       }
       // Копирование
       if(current_op == 5) {
+        if(!file) {
+          drawError("File not found");
+          continue;
+        }
         strcpy(user_input, "");
         if(drawPrompt("Enter destination path", user_input) == 0) {
           if(strlen(user_input) != 0) {
+            cp1251_to_utf8(user_input, buff);
+            strcpy(user_input, buff);
             terminal_get_file_path_with_current_path((char *)file.name(), buff);
             if(Storage->exists(buff)) {
               terminal_get_file_path_with_current_path(user_input, filename_to);
@@ -2715,9 +2745,15 @@ void files(char mode, char *io_buff) {
       }
       // Перемещение
       if(current_op == 6) {
+        if(!file) {
+          drawError("File not found");
+          continue;
+        }
         strcpy(user_input, "");
         if(drawPrompt("Enter destination path", user_input) == 0) {
           if(strlen(user_input) != 0) {
+            cp1251_to_utf8(user_input, buff);
+            strcpy(user_input, buff);
             terminal_get_file_path_with_current_path((char *)file.name(), buff);
             if(Storage->exists(buff)) {
               terminal_get_file_path_with_current_path(user_input, filename_to);
@@ -2734,6 +2770,10 @@ void files(char mode, char *io_buff) {
       }
       // Удаление
       if(current_op == 7) {
+        if(!file) {
+          drawError("File not found");
+          continue;
+        }
         if(drawConfirm("Delete file?") == 0) {
           terminal_get_file_path_with_current_path((char *)file.name(), buff);
           if(Storage->exists(buff)) {
@@ -2837,7 +2877,9 @@ void terminal(char mode, char *io_buff) {
     // Название может быть перезаписано, исправляем
     drawAppTitle("Terminal");
 
-    terminal_print(terminal_current_path);
+    strcpy(buff, terminal_current_path);
+    utf8_to_cp1251(buff);
+    terminal_print(buff);
     terminal_print(">");
     terminal_show_screen();
 
@@ -4555,18 +4597,23 @@ void terminal_execute_single(char *str) {
       terminal_cd_root();
     }
     else {
-      terminal_cd(cmdline_params[1]);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      terminal_cd(buff, 0);
     }
   }
   else if(strcmp(cmdline_params[0], "pwd") == 0) {
-    terminal_println(terminal_current_path);
+    strcpy(buff, terminal_current_path);
+    utf8_to_cp1251(buff);
+    terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "ls") == 0) {
     if(arg_count != 2) {
       strcpy(buff, terminal_current_path);
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
     }
     current_dir = Storage->open(buff);
     if(current_dir && current_dir.isDirectory()) {
@@ -4595,7 +4642,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: du {directory|file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       ll = size_recursive(Storage, buff);
       if(ll >= (4096LL * 1024 * 1024)) {
         sprintf(buff, "%d GiB", ll / (1024 * 1024 * 1024));
@@ -4618,7 +4667,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: mkdir {directory}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       if(Storage->mkdir(buff)) {
         terminal_println("OK");
       }
@@ -4632,7 +4683,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: rmdir {directory}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       if(Storage->rmdir(buff)) {
         terminal_println("OK");
       }
@@ -4654,9 +4707,14 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: cp {from_path} {to_path}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       if(Storage->exists(buff)) {
-        terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+        cp1251_to_utf8(cmdline_params[2], buff2);
+        strcpy(buff3, buff2);
+        terminal_get_file_path_with_current_path(buff3, buff2);
         cp_recursive_between_storages(Storage, buff, Storage, buff2);
       }
       else {
@@ -4669,11 +4727,16 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: mv {from_path} {to_path}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       if(Storage->exists(buff)) {
-        terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+        cp1251_to_utf8(cmdline_params[2], buff2);
+        strcpy(buff3, buff2);
+        terminal_get_file_path_with_current_path(buff3, buff2);
         cp_recursive_between_storages(Storage, buff, Storage, buff2);
-        delete_recursive(Storage, cmdline_params[1]);
+        delete_recursive(Storage, buff);
       }
       else {
         terminal_println("File not exists");
@@ -4685,7 +4748,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: rm {path}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       if(Storage->exists(buff)) {
         delete_recursive(Storage, buff);
       }
@@ -4703,7 +4768,9 @@ void terminal_execute_single(char *str) {
         terminal_println("No storage");
       }
       else {
-        terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+        cp1251_to_utf8(cmdline_params[1], buff);
+        strcpy(buff2, buff);
+        terminal_get_file_path_with_current_path(buff2, buff);
         if(!Storage->exists(buff)) {
           terminal_println("File not exists");
         }
@@ -4748,7 +4815,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: cat {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_cat(buff);
     }
   }
@@ -4757,7 +4826,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: head {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_head(buff);
     }
   }
@@ -4766,7 +4837,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: tail {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_tail(buff);
     }
   }
@@ -4775,7 +4848,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: more {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_more(buff);
     }
   }
@@ -4784,7 +4859,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: grep {text} {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff);
+      cp1251_to_utf8(cmdline_params[2], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_grep(cmdline_params[1], buff);
     }
   }
@@ -4793,7 +4870,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: sort {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_sort(buff, 1);
     }
   }
@@ -4802,7 +4881,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: uniq {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_sort(buff, 0);
     }
   }
@@ -4811,8 +4892,10 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: view {file}\r");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      view_file(buff, buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      view_file(cmdline_params[1], buff);
     }
   }
   else if(strcmp(cmdline_params[0], "hexview") == 0) {
@@ -4820,8 +4903,10 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: hexview {file}\r");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      hexview_file(buff, buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      hexview_file(cmdline_params[1], buff);
     }
   }
   else if(strcmp(cmdline_params[0], "append") == 0) {
@@ -4829,7 +4914,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: append {file} {line} [line] ...");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       for(i = 2; i < arg_count; i++) {
         file_append_line(buff, cmdline_params[i]);
       }
@@ -4840,7 +4927,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: edit {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       edit_file(buff, buff);
     }
   }
@@ -4849,7 +4938,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: csv {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       edit_csv(buff, buff);
     }
   }
@@ -4858,7 +4949,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: hexdump {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_hexdump(buff);
     }
   }
@@ -4867,7 +4960,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: wc {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_wc(buff);
     }
   }
@@ -4876,7 +4971,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: crc {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_checksum(buff, CHECKSUM_CRC);
     }
   }
@@ -4885,7 +4982,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: md5sum {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_checksum(buff, CHECKSUM_MD5);
     }
   }
@@ -4894,7 +4993,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: sha256sum {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_checksum(buff, CHECKSUM_SHA256);
     }
   }
@@ -4903,7 +5004,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: brainfuck {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_brainfuck(buff);
     }
   }
@@ -4912,7 +5015,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: basic {file}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       terminal_basic(buff);
     }
   }
@@ -4921,7 +5026,9 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: touch {filename}");
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file = Storage->open(buff, FILE_APPEND);
       if(file) {
         file.close();
@@ -4942,8 +5049,13 @@ void terminal_execute_single(char *str) {
         FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
       }
 
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[2], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       cp_between_storages(&FFat, buff, &SD, buff2);
 
       if(storage_type == STORAGE_TYPE_SD) {
@@ -4960,8 +5072,13 @@ void terminal_execute_single(char *str) {
         FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
       }
 
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[2], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       cp_between_storages(&SD, buff, &FFat, buff2);
 
       if(storage_type == STORAGE_TYPE_SD) {
@@ -4974,12 +5091,19 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: utf8_to_cp1251 {input_filename} [output_filename]");
     }
     else if(arg_count == 2) {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file_utf8_to_cp1251(buff, buff);
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[2], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       file_utf8_to_cp1251(buff, buff2);
     }
   }
@@ -4988,12 +5112,19 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: cp1251_to_utf8 {input_filename} [output_filename]");
     }
     else if(arg_count == 2) {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file_cp1251_to_utf8(buff, buff);
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[2], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       file_cp1251_to_utf8(buff, buff2);
     }
   }
@@ -5002,12 +5133,19 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: base16encode {input_filename} [output_filename]");
     }
     else if(arg_count == 2) {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file_base16_encode(buff, NULL);
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[2], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       file_base16_encode(buff, buff2);
     }
   }
@@ -5016,12 +5154,19 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: base16decode {input_filename} [output_filename]");
     }
     else if(arg_count == 2) {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file_base16_decode(buff, NULL);
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[2], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       file_base16_decode(buff, buff2);
     }
   }
@@ -5030,12 +5175,19 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: base32encode {input_filename} [output_filename]");
     }
     else if(arg_count == 2) {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file_base32_encode(buff, NULL);
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[2], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       file_base32_encode(buff, buff2);
     }
   }
@@ -5044,12 +5196,19 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: base32decode {input_filename} [output_filename]");
     }
     else if(arg_count == 2) {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file_base32_decode(buff, NULL);
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[2], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       file_base32_decode(buff, buff2);
     }
   }
@@ -5058,12 +5217,19 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: base64encode {input_filename} [output_filename]");
     }
     else if(arg_count == 2) {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file_base64_encode(buff, NULL);
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[2], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       file_base64_encode(buff, buff2);
     }
   }
@@ -5072,12 +5238,19 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: base64decode {input_filename} [output_filename]");
     }
     else if(arg_count == 2) {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file_base64_decode(buff, NULL);
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[2], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       file_base64_decode(buff, buff2);
     }
   }
@@ -5086,12 +5259,19 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: aes_encrypt {password} {input_filename} [output_filename]");
     }
     else if(arg_count == 3) {
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff);
+      cp1251_to_utf8(cmdline_params[2], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file_aes_encrypt(cmdline_params[1], buff, NULL);
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[3], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[2], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[3], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       file_aes_encrypt(cmdline_params[1], buff, buff2);
     }
   }
@@ -5100,12 +5280,19 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: aes_decrypt {password} {input_filename} [output_filename]");
     }
     else if(arg_count == 3) {
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff);
+      cp1251_to_utf8(cmdline_params[2], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file_aes_decrypt(cmdline_params[1], buff, NULL);
     }
     else {
-      terminal_get_file_path_with_current_path(cmdline_params[2], buff);
-      terminal_get_file_path_with_current_path(cmdline_params[3], buff2);
+      char buff3[160];
+      cp1251_to_utf8(cmdline_params[2], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      cp1251_to_utf8(cmdline_params[3], buff2);
+      strcpy(buff3, buff2);
+      terminal_get_file_path_with_current_path(buff3, buff2);
       file_aes_decrypt(cmdline_params[1], buff, buff2);
     }
   }
@@ -5115,10 +5302,14 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: unzip {archive} [destination]");
     }
     else if(arg_count == 2) {
-      terminal_get_file_path_with_current_path(cmdline_params[1], buff);
+      // Не безопасно с UTF8
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
       file_unzip(cmdline_params[1], NULL);
     }
     else {
+      // Не безопасно с UTF8
       terminal_get_file_path_with_current_path(cmdline_params[1], buff);
       terminal_get_file_path_with_current_path(cmdline_params[2], buff2);
       file_unzip(cmdline_params[1], buff);
@@ -5757,7 +5948,7 @@ void terminal_execute_single(char *str) {
 
 // Получить полный путь к файлу
 void terminal_get_file_path_with_current_path(char *filename, char *full_path) {
-  char buff[160];
+  //char buff[160];
 
   // Если путь начинается с /, то текущий путь не учитывается
   if(filename[0] == '/') {
@@ -5771,9 +5962,9 @@ void terminal_get_file_path_with_current_path(char *filename, char *full_path) {
   }  
   strcat(full_path, filename);
 
-  cp1251_to_utf8(full_path, buff);
+  //cp1251_to_utf8(full_path, buff);
 
-  strcpy(full_path, buff);
+  //strcpy(full_path, buff);
 }
 
 // Переход к корневой папке
@@ -5782,8 +5973,8 @@ void terminal_cd_root() {
 }
 
 // Список папок через /
-void terminal_cd(char *next_path) {
-  char buff[80];
+void terminal_cd(char *next_path, char suppress_output) {
+  char buff[160];
   int i;
   int read, write;
 
@@ -5844,17 +6035,24 @@ void terminal_cd(char *next_path) {
   if(buff[0] == '/') {
     if(Storage && Storage->exists(buff)) {
       strcpy(terminal_current_path, buff);
-      terminal_print("Current path: ");
-      terminal_println(terminal_current_path);
+      if(suppress_output == 0) {
+        terminal_print("Current path: ");
+        utf8_to_cp1251(buff);
+        terminal_println(buff);
+      }
     }
     else {
-      terminal_print("Path not exists: ");
-      terminal_println(buff);
+      if(suppress_output == 0) {
+        terminal_print("Path not exists: ");
+        terminal_println(buff);
+      }
     }
   }
   else {
-    terminal_print("Path error: ");
-    terminal_println(buff);
+    if(suppress_output == 0) {
+      terminal_print("Path error: ");
+      terminal_println(buff);
+    }
   }
 }
 
@@ -7556,6 +7754,7 @@ void terminal_dd(int arg_count, char **cmdline_params) {
   enum direction {DIRECTION_TERMINAL, DIRECTION_ZERO, DIRECTION_RANDOM, DIRECTION_FILE} source_type, dest_type;
   char source_file_name[160];
   char dest_file_name[160];
+  char buff[160];
   char append_flag = 0;
   char finish_flag = 0;
   int i;
@@ -7575,11 +7774,13 @@ void terminal_dd(int arg_count, char **cmdline_params) {
       }
       else {
         source_type = DIRECTION_FILE;
-        terminal_get_file_path_with_current_path(cmdline_params[i] + 3, source_file_name);
+        cp1251_to_utf8(cmdline_params[i] + 3, buff);
+        terminal_get_file_path_with_current_path(buff, source_file_name);
       }
     }
     else if(memcmp("of=", cmdline_params[i], 3) == 0) {
-      terminal_get_file_path_with_current_path(cmdline_params[i] + 3, dest_file_name);
+      cp1251_to_utf8(cmdline_params[i] + 3, buff);
+      terminal_get_file_path_with_current_path(buff, dest_file_name);
       dest_type = DIRECTION_FILE;
     }
     else if(memcmp("bs=", cmdline_params[i], 3) == 0) {
@@ -19995,7 +20196,7 @@ void wifi_network_info() {
     if(millis() - prev_update_millis > 1000) {
       tft.setTextColor(color_scheme_fg, color_scheme_bg);
       screen_offset = 20;
-      sprintf(buff, "SSID: %s  ", WiFi.SSID());
+      sprintf(buff, "SSID: %s  ", WiFi.SSID().c_str());
       tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
       screen_offset += 16;
       sprintf(buff, "BSSID: %02x:%02x:%02x:%02x:%02x:%02x  ", WiFi.BSSID()[0], WiFi.BSSID()[1], WiFi.BSSID()[2], WiFi.BSSID()[3], WiFi.BSSID()[4], WiFi.BSSID()[5]);
@@ -24527,7 +24728,7 @@ void dashboard_channel_monitor() {
     total_packets += this_ch_count;
     packets_counts[ch] += this_ch_count;
 
-    sprintf(buff, "Ch %d: %d pkts/s, %d total, %d%%     ", ch, this_ch_count, total_packets > 0 ? packets_counts[ch], 100 * packets_counts[ch] / total_packets : 0);
+    sprintf(buff, "Ch %d: %d pkts/s, %d total, %d%%     ", ch, this_ch_count, packets_counts[ch], total_packets > 0 ? 100 * packets_counts[ch] / total_packets : 0);
     tft.setTextColor(color_scheme_fg, color_scheme_bg);
     tft.drawString(buff, 1, 60 + 18 * ch, FONT_DEFAULT);
 
@@ -27768,6 +27969,7 @@ void view_file(char *title, char *filename) {
 
   file = Storage->open(filename);
   if(!file) {
+    Serial.printf("Cannot open file %s\n", filename);
     drawError("Cannot open file");
     return;
   }
@@ -27783,7 +27985,7 @@ void view_file(char *title, char *filename) {
   }
 
   while(1) {
-    Serial.printf("file_offset = %d of %d (%d%%)\n", file_offset, file.size(), 100 * file_offset / file.size());
+    Serial.printf("file_offset = %d of %d (%d%%)\n", file_offset, file.size(), file.size() > 0 ? 100 * file_offset / file.size() : 0);
     file.seek(file_offset);
     memset(buff, 0, 2048);
     file.read((uint8_t *)buff, 2048);
@@ -27986,7 +28188,7 @@ void hexview_file(char *title, char *filename) {
   }
 
   while(1) {
-    Serial.printf("file_offset = %d of %d (%d%%)\n", file_offset, file.size(), 100 * file_offset / file.size());
+    Serial.printf("file_offset = %d of %d (%d%%)\n", file_offset, file.size(), file.size() > 0 ? 100 * file_offset / file.size() : 0);
     file.seek(file_offset);
 
     y = 0;
@@ -34709,9 +34911,314 @@ char utf8_to_cp1251_quad_byte(char byte1, char byte2, char byte3, char byte4) {
   return byte_out;
 }
 
+// Символ UTF-8 в число
+int utf8_bytes_to_int(char *str) {
+  //Serial.printf("utf8_bytes_to_int %s\n", str);  Serial.flush();
+  int result = 0;
+  if(utf8_is_double_byte(str[0])) {
+    result = ((str[0] & 0x1F) << 6) | (str[1] & 0x3F);
+  }
+  else if(utf8_is_triple_byte(str[0])) {
+    result = ((str[0] & 0x0F) << 12) | ((str[1] & 0x3F) << 6) | (str[2] & 0x3F);
+  }
+  else if(utf8_is_quad_byte(str[0])) {
+    result = ((str[0] & 0x07) << 18) | ((str[1] & 0x3F) << 12) | ((str[2] & 0x3F) << 6) | (str[3] & 0x3F);
+  }
+  else {
+    result = str[0];
+  }
+
+  //Serial.printf("utf8_bytes_to_int returns %d\n", result);  Serial.flush();
+
+  return result;
+}
+
+int cp1251_to_utf8_int(int byte) {
+  //Serial.printf("cp1251_to_utf8_int %c %d\n", byte, byte);  Serial.flush();
+
+  int int_to_char[] = {
+    // 0x80 - 0x8F
+    0x0402, 0x0403, 0x201A, 0x0453, 0x201E, 0x2026, 0x2020, 0x2021, 0x20AC, 0x2030, 0x0409, 0x2039, 0x040A, 0x040C, 0x040B, 0x040F,
+    // 0x90 - 0x9F
+    0x0452, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x0020, 0x2122, 0x0459, 0x203A, 0x045A, 0x045C, 0x045B, 0x045F,
+    // 0xA0 - 0xAF
+    0x00A0, 0x040E, 0x045E, 0x0408, 0x00A4, 0x0490, 0x00A6, 0x00A7, 0x0401, 0x00A9, 0x0404, 0x00AB, 0x00AC, 0x00AD, 0x00AE, 0x0407,
+    // 0xB0 - 0xBF
+    0x00B0, 0x00B1, 0x0406, 0x0456, 0x0491, 0x00B5, 0x00B6, 0x00B7, 0x0451, 0x2116, 0x0454, 0x00BB, 0x0458, 0x0405, 0x0455, 0x0457,
+    // 0xC0 - 0xCF
+    0x0410, 0x0411, 0x0412, 0x0413, 0x0414, 0x0415, 0x0416, 0x0417, 0x0418, 0x0419, 0x041A, 0x041B, 0x041C, 0x041D, 0x041E, 0x041F,
+    // 0xD0 - 0xDF
+    0x0420, 0x0421, 0x0422, 0x0423, 0x0424, 0x0425, 0x0426, 0x0427, 0x0428, 0x0429, 0x042A, 0x042B, 0x042C, 0x042D, 0x042E, 0x042F,
+    // 0xE0 - 0xEF
+    0x0430, 0x0431, 0x0432, 0x0433, 0x0434, 0x0435, 0x0436, 0x0437, 0x0438, 0x0439, 0x043A, 0x043B, 0x043C, 0x043D, 0x043E, 0x043F,
+    // 0xF0 - 0xFF
+    0x0440, 0x0441, 0x0442, 0x0443, 0x0444, 0x0445, 0x0446, 0x0447, 0x0448, 0x0449, 0x044A, 0x044B, 0x044C, 0x044D, 0x044E, 0x044F,
+  };
+
+  if(byte <= 0x7F) return byte;
+  return int_to_char[byte - 0x80];
+}
+
+int utf8_int_to_cp1251(int utf8_byte) {
+  //Serial.printf("utf8_int_to_cp1251 %d\n", utf8_byte);  Serial.flush();
+  int char_to_int[] = {
+    // UTF8, cp1251
+    0xA0, 0xA0, // Неразрывный пробел
+    0xA4, 0xA4, // ¤
+    0xA6, 0xA6, // ¦
+    0xA7, 0xA7, // §
+    0xA9, 0xA9, // ©
+    0xAB, 0xAB, // Кавычка ёлочка открывающая
+    0xAC, 0xAC, // ¬
+    0xAD, 0xAD, // Мягкий перенос
+    0xAE, 0xAE, // ®
+    0xB0, 0xB0, // °
+    0xB1, 0xB1, // ±
+    0xB5, 0xB5, // µ
+    0xB6, 0xB6, // ¶
+    0xB7, 0xB7, // ·
+    0xBB, 0xBB, // Кавычка ёлочка закрывающая
+    // 0x80 - 0x8F
+    0x0402, 0x80, // Ђ
+    0x0403, 0x81, // Ѓ
+    0x201A, 0x82, // ‚
+    0x0453, 0x83, // ѓ
+    0x201E, 0x84, // „
+    0x2026, 0x85, // …
+    0x2020, 0x86, // †
+    0x2021, 0x87, // ‡
+    0x20AC, 0x88, // €
+    0x2030, 0x89, // ‰
+    0x0409, 0x8A, // Љ
+    0x2039, 0x8B, // ‹
+    0x040A, 0x8C, // Њ
+    0x040C, 0x8D, // Ќ
+    0x040B, 0x8E, // Ћ
+    0x040F, 0x8F, // Џ
+    // 0x90 - 0x9F
+    0x0452, 0x90, // ђ
+    0x2018, 0x91, // ‘
+    0x2019, 0x92, // ’
+    0x201C, 0x93, // “
+    0x201D, 0x94, // ”
+    0x2022, 0x95, // •
+    0x2013, 0x96, // –
+    0x2014, 0x97, // —
+    0x0020, 0x98, //  
+    0x2122, 0x99, // ™
+    0x0459, 0x9A, // љ
+    0x203A, 0x9B, // ›
+    0x045A, 0x9C, // њ
+    0x045C, 0x9D, // ќ
+    0x045B, 0x9E, // ћ
+    0x045F, 0x9F, // џ
+    // 0xA0 - 0xAF
+    0x00A0, 0xA0, // NBSP
+    0x040E, 0xA1, // Ў
+    0x045E, 0xA2, // ў
+    0x0408, 0xA3, // Ј
+    0x00A4, 0xA4, // ¤
+    0x0490, 0xA5, // Ґ
+    0x00A6, 0xA6, // ¦
+    0x00A7, 0xA7, // §
+    0x0401, 0xA8, // Ё
+    0x00A9, 0xA9, // ©
+    0x0404, 0xAA, // Є
+    0x00AB, 0xAB, // «
+    0x00AC, 0xAC, // ¬
+    0x00AD, 0xAD, // SHY
+    0x00AE, 0xAE, // ®
+    0x0407, 0xAF, // Ї
+    // 0xB0 - 0xBF
+    0x00B0, 0xB0, // °
+    0x00B1, 0xB1, // ±
+    0x0406, 0xB2, // І
+    0x0456, 0xB3, // і
+    0x0491, 0xB4, // ґ
+    0x00B5, 0xB5, // µ
+    0x00B6, 0xB6, // ¶
+    0x00B7, 0xB7, // ·
+    0x0451, 0xB8, // ё
+    0x2116, 0xB9, // №
+    0x0454, 0xBA, // є
+    0x00BB, 0xBB, // »
+    0x0458, 0xBC, // ј
+    0x0405, 0xBD, // Ѕ
+    0x0455, 0xBE, // ѕ
+    0x0457, 0xBF, // ї
+    // 0xC0 - 0xCF
+    0x0410, 0xC0, // А
+    0x0411, 0xC1, // Б
+    0x0412, 0xC2, // В
+    0x0413, 0xC3, // Г
+    0x0414, 0xC4, // Д
+    0x0415, 0xC5, // Е
+    0x0416, 0xC6, // Ж
+    0x0417, 0xC7, // З
+    0x0418, 0xC8, // И
+    0x0419, 0xC9, // Й
+    0x041A, 0xCA, // К
+    0x041B, 0xCB, // Л
+    0x041C, 0xCC, // М
+    0x041D, 0xCD, // Н
+    0x041E, 0xCE, // О
+    0x041F, 0xCF, // П
+    // 0xD0 - 0xDF
+    0x0420, 0xD0, // Р
+    0x0421, 0xD1, // С
+    0x0422, 0xD2, // Т
+    0x0423, 0xD3, // У
+    0x0424, 0xD4, // Ф
+    0x0425, 0xD5, // Х
+    0x0426, 0xD6, // Ц
+    0x0427, 0xD7, // Ч
+    0x0428, 0xD8, // Ш
+    0x0429, 0xD9, // Щ
+    0x042A, 0xDA, // Ъ
+    0x042B, 0xDB, // Ы
+    0x042C, 0xDC, // Ь
+    0x042D, 0xDD, // Э
+    0x042E, 0xDE, // Ю
+    0x042F, 0xDF, // Я
+    // 0xE0 - 0xEF
+    0x0430, 0xE0, // а
+    0x0431, 0xE1, // б
+    0x0432, 0xE2, // в
+    0x0433, 0xE3, // г
+    0x0434, 0xE4, // д
+    0x0435, 0xE5, // е
+    0x0436, 0xE6, // ж
+    0x0437, 0xE7, // з
+    0x0438, 0xE8, // и
+    0x0439, 0xE9, // й
+    0x043A, 0xEA, // к
+    0x043B, 0xEB, // л
+    0x043C, 0xEC, // м
+    0x043D, 0xED, // н
+    0x043E, 0xEE, // о
+    0x043F, 0xEF, // п
+    // 0xF0 - 0xFF
+    0x0440, 0xF0, // р
+    0x0441, 0xF1, // с
+    0x0442, 0xF2, // т
+    0x0443, 0xF3, // у
+    0x0444, 0xF4, // ф
+    0x0445, 0xF5, // х
+    0x0446, 0xF6, // ц
+    0x0447, 0xF7, // ч
+    0x0448, 0xF8, // ш
+    0x0449, 0xF9, // щ
+    0x044A, 0xFA, // ъ
+    0x044B, 0xFB, // ы
+    0x044C, 0xFC, // ь
+    0x044D, 0xFD, // э
+    0x044E, 0xFE, // ю
+    0x044F, 0xFF, // я
+    // Трёхбайтовые
+    0x2000, 0x20, // En Quad
+    0x2001, 0x20, // Em Quad
+    0x2002, 0x20, // En Space
+    0x2003, 0x20, // Em Space
+    0x2004, 0x20, // Three-Per-Em Space
+    0x2005, 0x20, // Four-Per-Em Space
+    0x2006, 0x20, // Six-Per-Em Space
+    0x2007, 0x20, // Figure Space
+    0x2008, 0x20, // Punctuation Space
+    0x2009, 0x20, // Thin Space
+    0x200A, 0x20, // Hair Space
+    0x200B, 0x20, // Zero Width Space
+    0x2010, 0x2D, // ‐ Hyphen
+    0x2011, 0x2D, // ‑ Non-Breaking Hyphen
+    0x2012, 0x2D, // ‒ Figure Dash
+    0x2013, 0x2D, // – En Dash
+    0x2014, 0x2D, // — Em Dash
+    0x2015, 0x2D, // ― Horizontal Bar
+    0x2018, 0x91, // ‘ Left Single Quotation Mark
+    0x2019, 0x92, // ’ Right Single Quotation Mark
+    0x201A, 0x82, // ‚ Single Low-9 Quotation Mark
+    0x201B, 0x92, // ‛ Single High-Reversed-9 Quotation Mark
+    0x201C, 0x93, // “ Left Double Quotation Mark
+    0x201D, 0x94, // ” Right Double Quotation Mark
+    0x201E, 0x84, // „ Double Low-9 Quotation Mark
+    0x201F, 0x94, // ‟ Double High-Reversed-9 Quotation Mark
+    0x2020, 0x86, // † Dagger
+    0x2021, 0x87, // ‡ Double Dagger
+    0x2022, 0x95, // • Bullet
+    0x2023, 0x95, // ‣ Triangular Bullet
+    0x2024, 0x2E, // ․ One Dot Leader
+    0x2026, 0x85, // … Horizontal Ellipsis
+
+    0x2030, 0x89, // ‰ Per Mille Sign
+    0x2039, 0x8B, // ‹ Single Left-Pointing Angle Quotation Mark
+    0x203A, 0x9B, // › Single Right-Pointing Angle Quotation Mark
+    0, 0, // End
+  };
+  int i;
+
+  if(utf8_byte <= 0x7F) return utf8_byte;
+
+  for(i = 0; char_to_int[i * 2] != 0; i++) {
+    if(char_to_int[i * 2] == utf8_byte) {
+      //Serial.printf("utf8_int_to_cp1251 returns %d\n", char_to_int[i * 2 + 1]);  Serial.flush();
+      return char_to_int[i * 2 + 1];
+    }
+  }
+  Serial.printf("utf8_int_to_cp1251 no result\n");  Serial.flush();
+
+  return '#';
+}
+
+// Число в символ UTF-8, возвращает число байт
+int utf8_int_to_bytes(int symbol, char *buff) {
+  int bytes_count = 0;
+
+  if(symbol < 0 || symbol > 0x10FFFF ||
+    (symbol >= 0xD800 && symbol <= 0xDFFF)) {
+      return 0;
+  }
+  if(symbol <= 0x7F) {
+    buff[0] = symbol;
+    bytes_count = 1;
+  }
+  else if(symbol <= 0x7FF) {
+    buff[0] = 0xC0 | (symbol >> 6);
+    buff[1] = 0x80 | (symbol & 0x3F);
+    bytes_count = 2;
+  }
+  else if(symbol <= 0xFFFF && !(symbol >= 0xD800 && symbol <= 0xDFFF)) {
+    buff[0] = 0xE0 | (symbol >> 12);
+    buff[1] = 0x80 | ((symbol >> 6) & 0x3F);
+    buff[2] = 0x80 | (symbol & 0x3F);
+    bytes_count = 3;
+  }
+  else if(symbol <= 0x10FFFF) {
+    buff[0] = 0xF0 | (symbol >> 18);
+    buff[1] = 0x80 | ((symbol >> 12) & 0x3F);
+    buff[2] = 0x80 | ((symbol >> 6) & 0x3F);
+    buff[3] = 0x80 | (symbol & 0x3F);
+    bytes_count = 4;
+  }
+
+  return bytes_count;
+}
+
 // Преобразование строки из utf8 в cp1251
 // Строка всегда короче, поэтому преобразование в том же буфере
 void utf8_to_cp1251(char *buff) {
+  //Serial.printf("utf8_to_cp1251 %s\n", buff); Serial.flush();
+  int read_offset = 0;
+  int write_offset = 0;
+  int utf8_int = 0;
+  while(buff[read_offset] != 0) {
+    utf8_int = utf8_bytes_to_int(buff + read_offset);
+    read_offset += utf8_char_bytes_count(buff + read_offset);
+
+    buff[write_offset] = utf8_int_to_cp1251(utf8_int);
+    write_offset++;
+  }
+  buff[write_offset] = 0;
+/*
+  return;
   int read_offset = 0;
   int write_offset = 0;
   unsigned char byte, byte2, byte3, byte4;
@@ -34741,6 +35248,7 @@ void utf8_to_cp1251(char *buff) {
     write_offset++;
   }
   buff[write_offset] = 0;
+  */
 }
 
 void cp1251_to_utf8(char *in_buff, char *out_buff) {
@@ -34934,6 +35442,29 @@ char utf8_is_quad_byte(char byte1) {
     return 1;
   }
   return 0;
+}
+
+int utf8_char_bytes_count(char *str) {
+  if(str[0] == 0) return 0;
+
+  if(utf8_is_double_byte(*str)) {
+    if(*(str + 1) == 0) return 1;
+    return 2;
+  }
+  else if(utf8_is_triple_byte(*str)) {
+    if(*(str + 1) == 0) return 1;
+    if(*(str + 2) == 0) return 2;
+    return 3;
+  }
+  else if(utf8_is_quad_byte(*str)) {
+    if(*(str + 1) == 0) return 1;
+    if(*(str + 2) == 0) return 2;
+    if(*(str + 3) == 0) return 3;
+    return 4;
+  }
+  else {
+    return 1;
+  }
 }
 
 // Проверка, является ли корректной строкой UTF-8
