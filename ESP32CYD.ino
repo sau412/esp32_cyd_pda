@@ -257,17 +257,17 @@
 2026-10-25 Баг Life, Life непрерывное рисование
 2026-11-02 Новый способ кодирования и декодирования UTF8 (не полностью)
 2026-11-03 Новый способ кодирования и декодирования UTF8, фикс поддержки UTF8 в операциях над файлами (не везде)
+2026-11-04 Попытки починить режим сна
+2026-11-05 xmodem отправка, получение, life своё правило, не уходить в сон для блокировки экрана
 
 - новый обзор(ы)
 
 Улучшения тут и там:
-- Баг со сном
-- Символы UTF-8 с акцентами декодировать
-- Bluetooth в отдельном потоке
-- Life своё правило
+- ymodem
 - tar
-- xmodem отправка
-- xmodem приём
+- Вынести самые длинные команды терминала в отдельные функции
+- Символы UTF-8 с акцентами декодировать - гласные, n, l, s, c
+- Bluetooth в отдельном потоке
 - Gemini
 - Finger
 - Простой HTTP браузер
@@ -277,7 +277,6 @@
 - Приложение Графики функций
 - Заставка Аттрактор Клиффорда
 - Цвета и линии для аттрактора Лоренца
-- Смена кодировки с одним и тем же файлом (перекодировать, старый удалить, переименовать)
 - Баг - буфер при создании новой таблицы не пустой? Мусор в ячейке, но не сразу. Вылет при сохранении (не воспроизвелось)
 - Убрать многоуровневые настройки (больше двух уровней)
 - Настройки - горизонтальный переход к сходным настройкам
@@ -546,6 +545,9 @@ WiFiClient *global_client = NULL;
 
 // For deep sleep
 #include "driver/rtc_io.h"
+
+// Core reset reason
+#include "rom/rtc.h"
 
 // For TOTP
 #include <TOTP.h>
@@ -3454,6 +3456,9 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "serial") == 0) {
     terminal_serial(arg_count, cmdline_params);
+  }
+  else if(strcmp(cmdline_params[0], "xmodem") == 0) {
+    terminal_xmodem(arg_count, cmdline_params);
   }
   // ======================================================
   // Случайные числа
@@ -7388,6 +7393,270 @@ int terminal_serial(int arg_count, char **args) {
   }
   Serial2.end();
   return 0;
+}
+
+int terminal_xmodem(int arg_count, char **args) {
+  long speed = 115200;
+  char filename[160];
+  char buff[160];
+  char break_flag = 0;
+  char send_flag = 1;
+  fs::File file;
+  int bytesRead;
+  int byte;
+  int block;
+  int block_received;
+  int rx_pin = 22;
+  int tx_pin = 27;
+  int i;
+  int checksum;
+  char checksum_crc = 0;
+  long wait_start_millis;
+  for(i = 1; i < arg_count; i++) {
+    if(strcmp(args[i], "-tx") == 0 && i + 1 < arg_count) {
+      tx_pin = strtol(args[i + 1], NULL, 10);
+      i++;
+      continue;
+    }
+    if(strcmp(args[i], "-rx") == 0 && i + 1 < arg_count) {
+      rx_pin = strtol(args[i + 1], NULL, 10);
+      i++;
+      continue;
+    }
+    if(strcmp(args[i], "-speed") == 0 && i + 1 < arg_count) {
+      speed = strtol(args[i], NULL, 10);
+      i++;
+      continue;
+    }
+    if(strcmp(args[i], "send") == 0) {
+      send_flag = 1;
+      continue;
+    }
+    if(strcmp(args[i], "receive") == 0) {
+      send_flag = 0;
+      continue;
+    }
+    strcpy(filename, args[i]);
+  }
+
+  if(!filename) {
+    terminal_println("File is not set");
+    return 1;
+  }
+
+  cp1251_to_utf8(filename, buff);
+  terminal_get_file_path_with_current_path(buff, filename);
+
+  if(send_flag) {
+    file = Storage->open(filename);
+
+    Serial.printf("Starting xmodem speed %d tx %d rx %d\n", speed, tx_pin, rx_pin);
+    Serial2.begin(speed, SERIAL_8N1, rx_pin, tx_pin); 
+
+    block = 1;
+    while(1) {
+      while(!Serial2.available()) {
+        terminal_print("w");
+        terminal_show_screen();
+        wait_start_millis = millis();
+        while(millis() - wait_start_millis < 1000) {
+          if(terminal_input_char() == 0x03) {
+            terminal_println("\n\rCancel");
+            break_flag = 1;
+            break;
+          }
+        }
+        if(break_flag) break;
+      }
+      if(break_flag) break;
+
+      byte = Serial2.read();
+      //sprintf(buff, "Xmodem char: %02X '%c'", byte, byte);
+      //terminal_println(buff);
+
+      if(byte == 0x18) {
+        terminal_println("\n\rPeer cancel");
+        break;
+      }
+      // Запрос CRC - отказываем
+      if(byte == 0x43) {
+        checksum_crc = 1;
+      }
+      if(byte != 0x06 && byte != 0x15 && byte != 0x43) {
+        sprintf(buff, "Xmodem unknown char: 0x%02X '%c'", byte, byte);
+        terminal_println(buff);
+        continue;
+      }
+      // Файл закончился, получено подтверждение
+      if(!file.available() && byte == 0x06) {
+        // Конец передачи
+        terminal_println("\n\rSuccess");
+        break;
+      }
+      // 06 (ACK) - блок получен
+      // 15 (NAK) - запрос повтора или первый блок
+      if(byte == 0x06 || (block == 1 && byte == 0x15) || (block == 1 && byte == 0x43)) {
+        // Заполняющий символ
+        memset(buff, 0x1A, 133);
+        buff[0] = 0x01;
+        buff[1] = block % 256;
+        buff[2] = ~(block % 256);
+
+        bytesRead = file.read((uint8_t*)buff + 3, 128);
+        checksum = 0;
+        for(i = 0; i < 128; i++) {
+          checksum = (checksum + buff[i + 3]) % 256;
+        }
+        buff[131] = checksum;
+
+        if(checksum_crc) {
+          checksum = xmodem_crc16((const uint8_t*)buff + 3, 128);
+          buff[131] = checksum >> 8;
+          buff[132] = checksum & 0xFF;
+        }
+        block++;
+        terminal_print(".");
+      }
+      else {
+        terminal_print("r");
+      }
+
+      Serial2.write((uint8_t *)buff, checksum_crc ? 133 : 132);
+
+      if(!file.available()) {
+        buff[0] = 0x04; // EOT
+        Serial2.write((uint8_t *)buff, 1);
+      }
+
+      terminal_show_screen();
+    }
+    Serial2.end();
+
+    file.close();
+  }
+  else {
+    file = Storage->open(filename, FILE_WRITE);
+    block = 1;
+
+    // Ожидаем соединения
+    Serial2.write(0x15);
+    while(1) {
+      if(!Serial2.available()) {
+        terminal_print("w");
+        terminal_show_screen();
+        wait_start_millis = millis();
+        while(millis() - wait_start_millis < 1000) {
+          if(terminal_input_char() == 0x03) {
+            terminal_println("\n\rCancel");
+            break_flag = 1;
+            break;
+          }
+        }
+        if(break_flag) break;
+        Serial2.write(0x15);
+      }
+      else {
+        break;
+      }
+      if(break_flag) break;
+    }
+
+    terminal_println("\n\rConnected");
+
+    while(!break_flag) {
+      while(!Serial2.available()) {
+        terminal_print("w");
+        terminal_show_screen();
+        wait_start_millis = millis();
+        while(millis() - wait_start_millis < 1000) {
+          if(terminal_input_char() == 0x03) {
+            terminal_println("\n\rCancel");
+            break_flag = 1;
+            break;
+          }
+        }
+        if(break_flag) break;
+      }
+      if(break_flag) break;
+
+      byte = Serial2.read(); // 0x01
+      //sprintf(buff, "%02X ", byte);
+      //terminal_print(buff);
+      if(byte == 0x04) {
+        terminal_println("\n\rSuccess");
+        break;
+      }
+      if(byte == 0x18) {
+        terminal_println("\n\rPeer cancel");
+        break;
+      }
+      if(byte != 0x01) {
+        terminal_print("?");
+        //terminal_print_char(byte);
+        terminal_show_screen();
+        continue;
+      }
+
+      byte = Serial2.read(); // номер блока
+      block_received = byte;
+      if(block_received == ((block + 256 - 1) % 256)) {
+        // Повтор прошлого блока
+      }
+      else if(block_received != (block % 256)) {
+        sprintf(buff, "\n\rReceived block %d, should be block %d", block_received, block);
+        terminal_println(buff);
+        terminal_show_screen();
+      }
+      byte = Serial2.read(); // ~номер блока
+
+      // Данные
+      for(i = 0; i < 128; i++) {
+        while(!Serial2.available());
+        byte = Serial2.read();
+        buff[i] = byte;
+      }
+
+      if(block_received == (block % 256)) {
+        file.write((uint8_t *)buff, 128);
+        terminal_print(".");
+        terminal_show_screen();
+        block++;
+      }
+      else {
+        terminal_print("r");
+        terminal_show_screen();
+      }
+      byte = Serial2.read(); // CRC
+
+      Serial2.write(0x06);
+    }
+
+    if(break_flag) {
+      Serial2.write(0x18); // Отмена
+    }
+
+    Serial2.end();
+    file.close();
+  }
+
+  return 0;
+}
+
+uint16_t xmodem_crc16(const uint8_t *data, size_t len) {
+  uint16_t crc = 0;
+
+  while (len--) {
+    crc ^= (uint16_t)*data++ << 8;
+
+    for (uint8_t i = 0; i < 8; i++) {
+      if (crc & 0x8000)
+        crc = (crc << 1) ^ 0x1021;
+      else
+        crc <<= 1;
+    }
+  }
+
+  return crc;
 }
 
 void terminal_cat(char *filename) {
@@ -16036,6 +16305,7 @@ void life(char mode, char *io_buff) {
     "B3/S45678 - Coral",
     "B2/S - Seeds",
     "Random rule",
+    "Enter rule",
     NULL,
   };
 
@@ -16098,6 +16368,7 @@ void life_show(char *rule_name, int rule_index, char *field) {
   char *field_next = NULL;
   int button_pressed;
   int x, y;
+  int i;
   int prev_x, prev_y;
   int touch_x, touch_y;
   int cell_color;
@@ -16105,6 +16376,7 @@ void life_show(char *rule_name, int rule_index, char *field) {
   char current_cell;
   long prev_millis = 0;
   char title[80];
+  char buff[80];
   TouchPoint p;
   char *buttons[] = {
     "Start", "Step", "Stop", "Rnd", "Clr",
@@ -16158,7 +16430,52 @@ void life_show(char *rule_name, int rule_index, char *field) {
         (rule_s & 1 << 6 ? "7" : ""),
         (rule_s & 1 << 7 ? "8" : "")
       );
-    break;
+      break;
+    case 11:
+      strcpy(buff, "");
+      if(drawPrompt("Birth rule", buff) == 0) {
+        rule_b = 0;
+        for(i = 0; i < strlen(buff); i++) {
+          if(buff[i] < '0' || buff[i] > '9') continue;
+          rule_b |= 1 << buff[i] - '0' - 1;
+        }
+      }
+      else {
+        return;
+      }
+      strcpy(buff, "");
+      if(drawPrompt("Survive rule", buff) == 0) {
+        rule_s = 0;
+        for(i = 0; i < strlen(buff); i++) {
+          if(buff[i] < '0' || buff[i] > '9') continue;
+          rule_s |= 1 << buff[i] - '0' - 1;
+        }        
+      }
+      else {
+        return;
+      }
+      sprintf(
+        title,
+        "B%s%s%s%s%s%s%s%s/S%s%s%s%s%s%s%s%s",
+        (rule_b & 1 << 0 ? "1" : ""),
+        (rule_b & 1 << 1 ? "2" : ""),
+        (rule_b & 1 << 2 ? "3" : ""),
+        (rule_b & 1 << 3 ? "4" : ""),
+        (rule_b & 1 << 4 ? "5" : ""),
+        (rule_b & 1 << 5 ? "6" : ""),
+        (rule_b & 1 << 6 ? "7" : ""),
+        (rule_b & 1 << 7 ? "8" : ""),
+        (rule_s & 1 << 0 ? "1" : ""),
+        (rule_s & 1 << 1 ? "2" : ""),
+        (rule_s & 1 << 2 ? "3" : ""),
+        (rule_s & 1 << 3 ? "4" : ""),
+        (rule_s & 1 << 4 ? "5" : ""),
+        (rule_s & 1 << 5 ? "6" : ""),
+        (rule_s & 1 << 6 ? "7" : ""),
+        (rule_s & 1 << 7 ? "8" : "")
+      );
+
+      break;
   }
 
   field_next = (char *)malloc(LIFE_FIELD_WIDTH_CELLS * LIFE_FIELD_HEIGHT_CELLS / 8 * sizeof(char));
@@ -37630,8 +37947,18 @@ int get_brightness() {
 }
 
 void set_brightness(int level) {
+  level = constrain(level, 0, 255);
   global_brightness = level;
-  analogWrite(global_backlight_pin, level);
+  if(level > 0 || true) {
+    Serial.printf("analogWrite(%d, %d);\n", global_backlight_pin, level);
+    analogWrite(global_backlight_pin, level);
+  }
+  else {
+    Serial.printf("ledcDetach(%d);\n", global_backlight_pin);
+    ledcDetach(global_backlight_pin);
+    Serial.printf("digitalWrite(%d, %d);\n", global_backlight_pin, LOW);
+    digitalWrite(global_backlight_pin, LOW);
+  }
 }
 
 void save_brightness() {
@@ -39256,6 +39583,8 @@ void sleep_until_touch_or_boot() {
   int offset_x, offset_y;
   long millis_touch_start = millis();
   char touch_started = 0;
+  char is_screen_on = 1;
+  char app_title_state = 0;
   brighness = get_brightness();
 
   buff = (char *)malloc(tft.width() * tft.height() / 6 * sizeof(char));
@@ -39271,16 +39600,28 @@ void sleep_until_touch_or_boot() {
   tft.drawCentreString("Touch square for 4 s to wake up", tft.width() / 2, offset_y + 4, FONT_DEFAULT);
   tft.drawRect(tft.width() / 2 - 8, offset_y + 24, 16, 16, TFT_BLACK);
 
-
   touchWaitRelease();
   delay(100);
+
+  app_title_state = app_title_enabled;
+  //app_title_enabled = 0;
+  //tft.fillRect(0, 0, tft.width(), 16, color_scheme_title_bg);
+
   while(touch_count < 3) {
     // Включаем подсветку, но не более 3 секунд если касание не на мишени
     if(millis() - millis_touch_start < 3000) {
-      set_brightness(brighness);
+      if(is_screen_on == 0) {
+        Serial.println("set_brightness(b)");
+        set_brightness(brighness);
+        is_screen_on = 1;
+      }
     }
     else {
-      set_brightness(0);
+      if(is_screen_on == 1) {
+        Serial.println("set_brightness(0)");
+        set_brightness(0);
+        is_screen_on = 0;
+      }
     }
 
     // Ожидаем завершения морзе
@@ -39289,10 +39630,15 @@ void sleep_until_touch_or_boot() {
     }
 
     // Уходим в сон
-    esp_sleep_enable_timer_wakeup(1000000);
-    //esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT0);
+    //Serial.printf("Before %d:%02d:%02d\n", global_hours, global_minutes, global_seconds);
     Serial.flush();
-    esp_light_sleep_start();
+    //esp_sleep_enable_timer_wakeup(1000000);
+    
+    //esp_light_sleep_start();
+    delay(1000);
+
+    //Serial.printf("After %d:%02d:%02d\n", global_hours, global_minutes, global_seconds);
+
     if(digitalRead(BOOT_BUTTON_PIN) == LOW) {
       while(digitalRead(BOOT_BUTTON_PIN) == LOW);
       break;
@@ -39322,6 +39668,7 @@ void sleep_until_touch_or_boot() {
     delay(1);
   }
 
+  app_title_enabled = app_title_state;
   buffer_to_screen_area(buff, 0, tft.height() / 3, tft.width(), tft.height() / 6);
   free(buff);
   set_brightness(brighness);
@@ -39527,7 +39874,11 @@ void setup() {
   esp_reset_reason_t reason;
 
   Serial.begin(115200);
+  Serial.println("CYD PDA by sau412");
   Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+
+  Serial.printf("CPU0 reset: %d\n", rtc_get_reset_reason(0));
+  Serial.printf("CPU1 reset: %d\n", rtc_get_reset_reason(1));
 
   // Output pins
   pinMode(LED_RED, OUTPUT);
