@@ -259,6 +259,8 @@
 2026-11-03 Новый способ кодирования и декодирования UTF8, фикс поддержки UTF8 в операциях над файлами (не везде)
 2026-11-04 Попытки починить режим сна
 2026-11-05 xmodem отправка, получение, life своё правило, не уходить в сон для блокировки экрана
+2026-11-06 LCDproc/LCD Smartie вывод данных команда matrix в терминале, новый способ конвертировать cp1251 в utf-8,
+  заставка диаграммы Вороного
 
 - новый обзор(ы)
 
@@ -266,17 +268,16 @@
 - ymodem
 - tar
 - Вынести самые длинные команды терминала в отдельные функции
-- Символы UTF-8 с акцентами декодировать - гласные, n, l, s, c
 - Bluetooth в отдельном потоке
 - Gemini
 - Finger
 - Простой HTTP браузер
-- Заставка Диаграммы Вороного
 - Заставка Коралл (диффузионная агрегация)
 - Заставка Лиссажу спирограф
 - Приложение Графики функций
 - Заставка Аттрактор Клиффорда
 - Цвета и линии для аттрактора Лоренца
+
 - Баг - буфер при создании новой таблицы не пустой? Мусор в ячейке, но не сразу. Вылет при сохранении (не воспроизвелось)
 - Убрать многоуровневые настройки (больше двух уровней)
 - Настройки - горизонтальный переход к сходным настройкам
@@ -2086,6 +2087,7 @@ const char global_terminal_help[] PROGMEM =
   "sleep {seconds} - sleep for specific time in seconds\n"
   "delay {milliseconds} - sleep for specific time in milliseconds\n"
   "serial [-tx pin] [-rx pin] [speed] - connect to serial port\n"
+  "xmodem [-tx pin] [-rx pin] [speed] [send|receive] {file} - send or receive file via serial xmodem\n"
   "\n"
   "Random numbers:\n"
   "random [from] [to] - generate random numbers (from and to included)\n"
@@ -3459,6 +3461,9 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "xmodem") == 0) {
     terminal_xmodem(arg_count, cmdline_params);
+  }
+  else if(strcmp(cmdline_params[0], "matrix") == 0) {
+    terminal_matrix(arg_count, cmdline_params);
   }
   // ======================================================
   // Случайные числа
@@ -6614,6 +6619,10 @@ void terminal_ansi_clear_screen() {
   terminal_print("\e[2J");
 }
 
+void terminal_ansi_clear_line() {
+  terminal_print("\e[2K");
+}
+
 void terminal_show_screen() {
   int row, col;
   int color_fg;
@@ -7327,44 +7336,62 @@ int terminal_serial(int arg_count, char **args) {
   int byte;
   int rx_pin = 22;
   int tx_pin = 27;
+  char alt_pin_set = 0;
+  char buff[80];
   int i;
+  HardwareSerial *port = NULL;
+  
   for(i = 1; i < arg_count; i++) {
     if(strcmp(args[i], "-tx") == 0 && i + 1 < arg_count) {
       tx_pin = strtol(args[i + 1], NULL, 10);
+      alt_pin_set = 1;
       i++;
       continue;
     }
     if(strcmp(args[i], "-rx") == 0 && i + 1 < arg_count) {
       rx_pin = strtol(args[i + 1], NULL, 10);
+      alt_pin_set = 1;
       i++;
       continue;
     }
     speed = strtol(args[i], NULL, 10);
   }
-  Serial.printf("Starting serial speed %d tx %d rx %d\n", speed, tx_pin, rx_pin);
-  Serial2.begin(speed, SERIAL_8N1, rx_pin, tx_pin); 
+
+  if(alt_pin_set == 1) {
+    sprintf(buff, "Starting serial at tx %d rx %d speed %d\n", speed, tx_pin, rx_pin);
+    terminal_println(buff);
+    port = &Serial2;
+    port->begin(speed, SERIAL_8N1, rx_pin, tx_pin); 
+  }
+  else {
+    sprintf(buff, "Starting default serial speed %d\n", speed);
+    terminal_println(buff);
+    port = &Serial;
+    port->begin(speed);
+  }
+  terminal_show_screen();
 
   terminal_output[0] = 0;
 
   while(1) {
-    if(Serial2.available()) {
-      byte = Serial2.read();
+    if(port->available()) {
+      byte = port->read();
       if(byte == '\n') {
-        Serial2.print('\r');
+        port->print('\r');
         terminal_print_char('\r');
       }
       else if(byte == '\r') {
-        Serial2.print('\n');
+        port->print('\n');
         terminal_print_char('\n');
       }
-      Serial2.print((char)byte);
+      port->print((char)byte);
       terminal_print_char(byte);
       terminal_show_screen();
     }
 
     // Terminal_output - возможность терминалу ответить на ESC-последовательность
     if(strlen(terminal_output) > 0) {
-      Serial2.print(terminal_output);
+      port->print(terminal_output);
       terminal_output[0] = 0;
     }
 
@@ -7383,15 +7410,16 @@ int terminal_serial(int arg_count, char **args) {
         break;
       }
       else if(byte == '\n') {
-        Serial2.print('\r');
+        port->print('\r');
         terminal_print_char('\r');
       }
-      Serial2.print((char)byte);
+      port->print((char)byte);
       terminal_print_char((char)byte);
       terminal_show_screen();
     }
   }
-  Serial2.end();
+  if(alt_pin_set == 1) port->end();
+
   return 0;
 }
 
@@ -7401,6 +7429,7 @@ int terminal_xmodem(int arg_count, char **args) {
   char buff[160];
   char break_flag = 0;
   char send_flag = 1;
+  char alt_pin_set = 0;
   fs::File file;
   int bytesRead;
   int byte;
@@ -7412,15 +7441,19 @@ int terminal_xmodem(int arg_count, char **args) {
   int checksum;
   char checksum_crc = 0;
   long wait_start_millis;
+  HardwareSerial *port = NULL;
+
   for(i = 1; i < arg_count; i++) {
     if(strcmp(args[i], "-tx") == 0 && i + 1 < arg_count) {
       tx_pin = strtol(args[i + 1], NULL, 10);
       i++;
+      alt_pin_set = 1;
       continue;
     }
     if(strcmp(args[i], "-rx") == 0 && i + 1 < arg_count) {
       rx_pin = strtol(args[i + 1], NULL, 10);
       i++;
+      alt_pin_set = 1;
       continue;
     }
     if(strcmp(args[i], "-speed") == 0 && i + 1 < arg_count) {
@@ -7444,18 +7477,29 @@ int terminal_xmodem(int arg_count, char **args) {
     return 1;
   }
 
+  if(alt_pin_set == 1) {
+    sprintf(buff, "Starting xmodem at tx %d rx %d speed %d\n", speed, tx_pin, rx_pin);
+    terminal_println(buff);
+    port = &Serial2;
+    port->begin(speed, SERIAL_8N1, rx_pin, tx_pin); 
+  }
+  else {
+    sprintf(buff, "Starting xmodem at default serial speed %d\n", speed);
+    terminal_println(buff);
+    port = &Serial;
+    port->begin(speed);
+  }
+  terminal_show_screen();
+
   cp1251_to_utf8(filename, buff);
   terminal_get_file_path_with_current_path(buff, filename);
 
   if(send_flag) {
     file = Storage->open(filename);
 
-    Serial.printf("Starting xmodem speed %d tx %d rx %d\n", speed, tx_pin, rx_pin);
-    Serial2.begin(speed, SERIAL_8N1, rx_pin, tx_pin); 
-
     block = 1;
     while(1) {
-      while(!Serial2.available()) {
+      while(!port->available()) {
         terminal_print("w");
         terminal_show_screen();
         wait_start_millis = millis();
@@ -7470,7 +7514,7 @@ int terminal_xmodem(int arg_count, char **args) {
       }
       if(break_flag) break;
 
-      byte = Serial2.read();
+      byte = port->read();
       //sprintf(buff, "Xmodem char: %02X '%c'", byte, byte);
       //terminal_println(buff);
 
@@ -7521,16 +7565,16 @@ int terminal_xmodem(int arg_count, char **args) {
         terminal_print("r");
       }
 
-      Serial2.write((uint8_t *)buff, checksum_crc ? 133 : 132);
+      port->write((uint8_t *)buff, checksum_crc ? 133 : 132);
 
       if(!file.available()) {
         buff[0] = 0x04; // EOT
-        Serial2.write((uint8_t *)buff, 1);
+        port->write((uint8_t *)buff, 1);
       }
 
       terminal_show_screen();
     }
-    Serial2.end();
+    if(alt_pin_set == 1) port->end();
 
     file.close();
   }
@@ -7539,9 +7583,9 @@ int terminal_xmodem(int arg_count, char **args) {
     block = 1;
 
     // Ожидаем соединения
-    Serial2.write(0x15);
+    port->write(0x15);
     while(1) {
-      if(!Serial2.available()) {
+      if(!port->available()) {
         terminal_print("w");
         terminal_show_screen();
         wait_start_millis = millis();
@@ -7553,7 +7597,7 @@ int terminal_xmodem(int arg_count, char **args) {
           }
         }
         if(break_flag) break;
-        Serial2.write(0x15);
+        port->write(0x15);
       }
       else {
         break;
@@ -7564,7 +7608,7 @@ int terminal_xmodem(int arg_count, char **args) {
     terminal_println("\n\rConnected");
 
     while(!break_flag) {
-      while(!Serial2.available()) {
+      while(!port->available()) {
         terminal_print("w");
         terminal_show_screen();
         wait_start_millis = millis();
@@ -7579,7 +7623,7 @@ int terminal_xmodem(int arg_count, char **args) {
       }
       if(break_flag) break;
 
-      byte = Serial2.read(); // 0x01
+      byte = port->read(); // 0x01
       //sprintf(buff, "%02X ", byte);
       //terminal_print(buff);
       if(byte == 0x04) {
@@ -7597,7 +7641,7 @@ int terminal_xmodem(int arg_count, char **args) {
         continue;
       }
 
-      byte = Serial2.read(); // номер блока
+      byte = port->read(); // номер блока
       block_received = byte;
       if(block_received == ((block + 256 - 1) % 256)) {
         // Повтор прошлого блока
@@ -7607,12 +7651,12 @@ int terminal_xmodem(int arg_count, char **args) {
         terminal_println(buff);
         terminal_show_screen();
       }
-      byte = Serial2.read(); // ~номер блока
+      byte = port->read(); // ~номер блока
 
       // Данные
       for(i = 0; i < 128; i++) {
-        while(!Serial2.available());
-        byte = Serial2.read();
+        while(!port->available());
+        byte = port->read();
         buff[i] = byte;
       }
 
@@ -7626,16 +7670,16 @@ int terminal_xmodem(int arg_count, char **args) {
         terminal_print("r");
         terminal_show_screen();
       }
-      byte = Serial2.read(); // CRC
+      byte = port->read(); // Checksum
 
-      Serial2.write(0x06);
+      port->write(0x06);
     }
 
     if(break_flag) {
-      Serial2.write(0x18); // Отмена
+      port->write(0x18); // Отмена
     }
 
-    Serial2.end();
+    if(alt_pin_set == 1) port->end();
     file.close();
   }
 
@@ -7657,6 +7701,171 @@ uint16_t xmodem_crc16(const uint8_t *data, size_t len) {
   }
 
   return crc;
+}
+
+int terminal_matrix(int arg_count, char **args) {
+  long speed = 115200;
+  int byte;
+  int rx_pin = 22;
+  int tx_pin = 27;
+  int x, y;
+  char alt_pin_set = 0;
+  char buff[80];
+  int i;
+  HardwareSerial *port = NULL;
+  
+  for(i = 1; i < arg_count; i++) {
+    if(strcmp(args[i], "-tx") == 0 && i + 1 < arg_count) {
+      tx_pin = strtol(args[i + 1], NULL, 10);
+      alt_pin_set = 1;
+      i++;
+      continue;
+    }
+    if(strcmp(args[i], "-rx") == 0 && i + 1 < arg_count) {
+      rx_pin = strtol(args[i + 1], NULL, 10);
+      alt_pin_set = 1;
+      i++;
+      continue;
+    }
+    speed = strtol(args[i], NULL, 10);
+  }
+
+  if(alt_pin_set == 1) {
+    sprintf(buff, "Starting serial at tx %d rx %d speed %d\n", speed, tx_pin, rx_pin);
+    terminal_println(buff);
+    port = &Serial2;
+    port->begin(speed, SERIAL_8N1, rx_pin, tx_pin); 
+  }
+  else {
+    sprintf(buff, "Starting default serial speed %d\n", speed);
+    terminal_println(buff);
+    port = &Serial;
+    port->begin(speed);
+  }
+  terminal_show_screen();
+
+  terminal_output[0] = 0;
+
+  terminal_ansi_hide_cursor();
+  while(1) {
+    while(port->available()) {
+      byte = port->read();
+      if(byte == 0xFE) {
+        while(!port->available());
+        byte = port->read();
+        if(byte == 0x20) {
+          // ???
+        }
+        else if(byte == 0x41) {
+          // Auto Transmit Key Presses On (не актуально)
+        }
+        else if(byte == 0x42) {
+          // Подсветка, игнорируем
+          while(!port->available());
+          port->read();
+        }
+        else if(byte == 0x44) {
+          // Автоперенос выключить (не актуально)
+        }
+        else if(byte == 0x46) {
+          // Выключить подсветку, игнорируем
+        }
+        else if(byte == 0x47) {
+          while(!port->available());
+          x = port->read();
+          while(!port->available());
+          y = port->read();
+          terminal_ansi_set_cursor(x, y);
+        }
+        else if(byte == 0x4A) {
+          terminal_ansi_show_cursor();
+        }
+        else if(byte == 0x4B) {
+          terminal_ansi_hide_cursor();
+        }
+        else if(byte == 0x4E) {
+          // Очистить строку
+          terminal_ansi_clear_line();
+        }
+        else if(byte == 0x50) {
+          // Контрастность, игнорируем
+          while(!port->available());
+          port->read();
+        }
+        else if(byte == 0x52) {
+          // Auto Scroll Off, игнорируем
+        }
+        else if(byte == 0x53) {
+          terminal_ansi_hide_cursor();
+        }
+        else if(byte == 0x54) {
+          terminal_ansi_show_cursor();
+        }
+        else if(byte == 0x56) {
+          // General Purpose Output Off
+        }
+        else if(byte == 0x58) {
+          terminal_ansi_clear_screen();
+        }
+        else if(byte == 0x60) {
+          // Auto Repeat Mode Off
+        }
+        else if(byte == 0x76) {
+          // Короткие вертикальные столбики, игнорируем
+        }
+        else if(byte == 0x98) {
+          // Set and Save Brightness, игнорируем
+        }
+        else {
+          /*
+          terminal_ansi_set_cursor(1, 10);
+          sprintf(buff, "Unknown ctrl: %02X ", byte);
+          terminal_println(buff);
+          terminal_show_screen();
+          delay(1000);
+          */
+          // Прочие байты игнорируем
+        }
+        continue;
+      }
+      if(byte == '\n') {
+        port->print('\r');
+        terminal_print_char('\r');
+      }
+      else if(byte == '\r') {
+        port->print('\n');
+        terminal_print_char('\n');
+      }
+      //port->print((char)byte);
+      terminal_print_char(byte);
+    }
+    terminal_show_screen();
+
+    byte = terminal_input_char();
+    if(byte != -1) {
+      // Ctrl + C
+      if(byte == 0x03) {
+        break;
+      }
+      // Ctrl + D
+      if(byte == 0x04) {
+        break;
+      }
+      // Esc
+      if(byte == 0x1B) {
+        break;
+      }
+      else if(byte == '\n') {
+        port->print('\r');
+        terminal_print_char('\r');
+      }
+      terminal_show_screen();
+    }
+  }
+  if(alt_pin_set == 1) port->end();
+
+  terminal_ansi_show_cursor();
+  return 0;
 }
 
 void terminal_cat(char *filename) {
@@ -18481,6 +18690,7 @@ void screensaver(char mode, char *io_buff) {
     "Defrag",
     "Julia set",
     "Rule 30",
+    "Voronoi diagrams",
     NULL
   };
   char app_icon[] = {
@@ -18572,6 +18782,10 @@ void screensaver(char mode, char *io_buff) {
       // Rule 30
       if(button_pressed == 11) {
         screensaver_rule_30();
+      }
+      // Диаграммы Вороного
+      if(button_pressed == 12) {
+        screensaver_voronoi();
       }
       clearScreen();
       drawAppTitle("Screensavers");
@@ -19250,6 +19464,80 @@ void screensaver_rule_30() {
   }
 }
 
+void screensaver_voronoi() {
+  int x, y, i;
+  int i_min;
+  float d, d_min;
+  int xc[24];
+  int yc[24];
+  int color;
+  int height = tft.height();
+  int width = tft.width();
+  char changes_flag;
+  char break_flag = 0;
+  int line_colors[] = {
+  // BBBBBGGGGGGRRRRR
+    0b0000000000011111, //RED
+    0b0000001000011111,
+    0b0000010000011111,
+    0b0000011000011111,
+    0b0000011111111111,
+    0b0000011111111000,
+    0b0000011111110000,
+    0b0000011111101000,
+    0b0000011111100000, //GREEN
+    0b0100011111100000,
+    0b1000011111100000,
+    0b1100011111100000,
+    0b1111111111100000,
+    0b1111111000000000,
+    0b1111110000000000,
+    0b1111101000000000,
+    0b1111100000000000, //BLUE
+    0b1111100000001000,
+    0b1111100000010000,
+    0b1111100000011000,
+    0b1111100000011111,
+    0b1100000000011111,
+    0b1000000000011111,
+    0b0100000000011111,
+  };
+
+  disableAppTitle();
+  tft.fillScreen(TFT_BLACK);
+
+  while(1) {
+    // Выбираем 24 точки
+    for(i = 0; i < 24; i++) {
+      xc[i] = random(0, width);
+      yc[i] = random(0, height);
+      //tft.drawPixel(xc[i], yc[i], line_colors[i]);
+    }
+
+    for(y = 0; y < height; y++) {
+      for(x = 0; x < width; x++) {
+        i_min = 0;
+        d_min = 320 * 320 + 240 * 240;
+        for(i = 0; i < 24; i++) {
+          d = (x - xc[i]) * (x - xc[i]) + (y - yc[i]) * (y - yc[i]);
+          if(d < d_min) {
+            d_min = d;
+            i_min = i;
+          }
+        }
+        tft.drawPixel(x, y, line_colors[i_min]);
+      }
+    }
+
+    if(break_flag) break;
+    delayOrTouchWait(10000);
+    if(touchCheckNowait()) {
+      touchWaitRelease();
+      break;
+    }
+  }
+}
+
 // Дефрагментация диска
 #define DEFRAG_ICON_WIDTH 8
 #define DEFRAG_ICON_HEIGHT 10
@@ -19536,7 +19824,7 @@ char array_get_bit(char *arr, int x, int y, int width, int height) {
   int byte_offset = (x + y * width) / 8;
   int bit_offset = (x + y * width) % 8;
   if(x < 0 || y < 0) return 0;
-  if(byte_offset >= (width * height) / 8) return 0;
+  if(x >= width || y >= height) return 0;
   return arr[byte_offset] & (1 << (7 - bit_offset));
 }
 
@@ -19549,6 +19837,8 @@ void array_set_bit(char *arr, int x, int y, int width, int height, char bit) {
     arr[byte_offset] |= (1 << (7 - bit_offset));
   }
   else {
+    uint8_t *tmp;
+    tmp = (uint8_t *)arr;
     arr[byte_offset] &= ~(1 << (7 - bit_offset));
   }
 }
@@ -22710,6 +23000,32 @@ void rss_view_source(char *source_name, char *source_url) {
         buff[0] = '>';
         shift_length = 4;
       }
+      // Символы UTF-8 номерные
+      else if(memcmp(buff, "&amp;#x", 7) == 0) {
+        char *tmp;
+        int utf8_int = strtol(buff + 7, &tmp, 16);
+        buff[0] = utf8_int_to_cp1251(utf8_int);
+        shift_length = tmp - buff + 1;
+      }
+      else if(memcmp(buff, "&#x", 3) == 0) {
+        char *tmp;
+        int utf8_int = strtol(buff + 3, &tmp, 16);
+        buff[0] = utf8_int_to_cp1251(utf8_int);
+        shift_length = tmp - buff + 1;
+      }
+      else if(memcmp(buff, "&amp;#", 6) == 0) {
+        char *tmp;
+        int utf8_int = strtol(buff + 6, &tmp, 10);
+        buff[0] = utf8_int_to_cp1251(utf8_int);
+        shift_length = tmp - buff + 1;
+      }
+      else if(memcmp(buff, "&#", 2) == 0) {
+        char *tmp;
+        int utf8_int = strtol(buff + 2, &tmp, 10);
+        buff[0] = utf8_int_to_cp1251(utf8_int);
+        shift_length = tmp - buff + 1;
+      }
+/*
       // Кавычки-ёлочки
       else if(memcmp(buff, "&amp;#171;", 10) == 0) {
         buff[0] = 0xAB;
@@ -22782,7 +23098,7 @@ void rss_view_source(char *source_name, char *source_url) {
         buff[0] = 0x85;
         shift_length = 7;
       }
-
+*/
 
       // Добавить байт
       data[offset] = buff[0];
@@ -35280,90 +35596,100 @@ int utf8_int_to_cp1251(int utf8_byte) {
   //Serial.printf("utf8_int_to_cp1251 %d\n", utf8_byte);  Serial.flush();
   int char_to_int[] = {
     // UTF8, cp1251
-    0xA0, 0xA0, // Неразрывный пробел
-    0xA4, 0xA4, // ¤
-    0xA6, 0xA6, // ¦
-    0xA7, 0xA7, // §
-    0xA9, 0xA9, // ©
-    0xAB, 0xAB, // Кавычка ёлочка открывающая
-    0xAC, 0xAC, // ¬
-    0xAD, 0xAD, // Мягкий перенос
-    0xAE, 0xAE, // ®
-    0xB0, 0xB0, // °
-    0xB1, 0xB1, // ±
-    0xB5, 0xB5, // µ
-    0xB6, 0xB6, // ¶
-    0xB7, 0xB7, // ·
-    0xBB, 0xBB, // Кавычка ёлочка закрывающая
-    // 0x80 - 0x8F
-    0x0402, 0x80, // Ђ
-    0x0403, 0x81, // Ѓ
-    0x201A, 0x82, // ‚
-    0x0453, 0x83, // ѓ
-    0x201E, 0x84, // „
-    0x2026, 0x85, // …
-    0x2020, 0x86, // †
-    0x2021, 0x87, // ‡
-    0x20AC, 0x88, // €
-    0x2030, 0x89, // ‰
-    0x0409, 0x8A, // Љ
-    0x2039, 0x8B, // ‹
-    0x040A, 0x8C, // Њ
-    0x040C, 0x8D, // Ќ
-    0x040B, 0x8E, // Ћ
-    0x040F, 0x8F, // Џ
-    // 0x90 - 0x9F
-    0x0452, 0x90, // ђ
-    0x2018, 0x91, // ‘
-    0x2019, 0x92, // ’
-    0x201C, 0x93, // “
-    0x201D, 0x94, // ”
-    0x2022, 0x95, // •
-    0x2013, 0x96, // –
-    0x2014, 0x97, // —
-    0x0020, 0x98, //  
-    0x2122, 0x99, // ™
-    0x0459, 0x9A, // љ
-    0x203A, 0x9B, // ›
-    0x045A, 0x9C, // њ
-    0x045C, 0x9D, // ќ
-    0x045B, 0x9E, // ћ
-    0x045F, 0x9F, // џ
-    // 0xA0 - 0xAF
-    0x00A0, 0xA0, // NBSP
-    0x040E, 0xA1, // Ў
-    0x045E, 0xA2, // ў
-    0x0408, 0xA3, // Ј
+    0x00A0, 0xA0, // Неразрывный пробел
     0x00A4, 0xA4, // ¤
-    0x0490, 0xA5, // Ґ
     0x00A6, 0xA6, // ¦
     0x00A7, 0xA7, // §
-    0x0401, 0xA8, // Ё
     0x00A9, 0xA9, // ©
-    0x0404, 0xAA, // Є
     0x00AB, 0xAB, // «
     0x00AC, 0xAC, // ¬
-    0x00AD, 0xAD, // SHY
+    0x00AD, 0xAD, // Мягкий перенос
     0x00AE, 0xAE, // ®
-    0x0407, 0xAF, // Ї
-    // 0xB0 - 0xBF
     0x00B0, 0xB0, // °
     0x00B1, 0xB1, // ±
-    0x0406, 0xB2, // І
-    0x0456, 0xB3, // і
-    0x0491, 0xB4, // ґ
     0x00B5, 0xB5, // µ
     0x00B6, 0xB6, // ¶
     0x00B7, 0xB7, // ·
-    0x0451, 0xB8, // ё
-    0x2116, 0xB9, // №
-    0x0454, 0xBA, // є
     0x00BB, 0xBB, // »
-    0x0458, 0xBC, // ј
+    0x00C0, 'A', // À
+    0x00C1, 'A', // Á
+    0x00C2, 'A', // Â
+    0x00C3, 'A', // Ã
+    0x00C4, 'A', // Ä
+    0x00C5, 'A', // Å
+    0x00C7, 'C', // Ç
+    0x00C8, 'E', // È
+    0x00C9, 'E', // É
+    0x00CA, 'E', // Ê
+    0x00CB, 'E', // Ë
+    0x00CC, 'I', // Ì
+    0x00CD, 'I', // Í
+    0x00CE, 'I', // Î
+    0x00CF, 'I', // Ï
+    0x00D0, 'D', // Ð
+    0x00D1, 'N', // Ñ
+    0x00D2, 'O', // Ò
+    0x00D3, 'O', // Ó
+    0x00D4, 'O', // Ô
+    0x00D5, 'O', // Õ
+    0x00D6, 'O', // Ö
+    0x00D8, 'O', // Ø
+    0x00D9, 'U', // Ù
+    0x00DA, 'U', // Ú
+    0x00DB, 'U', // Û
+    0x00DC, 'U', // Ü
+    0x00DD, 'Y', // Ý
+    0x00DE, 'D', // Þ
+    0x00E0, 'a', // à
+    0x00E1, 'a', // á
+    0x00E2, 'a', // â
+    0x00E3, 'a', // ã
+    0x00E4, 'a', // ä
+    0x00E5, 'a', // å
+    0x00E7, 'c', // ç
+    0x00E8, 'e', // è
+    0x00E9, 'e', // é
+    0x00EA, 'e', // ê
+    0x00EB, 'e', // ë
+    0x00EC, 'i', // ì
+    0x00ED, 'i', // í
+    0x00EE, 'i', // î
+    0x00EF, 'i', // ï
+    0x00F0, 'd', // ð
+    0x00F1, 'n', // ñ
+    0x00F2, 'o', // ò
+    0x00F3, 'o', // ó
+    0x00F4, 'o', // ô
+    0x00F5, 'o', // õ
+    0x00F6, 'o', // ö
+    0x00F8, 'o', // ø
+    0x00F9, 'u', // ù
+    0x00FA, 'u', // ú
+    0x00FB, 'u', // û
+    0x00FC, 'u', // ü
+    0x00FD, 'y', // ý
+    0x00FE, 'd', // þ
+    0x00FF, 'y', // ÿ
+    0x0160, 'S', // Š
+    0x0161, 's', // š
+    0x0178, 'Y', // Ÿ
+    0x0192, 'f', // ƒ
+    0x02C6, '^', // ^ to prev symbol
+    0x02DC, '~', // ~ to prev symbol
+    0x0401, 0xA8, // Ё
+    0x0402, 0x80, // Ђ
+    0x0403, 0x81, // Ѓ
+    0x0404, 0xAA, // Є
     0x0405, 0xBD, // Ѕ
-    0x0455, 0xBE, // ѕ
-    0x0457, 0xBF, // ї
-    // 0xC0 - 0xCF
+    0x0406, 0xB2, // І
+    0x0407, 0xAF, // Ї
+    0x0408, 0xA3, // Ј
+    0x0409, 0x8A, // Љ
+    0x040A, 0x8C, // Њ
+    0x040B, 0x8E, // Ћ
+    0x040C, 0x8D, // Ќ
+    0x040E, 0xA1, // Ў
+    0x040F, 0x8F, // Џ
     0x0410, 0xC0, // А
     0x0411, 0xC1, // Б
     0x0412, 0xC2, // В
@@ -35380,7 +35706,6 @@ int utf8_int_to_cp1251(int utf8_byte) {
     0x041D, 0xCD, // Н
     0x041E, 0xCE, // О
     0x041F, 0xCF, // П
-    // 0xD0 - 0xDF
     0x0420, 0xD0, // Р
     0x0421, 0xD1, // С
     0x0422, 0xD2, // Т
@@ -35397,7 +35722,6 @@ int utf8_int_to_cp1251(int utf8_byte) {
     0x042D, 0xDD, // Э
     0x042E, 0xDE, // Ю
     0x042F, 0xDF, // Я
-    // 0xE0 - 0xEF
     0x0430, 0xE0, // а
     0x0431, 0xE1, // б
     0x0432, 0xE2, // в
@@ -35414,7 +35738,6 @@ int utf8_int_to_cp1251(int utf8_byte) {
     0x043D, 0xED, // н
     0x043E, 0xEE, // о
     0x043F, 0xEF, // п
-    // 0xF0 - 0xFF
     0x0440, 0xF0, // р
     0x0441, 0xF1, // с
     0x0442, 0xF2, // т
@@ -35431,7 +35754,22 @@ int utf8_int_to_cp1251(int utf8_byte) {
     0x044D, 0xFD, // э
     0x044E, 0xFE, // ю
     0x044F, 0xFF, // я
-    // Трёхбайтовые
+    0x0451, 0xB8, // ё
+    0x0452, 0x90, // ђ
+    0x0453, 0x83, // ѓ
+    0x0454, 0xBA, // є
+    0x0455, 0xBE, // ѕ
+    0x0456, 0xB3, // і
+    0x0457, 0xBF, // ї
+    0x0458, 0xBC, // ј
+    0x0459, 0x9A, // љ
+    0x045A, 0x9C, // њ
+    0x045B, 0x9E, // ћ
+    0x045C, 0x9D, // ќ
+    0x045E, 0xA2, // ў
+    0x045F, 0x9F, // џ
+    0x0490, 0xA5, // Ґ
+    0x0491, 0xB4, // ґ
     0x2000, 0x20, // En Quad
     0x2001, 0x20, // Em Quad
     0x2002, 0x20, // En Space
@@ -35447,8 +35785,8 @@ int utf8_int_to_cp1251(int utf8_byte) {
     0x2010, 0x2D, // ‐ Hyphen
     0x2011, 0x2D, // ‑ Non-Breaking Hyphen
     0x2012, 0x2D, // ‒ Figure Dash
-    0x2013, 0x2D, // – En Dash
-    0x2014, 0x2D, // — Em Dash
+    0x2013, 0x96, // –
+    0x2014, 0x97, // —
     0x2015, 0x2D, // ― Horizontal Bar
     0x2018, 0x91, // ‘ Left Single Quotation Mark
     0x2019, 0x92, // ’ Right Single Quotation Mark
@@ -35458,16 +35796,18 @@ int utf8_int_to_cp1251(int utf8_byte) {
     0x201D, 0x94, // ” Right Double Quotation Mark
     0x201E, 0x84, // „ Double Low-9 Quotation Mark
     0x201F, 0x94, // ‟ Double High-Reversed-9 Quotation Mark
-    0x2020, 0x86, // † Dagger
-    0x2021, 0x87, // ‡ Double Dagger
-    0x2022, 0x95, // • Bullet
+    0x2020, 0x86, // †
+    0x2021, 0x87, // ‡
+    0x2022, 0x95, // •
     0x2023, 0x95, // ‣ Triangular Bullet
     0x2024, 0x2E, // ․ One Dot Leader
-    0x2026, 0x85, // … Horizontal Ellipsis
-
-    0x2030, 0x89, // ‰ Per Mille Sign
-    0x2039, 0x8B, // ‹ Single Left-Pointing Angle Quotation Mark
-    0x203A, 0x9B, // › Single Right-Pointing Angle Quotation Mark
+    0x2026, 0x85, // …
+    0x2030, 0x89, // ‰
+    0x2039, 0x8B, // ‹
+    0x203A, 0x9B, // ›
+    0x20AC, 0x88, // €
+    0x2116, 0xB9, // №
+    0x2122, 0x99, // ™
     0, 0, // End
   };
   int i;
@@ -35534,38 +35874,6 @@ void utf8_to_cp1251(char *buff) {
     write_offset++;
   }
   buff[write_offset] = 0;
-/*
-  return;
-  int read_offset = 0;
-  int write_offset = 0;
-  unsigned char byte, byte2, byte3, byte4;
-  int length = strlen(buff);
-  while(read_offset < length) {
-    byte = buff[read_offset];
-    read_offset++;
-    if(utf8_is_double_byte(byte)) {
-      byte = utf8_to_cp1251_double_byte(byte, buff[read_offset]);
-      read_offset++;
-    }
-    else if(utf8_is_triple_byte(byte)) {
-      byte2 = buff[read_offset + 0];
-      byte3 = buff[read_offset + 1];
-      byte = utf8_to_cp1251_triple_byte(byte, byte2, byte3);
-      read_offset += 2;
-    }
-    else if(utf8_is_quad_byte(byte)) {
-      byte2 = buff[read_offset + 0];
-      byte3 = buff[read_offset + 1];
-      byte4 = buff[read_offset + 2];
-      byte = utf8_to_cp1251_quad_byte(byte, byte2, byte3, byte4);
-      read_offset += 3;
-    }
-    
-    buff[write_offset] = byte;
-    write_offset++;
-  }
-  buff[write_offset] = 0;
-  */
 }
 
 void cp1251_to_utf8(char *in_buff, char *out_buff) {
@@ -35573,123 +35881,16 @@ void cp1251_to_utf8(char *in_buff, char *out_buff) {
   int write_offset = 0;
   int i;
   unsigned char byte;
-  // 1251 byte, utf8 bytes (2/3), byte1, byte2, byte3
-  char byte_to_bytes[] = {
-    0x80, 2, 0xD0, 0x82, 0x00, // Ђ
-    0x81, 2, 0xD0, 0x83, 0x00, // Ѓ
-    0x82, 3, 0xE2, 0x80, 0x9A, // ‚
-    0x83, 2, 0xD1, 0x93, 0x00, // ѓ
-    0x84, 3, 0xE2, 0x80, 0x9E, // „
-    0x85, 3, 0xE2, 0x80, 0xA6, // …
-    0x86, 3, 0xE2, 0x80, 0xA0, // †
-    0x87, 3, 0xE2, 0x80, 0xA1, // ‡
-    0x88, 3, 0xE2, 0x82, 0xAC, // €
-    0x89, 3, 0xE2, 0x80, 0xB0, // ‰
-    0x8A, 2, 0xD0, 0x89, 0x00, // Љ
-    0x8B, 3, 0xE2, 0x80, 0xB9, // ‹
-    0x8C, 2, 0xD0, 0x8A, 0x00, // Њ
-    0x8D, 2, 0xD0, 0x8C, 0x00, // Ќ
-    0x8E, 2, 0xD0, 0x8B, 0x00, // Ћ
-    0x8F, 2, 0xD0, 0x8F, 0x00, // Џ
-    0x90, 2, 0xD1, 0x92, 0x00, // ђ
-    0x91, 3, 0xE2, 0x80, 0x98, // ‘
-    0x92, 3, 0xE2, 0x80, 0x99, // ’
-    0x93, 3, 0xE2, 0x80, 0x9C, // “
-    0x94, 3, 0xE2, 0x80, 0x9D, // ”
-    0x95, 3, 0xE2, 0x80, 0xA2, // •
-    0x96, 3, 0xE2, 0x80, 0x93, // –
-    0x97, 3, 0xE2, 0x80, 0x94, // —
-    0x98, 1, 0x20, 0x00, 0x00, //  
-    0x99, 3, 0xE2, 0x84, 0xA2, // ™
-    0x9A, 2, 0xD1, 0x99, 0x00, // љ
-    0x9B, 3, 0xE2, 0x80, 0xBA, // ›
-    0x9C, 2, 0xD1, 0x9A, 0x00, // њ
-    0x9D, 2, 0xD1, 0x9C, 0x00, // ќ
-    0x9E, 2, 0xD1, 0x9B, 0x00, // ћ
-    0x9F, 2, 0xD1, 0x9F, 0x00, // џ
-    0xA0, 2, 0xC2, 0xA0, 0x00, // NBSP
-    0xA1, 2, 0xD0, 0x8E, 0x00, // Ў
-    0xA2, 2, 0xD1, 0x9E, 0x00, // ў
-    0xA3, 2, 0xD0, 0x88, 0x00, // Ј
-    0xA4, 2, 0xC2, 0xA4, 0x00, // ¤
-    0xA5, 2, 0xD2, 0x90, 0x00, // Ґ
-    0xA6, 2, 0xC2, 0xA6, 0x00, // ¦
-    0xA7, 2, 0xC2, 0xA7, 0x00, // §
-    0xA8, 2, 0xD0, 0x81, 0x00, // Ё
-    0xA9, 2, 0xC2, 0xA9, 0x00, // ©
-    0xAA, 2, 0xD0, 0x84, 0x00, // Є
-    0xAB, 2, 0xC2, 0xAB, 0x00, // «
-    0xAC, 2, 0xC2, 0xAC, 0x00, // ¬
-    0xAD, 2, 0xC2, 0xAD, 0x00, // SHY
-    0xAE, 2, 0xC2, 0xAE, 0x00, // ®
-    0xAF, 2, 0xD0, 0x87, 0x00, // Ї
-    0xB0, 2, 0xC2, 0xB0, 0x00, // °
-    0xB1, 2, 0xC2, 0xB1, 0x00, // ±
-    0xB2, 2, 0xD0, 0x86, 0x00, // І
-    0xB3, 2, 0xD1, 0x96, 0x00, // і
-    0xB4, 2, 0xD2, 0x91, 0x00, // ґ
-    0xB5, 2, 0xC2, 0xB5, 0x00, // µ
-    0xB6, 2, 0xC2, 0xB6, 0x00, // ¶
-    0xB7, 2, 0xC2, 0xB7, 0x00, // ·
-    0xB8, 2, 0xD1, 0x91, 0x00, // ё
-    0xB9, 3, 0xE2, 0x84, 0x96, // №
-    0xBA, 2, 0xD1, 0x94, 0x00, // є
-    0xBB, 2, 0xC2, 0xBB, 0x00, // »
-    0xBC, 2, 0xD1, 0x98, 0x00, // ј
-    0xBD, 2, 0xD0, 0x85, 0x00, // Ѕ
-    0xBE, 2, 0xD1, 0x95, 0x00, // ѕ
-    0xBF, 2, 0xD1, 0x97, 0x00, // ї
-    0x00
-  };
+  char buff[10];
+  int utf8_int;
   int length = strlen(in_buff);
+
   while(read_offset < length) {
     byte = in_buff[read_offset];
     read_offset++;
 
-    if(byte <= 0x7F) {
-      out_buff[write_offset] = byte;
-      write_offset++;
-    }
-    else {
-      for(i = 0; byte_to_bytes[i] != 0x00; i += 5) {
-        if(byte_to_bytes[i] == byte) {
-          if(byte_to_bytes[i + 1] >= 1) {
-            out_buff[write_offset] = byte_to_bytes[i + 2];
-            write_offset++;
-          }
-          if(byte_to_bytes[i + 1] >= 2) {
-            out_buff[write_offset] = byte_to_bytes[i + 3];
-            write_offset++;
-          }
-          if(byte_to_bytes[i + 1] >= 3) {
-            out_buff[write_offset] = byte_to_bytes[i + 4];
-            write_offset++;
-          }
-          break;
-        }
-      }
-      // А-П
-      if(byte >= 0xC0 && byte <= 0xCF) {
-        out_buff[write_offset] = 0xD0;
-        write_offset++;
-        out_buff[write_offset] = 0x90 + byte - 0xC0;
-        write_offset++;
-      }
-      // Р-Я а-п
-      if(byte >= 0xD0 && byte <= 0xEF) {
-        out_buff[write_offset] = 0xD0;
-        write_offset++;
-        out_buff[write_offset] = 0xA0 + byte - 0xD0;
-        write_offset++;
-      }
-      // р-я
-      if(byte >= 0xF0 && byte <= 0xFF) {
-        out_buff[write_offset] = 0xD1;
-        write_offset++;
-        out_buff[write_offset] = 0x80 + byte - 0xF0;
-        write_offset++;
-      }
-    }
+    utf8_int = cp1251_to_utf8_int(byte);
+    write_offset += utf8_int_to_bytes(utf8_int, out_buff + write_offset);
   }
   out_buff[write_offset] = 0;
 }
