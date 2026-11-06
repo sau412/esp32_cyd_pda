@@ -209,6 +209,8 @@ Terminal controls:
 * sleep {seconds} - sleep for specific time in seconds
 * delay {milliseconds} - sleep for specific time in milliseconds
 * serial [-tx pin] [-rx pin] [speed] - connect to serial port
+* xmodem [-tx pin] [-rx pin] [speed] [send|receive] {file} - send or receive file via serial xmodem
+* matrix [-tx pin] [-rx pin] [speed] - emulate matrix orbital screen
 
 Random numbers:
 * random [from] [to] - generate random numbers (from and to included)
