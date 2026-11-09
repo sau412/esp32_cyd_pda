@@ -261,23 +261,23 @@
 2026-11-05 xmodem отправка, получение, life своё правило, не уходить в сон для блокировки экрана
 2026-11-06 LCDproc/LCD Smartie вывод данных команда matrix в терминале, новый способ конвертировать cp1251 в utf-8,
   заставка диаграммы Вороного
+2026-11-09 Показывать канал Wi-Fi, более красочный аттрактор Лоренца, заставка спирограф
 
 - новый обзор(ы)
 
 Улучшения тут и там:
+- Вынести самые длинные команды терминала в отдельные функции: cowsay, lsblk, deg, qth, stat, storage, ls, du, file, weather, chat
+- Finger
 - ymodem
 - tar
-- Вынести самые длинные команды терминала в отдельные функции
 - Bluetooth в отдельном потоке
 - Gemini
-- Finger
 - Простой HTTP браузер
 - Заставка Коралл (диффузионная агрегация)
-- Заставка Лиссажу спирограф
 - Приложение Графики функций
-- Заставка Аттрактор Клиффорда
-- Цвета и линии для аттрактора Лоренца
+- Терминал, фукнция установки значения в ini-файле
 
+- Заставка Аттрактор Клиффорда
 - Баг - буфер при создании новой таблицы не пустой? Мусор в ячейке, но не сразу. Вылет при сохранении (не воспроизвелось)
 - Убрать многоуровневые настройки (больше двух уровней)
 - Настройки - горизонтальный переход к сходным настройкам
@@ -2088,6 +2088,7 @@ const char global_terminal_help[] PROGMEM =
   "delay {milliseconds} - sleep for specific time in milliseconds\n"
   "serial [-tx pin] [-rx pin] [speed] - connect to serial port\n"
   "xmodem [-tx pin] [-rx pin] [speed] [send|receive] {file} - send or receive file via serial xmodem\n"
+  "matrix [-tx pin] [-rx pin] [speed] - emulate matrix orbital screen\n"
   "\n"
   "Random numbers:\n"
   "random [from] [to] - generate random numbers (from and to included)\n"
@@ -5421,6 +5422,8 @@ void terminal_execute_single(char *str) {
     sprintf(buff, "DNS IP: %s", WiFi.dnsIP().toString().c_str());
     terminal_println(buff);
     sprintf(buff, "RSSI: %d", WiFi.RSSI());
+    terminal_println(buff);
+    sprintf(buff, "Channel: %d (%d MHz)", WiFi.channel(), (WiFi.channel() == 14) ? 2484 : 2407 + WiFi.channel() * 5);
     terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "hostname") == 0) {
@@ -18691,6 +18694,7 @@ void screensaver(char mode, char *io_buff) {
     "Julia set",
     "Rule 30",
     "Voronoi diagrams",
+    "Spirograph",
     NULL
   };
   char app_icon[] = {
@@ -18786,6 +18790,10 @@ void screensaver(char mode, char *io_buff) {
       // Диаграммы Вороного
       if(button_pressed == 12) {
         screensaver_voronoi();
+      }
+      // Спирограф
+      if(button_pressed == 13) {
+        screensaver_spirograph();
       }
       clearScreen();
       drawAppTitle("Screensavers");
@@ -18888,42 +18896,150 @@ void screensaver_pendulum() {
   }
 }
 
-#define LORENZ_COUNT 80
-
 void screensaver_lorenz() {
-  float x[LORENZ_COUNT];
-  float y[LORENZ_COUNT];
-  float z[LORENZ_COUNT];
+    int spectre_colors[] = {
+  // BBBBBGGGGGGRRRRR
+    0b0000000000011111, //RED
+    0b0000001000011111,
+    0b0000010000011111,
+    0b0000011000011111,
+    0b0000011111111111,
+    0b0000011111111000,
+    0b0000011111110000,
+    0b0000011111101000,
+    0b0000011111100000, //GREEN
+    0b0100011111100000,
+    0b1000011111100000,
+    0b1100011111100000,
+    0b1111111111100000,
+    0b1111111000000000,
+    0b1111110000000000,
+    0b1111101000000000,
+    0b1111100000000000, //BLUE
+    0b1111100000001000,
+    0b1111100000010000,
+    0b1111100000011000,
+    0b1111100000011111,
+    0b1100000000011111,
+    0b1000000000011111,
+    0b0100000000011111,
+  };
+
+  float x, y, z;
+  float old_x, old_y, old_z;
   float dx;
   float dy;
   float dz;
   float sigma = 10;
   float r = 28;
   float b = 8 / 3;
+  long millis_start = millis();
+  long seconds = 0;
   int i;
 
-  for(i = 0; i < LORENZ_COUNT; i++) {
-    x[i] = (float)random(0, 100) - 50;
-    y[i] = (float)random(0, 100) - 50;
-    z[i] = (float)random(0, 100) - 50;
+  x = (float)random(0, 100) - 50;
+  y = (float)random(0, 100) - 50;
+  z = (float)random(0, 100) - 50;
+
+  old_x = x;
+  old_y = y;
+  old_z = z;
+
+  for(i = 0; i < 3000; i++) {
+    dx = sigma * (y - x);
+    dy = x * (r - z) - y;
+    dz = x * y - b * z;
+    x += dx / 1000;
+    y += dy / 1000;
+    z += dz / 1000;
   }
 
   disableAppTitle();
   tft.fillScreen(TFT_BLACK);
 
   while(1) {
-    for(i = 0; i < LORENZ_COUNT; i++) {
-      tft.drawPixel(tft.width() / 2 + x[i] * 6 - z[i] * 0, tft.height() / 2 - (z[i] * 3), TFT_BLACK);
-      dx = sigma * (y[i] - x[i]);
-      dy = x[i] * (r - z[i]) - y[i];
-      dz = x[i] * y[i] - b * z[i];
-      x[i] += dx / 1000;
-      y[i] += dy / 1000;
-      z[i] += dz / 1000;
-      tft.drawPixel(tft.width() / 2 + x[i] * 6 - z[i] * 0, tft.height() / 2 - (z[i] * 3), TFT_WHITE);
-      //Serial.printf("x = %f, y = %f, z = %f\n", x[i], y[i], z[i]);
-      //delay(1000);
+    seconds = (millis() - millis_start) / 1000;
+
+    dx = sigma * (old_y - old_x);
+    dy = old_x * (r - old_z) - old_y;
+    dz = old_x * old_y - b * old_z;
+    old_x += dx / 1000;
+    old_y += dy / 1000;
+    old_z += dz / 1000;
+    tft.drawPixel(tft.width() / 2 + old_x * 6 - old_z * 0, 2 * tft.height() / 3 - (old_z * 3), TFT_BLACK);
+
+    dx = sigma * (y - x);
+    dy = x * (r - z) - y;
+    dz = x * y - b * z;
+    x += dx / 1000;
+    y += dy / 1000;
+    z += dz / 1000;
+    tft.drawPixel(tft.width() / 2 + x * 6 - z * 0, 2 * tft.height() / 3 - (z * 3), spectre_colors[seconds % 24]);
+
+    //delayOrTouchWait(2);
+    if(touchCheckNowait()) {
+      touchWaitRelease();
+      return;
     }
+  }
+}
+
+void screensaver_spirograph() {
+    int spectre_colors[] = {
+  // BBBBBGGGGGGRRRRR
+    0b0000000000011111, //RED
+    0b0000001000011111,
+    0b0000010000011111,
+    0b0000011000011111,
+    0b0000011111111111,
+    0b0000011111111000,
+    0b0000011111110000,
+    0b0000011111101000,
+    0b0000011111100000, //GREEN
+    0b0100011111100000,
+    0b1000011111100000,
+    0b1100011111100000,
+    0b1111111111100000,
+    0b1111111000000000,
+    0b1111110000000000,
+    0b1111101000000000,
+    0b1111100000000000, //BLUE
+    0b1111100000001000,
+    0b1111100000010000,
+    0b1111100000011000,
+    0b1111100000011111,
+    0b1100000000011111,
+    0b1000000000011111,
+    0b0100000000011111,
+  };
+
+  float x, y;
+  float a, b, c;
+  long millis_start = millis();
+  float arg = 0;
+  float arg2 = 0;
+  int i;
+
+  a = tft.width() / 4 - 2;
+  b = random(1, 10);
+  c = random(1, 10);
+
+  disableAppTitle();
+  tft.fillScreen(TFT_BLACK);
+
+  while(1) {
+    if(millis() - millis_start > 60000) {
+      tft.fillScreen(TFT_BLACK);
+      b = random(2, 12);
+      c = random(2, 12);
+      millis_start = millis();
+    }
+    arg = (1.0 * millis() - millis_start) / 1000;
+
+    x = a * sin(b * arg) + a * sin(c * arg) / 2;
+    y = a * cos(b * arg) + a * cos(c * arg) / 2;
+    tft.drawPixel(tft.width() / 2 + x, tft.height() / 2 - y, spectre_colors[((int)(arg * 10)) % 24]);
+
     //delayOrTouchWait(2);
     if(touchCheckNowait()) {
       touchWaitRelease();
@@ -20810,6 +20926,9 @@ void wifi_network_info() {
       tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
       screen_offset += 16;
       sprintf(buff, "RSSI: %d (%d%%)  ", WiFi.RSSI(), constrain(2 * (WiFi.RSSI() + 100), 0, 100));
+      tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
+      screen_offset += 16;
+      sprintf(buff, "Channel: %d (%d MHz)", WiFi.channel(), (WiFi.channel() == 14) ? 2484 : 2407 + WiFi.channel() * 5);
       tft.drawString(buff, 8, screen_offset, FONT_DEFAULT);
       screen_offset += 16;
       sprintf(buff, "My MAC: %02x:%02x:%02x:%02x:%02x:%02x  ", WiFi.macAddress()[0], WiFi.macAddress()[1], WiFi.macAddress()[2], WiFi.macAddress()[3], WiFi.macAddress()[4], WiFi.macAddress()[5]);
