@@ -262,12 +262,12 @@
 2026-11-06 LCDproc/LCD Smartie вывод данных команда matrix в терминале, новый способ конвертировать cp1251 в utf-8,
   заставка диаграммы Вороного
 2026-11-09 Показывать канал Wi-Fi, более красочный аттрактор Лоренца, заставка спирограф
+2026-11-10 Вынести самые длинные команды терминала в отдельные функции: cowsay, lsblk, deg, qth, stat, storage, ls, du, file, weather, chat,
+  команда ini для терминала, finger клиент, улучшение спирографа
 
 - новый обзор(ы)
 
 Улучшения тут и там:
-- Вынести самые длинные команды терминала в отдельные функции: cowsay, lsblk, deg, qth, stat, storage, ls, du, file, weather, chat
-- Finger
 - ymodem
 - tar
 - Bluetooth в отдельном потоке
@@ -275,7 +275,6 @@
 - Простой HTTP браузер
 - Заставка Коралл (диффузионная агрегация)
 - Приложение Графики функций
-- Терминал, фукнция установки значения в ini-файле
 
 - Заставка Аттрактор Клиффорда
 - Баг - буфер при создании новой таблицы не пустой? Мусор в ячейке, но не сразу. Вылет при сохранении (не воспроизвелось)
@@ -2225,6 +2224,7 @@ const char global_terminal_help[] PROGMEM =
   "brainfuck {file_path} - brainfuck interpreter\n"
   "basic {file_path} - BASIC interpreter\n"
   "touch {file_path} - crete empty file\n"
+  "ini {file_path} {key} [value] - get and set values in ini file\n"
   "ffat_to_sd {ffat_filename} {sd_filename} - copy file from ffat to SD\n"
   "sd_to_ffat {sd_filename} {ffat_filename} - copy file from SD to ffat\n"
   "utf8_to_cp1251 {input_filename} [output_filename] - change file encoding from UTF-8 to cp1251\n"
@@ -2276,6 +2276,7 @@ const char global_terminal_help[] PROGMEM =
   "chat [{nick} {message}]- chat read and post\n"
   "ruf - random useless fact\n"
   "iperf {host} [port] - iperf 2 client\n"
+  "finger {host[:port]} [query] - finger client\n"
   "help - show current help\n"
   "app {app_name} - run GUI app with app name\n"
   "Any other command - try to find file with that name in /Terminal and execute it.\n"
@@ -3279,33 +3280,7 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: cowsay {text}");
     }
     else {
-      strcpy(buff, "");
-      for(i = 1; i < arg_count; i++) {
-        if(i > 1) strcat(buff, " ");
-        strcat(buff, cmdline_params[i]);
-      }
-
-      terminal_print(" ");
-      for(i = 1; i <= strlen(buff) + 2; i++) {
-        terminal_print("_");
-      }
-      terminal_println("");
-
-      terminal_print("< ");
-      terminal_print(buff);
-      terminal_println(" >");
-
-      terminal_print(" ");
-      for(i = 1; i <= strlen(buff) + 2; i++) {
-        terminal_print("-");
-      }
-      terminal_println("");
-      terminal_println("    \\   ^__^");
-      terminal_println("     \\  (oo)\\_______");
-      terminal_println("        (__)\\       )\\/\\");
-      terminal_println("            ||----w |");
-      terminal_println("            ||     ||");
-      
+      terminal_cowsay(arg_count, cmdline_params);
     }
   }
   else if(strcmp(cmdline_params[0], "caesar") == 0) {
@@ -3383,47 +3358,7 @@ void terminal_execute_single(char *str) {
     terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "lsblk") == 0) {
-    sprintf(buff, "Flash chip size: %d bytes", ESP.getFlashChipSize());
-    terminal_println(buff);
-    sprintf(buff, "Flash chip speed: %d Hz", ESP.getFlashChipSpeed());
-    terminal_println(buff);
-    terminal_print("Flash chip mode: ");
-    switch (ESP.getFlashChipMode()) {
-      case FM_QIO:  terminal_println("QIO (Quad I/O)"); break;
-      case FM_QOUT: terminal_println("QOUT (Quad Output)"); break;
-      case FM_DIO:  terminal_println("DIO (Dual I/O)"); break;
-      case FM_DOUT: terminal_println("DOUT (Dual Output)"); break;
-      case FM_FAST_READ: terminal_println("FAST_READ"); break;
-      case FM_SLOW_READ: terminal_println("SLOW_READ"); break;
-      default:      terminal_println("UNKNOWN"); break;
-    }
-
-    // Partitions
-    esp_partition_type_t types[] = {ESP_PARTITION_TYPE_APP, ESP_PARTITION_TYPE_DATA};
-
-    for (int i = 0; i < 2; i++) {
-      // Find first partition matching the type
-      esp_partition_iterator_t it = esp_partition_find(types[i], ESP_PARTITION_SUBTYPE_ANY, NULL);
-      
-      while (it != NULL) {
-        // Get pointer to the actual partition info structure
-        const esp_partition_t *part = esp_partition_get(it);
-        
-        if (part != NULL) {
-          sprintf(buff, "Type %s subtype 0x%02X addr 0x%06X",
-                        part->type == ESP_PARTITION_TYPE_APP ? "APP" : "DATA",
-                        part->subtype,
-                        part->address);
-          terminal_println(buff);
-          sprintf(buff, "Size: %d b, label %s",
-                        part->size,
-                        part->label);
-          terminal_println(buff);
-        }
-        // Move to the next partition entry
-        it = esp_partition_next(it);
-      }
-    }
+    terminal_lsblk();
   }
   else if(strcmp(cmdline_params[0], "colors") == 0) {
     for(i2 = 0; i2 < 16; i2++) {
@@ -3677,33 +3612,7 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: deg {degrees|deg min sec}");
     }
     else {
-      // Если есть десятичная точка в первом и единственном аргументе
-      if(arg_count == 2 && strchr(cmdline_params[1], '.')) {
-        char sign = 0;
-        d1 = strtod(cmdline_params[1], NULL);
-        if(d1 < 0) {
-          sign = 1;
-          d1 = abs(d1);
-        }
-        i1 = floor(d1); // Целая часть - градусы
-        d2 = fmod(d1, 1); // Дробная часть это минуты и секунды
-        i2 = floor(d2 * 60); // Минуты - дробная часть на 60
-        d3 = 60.0 * fmod(d2 * 60, 1); // Секунды - остаток от деления на 60
-        sprintf(buff, "%s%d deg %d min %g sec", sign ? "-" : "", i1, i2, d3);
-      }
-      else {
-        d1 = strtod(cmdline_params[1], NULL);
-        d2 = 0;
-        if(arg_count >= 3) {
-          d2 = strtod(cmdline_params[2], NULL);
-        }
-        d3 = 0;
-        if(arg_count == 4) {
-          d3 = strtod(cmdline_params[3], NULL);
-        }
-        sprintf(buff, "%g deg", d1 + d2 / 60 + d3 / 3600);
-      }
-      terminal_println(buff);
+      terminal_deg(arg_count, cmdline_params);
     }
   }
   else if(strcmp(cmdline_params[0], "degrad") == 0) {
@@ -3789,86 +3698,7 @@ void terminal_execute_single(char *str) {
     }
   }
   else if(strcmp(cmdline_params[0], "qth") == 0) {
-    double lat, lon;
-    if(arg_count == 2) {
-      // Обратное преобразование, из QTH-локатора в координаты
-      double dist_lat = 0, dist_lon = 0;
-      qth_to_lat_lon(cmdline_params[1], &lat, &lon, &dist_lat, &dist_lon);
-      sprintf(buff, "Center: lat %g, lon %g", lat, lon);
-      terminal_println(buff);
-
-      // Погрешность
-      terminal_println("Uncertainty:");
-      sprintf(buff, "Lat %c%g deg, %c%g km", 0xB1, dist_lat, 0xB1, 110.62 * dist_lat);
-      terminal_println(buff);
-      sprintf(buff, "Lon %c%g deg, %c%g km", 0xB1, dist_lon, 0xB1, 111.32 * cos(PI * lat / 180) * dist_lon);
-      terminal_println(buff);
-    }
-    else {
-      if(arg_count == 1) {
-        lat = global_lat;
-        lon = global_lon;
-      }
-      else {
-        lat = strtod(cmdline_params[1], NULL);
-        lon = strtod(cmdline_params[2], NULL);
-      }
-      sprintf(buff, "Coordinates: lat %g, lon %g", lat, lon);
-      terminal_println(buff);
-      terminal_print("QTH: ");
-
-      strcpy(buff, "");
-      j = 0;
-      d1 = 180 + global_lon;
-      d2 = 90 + global_lat;
-      
-      // Первые две буквы (большие)
-      i = d1 / 20;
-      d1 = fmod(d1, 20);
-      buff[j] = 'A' + i;
-      j++;
-
-      i = d2 / 10;
-      d2 = fmod(d2, 10);
-      buff[j] = 'A' + i;
-      j++;
-
-      // Две цифры
-      i = d1 / 2;
-      d1 = fmod(d1, 2);
-      buff[j] = '0' + i;
-      j++;
-
-      i = d2 / 1;
-      d2 = fmod(d2, 1);
-      buff[j] = '0' + i;
-      j++;
-
-      // Две маленькие буквы
-      i = d1 * 12;
-      d1 = fmod(d1, 1.0 / 12);
-      buff[j] = 'a' + i;
-      j++;
-
-      i = d2 * 24;
-      d2 = fmod(d2, 1.0 / 24);
-      buff[j] = 'a' + i;
-      j++;
-
-      // Ещё две цифры
-      i = d1 * 120;
-      buff[j] = '0' + i;
-      j++;
-
-      i = d2 * 240;
-      buff[j] = '0' + i;
-      j++;
-
-      // Ну и хватит
-      buff[j] = 0;
-
-      terminal_println(buff);
-    }
+    terminal_qth(arg_count, cmdline_params);
   }
   // ======================================================
   // Математика, статистика
@@ -3960,72 +3790,7 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: stat {number} [number] ...");
     }
     else {
-      double sum = 0;
-      double sumsq = 0;
-      double avg = 0;
-      double prod = 1;
-      double min_val = 0;
-      double max_val = 0;
-      double disp = 0;
-      double m3 = 0, m4 = 0;
-      long count = 0;
-      for(i = 1; i < arg_count; i++) {
-        d1 = strtod(cmdline_params[i], NULL);
-        sum += d1;
-        sumsq += d1 * d1;
-        prod *= d1;
-        count++;
-        if(i == 1) {
-          min_val = d1;
-          max_val = d1;
-        }
-        else {
-          min_val = min(min_val, d1);
-          max_val = max(max_val, d1);
-        }
-      }
-      avg = sum / count;
-      // Второй проход для дисперсии
-      for(i = 1; i < arg_count; i++) {
-        d1 = strtod(cmdline_params[i], NULL);
-        disp += (avg - d1) * (avg - d1);
-        m3 += (avg - d1) * (avg - d1) * (avg - d1);
-        m4 += (avg - d1) * (avg - d1) * (avg - d1) * (avg - d1);
-      }
-      disp /= count;
-      m3 /= count;
-      m4 /= count;
-      sprintf(buff, "Count = %d", count);
-      terminal_println(buff);
-      sprintf(buff, "Sum = %g", sum);
-      terminal_println(buff);
-      sprintf(buff, "Avg = %g", avg);
-      terminal_println(buff);
-      sprintf(buff, "Sum of squares = %g", sumsq);
-      terminal_println(buff);
-      sprintf(buff, "Product = %g", prod);
-      terminal_println(buff);
-      sprintf(buff, "Min = %g", min_val);
-      terminal_println(buff);
-      sprintf(buff, "Max = %g", max_val);
-      terminal_println(buff);
-      sprintf(buff, "Variance = %g", disp);
-      terminal_println(buff);
-      sprintf(buff, "Standard deviation = %g", sqrt(disp));
-      terminal_println(buff);
-      sprintf(buff, "Third central moment = %g", m3);
-      terminal_println(buff);
-      sprintf(buff, "Fourth central moment = %g", m4);
-      terminal_println(buff);
-      if(disp != 0) {
-        sprintf(buff, "Skewness = %g", m3 / sqrt(disp * disp * disp));
-        terminal_println(buff);
-        sprintf(buff, "Kurtosis = %g", m4 / (disp * disp));
-        terminal_println(buff);
-      }
-      else {
-        terminal_println("Dispersion is zero, no skewness and kurtosis");
-      }
+      terminal_stat(arg_count, cmdline_params);
     }
   }
   else if(strcmp(cmdline_params[0], "det") == 0) {
@@ -4479,31 +4244,7 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: storage {ffat|sd|none}");
     }
     else {
-      if(storage_type == STORAGE_TYPE_FFAT) {
-        FFat.end();
-        storage_type = STORAGE_TYPE_NONE;
-      }
-      if(storage_type == STORAGE_TYPE_SD) {
-        SD.end();
-        storage_type = STORAGE_TYPE_NONE;
-      }
-      if(strcmp(cmdline_params[1], "ffat") == 0) {
-        storage_type = STORAGE_TYPE_FFAT;
-        FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
-        Storage = &FFat;
-      }
-      else if(strcmp(cmdline_params[1], "sd") == 0) {
-        storage_type = STORAGE_TYPE_SD;
-        SD.begin(SD_CS, sdSPI);
-        Storage = &SD;
-      }
-      else if(strcmp(cmdline_params[1], "none") == 0) {
-        storage_type = STORAGE_TYPE_NONE;
-        Storage = NULL;
-      }
-      else {
-        terminal_println("Unknown storage type");
-      }
+      terminal_storage(arg_count, cmdline_params);
     }
   }
   else if(strcmp(cmdline_params[0], "df") == 0) {
@@ -4618,59 +4359,14 @@ void terminal_execute_single(char *str) {
     terminal_println(buff);
   }
   else if(strcmp(cmdline_params[0], "ls") == 0) {
-    if(arg_count != 2) {
-      strcpy(buff, terminal_current_path);
-    }
-    else {
-      cp1251_to_utf8(cmdline_params[1], buff);
-      strcpy(buff2, buff);
-      terminal_get_file_path_with_current_path(buff2, buff);
-    }
-    current_dir = Storage->open(buff);
-    if(current_dir && current_dir.isDirectory()) {
-      i1 = 0;
-      while(file = current_dir.openNextFile()) {
-        strcpy(buff, file.name());
-        utf8_to_cp1251(buff);
-        if(i1 + strlen(buff) >= 40) {
-          terminal_println("");
-          i1 = 0;
-        }
-        terminal_print(buff);
-        i1 += strlen(buff) + 2;
-        terminal_print("  ");
-      }
-      if(i1 > 0) {
-        terminal_println("");
-      }
-    }
-    else {
-      terminal_println("Unable to open directory");
-    }
+    terminal_ls(arg_count, cmdline_params);
   }
   else if(strcmp(cmdline_params[0], "du") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: du {directory|file}");
     }
     else {
-      cp1251_to_utf8(cmdline_params[1], buff);
-      strcpy(buff2, buff);
-      terminal_get_file_path_with_current_path(buff2, buff);
-      ll = size_recursive(Storage, buff);
-      if(ll >= (4096LL * 1024 * 1024)) {
-        sprintf(buff, "%d GiB", ll / (1024 * 1024 * 1024));
-      }
-      else if(ll >= (4096LL * 1024)) {
-        sprintf(buff, "%d MiB", ll / (1024 * 1024));
-      }
-      else if(ll >= 4096) {
-        sprintf(buff, "%d kiB", ll / (1024));
-      }
-      else {
-        sprintf(buff, "%d bytes", ll);
-      }
-      //sprintf(buff, "%d bytes", i1);
-      terminal_println(buff);
+      terminal_du(arg_count, cmdline_params);
     }
   }
   else if(strcmp(cmdline_params[0], "mkdir") == 0) {
@@ -4775,50 +4471,7 @@ void terminal_execute_single(char *str) {
       terminal_println("Usage: file {file}");
     }
     else {
-      if(!Storage) {
-        terminal_println("No storage");
-      }
-      else {
-        cp1251_to_utf8(cmdline_params[1], buff);
-        strcpy(buff2, buff);
-        terminal_get_file_path_with_current_path(buff2, buff);
-        if(!Storage->exists(buff)) {
-          terminal_println("File not exists");
-        }
-        else if(is_empty_directory(buff)) {
-          terminal_println("Empty directory");
-        }
-        else if(is_directory(buff)) {
-          terminal_println("Directory");
-        }
-        else if(is_empty_file(buff)) {
-          terminal_println("Empty file");
-        }
-        else if(is_bmp_file(buff)) {
-          terminal_println("BMP image");
-        }
-        else if(is_png_file(buff)) {
-          terminal_println("PNG image");
-        }
-        else if(is_jpeg_file(buff)) {
-          terminal_println("JPEG image");
-        }
-        else if(is_webp_file(buff)) {
-          terminal_println("WEBP image");
-        }
-        else if(is_mp3_file(buff)) {
-          terminal_println("MP3 sound");
-        }
-        else if(is_wav_file(buff)) {
-          terminal_println("WAV sound");
-        }
-        else if(is_binary_file(buff)) {
-          terminal_println("Binary file");
-        }
-        else {
-          terminal_println("Text file");
-        }
-      }
+      terminal_file(arg_count, cmdline_params);
     }
   }
   else if(strcmp(cmdline_params[0], "cat") == 0) {
@@ -5047,6 +4700,29 @@ void terminal_execute_single(char *str) {
       }
       else {
         terminal_println("File not found");
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "ini") == 0) {
+    if(arg_count < 3) {
+      terminal_println("Usage: ini {filename} {variable} [value]");
+    }
+    else if(arg_count == 3 || arg_count == 4) {
+      cp1251_to_utf8(cmdline_params[1], buff);
+      strcpy(buff2, buff);
+      terminal_get_file_path_with_current_path(buff2, buff);
+      if(arg_count == 3) {
+        read_key_value_from_file(buff, cmdline_params[2], buff);
+        terminal_println(buff);
+      }
+      else {
+        error = write_key_value_to_file(buff, cmdline_params[2], cmdline_params[3]);
+        if(error == 1) {
+          terminal_println("Success");
+        }
+        else {
+          terminal_println("Error");
+        }
       }
     }
   }
@@ -5576,98 +5252,10 @@ void terminal_execute_single(char *str) {
     }
   }
   else if(strcmp(cmdline_params[0], "weather") == 0) {
-    char temp[20];
-    char wind[20];
-    char weather_text[80];
-    double lat, lon;
-    int result = 0;
-    lat = global_lat;
-    lon = global_lon;
-    if(arg_count == 2) {
-      qth_to_lat_lon(cmdline_params[1], &lat, &lon, NULL, NULL);
-    }
-    if(arg_count == 3) {
-      lat = strtod(cmdline_params[1], NULL);
-      lon = strtod(cmdline_params[2], NULL);
-    }
-    sprintf(buff, "Getting at: lat %g, lon %g", lat, lon);
-    terminal_println(buff);
-    terminal_show_screen();
-
-    result = weather_get(lat, lon, temp, wind, weather_text);
-    if(result) {
-      sprintf(buff, "Temp: %s C, wind %s m/s", temp, wind);
-      terminal_println(buff);
-      terminal_println(weather_text);
-    }
-    else {
-      terminal_println("Unable to get weather");
-    }
+    terminal_weather(arg_count, cmdline_params);
   }
   else if(strcmp(cmdline_params[0], "chat") == 0) {
-    if(arg_count == 1) {
-      // Чтение чата
-      char *messages;
-      messages = (char *)malloc(5000 * sizeof(char));
-      if(messages) {
-        if(get_file_https("https://arikado.xyz/cyd/chat_data.txt", messages, 5000) == 200) {
-          i = 0;
-          j = 0;
-
-          for(i1 = 0; i1 < strlen(messages); i1++) {
-            byte = messages[i1];
-            if(byte == '\n' && messages[i1 + 1] == '\r') {
-              i1++;
-            }
-            else if(byte == '\r' && messages[i1 + 1] == '\n') {
-              i1++;
-            }
-            
-            if(byte == '\r' || byte == '\n') {
-              terminal_println("");
-              i = 0;
-              j++;
-              if(j > 15) break;
-              continue;
-            }
-            else {
-              terminal_print_char(byte);
-            }
-            i++;
-            if(i == 40) {
-              i = 0;
-              j++;
-              if(j > 15) break;
-            }
-          }
-        }
-        else {
-          terminal_println("Unable to get messages");
-        }
-        free(messages);
-      }
-      else {
-        terminal_println("Unable to reserve memory");
-      }
-    }
-    else if(arg_count == 3) {
-      error = chat_send_message(cmdline_params[1], cmdline_params[2], buff);
-      if(error == 200) {
-        terminal_println("Message sent");
-      }
-      else {
-        if(error > 0) {
-          sprintf(buff, "HTTP code %s", error);
-        }
-        else {
-          http_get_error_text(error, buff);
-        }
-        terminal_println(buff);
-      }
-    }
-    else {
-      terminal_println("chat [{nick} {message}]");
-    }
+    terminal_chat(arg_count, cmdline_params);
   }
   else if(strcmp(cmdline_params[0], "ruf") == 0) {
     if(get_random_useless_fact(buff) == 200) {
@@ -5680,6 +5268,7 @@ void terminal_execute_single(char *str) {
   }
   else if(strcmp(cmdline_params[0], "iperf") == 0) {
     if(arg_count == 1) {
+      terminal_println("Usage: iperf {host} [port]");
     }
     else {
       if(arg_count == 2) {
@@ -5687,6 +5276,19 @@ void terminal_execute_single(char *str) {
       }
       else {
         terminal_iperf_client(cmdline_params[1], cmdline_params[2]);
+      }
+    }
+  }
+  else if(strcmp(cmdline_params[0], "finger") == 0) {
+    if(arg_count == 1) {
+      terminal_println("Usage: finger {host[:port]} [query]");
+    }
+    else {
+      if(arg_count == 2) {
+        terminal_finger(cmdline_params[1], NULL);
+      }
+      else {
+        terminal_finger(cmdline_params[1], cmdline_params[2]);
       }
     }
   }
@@ -6067,6 +5669,121 @@ void terminal_cd(char *next_path, char suppress_output) {
       terminal_println(buff);
     }
   }
+}
+
+int terminal_ls(int arg_count, char *cmdline_params[]) {
+  int i1;
+  char buff[160];
+  char buff2[160];
+  fs::File current_dir, file;
+
+  if(arg_count != 2) {
+    strcpy(buff, terminal_current_path);
+  }
+  else {
+    cp1251_to_utf8(cmdline_params[1], buff);
+    strcpy(buff2, buff);
+    terminal_get_file_path_with_current_path(buff2, buff);
+  }
+  current_dir = Storage->open(buff);
+  if(current_dir && current_dir.isDirectory()) {
+    i1 = 0;
+    while(file = current_dir.openNextFile()) {
+      strcpy(buff, file.name());
+      utf8_to_cp1251(buff);
+      if(i1 + strlen(buff) >= 40) {
+        terminal_println("");
+        i1 = 0;
+      }
+      terminal_print(buff);
+      i1 += strlen(buff) + 2;
+      terminal_print("  ");
+    }
+    if(i1 > 0) {
+      terminal_println("");
+    }
+  }
+  else {
+    terminal_println("Unable to open directory");
+  }
+
+  return 0;
+}
+
+int terminal_du(int arg_count, char *cmdline_params[]) {
+  char buff[160];
+  char buff2[160];
+  long long ll;
+
+  cp1251_to_utf8(cmdline_params[1], buff);
+  strcpy(buff2, buff);
+  terminal_get_file_path_with_current_path(buff2, buff);
+  ll = size_recursive(Storage, buff);
+  if(ll >= (4096LL * 1024 * 1024)) {
+    sprintf(buff, "%d GiB", ll / (1024 * 1024 * 1024));
+  }
+  else if(ll >= (4096LL * 1024)) {
+    sprintf(buff, "%d MiB", ll / (1024 * 1024));
+  }
+  else if(ll >= 4096) {
+    sprintf(buff, "%d kiB", ll / (1024));
+  }
+  else {
+    sprintf(buff, "%d bytes", ll);
+  }
+  terminal_println(buff);
+  
+  return 0;
+}
+
+int terminal_file(int arg_count, char *cmdline_params[]) {
+  char buff[160];
+  char buff2[160];
+  if(!Storage) {
+    terminal_println("No storage");
+  }
+  else {
+    cp1251_to_utf8(cmdline_params[1], buff);
+    strcpy(buff2, buff);
+    terminal_get_file_path_with_current_path(buff2, buff);
+    if(!Storage->exists(buff)) {
+      terminal_println("File not exists");
+    }
+    else if(is_empty_directory(buff)) {
+      terminal_println("Empty directory");
+    }
+    else if(is_directory(buff)) {
+      terminal_println("Directory");
+    }
+    else if(is_empty_file(buff)) {
+      terminal_println("Empty file");
+    }
+    else if(is_bmp_file(buff)) {
+      terminal_println("BMP image");
+    }
+    else if(is_png_file(buff)) {
+      terminal_println("PNG image");
+    }
+    else if(is_jpeg_file(buff)) {
+      terminal_println("JPEG image");
+    }
+    else if(is_webp_file(buff)) {
+      terminal_println("WEBP image");
+    }
+    else if(is_mp3_file(buff)) {
+      terminal_println("MP3 sound");
+    }
+    else if(is_wav_file(buff)) {
+      terminal_println("WAV sound");
+    }
+    else if(is_binary_file(buff)) {
+      terminal_println("Binary file");
+    }
+    else {
+      terminal_println("Text file");
+    }
+  }
+  return 0;
 }
 
 void terminal_print(char *string) {
@@ -7332,6 +7049,315 @@ void terminal_stack_unshift(char *str) {
   file.close();
 
   free(buff);
+}
+
+int terminal_cowsay(int arg_count, char *cmdline_params[]) {
+  int i;
+  char buff[160];
+  strcpy(buff, "");
+  for(i = 1; i < arg_count; i++) {
+    if(i > 1) strcat(buff, " ");
+    strcat(buff, cmdline_params[i]);
+  }
+
+  terminal_print(" ");
+  for(i = 1; i <= strlen(buff) + 2; i++) {
+    terminal_print("_");
+  }
+  terminal_println("");
+
+  terminal_print("< ");
+  terminal_print(buff);
+  terminal_println(" >");
+
+  terminal_print(" ");
+  for(i = 1; i <= strlen(buff) + 2; i++) {
+    terminal_print("-");
+  }
+  terminal_println("");
+  terminal_println("    \\   ^__^");
+  terminal_println("     \\  (oo)\\_______");
+  terminal_println("        (__)\\       )\\/\\");
+  terminal_println("            ||----w |");
+  terminal_println("            ||     ||");
+
+  return 0;
+}
+
+int terminal_lsblk() {
+  char buff[80];
+  int i;
+
+  sprintf(buff, "Flash chip size: %d bytes", ESP.getFlashChipSize());
+  terminal_println(buff);
+  sprintf(buff, "Flash chip speed: %d Hz", ESP.getFlashChipSpeed());
+  terminal_println(buff);
+  terminal_print("Flash chip mode: ");
+  switch (ESP.getFlashChipMode()) {
+    case FM_QIO:  terminal_println("QIO (Quad I/O)"); break;
+    case FM_QOUT: terminal_println("QOUT (Quad Output)"); break;
+    case FM_DIO:  terminal_println("DIO (Dual I/O)"); break;
+    case FM_DOUT: terminal_println("DOUT (Dual Output)"); break;
+    case FM_FAST_READ: terminal_println("FAST_READ"); break;
+    case FM_SLOW_READ: terminal_println("SLOW_READ"); break;
+    default:      terminal_println("UNKNOWN"); break;
+  }
+
+  // Partitions
+  esp_partition_type_t types[] = {ESP_PARTITION_TYPE_APP, ESP_PARTITION_TYPE_DATA};
+
+  for (int i = 0; i < 2; i++) {
+    // Find first partition matching the type
+    esp_partition_iterator_t it = esp_partition_find(types[i], ESP_PARTITION_SUBTYPE_ANY, NULL);
+    
+    while (it != NULL) {
+      // Get pointer to the actual partition info structure
+      const esp_partition_t *part = esp_partition_get(it);
+      
+      if (part != NULL) {
+        sprintf(buff, "Type %s subtype 0x%02X addr 0x%06X",
+                      part->type == ESP_PARTITION_TYPE_APP ? "APP" : "DATA",
+                      part->subtype,
+                      part->address);
+        terminal_println(buff);
+        sprintf(buff, "Size: %d b, label %s",
+                      part->size,
+                      part->label);
+        terminal_println(buff);
+      }
+      // Move to the next partition entry
+      it = esp_partition_next(it);
+    }
+  }
+
+  return 0;
+}
+
+int terminal_deg(int arg_count, char *cmdline_params[]) {
+  char buff[80];
+  long d1, d2, d3;
+  int i1, i2;
+  // Если есть десятичная точка в первом и единственном аргументе
+  if(arg_count == 2 && strchr(cmdline_params[1], '.')) {
+    char sign = 0;
+    d1 = strtod(cmdline_params[1], NULL);
+    if(d1 < 0) {
+      sign = 1;
+      d1 = abs(d1);
+    }
+    i1 = floor(d1); // Целая часть - градусы
+    d2 = fmod(d1, 1); // Дробная часть это минуты и секунды
+    i2 = floor(d2 * 60); // Минуты - дробная часть на 60
+    d3 = 60.0 * fmod(d2 * 60, 1); // Секунды - остаток от деления на 60
+    sprintf(buff, "%s%d deg %d min %g sec", sign ? "-" : "", i1, i2, d3);
+  }
+  else {
+    d1 = strtod(cmdline_params[1], NULL);
+    d2 = 0;
+    if(arg_count >= 3) {
+      d2 = strtod(cmdline_params[2], NULL);
+    }
+    d3 = 0;
+    if(arg_count == 4) {
+      d3 = strtod(cmdline_params[3], NULL);
+    }
+    sprintf(buff, "%g deg", d1 + d2 / 60 + d3 / 3600);
+  }
+  terminal_println(buff);
+}
+
+int terminal_qth(int arg_count, char *cmdline_params[]) {
+  char buff[80];
+  double d1, d2;
+  int i, j;
+  double lat, lon;
+  double dist_lat = 0, dist_lon = 0;
+
+  if(arg_count == 2) {
+    // Обратное преобразование, из QTH-локатора в координаты
+    qth_to_lat_lon(cmdline_params[1], &lat, &lon, &dist_lat, &dist_lon);
+    sprintf(buff, "Center: lat %g, lon %g", lat, lon);
+    terminal_println(buff);
+
+    // Погрешность
+    terminal_println("Uncertainty:");
+    sprintf(buff, "Lat %c%g deg, %c%g km", 0xB1, dist_lat, 0xB1, 110.62 * dist_lat);
+    terminal_println(buff);
+    sprintf(buff, "Lon %c%g deg, %c%g km", 0xB1, dist_lon, 0xB1, 111.32 * cos(PI * lat / 180) * dist_lon);
+    terminal_println(buff);
+  }
+  else {
+    if(arg_count == 1) {
+      lat = global_lat;
+      lon = global_lon;
+    }
+    else {
+      lat = strtod(cmdline_params[1], NULL);
+      lon = strtod(cmdline_params[2], NULL);
+    }
+    sprintf(buff, "Coordinates: lat %g, lon %g", lat, lon);
+    terminal_println(buff);
+    terminal_print("QTH: ");
+
+    strcpy(buff, "");
+    j = 0;
+    d1 = 180 + global_lon;
+    d2 = 90 + global_lat;
+    
+    // Первые две буквы (большие)
+    i = d1 / 20;
+    d1 = fmod(d1, 20);
+    buff[j] = 'A' + i;
+    j++;
+
+    i = d2 / 10;
+    d2 = fmod(d2, 10);
+    buff[j] = 'A' + i;
+    j++;
+
+    // Две цифры
+    i = d1 / 2;
+    d1 = fmod(d1, 2);
+    buff[j] = '0' + i;
+    j++;
+
+    i = d2 / 1;
+    d2 = fmod(d2, 1);
+    buff[j] = '0' + i;
+    j++;
+
+    // Две маленькие буквы
+    i = d1 * 12;
+    d1 = fmod(d1, 1.0 / 12);
+    buff[j] = 'a' + i;
+    j++;
+
+    i = d2 * 24;
+    d2 = fmod(d2, 1.0 / 24);
+    buff[j] = 'a' + i;
+    j++;
+
+    // Ещё две цифры
+    i = d1 * 120;
+    buff[j] = '0' + i;
+    j++;
+
+    i = d2 * 240;
+    buff[j] = '0' + i;
+    j++;
+
+    // Ну и хватит
+    buff[j] = 0;
+
+    terminal_println(buff);
+  }
+
+  return 0;
+}
+
+int terminal_stat(int arg_count, char *cmdline_params[]) {
+  int i;
+  double sum = 0;
+  double sumsq = 0;
+  double avg = 0;
+  double prod = 1;
+  double min_val = 0;
+  double max_val = 0;
+  double disp = 0;
+  double m3 = 0, m4 = 0;
+  double d1;
+  char buff[80];
+  long count = 0;
+
+  for(i = 1; i < arg_count; i++) {
+    d1 = strtod(cmdline_params[i], NULL);
+    sum += d1;
+    sumsq += d1 * d1;
+    prod *= d1;
+    count++;
+    if(i == 1) {
+      min_val = d1;
+      max_val = d1;
+    }
+    else {
+      min_val = min(min_val, d1);
+      max_val = max(max_val, d1);
+    }
+  }
+  avg = sum / count;
+  // Второй проход для дисперсии
+  for(i = 1; i < arg_count; i++) {
+    d1 = strtod(cmdline_params[i], NULL);
+    disp += (avg - d1) * (avg - d1);
+    m3 += (avg - d1) * (avg - d1) * (avg - d1);
+    m4 += (avg - d1) * (avg - d1) * (avg - d1) * (avg - d1);
+  }
+  disp /= count;
+  m3 /= count;
+  m4 /= count;
+  sprintf(buff, "Count = %d", count);
+  terminal_println(buff);
+  sprintf(buff, "Sum = %g", sum);
+  terminal_println(buff);
+  sprintf(buff, "Avg = %g", avg);
+  terminal_println(buff);
+  sprintf(buff, "Sum of squares = %g", sumsq);
+  terminal_println(buff);
+  sprintf(buff, "Product = %g", prod);
+  terminal_println(buff);
+  sprintf(buff, "Min = %g", min_val);
+  terminal_println(buff);
+  sprintf(buff, "Max = %g", max_val);
+  terminal_println(buff);
+  sprintf(buff, "Variance = %g", disp);
+  terminal_println(buff);
+  sprintf(buff, "Standard deviation = %g", sqrt(disp));
+  terminal_println(buff);
+  sprintf(buff, "Third central moment = %g", m3);
+  terminal_println(buff);
+  sprintf(buff, "Fourth central moment = %g", m4);
+  terminal_println(buff);
+  if(disp != 0) {
+    sprintf(buff, "Skewness = %g", m3 / sqrt(disp * disp * disp));
+    terminal_println(buff);
+    sprintf(buff, "Kurtosis = %g", m4 / (disp * disp));
+    terminal_println(buff);
+  }
+  else {
+    terminal_println("Dispersion is zero, no skewness and kurtosis");
+  }
+
+  return 0;
+}
+
+int terminal_storage(int arg_count, char *cmdline_params[]) {
+  if(storage_type == STORAGE_TYPE_FFAT) {
+    FFat.end();
+    storage_type = STORAGE_TYPE_NONE;
+  }
+  if(storage_type == STORAGE_TYPE_SD) {
+    SD.end();
+    storage_type = STORAGE_TYPE_NONE;
+  }
+  if(strcmp(cmdline_params[1], "ffat") == 0) {
+    storage_type = STORAGE_TYPE_FFAT;
+    FFat.begin(IS_FORMAT_FFAT_IF_FAILED);
+    Storage = &FFat;
+  }
+  else if(strcmp(cmdline_params[1], "sd") == 0) {
+    storage_type = STORAGE_TYPE_SD;
+    SD.begin(SD_CS, sdSPI);
+    Storage = &SD;
+  }
+  else if(strcmp(cmdline_params[1], "none") == 0) {
+    storage_type = STORAGE_TYPE_NONE;
+    Storage = NULL;
+  }
+  else {
+    terminal_println("Unknown storage type");
+  }
+
+  return 0;
 }
 
 int terminal_serial(int arg_count, char **args) {
@@ -9101,6 +9127,112 @@ int terminal_my_ext_ip() {
   return return_value;
 }
 
+int terminal_weather(int arg_count, char *cmdline_params[]) {
+  char temp[20];
+  char wind[20];
+  char weather_text[80];
+  char buff[80];
+  double lat, lon;
+  int result = 0;
+
+  lat = global_lat;
+  lon = global_lon;
+  if(arg_count == 2) {
+    qth_to_lat_lon(cmdline_params[1], &lat, &lon, NULL, NULL);
+  }
+  if(arg_count == 3) {
+    lat = strtod(cmdline_params[1], NULL);
+    lon = strtod(cmdline_params[2], NULL);
+  }
+  sprintf(buff, "Getting at: lat %g, lon %g", lat, lon);
+  terminal_println(buff);
+  terminal_show_screen();
+
+  result = weather_get(lat, lon, temp, wind, weather_text);
+  if(result) {
+    sprintf(buff, "Temp: %s C, wind %s m/s", temp, wind);
+    terminal_println(buff);
+    terminal_println(weather_text);
+  }
+  else {
+    terminal_println("Unable to get weather");
+  }
+
+  return 0;
+}
+
+int terminal_chat(int arg_count, char *cmdline_params[]) {
+  int byte;
+  int i, j, i1, error;
+  char *messages = NULL;
+  char buff[160];
+
+  if(arg_count == 1) {
+    // Чтение чата
+    messages = (char *)malloc(5010 * sizeof(char));
+    if(messages) {
+      if(get_file_https("https://arikado.xyz/cyd/chat_data.txt", messages, 5000) == 200) {
+        i = 0;
+        j = 0;
+
+        for(i1 = 0; i1 < strlen(messages); i1++) {
+          byte = messages[i1];
+          if(byte == '\n' && messages[i1 + 1] == '\r') {
+            i1++;
+          }
+          else if(byte == '\r' && messages[i1 + 1] == '\n') {
+            i1++;
+          }
+          
+          if(byte == '\r' || byte == '\n') {
+            terminal_println("");
+            i = 0;
+            j++;
+            if(j > 15) break;
+            continue;
+          }
+          else {
+            terminal_print_char(byte);
+          }
+          i++;
+          if(i == 40) {
+            i = 0;
+            j++;
+            if(j > 15) break;
+          }
+        }
+      }
+      else {
+        terminal_println("Unable to get messages");
+      }
+      free(messages);
+    }
+    else {
+      terminal_println("Unable to reserve memory");
+    }
+  }
+  else if(arg_count == 3) {
+    error = chat_send_message(cmdline_params[1], cmdline_params[2], buff);
+    if(error == 200) {
+      terminal_println("Message sent");
+    }
+    else {
+      if(error > 0) {
+        sprintf(buff, "HTTP code %s", error);
+      }
+      else {
+        http_get_error_text(error, buff);
+      }
+      terminal_println(buff);
+    }
+  }
+  else {
+    terminal_println("chat [{nick} {message}]");
+  }
+  
+  return 0;
+}
+
 int terminal_bitcoin() {
   char query[80];
   char result[500];
@@ -9390,6 +9522,65 @@ void terminal_iperf_client(char *ip, char *port_text) {
       sprintf(buff, "Speed: %.2f kbps", mbps * 1000);
     }
     terminal_println(buff);
+  }
+  else {
+    terminal_println("Unable to connect");
+  }
+  free(buff);
+}
+
+void terminal_finger(char *ip, char *query) {
+  int port = 79;
+  char *buff = NULL;
+  char *port_text = strchr(ip, ':');
+  int offset = 0;
+  uint32_t start = 0;
+  uint32_t bytes = 0;
+  long timeout;
+  WiFiClient client;
+
+  buff = (char *)malloc(50000 * sizeof(char));
+  if(!buff) {
+    terminal_println("Unable to reserve memory");
+    return;
+  }
+
+  if(port_text != NULL) {
+    port = strtol(port_text + 1, NULL, 10);
+  }
+
+  client.connect(ip, port);
+  terminal_println("Connecting...");
+  terminal_show_screen();
+  if(client) {
+    terminal_println("Downloading...");
+    terminal_show_screen();
+    // Отправляем запрос
+    if(query != NULL) {
+      sprintf(buff, "%s\r\n", query);
+    }
+    else {
+      sprintf(buff, "\r\n");
+    }
+    client.print(buff);
+
+    // Читаем ответ
+    memset(buff, 0, 50000);
+    timeout = millis();
+    offset = 0;
+    while(client.connected() && millis() - timeout < 3000) {
+      while(client.available()) {
+        buff[offset] = client.read();
+        offset++;
+        buff[offset] = 0;
+      }
+      delay(10);
+    }
+
+    client.stop();
+
+    view_text(ip, buff);
+    terminal_println("Done");
   }
   else {
     terminal_println("Unable to connect");
@@ -19018,27 +19209,37 @@ void screensaver_spirograph() {
   long millis_start = millis();
   float arg = 0;
   float arg2 = 0;
+  float ratio;
+  float a_inner, a_outer;
   int i;
+  float cycle;
 
-  a = tft.width() / 4 - 2;
+  a = tft.width() / 2 - 2;
   b = random(1, 10);
   c = random(1, 10);
+  a_inner = random(1, 20);
+  a_outer = random(1, 20);
+  ratio = a_inner + a_outer;
 
   disableAppTitle();
   tft.fillScreen(TFT_BLACK);
 
   while(1) {
-    if(millis() - millis_start > 60000) {
+    if(millis() - millis_start > 10000) {
       tft.fillScreen(TFT_BLACK);
       b = random(2, 12);
       c = random(2, 12);
+      a_inner = random(1, 20);
+      a_outer = random(1, 20);
       millis_start = millis();
+      ratio = a_inner + a_outer;
+      cycle = 2.0 * PI / gcd((long)b, (long)c);
     }
     arg = (1.0 * millis() - millis_start) / 1000;
 
-    x = a * sin(b * arg) + a * sin(c * arg) / 2;
-    y = a * cos(b * arg) + a * cos(c * arg) / 2;
-    tft.drawPixel(tft.width() / 2 + x, tft.height() / 2 - y, spectre_colors[((int)(arg * 10)) % 24]);
+    x = a * a_inner * sin(b * arg) / ratio + a * a_outer * sin(c * arg) / ratio;
+    y = a * a_inner * cos(b * arg) / ratio + a * a_outer * cos(c * arg) / ratio;
+    tft.drawPixel(tft.width() / 2 + x, tft.height() / 2 - y, spectre_colors[(int)(arg / cycle * 24) % 24]);
 
     //delayOrTouchWait(2);
     if(touchCheckNowait()) {
