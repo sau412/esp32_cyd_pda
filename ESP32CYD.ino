@@ -264,10 +264,50 @@
 2026-11-09 Показывать канал Wi-Fi, более красочный аттрактор Лоренца, заставка спирограф
 2026-11-10 Вынести самые длинные команды терминала в отдельные функции: cowsay, lsblk, deg, qth, stat, storage, ls, du, file, weather, chat,
   команда ini для терминала, finger клиент, улучшение спирографа
+2026-11-12 Улучшение CHIP-8
+2026-11-13 Ещё улучшение CHIP-8
+2026-11-19 Прошлые команды в терминале (начало)
+2026-11-20 Прошлые команды в терминале, перестановка курсора в терминале left/right/home/end Ctrl+A/B/E/F/G/K,
+  мануал в PROGMEM, дату раз в день в чат, меню в ханойских башнях, копирование, меню в калькуляторе, вставка из буфера в редактировании,
 
 - новый обзор(ы)
 
 Улучшения тут и там:
+- Ланучер-список
+- Лаунчер с более крупными значками
+- Лаунчер "последние приложения"
+- tar
+- Приложение Графики функций
+- Поиск файлов по имени.
+- Поиск текста внутри файлов.
+- Погода прогноз
+- Совет от ИИ - экран История/продолжить - чем занимался в каких приложениях, как задачи
+- Категории для PIM
+- Облачная фоторамка - картинка с сервера
+- Фоторамка - картинки из папки
+- Угол луны сейчас, максимальный угол, азимут
+- Угол солнца сейчас, максимальный угол, азимут
+- Распаковка zip (ошибка при линковке)
+- Распаковка gz
+- Веб-сервер: плеер музыки
+- Веб-сервер: читалка книг
+- Веб-сервер: контакты, расписание, заметки, и прочие PIM-приложения он-лайн
+- Меню для просмотра: найти, найти далее
+- Меню файлов: смена кодировки, хэш мд5, хэш сша256
+- Меню редактирования: сохранить, найти, найти далее, заменить
+- Меню н назад, арифметики, прочих игр: изменить уровень, рестарт (вообще необязательно)
+- Пропикать морзянкой выделение
+
+- Разделить Exit app в правом меню - выход в лаунчер, exit в левом - назад
+- Ввод строки в терминале поддержка Ctrl+N/P/T/U/W/Y/Z
+- Автодополнение в терминале по табу для имён файлов
+- Заменить mbedtls на psa/crypto.h для обновления ESP32 с 3.3.13 на 4.0.0
+- Changelog где-нибудь
+- Quick launch лаунчер
+- Ланучер-список
+- Лаунчер с более крупными значками
+- Выбор вида лаунчера
+- Лаунчер "последние приложения"
 - ymodem
 - tar
 - Bluetooth в отдельном потоке
@@ -275,7 +315,10 @@
 - Простой HTTP браузер
 - Заставка Коралл (диффузионная агрегация)
 - Приложение Графики функций
-
+- Поиск файлов по имени.
+- Поиск текста внутри файлов.
+- Можно иметь какой-нибудь системный журнал, писать туда что-нибудь
+- Таблица менделеева
 - Заставка Аттрактор Клиффорда
 - Баг - буфер при создании новой таблицы не пустой? Мусор в ячейке, но не сразу. Вылет при сохранении (не воспроизвелось)
 - Убрать многоуровневые настройки (больше двух уровней)
@@ -315,7 +358,7 @@
 - Светофор
 - Marbles (правда это сложно)
 - Тетрис - настройки Figures (Tetranimo, Pentamino), Speed (Slow, Medium, Fast, Max), Increase on (Figure, Time, Line, None), Next figure (Random, No repeat), Filled lines (0 - 10), Scroll, Colors (on/off)
-- Tetris - зонтичное приложение для игр Brick Game
+- Tetris - зонтичное приложение для игр Brick Game: стрелялка, гоночки, арканоид
 - Убирать значки в лаунчере
 - Соединение через HTTP прокси
 - Вебсервер в фоне
@@ -340,15 +383,12 @@
 - Заставка двойной маятник (сложно)
 - Многозадачность в консоли через FreeRTOS
 - Обновление по OTA
-- CHIP-8 ускорение работы вывода спрайта
-- CHIP-8 рисовать только изменённые части экрана
 - Терминал через веб
 - I2C чтение распространённых датчиков
 - Basic рисование: plot, draw, rect, fillrect, triangle, fillscreen, drawString, drawCentreString, drawCircle, fillCircle
 - Basic строки
 - Basic работа с файлами
 - tftp - требует UDP
-- Совет от ИИ - экран История/продолжить - чем занимался в каких приложениях, как задачи
 - Терминал переменные окружения
 - /Terminal/Environment
 - Категории для PIM
@@ -361,15 +401,13 @@
 - Заставка бегущая строка
 - Заставка точки вверх-вниз как в 3д-кубе
 - Заставка бассейны Ньютона
-- Спирограф
 - Летающие квадратики (как в Song in lines)
 - Четырёхмерный куб
 - Папоротник Барнсли
 - Тонкий клиент - отправка касаний на сервер, получение текста/картинки с сервера
 - Удалённое управление - отправка картинки на сервер, получение касания с сервера
 - Облачная фоторамка - картинка с сервера
-- Таблица менделеева
-- Приливы-отливы
+- Приливы-отливы (требуются гармионические коэффициенты для каждой точки)
 - Конвертер валют и единиц
 - Майнер
 - Serial to web - управление RS-232 с веб-интерфейса (не то же самое что управление терминалом)
@@ -378,12 +416,7 @@
 - Дней до конца года
 - Номер недели
 - Можно заменить millis на esp_timer_get_time, чтобы не было переполнения времени
-- Quick launch лаунчер
-- Ланучер-список
-- Лаунчер с более крупными значками
-- Выбор вида лаунчера
 - Ещё один заход Bluetooth
-- Прошлые команды в терминале по стрелке вверх
 - Почта
 - Настройки пинов: подсветка, светодиод, звук, музыка, кнопка BOOT
 - urlencode
@@ -421,8 +454,6 @@
 - Меню ханойских башен: следующий уровень, предыдущий уровень (или просто выбор)
 - Меню н назад, арифметики, проичих игр: изменить уровень, рестарт (вообще необязательно)
 - циклическое переключение дашбордов
-- последние приложения приложением
-- терминал ввод поддержка передвижения курсора
 - drawTextFormatted блок выделения или курсор в указанном месте
 - Автоопределение кодировки файла при просмотре
 - QR-код
@@ -635,6 +666,9 @@ XPT2046_Bitbang touchscreen(XPT2046_MOSI, XPT2046_MISO, XPT2046_CLK, XPT2046_CS)
 
 #define EDIT_FILE_LENGTH_MAX 8192
 
+// Буфер обмена
+char *clipboard = NULL;
+
 // Терминал
 #define TERMINAL_WIDTH_CHARS 40
 #define TERMINAL_HEIGHT_CHARS 20
@@ -652,8 +686,9 @@ char *terminal_screen = terminal_primary_screen;
 char *terminal_colors = terminal_primary_colors;
 char *terminal_attributes = terminal_primary_attributes;
 
+// Буфер для запросов и ответов терминала (запрос размера, курсор)
 char terminal_output[80];
-char terminal_current_path[80] = "/";
+char terminal_current_path[160] = "/";
 
 #define ATTRIBUTE_BOLD 1
 #define ATTRIBUTE_UNDERLINED 2
@@ -1476,6 +1511,12 @@ void calculator(char mode, char *io_buff) {
     0x07, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77, 0x70, 
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
   };
+  int menu_selected;
+  char *menu_items[] = {
+    "Copy",
+    "Exit",
+    NULL
+  };
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Calculator");
@@ -1516,6 +1557,17 @@ void calculator(char mode, char *io_buff) {
     drawButtonMatrix(0, 80, tft.width(), 240, buttons, 5, 5);
 
     touchWaitPress();
+
+    if(global_touch_y >= 0 && global_touch_y < 16 && global_touch_x < tft.width() / 2) {
+      menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
+      if(menu_selected == 0) {
+        clipboard_copy(screen);
+      }
+      else if(menu_selected == 1) {
+        global_exit_flag = 1;
+      }
+    }
+
     button_pressed = touchCheckMatrix(0, 80, tft.width(), 240, buttons, 5, 5);
     if(button_pressed != -1) {
       if(!error_flag) {
@@ -1845,8 +1897,7 @@ void system_info(char mode, char *io_buff) {
 // Пользовательский мануал
 // ====================================================
 
-void user_manual(char mode, char *io_buff) {
-  char help[] =
+const char user_manual_help[] PROGMEM =
   "Help for the ESP32 CYD PDA firmware\n"
   "\n"
   "== Basic usage ==\n"
@@ -1997,6 +2048,8 @@ void user_manual(char mode, char *io_buff) {
   "/Webradio - internet radio settings files\n"
   "\n"
   ;
+
+void user_manual(char mode, char *io_buff) {
   char app_icon[] = {
     16, 16,
       0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 
@@ -2031,7 +2084,7 @@ void user_manual(char mode, char *io_buff) {
     return;
   }
 
-  view_text("User Manual", help);
+  view_text("User Manual", (char *)user_manual_help);
 }
 
 // ====================================================
@@ -2410,6 +2463,12 @@ void files(char mode, char *io_buff) {
     0x03, 0xB3, 0xB3, 0xB3, 0xB3, 0xB3, 0xB3, 0xB0, 
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
   };
+  int menu_selected;
+  char *menu_items[] = {
+    "Go to root",
+    "Exit",
+    NULL
+  };
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Files");
@@ -2555,6 +2614,18 @@ void files(char mode, char *io_buff) {
     drawButtonMatrix(0, 240, tft.width(), 80, file_operations, 4, 2);
 
     touchWaitPress();
+
+    // Меню
+    if(global_touch_y >= 0 && global_touch_y < 16 && global_touch_x < tft.width() / 2) {
+      menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
+      if(menu_selected == 0) {
+        terminal_cd_root();
+      }
+      else if(menu_selected == 1) {
+        global_exit_flag = 0;
+      }
+    }
+
     current_op = -1;
     if(touchCheckList(0, 40, 240, 192, files, 12, &file_offset, &file_selected) != -1) {
       if(prev_file_selected == file_selected && prev_file_offset == file_offset) {
@@ -2562,7 +2633,7 @@ void files(char mode, char *io_buff) {
       }
     }
     else {
-    // Операции
+      // Операции
       current_op = touchCheckMatrix(0, 240, tft.width(), 80, file_operations, 4, 2);
     }
 
@@ -2898,7 +2969,10 @@ void terminal(char mode, char *io_buff) {
       return;
     }
 
-    file_append_line(TERMINAL_HISTORY, buff);
+    // Записываем в историю непустые строки
+    if(strcmp(buff, "") != 0) {
+      file_append_line(TERMINAL_HISTORY, buff);
+    }
 
     terminal_execute(buff);
     strcpy(buff, "");
@@ -6458,15 +6532,33 @@ void terminal_input_string(char *input_buff) {
   char buff[TERMINAL_INPUT_MAX];
   int byte;
   int offset;
+  int prev_offset = 0;
+  int cursor_offset = 0;
   int input_begin_row = 0;
   int input_begin_col = 0;
   int input_row;
   int input_col;
   int input_scrolled = 0;
-  for(offset = 0; offset < TERMINAL_INPUT_MAX; offset++) {
-    buff[offset] = 0;
+  int command_offset = 0;
+  int command_file_offset = 0;
+  int command_max_offset = 0;
+  int i;
+  char command_changed_flag = 0;
+  char erase_old_command_flag = 0;
+  fs::File file;
+
+  if(Storage) {
+    // Ищем индекс после последней команды
+    file = Storage->open(TERMINAL_HISTORY);
+    while(file.available()) {
+      strcpy(buff, file.readStringUntil('\n').c_str());
+      command_offset++;
+    }
+    file.close();
+    command_max_offset = command_offset;
   }
 
+  memset(buff, 0, TERMINAL_INPUT_MAX);
   offset = 0;
 
   terminal_keyboard_redraw_flag = 1;
@@ -6475,6 +6567,109 @@ void terminal_input_string(char *input_buff) {
   input_begin_col = cursor_col;
 
   while(1) {
+    prev_offset = offset;
+    // Выводим текущую строку
+    terminal_ansi_set_cursor(input_begin_col + 1, input_begin_row - input_scrolled + 1);
+    for(i = 0; i < strlen(buff); i++) {
+      terminal_print_char(buff[i]);
+      // Проверяем прокрутку
+      input_row = cursor_row;
+      input_col = cursor_col;
+      // Если курсор перескочил на начало той же строки - увеличиваем количество прокрученных строк
+      if(input_col > cursor_col) {
+        if(input_row == cursor_row) {
+          input_scrolled++;
+        }
+      }
+    }
+    // Ставим курсор в нужное положение, если он не в конце строки
+    if(offset != cursor_offset) {
+      terminal_ansi_set_cursor(input_begin_col + 1, input_begin_row - input_scrolled + 1);
+      for(i = 0; i < cursor_offset; i++) {
+        terminal_print_char(buff[i]);
+      }
+    }
+    terminal_show_screen();
+
+    // Команды управления командами и курсором
+    if(strlen(terminal_output) > 0) {
+      // Up
+      if(!strcmp(terminal_output, "\x1B[A")) {
+        if(Storage && command_offset > 0) {
+          command_offset--;
+          file = Storage->open(TERMINAL_HISTORY);
+          command_file_offset = 0;
+          
+          while(file.available()) {
+            strcpy(buff, file.readStringUntil('\n').c_str());
+            if(command_offset == command_file_offset) {
+              break;
+            }
+            command_file_offset++;
+          }
+          file.close();
+          strcpy(input_buff, buff);
+          command_changed_flag = 1;
+          erase_old_command_flag = 1;
+        }
+      }
+      // Down
+      if(!strcmp(terminal_output, "\x1B[B")) {
+        if(Storage && command_max_offset > command_offset - 1) {
+          command_offset++;
+          file = Storage->open(TERMINAL_HISTORY);
+          command_file_offset = 0;
+          while(file.available()) {
+            strcpy(buff, file.readStringUntil('\n').c_str());
+            if(command_offset == command_file_offset) {
+              break;
+            }
+            command_file_offset++;
+            if(!file.available() && command_offset == command_file_offset) {
+              strcpy(buff, "");
+            }
+          }
+          if(command_offset > command_file_offset) {
+            strcpy(buff, "");
+            command_offset = command_file_offset;
+          }
+          file.close();
+          strcpy(input_buff, buff);
+          command_changed_flag = 1;
+          erase_old_command_flag = 1;
+        }
+      }
+      // Left
+      if(!strcmp(terminal_output, "\x1B[D")) {
+        if(cursor_offset > 0) {
+          cursor_offset--;
+        }
+      }
+      // Right
+      if(!strcmp(terminal_output, "\x1B[C")) {
+        if(cursor_offset < offset) {
+          cursor_offset++;
+        }
+      }
+      // End
+      if(!strcmp(terminal_output, "\x1B[4~")) {
+        cursor_offset = offset;
+      }
+      // Home
+      if(!strcmp(terminal_output, "\x1B[1~")) {
+        cursor_offset = 0;
+      }
+
+      // Если команда изменилась
+      if(command_changed_flag) {
+        offset = strlen(buff);
+        cursor_offset = strlen(buff);
+        command_changed_flag = 0;
+      }
+
+      strcpy(terminal_output, "");
+    }
+
     if(Serial.available()) {
       byte = Serial.read();
       if(byte >= 0xC0) {
@@ -6490,6 +6685,15 @@ void terminal_input_string(char *input_buff) {
     if(byte != -1) {
       if(byte == 0x00) {
         // Ignored
+      }
+      else if(byte == 0x01) {
+        // Ctrl+A, begin of string
+        cursor_offset = 0;
+      }
+      else if(byte == 0x02) {
+        // Ctrl+B, cursor left
+        if(cursor_offset > 0)
+          cursor_offset--;
       }
       else if(byte == 0x03) {
         // Ctrl+C
@@ -6508,28 +6712,47 @@ void terminal_input_string(char *input_buff) {
         terminal_show_screen();
         return;
       }
-      // Backspace
+      else if(byte == 0x05) {
+        // Ctrl+E, end of string
+        cursor_offset = offset;
+      }
+      else if(byte == 0x06) {
+        // Ctrl+F, cursor right
+        if(cursor_offset < offset) {
+          cursor_offset++;
+        }
+      }
+      else if(byte == 0x07) {
+        // Ctrl+G, отмена чтения строки
+        buff[0] = 0;
+        strcpy(input_buff, buff);
+        terminal_print_char('\n');
+        terminal_print_char('\r');
+        terminal_show_screen();
+        return;
+      }
+      // Backspace, Ctrl+H
       else if(byte == 0x08) {
-        if(offset > 0) {
-          buff[strlen(buff) - 1] = 0;
+        if(strlen(buff) > 0 && cursor_offset > 0) {
+          for(i = cursor_offset - 1; i < strlen(buff); i++) {
+            buff[i] = buff[i + 1];
+          }
           offset--;
+          cursor_offset--;
           if(cursor_col == 0) {
             cursor_col = 40;
             cursor_row--;
           }
-          terminal_print_char(0x08);
-          terminal_print_char(' ');
-          if(cursor_col == 0) {
-            cursor_col = 40;
-            cursor_row--;
-          }
-          terminal_print_char(0x08);
-          terminal_show_screen();
         }
       }
       // Tab
       else if(byte == 0x09) {
         // Ignored
+      }
+      else if(byte == 0x0B) {
+        // Ctrl+K, удалить текст до конца строки
+        buff[cursor_offset] = 0;
+        offset = cursor_offset;
       }
       else if(byte == 0x0C) {
         // Ctrl+L
@@ -6546,24 +6769,26 @@ void terminal_input_string(char *input_buff) {
         return;
       }
       else if(strlen(buff) < (TERMINAL_INPUT_MAX - 1)) {
-        buff[offset] = byte;
-        offset++;
-        buff[offset] = 0;
-
-        input_row = cursor_row;
-        input_col = cursor_col;
-        terminal_print_char(byte);
-        if(input_col > cursor_col) {
-          if(input_row == cursor_row) {
-            input_scrolled++;
-          }
+        // Сдвинуть строку справо
+        for(i = strlen(buff); i >= cursor_offset; i--) {
+          buff[i + 1] = buff[i];
         }
-        terminal_show_screen();
+        // Добавить символ в строку
+        buff[cursor_offset] = byte;
+        offset++;
+        cursor_offset++;
+        buff[offset] = 0;
       }
       else {
         // Некорректный символ или превышен лимит ввода
         beep_if_enabled();
       }
+    }
+
+    // Стираем прошлую строку
+    terminal_ansi_set_cursor(input_begin_col + 1, input_begin_row - input_scrolled + 1);
+    for(i = 0; i < prev_offset; i++) {
+      terminal_print_char(' ');
     }
 
     if(global_exit_flag) {
@@ -12111,9 +12336,10 @@ void chip8_run(char *filename) {
   fs::File file;
   long cycle_millis = 0;
   long timer_millis = 0;
+  long touch_millis = 0;
   int i, x, y;
   int pc = 512;
-  int sp = 4094 - 256 - 96;
+  int sp = 0;
   char ia, ib, ic, id;
   int byte_offset;
   int bit_offset;
@@ -12124,11 +12350,17 @@ void chip8_run(char *filename) {
   char carry;
   char screen_changed = 0;
   // 2 8-bit timers
-  char dt; // delay timer
-  char st; // sound timer
+  int dt; // delay timer
+  int st; // sound timer
   // 4096 bytes of memory
-  char *mem;
-  char *videomem;
+  uint8_t *mem;
+  uint8_t videomem[256];
+  uint8_t videomem_prev[256];
+  uint16_t stack[16];
+  int height;
+  int width;
+  int bytes_per_row;
+
   char memory_bit;
   char sprite_bit;
   // Keyboard
@@ -12139,7 +12371,7 @@ void chip8_run(char *filename) {
     "A", "0", "B", "F",
     NULL
   };
-  int key;
+  int key = -1;
   char fontset[80] = {
       0xF0, 0x90, 0x90, 0x90, 0xF0, //0
       0x20, 0x60, 0x20, 0x20, 0x70, //1
@@ -12174,11 +12406,15 @@ void chip8_run(char *filename) {
     return;
   }
   // Резервируем память
-  mem = (char *)malloc(4096 * sizeof(char));
-  for(i = 0; i < 4096; i++) {
-    mem[i] = 0;
+  mem = (uint8_t *)malloc(4096 * sizeof(char));
+  if(!mem) {
+    drawError("Unable to reserve memory");
+    file.close();
+    return;
   }
-  videomem = mem + 4095 - 256;
+  memset(mem, 0, 4096);
+  memset(videomem, 0, 256);
+  memset(videomem_prev, 0, 256);
 
   // Загружаем шрифт
   for(i = 0; i < 80; i++) {
@@ -12186,8 +12422,10 @@ void chip8_run(char *filename) {
   }
   // Загружаем ROM в память
   for(i = 512; file.available(); i++) {
+    if(i >= 4096) break;
     mem[i] = file.read();
   }
+  file.close();
 
   // Чистим регистры
   for(i = 0; i < 16; i++) {
@@ -12206,6 +12444,7 @@ void chip8_run(char *filename) {
 
   // Рабочий цикл
   while(1) {
+    delayMicroseconds(100);
     // pc loop
     if(pc >= 4096) pc = 0;
     // stack pointer loop
@@ -12225,15 +12464,24 @@ void chip8_run(char *filename) {
     }
 
     // Отобразить экран
-    if(screen_changed && millis() - cycle_millis > 1000 / 10) {
+    if(screen_changed && millis() - cycle_millis > 1000 / 60) {
       //Serial.printf("pc = %d, %1X %1X %1X %1X, sp = %d\n", pc, (int)ia, (int)ib, (int)ic, (int)id, sp);
 
       cycle_millis = millis();
       for(y = 0; y < CHIP8_HEIGHT; y++) {
         for(x = 0; x < CHIP8_WIDTH; x++) {
-          byte_offset = 4095 - 256 + (x + y * CHIP8_WIDTH) / 8;
+          byte_offset = (x + y * CHIP8_WIDTH) / 8;
+          // Если байт не менялся - пропускаем
+          if(videomem_prev[byte_offset] == videomem[byte_offset]) {
+            x += 7;
+            continue;
+          }
           bit_offset = x % 8;
-          if(mem[byte_offset] & (0x80 >> bit_offset)) {
+          // Если бит не менялся - пропускаем
+          if((videomem[byte_offset] & (0x80 >> bit_offset)) == (videomem_prev[byte_offset] & (0x80 >> bit_offset))) {
+            continue;
+          }
+          if(videomem[byte_offset] & (0x80 >> bit_offset)) {
             tft.fillRect(CHIP8_SCREEN_LEFT + x * CHIP8_SCREEN_SCALE, CHIP8_SCREEN_TOP + y * CHIP8_SCREEN_SCALE, CHIP8_SCREEN_SCALE, CHIP8_SCREEN_SCALE, TFT_GREEN);
           }
           else {
@@ -12241,33 +12489,38 @@ void chip8_run(char *filename) {
           }
         }
       }
+      memcpy(videomem_prev, videomem, 256);
       screen_changed = 0;
     }
 
     // Считать нажатую кнопку (если есть)
-    touchCheckNowait();
-    if(global_exit_flag) {
-      drawAppTitle("Exit");
-      touchWaitRelease();
-      drawAppTitle(filename);
-      touchExitActionReset();
-      break;
-    }
-
-    key = -1;
-    if(global_touch_present_flag) {
-      if(global_touch_y >= tft.height() - 200) {
-        key = keymap[(int)(global_touch_x / (tft.width() / 4) + 4 * floor((global_touch_y - tft.height() + 200) / 50)) % 16];
-        //Serial.println(key);
+    if(millis() - touch_millis > 20) {
+      touch_millis = millis();
+      touchCheckNowait();
+      if(global_exit_flag) {
+        drawAppTitle("Exit");
+        noTone(global_beeper_pin);
+        touchWaitRelease();
+        drawAppTitle(filename);
+        touchExitActionReset();
+        break;
+      }
+      key = -1;
+      if(global_touch_present_flag) {
+        if(global_touch_y >= tft.height() - 200) {
+          key = keymap[(int)(global_touch_x / (tft.width() / 4) + 4 * floor((global_touch_y - tft.height() + 200) / 50)) % 16];
+          //Serial.println(key);
+        }
       }
     }
+
     // Получаем инструкцию
     // pc - instruction pointer
     // Четыре полубайта, ia, ib, ic ,id
     ia = (mem[pc] & 0xF0) >> 4;
     ib = mem[pc] & 0x0F;
-    ic = (mem[pc + 1] & 0xF0) >> 4;
-    id = mem[pc + 1] & 0x0F;
+    ic = (mem[(pc + 1) % 4096] & 0xF0) >> 4;
+    id = mem[(pc + 1) % 4096] & 0x0F;
     
     //Serial.printf("pc = %d, %1X %1X %1X %1X, sp = %d\n", pc, (int)ia, (int)ib, (int)ic, (int)id, sp);
     //delay(100);
@@ -12282,8 +12535,13 @@ void chip8_run(char *filename) {
     }
     // 00EE RET
     else if(ia == 0x0 && ib == 0x0 && ic == 0xE && id == 0xE) {
-      sp -= 2;
-      pc = ((int)(mem[sp]) << 8) + mem[sp + 1];
+      if(sp == 0) {
+        drawError("Stack underflow");
+        break;
+      }
+      sp--;
+      pc = stack[sp];
+      //pc = ((int)(mem[sp]) << 8) + mem[sp + 1];
       pc += 2;
     }
     // 00FD EXIT
@@ -12299,9 +12557,14 @@ void chip8_run(char *filename) {
 
     // 2XXX CALL
     else if(ia == 0x2) {
-      mem[sp] = pc >> 8;
-      sp++;
-      mem[sp] = pc & 0xFF;
+      if(sp == 16) {
+        drawError("Stack overflow");
+        break;
+      }
+      stack[sp] = pc;
+      //mem[sp] = pc >> 8;
+      //sp++;
+      //mem[sp] = pc & 0xFF;
       sp++;
       pc = (ib << 8) + (ic << 4) + id;
     }
@@ -12381,10 +12644,10 @@ void chip8_run(char *filename) {
     }
     // 8XY6[a]	Vx >>= 1
     else if(ia == 0x8 && id == 0x6) {
-      carry = v[ib] & 0x1 ? 1 : 0;
       v[ib] = v[ic];
-      v[ib] = v[ib] >> 1;
+      carry = v[ib] & 0x1 ? 1 : 0;
       v[15] = carry;
+      v[ib] = v[ib] >> 1;
       pc += 2;
     }
     // 8XY7[a]	Vx = Vy - Vx
@@ -12399,10 +12662,10 @@ void chip8_run(char *filename) {
     }
     // 8XYE[a]	Vx <<= 1
     else if(ia == 0x8 && id == 0xE) {
-      carry = v[ib] & B10000000 ? 1 : 0;
       v[ib] = v[ic];
-      v[ib] = v[ib] << 1;
+      carry = v[ib] & B10000000 ? 1 : 0;
       v[15] = carry;
+      v[ib] = v[ib] << 1;
       pc += 2;
     }
 
@@ -12425,19 +12688,24 @@ void chip8_run(char *filename) {
 
     // CXNN	Vx = rand() & NN
     else if(ia == 0xC) {
-      v[ib] = random(0, 256) & (ic << 4) + id;
+      //v[ib] = random(0, 256) & (ic << 4) + id;
+      v[ib] = random(0, 256) & ((ic << 4) | id);
       pc += 2;
     }
 
     // DXYN	draw(Vx, Vy, N)
     else if(ia == 0xD) {
       v[15] = 0;
-      for(y = 0; y < id; y++) {
-        for(x = 0; x < 8; x++) {
+      height = id ? id : 16;
+      width = id ? 8 : 16;
+      bytes_per_row = width / 8;
+
+      for(y = 0; y < height; y++) {
+        for(x = 0; x < width; x++) {
           byte_offset = ((x + (int)v[ib]) % 64 + ((y + (int)v[ic]) % 32) * CHIP8_WIDTH) / 8;
           bit_offset = ((x + (int)v[ib]) % 64 + ((y + (int)v[ic]) % 32) * CHIP8_WIDTH) % 8;
           memory_bit = videomem[byte_offset] & 0x80 >> bit_offset;
-          sprite_bit = mem[(vi + y) % 4096] & 0x80 >> x;
+          sprite_bit = mem[(vi + y * bytes_per_row + x / 8) % 4096] & (0x80 >> (x % 8));
           if(memory_bit && sprite_bit) {
             v[15] = 1;
           }
@@ -12488,6 +12756,7 @@ void chip8_run(char *filename) {
     // FX1E	I += Vx
     else if(ia == 0xF && ic == 0x1 && id == 0xE) {
       vi += v[ib];
+      vi = vi % 4096;
       pc += 2;
     }
     // FX29	I = sprite_addr[Vx]
@@ -12497,9 +12766,9 @@ void chip8_run(char *filename) {
     }
     // FX33	set_BCD(Vx)
     else if(ia == 0xF && ic == 0x3 && id == 0x3) {
-      mem[vi + 0] = v[ib] / 100;
-      mem[vi + 1] = (v[ib] / 10) % 10;
-      mem[vi + 2] = v[ib] % 10;
+      mem[(vi + 0) % 4096] = v[ib] / 100;
+      mem[(vi + 1) % 4096] = (v[ib] / 10) % 10;
+      mem[(vi + 2) % 4096] = v[ib] % 10;
       pc += 2;
     }
     // FX55	reg_dump(Vx, &I)
@@ -15709,8 +15978,13 @@ void random_numbers(char mode, char *io_buff) {
     0x07, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77, 0x70, 
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
   };
+  int menu_selected;
+  char *menu_items[] = {
+    "Copy",
+    "Exit",
+    NULL
+  };
 
-  
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Random Numbers");
     return;
@@ -15731,6 +16005,16 @@ void random_numbers(char mode, char *io_buff) {
     drawButtonMatrix(0, 54, tft.width(), tft.height() - 54, buttons, 2, 5);
 
     touchWaitPress();
+    if(global_touch_y >= 0 && global_touch_y < 16 && global_touch_x < tft.width() / 2) {
+      menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
+      if(menu_selected == 0) {
+        clipboard_copy(buff);
+      }
+      else if(menu_selected == 1) {
+        global_exit_flag = 1;
+      }
+    }
+
     button_pressed = touchCheckMatrix(0, 54, tft.width(), tft.height() - 54, buttons, 2, 5);
     if(button_pressed != -1) {
       tft.fillRect(0, 16, tft.width(), 34, color_scheme_bg);
@@ -19206,7 +19490,7 @@ void screensaver_spirograph() {
 
   float x, y;
   float a, b, c;
-  long millis_start = millis();
+  long micros_start = 0;
   float arg = 0;
   float arg2 = 0;
   float ratio;
@@ -19214,28 +19498,23 @@ void screensaver_spirograph() {
   int i;
   float cycle;
 
-  a = tft.width() / 2 - 2;
-  b = random(1, 10);
-  c = random(1, 10);
-  a_inner = random(1, 20);
-  a_outer = random(1, 20);
-  ratio = a_inner + a_outer;
-
   disableAppTitle();
   tft.fillScreen(TFT_BLACK);
 
+  a = tft.width() / 2 - 1;
+
   while(1) {
-    if(millis() - millis_start > 10000) {
+    if(micros_start == 0 || micros() - micros_start > 10000000L) {
       tft.fillScreen(TFT_BLACK);
-      b = random(2, 12);
-      c = random(2, 12);
-      a_inner = random(1, 20);
-      a_outer = random(1, 20);
-      millis_start = millis();
+      b = random(2, 50);
+      c = random(2, 50);
+      a_inner = random(1, 50);
+      a_outer = random(1, 50);
+      micros_start = micros();
       ratio = a_inner + a_outer;
       cycle = 2.0 * PI / gcd((long)b, (long)c);
     }
-    arg = (1.0 * millis() - millis_start) / 1000;
+    arg = (1.0 * micros() - micros_start) / 1000000L;
 
     x = a * a_inner * sin(b * arg) / ratio + a * a_outer * sin(c * arg) / ratio;
     y = a * a_inner * cos(b * arg) / ratio + a * a_outer * cos(c * arg) / ratio;
@@ -29245,6 +29524,12 @@ char edit_text(char *title, char *contents, long max_len) {
   char **keyboard_current = keyboard_nocaps;
   long last_save_millis = millis();
   char changed_since_autosave = 0;
+  int menu_selected = 0;
+  char *menu_items[] = {
+    "Paste",
+    "Exit",
+    NULL
+  };
 
   clearScreen();
   drawAppTitle(title);
@@ -29417,6 +29702,23 @@ char edit_text(char *title, char *contents, long max_len) {
       draw_text_formatted(contents + screen_offset_bytes, 1, 16, tft.width() - 2, 11, FONT_DEFAULT, 0);
       // Ставим курсор по касанию
       cursor_offset_bytes = screen_offset_bytes + draw_text_formatted_touch_offset;
+    }
+
+    // Меню
+    if(global_touch_y >= 0 && global_touch_y < 16 && global_touch_x < tft.width() / 2) {
+      menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
+      if(menu_selected == 0) {
+        // Вставка
+        if(clipboard && strlen(clipboard) > 0) {
+          string_paste(contents, cursor_offset_bytes, clipboard);
+          cursor_offset_bytes += strlen(clipboard);
+          changes_present = 1;
+          changed_since_autosave = 1;
+        }
+      }
+      else if(menu_selected == 1) {
+        global_exit_flag = 0;
+      }
     }
 
     //touchWaitPress();
@@ -32369,6 +32671,14 @@ void hanoi_towers(char mode, char *io_buff) {
     0x0F, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xF0, 
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
   };
+  int menu_selected = 0;
+  char *menu_items[] = {
+    "Restart level",
+    "Previous level",
+    "Next level",
+    "Exit app",
+    NULL
+  };
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Hanoi Towers");
@@ -32469,6 +32779,24 @@ void hanoi_towers(char mode, char *io_buff) {
 
     touch_x = global_touch_x;
     touch_y = global_touch_y;
+    // Меню
+    if(touch_y >= 0 && touch_y < 16 && touch_x < tft.width() / 2) {
+      menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
+      if(menu_selected == 0) {
+        restart_flag = 1;
+      }
+      else if(menu_selected == 1) {
+        restart_flag = 1;
+        level = max(level - 1, 3);
+      }
+      else if(menu_selected == 2) {
+        restart_flag = 1;
+        level = min(level + 1, HANOI_TOWERS_MAX_LEVEL);
+      }
+      else if(menu_selected == 3) {
+        global_exit_flag = 1;
+      }
+    }
 
     if(column1 == -1) {
       column1 = touch_x / (tft.width() / 3);
@@ -34756,7 +35084,7 @@ void tetris_draw_field(char *field) {
       block_value = field[x + y * TETRIS_FIELD_WIDTH];
       icon = empty;
       if(block_value) {
-        icon = block;
+        icon = block2;
       }
       image_from_bits(tft.width() / 2 - TETRIS_FIELD_WIDTH * TETRIS_CELL_SIZE / 2 + x * TETRIS_CELL_SIZE + 1, 48 + y * TETRIS_CELL_SIZE + 1, icon, color_scheme_fg, color_scheme_bg);
     }
@@ -36395,6 +36723,49 @@ char char1251_lowercase(char in) {
   if(in == 0xBD) return 0xBE;
 
   return in;
+}
+
+int get_list_length(char **list) {
+  int i = 0;
+  while(list[i] != 0) i++;
+  return i;
+}
+
+// Копировать данные в буфер обмена
+void clipboard_copy(char *data) {
+  if(clipboard) {
+    free(clipboard);
+  }
+  clipboard = (char *)malloc((strlen(data) + 1) * sizeof(char));
+  if(clipboard) {
+    strcpy(clipboard, data);
+  }
+}
+
+// Удалить указанное количество символов из строки в указанном месте
+void string_cut(char *str, int from, int count) {
+  int i = 0;
+  if(count <= 0) return;
+  if(from < 0) return;
+  if(from >= strlen(str)) return;
+
+  while(str[from + i + count] != 0) {
+    str[from + i] = str[from + i + count];
+    i++;
+  }
+  str[from + i] = 0;
+}
+
+// Добавить символы в строку в указанное место
+void string_paste(char *str, int to, char *data) {
+  if (!str || !data || to < 0) return;
+
+  int len = strlen(str);
+  int add = strlen(data);
+  if (to > len || add == 0) return;
+
+  memmove(str + to + add, str + to, len - to + 1);
+  memcpy(str + to, data, add);
 }
 
 // ====================================================
@@ -38056,12 +38427,14 @@ int show_menu(int x0, int y0, int width, int height, char **items) {
   int item_height = 16;
   char *buff = NULL;
 
-  while(items[items_count] != NULL) items_count++;
+  items_count = get_list_length(items);
   if(items_count > 0) {
-    item_height = height / items_count;
+    item_height = (height - 2) / items_count;
   }
   // Сохраняем часть экрана где будет меню
   buff = (char *)malloc(width * height / 2 * sizeof(char));
+  if(!buff) return -1;
+
   screen_area_to_buffer(buff, x0, y0, width, height);
 
   // Рисуем рамку
