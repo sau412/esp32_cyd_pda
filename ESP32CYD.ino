@@ -269,6 +269,8 @@
 2026-11-19 Прошлые команды в терминале (начало)
 2026-11-20 Прошлые команды в терминале, перестановка курсора в терминале left/right/home/end Ctrl+A/B/E/F/G/K,
   мануал в PROGMEM, дату раз в день в чат, меню в ханойских башнях, копирование, меню в калькуляторе, вставка из буфера в редактировании,
+2026-11-21 Терминал ввод строки Ctrl+N/P/T/U/Y/W/Z, общая функция для меню приложения, системного меню, копирование в счётчике
+2026-11-22 Заставка фоторамка, morse news исправлен баг бесконечного запроса RSS, mood lamp яркие цвета
 
 - новый обзор(ы)
 
@@ -282,9 +284,6 @@
 - Поиск текста внутри файлов.
 - Погода прогноз
 - Совет от ИИ - экран История/продолжить - чем занимался в каких приложениях, как задачи
-- Категории для PIM
-- Облачная фоторамка - картинка с сервера
-- Фоторамка - картинки из папки
 - Угол луны сейчас, максимальный угол, азимут
 - Угол солнца сейчас, максимальный угол, азимут
 - Распаковка zip (ошибка при линковке)
@@ -296,10 +295,11 @@
 - Меню файлов: смена кодировки, хэш мд5, хэш сша256
 - Меню редактирования: сохранить, найти, найти далее, заменить
 - Меню н назад, арифметики, прочих игр: изменить уровень, рестарт (вообще необязательно)
-- Пропикать морзянкой выделение
+- Добавить прогноз погоды на следующие дни
+- Добавить выбор градусов в прогноз погоды
 
+- Пропикать морзянкой выделение
 - Разделить Exit app в правом меню - выход в лаунчер, exit в левом - назад
-- Ввод строки в терминале поддержка Ctrl+N/P/T/U/W/Y/Z
 - Автодополнение в терминале по табу для имён файлов
 - Заменить mbedtls на psa/crypto.h для обновления ESP32 с 3.3.13 на 4.0.0
 - Changelog где-нибудь
@@ -1469,6 +1469,145 @@ void launcher(char mode, char *io_buff) {
   }
 }
 
+void launcher_small_icons(char mode, char *io_buff) {
+  char redraw_flag;
+  int app_selected;
+  int app_selected_row;
+  int app_selected_col;
+  int app_selected_prev_row;
+  int app_selected_prev_col;
+  int app_fg;
+  int app_bg;
+
+  char *app_my_icon = app_default_icon;
+
+  int row, col;
+  int i;
+  int app_index;
+  char app_name[80];
+  char app_icon[130]; // 128 байт цветной спрайт, 2 байта размер
+  int apps_max = 0;
+  
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Launcher");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Lnch");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_my_icon, 130);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Launcher");
+
+  apps_max = 0;
+  for(i = 0; i < 80; i++) {
+    if(all_apps[i] == 0) {
+      apps_max = i;
+      break;
+    }
+  }
+
+  redraw_flag = 1;
+  touchCheckNowait();
+  while(1) {
+    app_selected = -1;
+    if(global_touch_y >= 16) {
+      app_selected_col = global_touch_x / (tft.width() / 8);
+      app_selected_row = (global_touch_y - 16) / (tft.height() / 10);
+      //Serial.printf("app_selected_col %d, app_selected_row %d\n", app_selected_col, app_selected_row);
+      //app_selected = app_selected_row * 8 + app_selected_col + 1;
+    }
+    if(global_touch_present_flag == 0 || global_touch_y < 16) {
+      app_selected_row = -1;
+      app_selected_col = -1;
+      app_selected = -1;
+    }
+    
+    app_index = 1;
+    for(row = 0; row != 10; row++) {
+      for(col = 0; col != 8; col++) {
+        if(app_index >= apps_max) {
+          break;
+        }
+        do {
+          all_apps[app_index](APP_MODE_RETURN_NAME_SHORT, app_name);
+          all_apps[app_index](APP_MODE_RETURN_ICON, app_icon);
+          app_index++;
+          if(app_index >= apps_max) break;
+        } while(strlen(app_name) == 0);
+
+        //Serial.printf("app=%d\n", row * 8 + col + 1);
+
+        redraw_flag = 0;
+        if(col == app_selected_col && row == app_selected_row) {
+          app_selected = app_index - 1;
+          app_fg = color_scheme_selection_fg;
+          app_bg = color_scheme_selection_bg;
+          if(global_touch_present_flag) {
+            redraw_flag = 1;
+          }
+        }
+        else {
+          app_fg = color_scheme_fg;
+          app_bg = color_scheme_bg;
+          if(!global_touch_present_flag) {
+            redraw_flag = 1;
+          }
+          if(row == app_selected_prev_row && col == app_selected_prev_col) {
+            redraw_flag = 1;
+          }
+        }
+        if(redraw_flag) {
+          //Serial.printf("Free heap before app: %d\n", ESP.getFreeHeap());
+          //Serial.printf("Free heap after app %s: %d\n", app_name, ESP.getFreeHeap());
+          app_name[4] = 0;
+          tft.setTextColor(app_fg, app_bg);
+          tft.drawCentreString(app_name, col * tft.width() / 8 + 15, 2 + 4 + 16 + 16 + row * 32, FONT_MONOSPACE);
+          icon16_from_bytes(7 + col * tft.width() / 8, 4 + 16 + row * 32, app_icon);
+          // Выделение вокруг значка
+          tft.drawRect(6 + col * tft.width() / 8, 3 + 16 + row * 32, 18, 18, app_bg);
+          // Выделение вокруг названия
+          tft.drawRect(
+            col * tft.width() / 8 + 15 - 1 - tft.textWidth(app_name, FONT_MONOSPACE) / 2,
+            2 + 4 + 16 + 16 + row * 32 - 1,
+            tft.textWidth(app_name, FONT_MONOSPACE) + 2,
+            tft.fontHeight(FONT_MONOSPACE) + 2,
+            app_bg
+          );
+        }
+      }
+      
+    }
+    app_selected_prev_row = app_selected_row;
+    app_selected_prev_col = app_selected_col;
+
+    if(app_selected == -1) touchWaitPress();
+    if(touchCheckNowait() == 1) continue;
+
+    if(app_selected >= 0 && app_selected < apps_max) {
+      //Serial.printf("Run app %d\n", app_selected);
+      touchExitActionReset();
+      all_apps[app_selected](APP_MODE_LAUNCH, NULL);
+      touchWaitRelease();
+      break;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
 // ====================================================
 // Калькулятор
 // ====================================================
@@ -1558,7 +1697,7 @@ void calculator(char mode, char *io_buff) {
 
     touchWaitPress();
 
-    if(global_touch_y >= 0 && global_touch_y < 16 && global_touch_x < tft.width() / 2) {
+    if(touchIsMenuTap()) {
       menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
       if(menu_selected == 0) {
         clipboard_copy(screen);
@@ -2616,7 +2755,7 @@ void files(char mode, char *io_buff) {
     touchWaitPress();
 
     // Меню
-    if(global_touch_y >= 0 && global_touch_y < 16 && global_touch_x < tft.width() / 2) {
+    if(touchIsMenuTap()) {
       menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
       if(menu_selected == 0) {
         terminal_cd_root();
@@ -2710,10 +2849,14 @@ void files(char mode, char *io_buff) {
               touchWaitRelease();
             }
             else if(is_png_file(buff)) {
-              png_show_image(buff, 0, 0);
+              png_show_image(buff, 0, 0, 1);
+              touchWaitPress();
+              touchWaitRelease();
             }
             else if(is_jpeg_file(buff)) {
-              jpeg_show_image(buff, 0, 0);
+              jpeg_show_image(buff, 0, 0, 1);
+              touchWaitPress();
+              touchWaitRelease();
             }
             else if(is_webp_file(buff)) {
               drawError("WEBP is not supported");
@@ -6543,8 +6686,8 @@ void terminal_input_string(char *input_buff) {
   int command_file_offset = 0;
   int command_max_offset = 0;
   int i;
-  char command_changed_flag = 0;
-  char erase_old_command_flag = 0;
+  int tmp;
+  char clipboard_serial_cmd = 0;
   fs::File file;
 
   if(Storage) {
@@ -6569,12 +6712,13 @@ void terminal_input_string(char *input_buff) {
   while(1) {
     prev_offset = offset;
     // Выводим текущую строку
+    //Serial.printf("input_begin_col %d, input_begin_row %d, input_scrolled %d\n", input_begin_col, input_begin_row, input_scrolled);
     terminal_ansi_set_cursor(input_begin_col + 1, input_begin_row - input_scrolled + 1);
     for(i = 0; i < strlen(buff); i++) {
-      terminal_print_char(buff[i]);
       // Проверяем прокрутку
       input_row = cursor_row;
       input_col = cursor_col;
+      terminal_print_char(buff[i]);
       // Если курсор перескочил на начало той же строки - увеличиваем количество прокрученных строк
       if(input_col > cursor_col) {
         if(input_row == cursor_row) {
@@ -6590,54 +6734,17 @@ void terminal_input_string(char *input_buff) {
       }
     }
     terminal_show_screen();
+    byte = -1;
 
     // Команды управления командами и курсором
     if(strlen(terminal_output) > 0) {
       // Up
       if(!strcmp(terminal_output, "\x1B[A")) {
-        if(Storage && command_offset > 0) {
-          command_offset--;
-          file = Storage->open(TERMINAL_HISTORY);
-          command_file_offset = 0;
-          
-          while(file.available()) {
-            strcpy(buff, file.readStringUntil('\n').c_str());
-            if(command_offset == command_file_offset) {
-              break;
-            }
-            command_file_offset++;
-          }
-          file.close();
-          strcpy(input_buff, buff);
-          command_changed_flag = 1;
-          erase_old_command_flag = 1;
-        }
+        byte = 0x10; // Ctrl+P
       }
       // Down
       if(!strcmp(terminal_output, "\x1B[B")) {
-        if(Storage && command_max_offset > command_offset - 1) {
-          command_offset++;
-          file = Storage->open(TERMINAL_HISTORY);
-          command_file_offset = 0;
-          while(file.available()) {
-            strcpy(buff, file.readStringUntil('\n').c_str());
-            if(command_offset == command_file_offset) {
-              break;
-            }
-            command_file_offset++;
-            if(!file.available() && command_offset == command_file_offset) {
-              strcpy(buff, "");
-            }
-          }
-          if(command_offset > command_file_offset) {
-            strcpy(buff, "");
-            command_offset = command_file_offset;
-          }
-          file.close();
-          strcpy(input_buff, buff);
-          command_changed_flag = 1;
-          erase_old_command_flag = 1;
-        }
+        byte = 0x0E;
       }
       // Left
       if(!strcmp(terminal_output, "\x1B[D")) {
@@ -6659,41 +6766,57 @@ void terminal_input_string(char *input_buff) {
       if(!strcmp(terminal_output, "\x1B[1~")) {
         cursor_offset = 0;
       }
-
-      // Если команда изменилась
-      if(command_changed_flag) {
-        offset = strlen(buff);
-        cursor_offset = strlen(buff);
-        command_changed_flag = 0;
+      // Del
+      if(!strcmp(terminal_output, "\x1B[3~")) {
+        if(cursor_offset < offset) {
+          string_cut(buff, cursor_offset, 1);
+          offset = strlen(buff);
+        }
       }
 
       strcpy(terminal_output, "");
     }
 
-    if(Serial.available()) {
-      byte = Serial.read();
-      if(byte >= 0xC0) {
-        if(Serial.available()) {
-          byte = utf8_to_cp1251_double_byte(byte, Serial.read());
+    if(byte == -1) {
+      if(Serial.available()) {
+        byte = Serial.read();
+        if(byte >= 0xC0) {
+          if(Serial.available()) {
+            byte = utf8_to_cp1251_double_byte(byte, Serial.read());
+          }
         }
       }
-    }
-    else {
-      byte = terminal_input_char();
+      else {
+        byte = terminal_input_char();
+      }
     }
 
     if(byte != -1) {
-      if(byte == 0x00) {
+      // Cut
+      if(byte == -2) {
+        clipboard_copy(buff);
+        strcpy(buff, "");
+        cursor_offset = 0;
+        offset = 0;
+      }
+      // Copy
+      else if(byte == -3) {
+        clipboard_copy(buff);
+      }
+      else if(byte == 0x00) {
         // Ignored
       }
       else if(byte == 0x01) {
         // Ctrl+A, begin of string
         cursor_offset = 0;
+        clipboard_serial_cmd = 0;
       }
       else if(byte == 0x02) {
         // Ctrl+B, cursor left
-        if(cursor_offset > 0)
+        if(cursor_offset > 0) {
           cursor_offset--;
+        }
+        clipboard_serial_cmd = 0;
       }
       else if(byte == 0x03) {
         // Ctrl+C
@@ -6715,12 +6838,14 @@ void terminal_input_string(char *input_buff) {
       else if(byte == 0x05) {
         // Ctrl+E, end of string
         cursor_offset = offset;
+        clipboard_serial_cmd = 0;
       }
       else if(byte == 0x06) {
         // Ctrl+F, cursor right
         if(cursor_offset < offset) {
           cursor_offset++;
         }
+        clipboard_serial_cmd = 0;
       }
       else if(byte == 0x07) {
         // Ctrl+G, отмена чтения строки
@@ -6744,21 +6869,81 @@ void terminal_input_string(char *input_buff) {
             cursor_row--;
           }
         }
+        clipboard_serial_cmd = 0;
       }
       // Tab
       else if(byte == 0x09) {
         // Ignored
+        clipboard_serial_cmd = 0;
       }
       else if(byte == 0x0B) {
-        // Ctrl+K, удалить текст до конца строки
+        // Ctrl+K, удалить текст до конца строки (копирует в буфер)
+        if(clipboard_serial_cmd) {
+          clipboard_append_end(buff + cursor_offset);
+        }
+        else {
+          clipboard_copy(buff + cursor_offset);
+        }
         buff[cursor_offset] = 0;
         offset = cursor_offset;
+        clipboard_serial_cmd = 1;
       }
       else if(byte == 0x0C) {
         // Ctrl+L
         buff[0] = 0;
         strcpy(input_buff, buff);
+        terminal_print_char('\n');
+        terminal_print_char('\r');
+        terminal_show_screen();
         return;
+      }
+      else if(byte == 0x0E) {
+        // Ctrl+N
+        if(Storage && command_max_offset > command_offset - 1) {
+          command_offset++;
+          file = Storage->open(TERMINAL_HISTORY);
+          command_file_offset = 0;
+          while(file.available()) {
+            strcpy(buff, file.readStringUntil('\n').c_str());
+            if(command_offset == command_file_offset) {
+              break;
+            }
+            command_file_offset++;
+            if(!file.available() && command_offset == command_file_offset) {
+              strcpy(buff, "");
+            }
+          }
+          if(command_offset > command_file_offset) {
+            strcpy(buff, "");
+            command_offset = command_file_offset;
+          }
+          file.close();
+          strcpy(input_buff, buff);
+          offset = strlen(buff);
+          cursor_offset = strlen(buff);
+        }
+        clipboard_serial_cmd = 0;
+      }
+      else if(byte == 0x10) {
+        // Ctrl+P
+        if(Storage && command_offset > 0) {
+          command_offset--;
+          file = Storage->open(TERMINAL_HISTORY);
+          command_file_offset = 0;
+          
+          while(file.available()) {
+            strcpy(buff, file.readStringUntil('\n').c_str());
+            if(command_offset == command_file_offset) {
+              break;
+            }
+            command_file_offset++;
+          }
+          file.close();
+          strcpy(input_buff, buff);
+          offset = strlen(buff);
+          cursor_offset = strlen(buff);
+        }
+        clipboard_serial_cmd = 0;
       }
       // Newline
       else if(byte == '\n') {
@@ -6767,6 +6952,88 @@ void terminal_input_string(char *input_buff) {
         terminal_print_char('\r');
         terminal_show_screen();
         return;
+      }
+      else if(byte == 0x14) {
+        // Ctrl+T, поменять местами два байта перед курсором
+        if(cursor_offset > 0) {
+          if(cursor_offset == offset) {
+            cursor_offset--;
+          }
+          tmp = buff[cursor_offset - 1];
+          buff[cursor_offset - 1] = buff[cursor_offset];
+          buff[cursor_offset] = tmp;
+          if(cursor_offset < offset) {
+            cursor_offset++;
+          }
+        }
+      }
+      else if(byte == 0x15) {
+        // Ctrl+U, удалить текст до курсора (копировать в буфер слева)
+        // Копировать в буфер
+        tmp = buff[cursor_offset];
+        buff[cursor_offset] = 0;
+        if(clipboard_serial_cmd) { 
+          clipboard_append_begin(buff);
+        }
+        else {
+          clipboard_copy(buff);
+        }
+        buff[cursor_offset] = tmp;
+        // Удалить
+        string_cut(buff, 0, cursor_offset);
+        cursor_offset = 0;
+        offset = strlen(buff);
+        clipboard_serial_cmd = 1;
+      }
+      else if(byte == 0x17) {
+        // Ctrl+W, удалить слово слева от курсора
+        if(cursor_offset > 0) {
+          offset = cursor_offset - 1;
+          // Если до курсора пробелы, то сначала нужно перемещаться влево до начала слова
+          while(buff[offset] == 0x20 && offset > 0) offset--;
+
+          // Потом до ближайшего пробела, не включая его
+          while(buff[offset] != 0x20 && offset > 0) offset--;
+
+          // Копируем этот кусок в начало буфера
+          tmp = buff[cursor_offset];
+          buff[cursor_offset] = 0;
+          if(clipboard_serial_cmd) { 
+            clipboard_append_begin(buff + offset);
+          }
+          else {
+            clipboard_copy(buff + offset);
+          }
+          buff[cursor_offset] = tmp;
+          // Удалить
+          string_cut(buff, offset, cursor_offset - offset);
+
+          cursor_offset = offset;
+          offset = strlen(buff);
+        }
+        clipboard_serial_cmd = 1;
+      }
+      else if(byte == 0x19) {
+        // Ctrl+Y, текст из буфера
+        // Буфер не пустой и есть место в строке
+        if(clipboard != NULL && strlen(buff) + strlen(clipboard) < (TERMINAL_INPUT_MAX - 1)) {
+          string_paste(buff, cursor_offset, clipboard);
+          cursor_offset += strlen(clipboard);
+          offset = strlen(buff);
+        }
+      }
+      else if(byte == 0x1A) {
+        // Ctrl+Z, приостановить процесс, тоже отмена
+        buff[0] = 0;
+        strcpy(input_buff, buff);
+        terminal_print_char('\n');
+        terminal_print_char('\r');
+        terminal_show_screen();
+        return;
+      }
+      else if(byte < 0x20) {
+        // Пропускаем служебные байты
+        clipboard_serial_cmd = 0;
       }
       else if(strlen(buff) < (TERMINAL_INPUT_MAX - 1)) {
         // Сдвинуть строку справо
@@ -6778,6 +7045,7 @@ void terminal_input_string(char *input_buff) {
         offset++;
         cursor_offset++;
         buff[offset] = 0;
+        clipboard_serial_cmd = 0;
       }
       else {
         // Некорректный символ или превышен лимит ввода
@@ -6826,7 +7094,7 @@ int terminal_input_char() {
     NULL
   };
   char *control_buttons_cb[] = {
-    "<", "Sel", "Cut", "Copy", "Paste", ">",
+    "<", "Del", "Cut", "Copy", "Paste", ">",
     NULL
   };
   char **control_buttons = NULL;
@@ -6914,8 +7182,9 @@ int terminal_input_char() {
         if(control_buttons == control_buttons_pg) {
           if(strlen(terminal_output) < 70) strcat(terminal_output, "\x1B[1~");
         }
-        // Select
+        // Delete
         if(control_buttons == control_buttons_cb) {
+          if(strlen(terminal_output) < 70) strcat(terminal_output, "\x1B[3~");
         }
       }
       else if(button == 2) {
@@ -6933,6 +7202,7 @@ int terminal_input_char() {
         }
         // Cut
         if(control_buttons == control_buttons_cb) {
+          return -2;
         }
       }
       else if(button == 3) {
@@ -6950,6 +7220,7 @@ int terminal_input_char() {
         }
         // Copy
         if(control_buttons == control_buttons_cb) {
+          return -3;
         }
       }
       else if(button == 4) {
@@ -6966,6 +7237,7 @@ int terminal_input_char() {
         }
         // Paste
         if(control_buttons == control_buttons_cb) {
+          return 0x19; // Ctrl+Y
         }
       }
       else if(button == 5) {
@@ -7781,8 +8053,8 @@ int terminal_xmodem(int arg_count, char **args) {
         checksum_crc = 1;
       }
       if(byte != 0x06 && byte != 0x15 && byte != 0x43) {
-        sprintf(buff, "Xmodem unknown char: 0x%02X '%c'", byte, byte);
-        terminal_println(buff);
+        //sprintf(buff, "Xmodem unknown char: 0x%02X '%c'", byte, byte);
+        //terminal_println(buff);
         continue;
       }
       // Файл закончился, получено подтверждение
@@ -15861,6 +16133,12 @@ void counter(char mode, char *io_buff) {
     0x0F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xF0, 
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
   };
+  int menu_selected;
+  char *menu_items[] = {
+    "Copy",
+    "Exit",
+    NULL
+  };
 
   if(mode == APP_MODE_RETURN_NAME) {
     strcpy(io_buff, "Counter");
@@ -15898,6 +16176,17 @@ void counter(char mode, char *io_buff) {
     drawButtonMatrix(0, tft.height() - 64, tft.width(), 64, buttons_other, 2, 1);
 
     touchWaitPress();
+    if(touchIsMenuTap()) {
+      menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
+      if(menu_selected == 0) {
+        sprintf(buff, "%ld", counter);
+        clipboard_copy(buff);
+      }
+      else if(menu_selected == 1) {
+        global_exit_flag = 1;
+      }
+    }
+
     if(global_touch_present_flag && global_touch_y >= 100 && global_touch_y < 200) {
       if(millis() - prev_touch_millis > 30) {
         counter++;
@@ -16005,7 +16294,7 @@ void random_numbers(char mode, char *io_buff) {
     drawButtonMatrix(0, 54, tft.width(), tft.height() - 54, buttons, 2, 5);
 
     touchWaitPress();
-    if(global_touch_y >= 0 && global_touch_y < 16 && global_touch_x < tft.width() / 2) {
+    if(touchIsMenuTap()) {
       menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
       if(menu_selected == 0) {
         clipboard_copy(buff);
@@ -19170,6 +19459,7 @@ void screensaver(char mode, char *io_buff) {
     "Rule 30",
     "Voronoi diagrams",
     "Spirograph",
+    "Photostand",
     NULL
   };
   char app_icon[] = {
@@ -19269,6 +19559,10 @@ void screensaver(char mode, char *io_buff) {
       // Спирограф
       if(button_pressed == 13) {
         screensaver_spirograph();
+      }
+      // Фоторамка
+      if(button_pressed == 14) {
+        screensaver_photostand();
       }
       clearScreen();
       drawAppTitle("Screensavers");
@@ -19528,6 +19822,60 @@ void screensaver_spirograph() {
   }
 }
 
+#define PHOTOSTAND_DIR "/Photostand"
+
+void screensaver_photostand() {
+  fs::File current_dir;
+  fs::File file;
+  char buff[320];
+
+  long millis_last_update = 0;
+
+  if(!Storage) {
+    drawError("Storage unavailable");
+    return;
+  }
+
+  if(!Storage->exists(PHOTOSTAND_DIR)) {
+    Storage->mkdir(PHOTOSTAND_DIR);
+  }
+
+  if(is_empty_directory(PHOTOSTAND_DIR)) {
+    drawError("Put some photos into /Photostand folder. 240x320 recommended");
+    return;
+  }
+
+  current_dir = Storage->open(PHOTOSTAND_DIR);
+
+  while(1) {
+    while(file = current_dir.openNextFile()) {
+      sprintf(buff, "%s/%s", PHOTOSTAND_DIR, file.name());
+      if(is_bmp_file(buff)) {
+        bmp_show_image(buff, 0, 0);
+        delayOrTouchWait(10000);
+      }
+      else if(is_png_file(buff)) {
+        png_show_image(buff, 0, 0, 0);
+        delayOrTouchWait(10000);
+      }
+      else if(is_jpeg_file(buff)) {
+        jpeg_show_image(buff, 0, 0, 0);
+        delayOrTouchWait(10000);
+      }
+
+      if(touchCheckNowait()) {
+        touchWaitRelease();
+        return;
+      }
+
+      file.close();
+    }
+    current_dir.rewindDirectory();
+  }
+
+  current_dir.close();
+}
+
 void screensaver_squares() {
   int x, y, height, width;
   disableAppTitle();
@@ -19766,20 +20114,64 @@ void screensaver_forest_fire() {
 }
 
 void screensaver_mood_lamp() {
-  int red = 0, green = 0, blue = 0;
+  int red = 0, green = 0, blue = 31;
   int color;
+  int delay_ms = 100;
   disableAppTitle();
   while(1) {
-    red = B00011110 * (1 + sin(1.0 * millis() / 10000)) / 2;
-    green = B00111110 * (1 + sin(1.1 * millis() / 10000)) / 2;
-    blue = B00011110 * (1 + sin(1.3 * millis() / 10000)) / 2;
-    color = ((red) << (5 + 6)) | ((green) << (5)) | ((blue));
-    tft.fillScreen(color);
-    //Serial.printf("r %d g %d b %d color %04X\n", red, green, blue, color);
-    delayOrTouchWait(50);
-    if(touchCheckNowait()) {
-      touchWaitRelease();
-      break;
+    for(red = 0; red < 31; red++) {
+      color = ((red) << (5 + 6)) | ((green) << (5)) | ((blue));
+      tft.fillScreen(color);
+      delayOrTouchWait(delay_ms);
+      if(touchCheckNowait()) {
+        touchWaitRelease();
+        return;
+      }
+    }
+    for(blue = 31; blue > 0; blue--) {
+      color = ((red) << (5 + 6)) | ((green) << (5)) | ((blue));
+      tft.fillScreen(color);
+      delayOrTouchWait(delay_ms);
+      if(touchCheckNowait()) {
+        touchWaitRelease();
+        return;
+      }
+    }
+    for(green = 0; green < 63; green++) {
+      color = ((red) << (5 + 6)) | ((green) << (5)) | ((blue));
+      tft.fillScreen(color);
+      delayOrTouchWait(delay_ms / 2);
+      if(touchCheckNowait()) {
+        touchWaitRelease();
+        return;
+      }
+    }
+    for(red = 31; red > 0; red--) {
+      color = ((red) << (5 + 6)) | ((green) << (5)) | ((blue));
+      tft.fillScreen(color);
+      delayOrTouchWait(delay_ms);
+      if(touchCheckNowait()) {
+        touchWaitRelease();
+        return;
+      }
+    }
+    for(blue = 0; blue < 31; blue++) {
+      color = ((red) << (5 + 6)) | ((green) << (5)) | ((blue));
+      tft.fillScreen(color);
+      delayOrTouchWait(delay_ms);
+      if(touchCheckNowait()) {
+        touchWaitRelease();
+        return;
+      }
+    }
+    for(green = 63; green > 0; green--) {
+      color = ((red) << (5 + 6)) | ((green) << (5)) | ((blue));
+      tft.fillScreen(color);
+      delayOrTouchWait(delay_ms / 2);
+      if(touchCheckNowait()) {
+        touchWaitRelease();
+        return;
+      }
     }
   }
 }
@@ -22997,6 +23389,18 @@ void http_file_access_show_dir(char *path, char *contents) {
   fs::File current_dir;
   char buff[320];
   char updir[160];
+  char *filenames[128];
+  long filesizes[128];
+  char is_dir[128];
+  int offset = 0;
+  int i, j;
+
+  for(offset = 0; offset < 128; offset++) {
+    filenames[offset] = NULL;
+    filesizes[offset] = 0;
+    is_dir[offset] = 0;
+  }
+
   current_dir = Storage->open(path);
   if(current_dir.isDirectory()) {
     // Если это не корневая папка, то добавляем ссылки
@@ -23013,24 +23417,65 @@ void http_file_access_show_dir(char *path, char *contents) {
       sprintf(buff, "<a href='?filename=%s'>&lt;-- .. </a> (up)<br>\n", updir);
       strcat(contents, buff);
     }
+    offset = 0;
     while(file = current_dir.openNextFile()) {
+      filenames[offset] = (char *)malloc((strlen(file.name()) + 1) * sizeof(char));
+      if(!filenames[offset]) break;
+      strcpy(filenames[offset], file.name());
+      filesizes[offset] = file.size();
+      is_dir[offset] = file.isDirectory();
+      offset++;
+      if(offset == 128) break;
+      file.close();
+    }
+    current_dir.close();
+
+    // Сортировка
+    for(j = 0; j < offset - 1; j++) {
+      bool swapped = false;
+
+      for(i = 0; i < offset - j - 1; i++) {
+        if((!is_dir[i] && is_dir[i + 1]) || (is_dir[i] == is_dir[i + 1]) && strcmp(filenames[i], filenames[i + 1]) > 0) {
+          char *tmp = filenames[i];
+          filenames[i] = filenames[i + 1];
+          filenames[i + 1] = tmp;
+
+          long tmp_len = filesizes[i];
+          filesizes[i] = filesizes[i + 1];
+          filesizes[i + 1] = tmp_len;
+
+          bool tmp_dir = is_dir[i];
+          is_dir[i] = is_dir[i + 1];
+          is_dir[i + 1] = tmp_dir;
+
+          swapped = true;
+        }
+      }
+
+      if(!swapped) break;
+    }
+
+    // Вывод
+    for(offset = 0; offset < 128 && filenames[offset]; offset++) {
       if(strcmp(path, "/")) {
-        if(file.isDirectory()) {
-          sprintf(buff, "<a href='?filename=%s/%s'>%s/%s</a> (dir)<br>\n", path, file.name(), path, file.name());
+        if(is_dir[offset]) {
+          sprintf(buff, "<a href='?filename=%s/%s'>%s</a> (dir)<br>\n", path, filenames[offset], filenames[offset]);
         }
         else {
-          sprintf(buff, "<a href='?filename=%s/%s'>%s/%s</a> (%d bytes)<br>\n", path, file.name(), path, file.name(), file.size());
+          sprintf(buff, "<a href='?filename=%s/%s'>%s</a> (%ld bytes)<br>\n", path, filenames[offset], filenames[offset], filesizes[offset]);
         }
       }
       else {
-        if(file.isDirectory()) {
-          sprintf(buff, "<a href='?filename=/%s'>/%s</a> (dir)<br>\n", file.name(), file.name());
+        if(is_dir[offset]) {
+          sprintf(buff, "<a href='?filename=/%s'>%s</a> (dir)<br>\n", filenames[offset], filenames[offset]);
         }
         else {
-          sprintf(buff, "<a href='?filename=/%s'>/%s</a> (%d bytes)<br>\n", file.name(), file.name(), file.size());
+          sprintf(buff, "<a href='?filename=/%s'>%s</a> (%ld bytes)<br>\n", filenames[offset], filenames[offset], filesizes[offset]);
         }
       }
       strcat(contents, buff);
+
+      free(filenames[offset]);
     }
   }
 }
@@ -26632,9 +27077,13 @@ void dashboard_morse_news() {
       tft.fillRect(0, 16, tft.width(), tft.height() - 16, color_scheme_bg);
       drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 1, 1);
 
-      while(!Storage->exists(MORSE_NEWS_SOURCES)) {
+      if(!Storage->exists(MORSE_NEWS_SOURCES)) {
         drawInfo("Write RSS URL to use Morse News");
         edit_file("Morse News", MORSE_NEWS_SOURCES);
+        if(!Storage->exists(MORSE_NEWS_SOURCES)) {
+          free(data);
+          return;
+        }
       }
       read_file_to_buff(MORSE_NEWS_SOURCES, 159, url);
 
@@ -29705,7 +30154,7 @@ char edit_text(char *title, char *contents, long max_len) {
     }
 
     // Меню
-    if(global_touch_y >= 0 && global_touch_y < 16 && global_touch_x < tft.width() / 2) {
+    if(touchIsMenuTap()) {
       menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
       if(menu_selected == 0) {
         // Вставка
@@ -32780,7 +33229,7 @@ void hanoi_towers(char mode, char *io_buff) {
     touch_x = global_touch_x;
     touch_y = global_touch_y;
     // Меню
-    if(touch_y >= 0 && touch_y < 16 && touch_x < tft.width() / 2) {
+    if(touchIsMenuTap()) {
       menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
       if(menu_selected == 0) {
         restart_flag = 1;
@@ -36742,6 +37191,39 @@ void clipboard_copy(char *data) {
   }
 }
 
+// Добавить в буфер данные слева (в начало)
+void clipboard_append_begin(char *data) {
+  char *buff = NULL;
+  int clipboard_len = clipboard ? strlen(clipboard) : 0;
+  buff = (char *)malloc((clipboard_len + strlen(data) + 1) * sizeof(char));
+  if(!buff) return;
+
+  strcpy(buff, data);
+  if(clipboard) {
+    strcat(buff, clipboard);
+  }
+  clipboard_copy(buff);
+  free(buff);
+}
+
+// Добавить в бкфер данные справа (в конец)
+void clipboard_append_end(char *data) {
+  char *buff = NULL;
+  int clipboard_len = clipboard ? strlen(clipboard) : 0;
+  buff = (char *)malloc((clipboard_len + strlen(data) + 1) * sizeof(char));
+  if(!buff) return;
+
+  if(clipboard) {
+    strcpy(buff, clipboard);
+  }
+  else {
+    strcpy(buff, "");
+  }
+  strcat(buff, data);
+  clipboard_copy(buff);
+  free(buff);
+}
+
 // Удалить указанное количество символов из строки в указанном месте
 void string_cut(char *str, int from, int count) {
   int i = 0;
@@ -38638,7 +39120,7 @@ int touchMapY(int x_raw, int y_raw) {
 }
 
 char touchIsMenuAction() {
-  if(app_title_enabled && global_touch_present_flag && global_touch_y < 16 && global_touch_x >= tft.width() - 16 && global_menu_visible_flag == 0) {
+  if(app_title_enabled && global_touch_present_flag && global_touch_y < 16 && global_touch_x >= tft.width() - 32 && global_menu_visible_flag == 0) {
     show_system_menu();
     return 1;
   }
@@ -38728,6 +39210,14 @@ void touchWaitPress() {
   //global_touch_present_flag = 1;
 
   //Serial.println("touchWaitPress end");
+}
+
+// Нажатие для вызова меню
+char touchIsMenuTap() {
+  if(global_touch_y >= 0 && global_touch_y < 16 && global_touch_x < 32) {
+    return 1;
+  }
+  return 0;
 }
 
 void touchWaitReleaseOrExit() {
@@ -39300,7 +39790,7 @@ int pngDraw(PNGDRAW *pDraw) {
 }
 
 // Отобразить PNG в указанном месте
-int png_show_image(char *filename, int start_x, int start_y) {
+int png_show_image(char *filename, int start_x, int start_y, int show_warnings) {
   char buff[80];
   int rc;
 
@@ -39335,11 +39825,13 @@ int png_show_image(char *filename, int start_x, int start_y) {
     rc = png->decode(NULL, iScale);
     png->close();
 
-    touchWaitPress();
-    touchWaitRelease();
+    //touchWaitPress();
+    //touchWaitRelease();
   } else {
-    sprintf(buff, "PNG error code: %d\n", rc);
-    drawError(buff);
+    if(show_warnings) {
+      sprintf(buff, "PNG error code: %d\n", rc);
+      drawError(buff);
+    }
   }
   delete png;
   png = nullptr;
@@ -39349,7 +39841,7 @@ int png_show_image(char *filename, int start_x, int start_y) {
 JPEGDEC *jpeg;
 
 // Отобразить JPEG в указанном месте
-int jpeg_show_image(char *filename, int start_x, int start_y) {
+int jpeg_show_image(char *filename, int start_x, int start_y, int show_warnings) {
   char buff[80];
   int rc;
   int scaleOption = 0;
@@ -39383,12 +39875,14 @@ int jpeg_show_image(char *filename, int start_x, int start_y) {
     jpeg->decode(0, 0, scaleOption);
     jpeg->close();
 
-    touchWaitPress();
-    touchWaitRelease();
+    //touchWaitPress();
+    //touchWaitRelease();
   }
   else {
-    sprintf(buff, "JPEG error code: %d\n", rc);
-    drawError(buff);
+    if(show_warnings) {
+      sprintf(buff, "JPEG error code: %d\n", rc);
+      drawError(buff);
+    }
   }
   delete jpeg;
   return 0;
