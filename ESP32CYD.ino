@@ -271,10 +271,20 @@
   мануал в PROGMEM, дату раз в день в чат, меню в ханойских башнях, копирование, меню в калькуляторе, вставка из буфера в редактировании,
 2026-11-21 Терминал ввод строки Ctrl+N/P/T/U/Y/W/Z, общая функция для меню приложения, системного меню, копирование в счётчике
 2026-11-22 Заставка фоторамка, morse news исправлен баг бесконечного запроса RSS, mood lamp яркие цвета
+2026-11-23 Lights off теперь Lights Out, предлагать скачать chip8, предлагать интернет-радио, Sleep теперь Lock Screen,
+  примеры для Tunes
 
 - новый обзор(ы)
 
 Улучшения тут и там:
+- Галерея (как на телефоне, разные папки с предпросмотром)
+- Проверить копирование и перемещение
+- Tunes индикация процесса
+- Оповещение о смене версии системы (апгрейд, даунгрейд)
+- Предложить создавать IRC, Basic, RSS
+- Журнал событий /Settings/Journal - что записывать? 
+- Журнал активности? /Settings/Launcher - что запускалось, что делалось последним. Записывать при выходе
+- Оповещения
 - Ланучер-список
 - Лаунчер с более крупными значками
 - Лаунчер "последние приложения"
@@ -1161,7 +1171,7 @@ void timer(char mode, char *io_buff);
 void stopwatch(char mode, char *io_buff);
 void breathe(char mode, char *io_buff);
 void brightness_app(char mode, char *io_buff);
-void lights_off(char mode, char *io_buff);
+void lights_out(char mode, char *io_buff);
 void notes(char mode, char *io_buff);
 void tables(char mode, char *io_buff);
 void basic(char mode, char *io_buff);
@@ -1283,7 +1293,7 @@ function_application_pointer all_apps[] = {
   life,
   l_system,
   fifteen,
-  lights_off,
+  lights_out,
   snake,
   sokoban,
   turkish_kerchief,
@@ -1653,6 +1663,7 @@ void calculator(char mode, char *io_buff) {
   int menu_selected;
   char *menu_items[] = {
     "Copy",
+    "Paste",
     "Exit",
     NULL
   };
@@ -1703,6 +1714,11 @@ void calculator(char mode, char *io_buff) {
         clipboard_copy(screen);
       }
       else if(menu_selected == 1) {
+        a = strtod(clipboard, NULL);
+        sprintf(screen, "%lg", a);
+        continue;
+      }
+      else if(menu_selected == 2) {
         global_exit_flag = 1;
       }
     }
@@ -2522,7 +2538,7 @@ const char global_terminal_help[] PROGMEM =
   "fuzzy_clock - Fuzzy Clock app\n"
   "view_font - View Font app\n"
   "fifteen - Fifteen game\n"
-  "lights_off - Lights Off game\n"
+  "lights_out - Lights Out game\n"
   "snake - Snake game\n"
   "turkish_kerchief - Turkish Kerchief solitaire\n"
   "memory_match - Memory Match game\n"
@@ -5683,8 +5699,8 @@ void terminal_execute_single(char *str) {
     else if(strcmp(cmdline_params[1], "fifteen") == 0) {
       fifteen(APP_MODE_LAUNCH, NULL);
     }
-    else if(strcmp(cmdline_params[1], "lights_off") == 0) {
-      lights_off(APP_MODE_LAUNCH, NULL);
+    else if(strcmp(cmdline_params[1], "lights_out") == 0) {
+      lights_out(APP_MODE_LAUNCH, NULL);
     }
     else if(strcmp(cmdline_params[1], "snake") == 0) {
       snake(APP_MODE_LAUNCH, NULL);
@@ -12100,6 +12116,45 @@ void tunes(char mode, char *io_buff) {
     return;
   }
 
+  if(!Storage->exists(TUNES_PATH)) {
+    Storage->mkdir(TUNES_PATH);
+    if(!Storage->exists(TUNES_PATH)) {
+      drawError("Unable to create directory");
+      return;
+    }
+  }
+
+  // Создать примеры
+  if(is_empty_directory(TUNES_PATH)) {
+    clearScreen();
+    drawAppTitle("Tunes");
+
+    if(drawConfirm("Create some samples?") == 0) {
+      write_file_from_buff(TUNES_PATH "/Buffoon", "Buffoon\n"
+        "t90 8c1 4.d#1 8g1 4.c2 8- 4.b1 8- 2a#1 4.- 8a#1 4.g#1 8a#1 4.g#1 2g1 4.- 8g1 4.g#1 8a#1 4.g#1 8- 4.g1 8- 4.d#1 8d#1 4.f1 8- 4.f#1 2g1\n");
+      write_file_from_buff(TUNES_PATH "/Ode_to_Joy", "Ode to Joy\n"
+        "4c#2 4c#2 4d2 4e2 4e2 4d2 4c#2 4b1 4a1 4a1 4b1 4c#2 4.c#2 8b1 2b1 4c#2 4c#2 4d2 4e2 4e2 4d2 4c#2 4b1 4a1 4a1 4b1 4c#2 4.b1 8a1 2a1 4b1 "
+        "4b1 4c#2 4a1 4b1 8c#2 8d2 4c#2 4a1 4b1 8c#2 8d2 4c#2 4b1 4a1 4b1 2e1 4c#2 4c#2 4d2 4e2 4e2 4d2 4c#2 4b1 4a1 4a1 4b1 4c#2 4.b1 8a1 2a1\n");
+      write_file_from_buff(TUNES_PATH "/Orpheus", "Orpheus\n"
+        "2c1 8d1 8f1 8e1 8d1 4g1 4g1 8g1 8a1 8e1 8f1 4d1 4d1 8d1 8f1 8e1 8d1 8c1 8c2 8b1 8a1 8g1 8f1 8e1 8d1 2c1 8d1 8f1 8e1 8d1 4g1 4g1 8g1 8a1 "
+        "8e1 8f1 4d1 4d1 8d1 8f1 8e1 8d1 8c1 8g1 8d1 8e1 4c1 4c1\n");
+      write_file_from_buff(TUNES_PATH "/Pop_Goes_the_Weasel", "Pop Goes the Weasel\n"
+        "4g1 8g1 4a1 8a1 8b1 8d2 8b1 4g1 8d1 4g1 8g1 4a1 8c2 4.b1 4g1 8d1 4g1 8g1 4a1 8a1 8b1 8d2 8b1 4.g1 4.e2 4a1 8c2 4.b1 4g1 8d2 4g2 8g2 "
+        "4e2 8g2 4f#2 8e2 4d2 8d2 4g2 8g2 4e2 8g2 4.f#2 4.d2 4c2 8b1 4c2 8d2 4e2 8f#2 4.g2 4.e2 4a1 8c2 4.b1 4.g1\n");
+      write_file_from_buff(TUNES_PATH "/Tetris", "Tetris\n"
+        "2e2 4b1 4c2 4d2 8e2 8d2 4c2 4b1 2a1 4a1 4c2 2e2 4d2 4c2 2b1 4b1 4c2 2d2 2e2 2c2 2a1 1a1 4- 2d2 4f2 2a2 4g2 4f2 2e2 4e2 4c2 2e2 4d2 "
+        "4c2 2b1 4b1 4c2 2d2 2e2 2c2 2a1 2a1\n");
+      write_file_from_buff(TUNES_PATH "/Deck_the_Halls", "Deck the Halls\n"
+        "4.c2 8a#1 4a1 4g1 4f1 4g1 4a1 4f1 8g1 8a1 8a#1 8g1 4.a1 8g1 4f1 4e1 4f1 4- 4.c2 8a#1 4a1 4g1 4f1 4g1 4a1 4f1 8g1 8a1 8a#1 8g1 4.a1 8g1 "
+        "4f1 4e1 4f1 4- 4.g1 8a1 4a#1 4g1 4.a1 8a#1 4c2 4g1 8a1 8b1 4c2 8d2 8e2 4f2 4e2 4d2 4c2 4- 4.c2 8a#1 4a1 4g1 4f1 4g1 4a1 4f1 8d2 8d2 8d2 "
+        "8d2 4.c2 8a#1 4a1 4g1 2f1\n");
+      write_file_from_buff(TUNES_PATH "/About_Bears", "About Bears\n"
+        "4d1 8d1 8f1 4a1 4d1 4e1 4e1 2- 4c#1 8c#1 8e1 4a1 4c#1 4d1 4- 2- 4d1 8d1 8f1 4a1 4d1 4e1 4e1 2- 4g1 4f1 4e1 4g1 2.a1 4- 4g1 8g1 8a1 4d2 "
+        "4a#1 4g1 4g1 2- 4f1 8f1 8a1 4c2 4a1 2.f1 8- 4d1 8d1 8f1 4a1 4d1 4e1 4e1 2- 4c#1 4e1 4a1 4c#1 4d1 4- 2- 1a1 4a1 4a1 4d#2 4d2 2.c2 4a#1 "
+        "2.g1 4- 1e1 4e1 4e1 4a#1 4a1 2.g1 4f1 2.d1 8-\n");
+    }
+  }
+
   pim_app("Tunes", TUNES_PATH, tunes_file_to_list, buttons, tunes_action);
 }
 
@@ -12544,6 +12599,28 @@ void webradio(char mode, char *io_buff) {
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 130);
     return;
+  }
+
+  if(!Storage->exists(WEBRADIO_PATH)) {
+    Storage->mkdir(WEBRADIO_PATH);
+    if(!Storage->exists(WEBRADIO_PATH)) {
+      drawError("Unable to create directory");
+      return;
+    }
+  }
+
+  // Создать примеры
+  if(is_empty_directory(WEBRADIO_PATH)) {
+    clearScreen();
+    drawAppTitle("Webradio");
+
+    if(drawConfirm("Create some samples?") == 0) {
+      write_file_from_buff(WEBRADIO_PATH "/Dance_UK_Radio", "Dance UK Radio\nhttp://uk2.internet-radio.com:8024/stream;\n");
+      write_file_from_buff(WEBRADIO_PATH "/FIP_Jazz", "FIP Jazz\nhttps://icecast.radiofrance.fr/fipjazz-midfi.mp3?id=radiofrance\n");
+      write_file_from_buff(WEBRADIO_PATH "/Radio_Paradise", "Radio Paradise\nhttp://stream-tx1.radioparadise.com/mp3-128\n");
+      write_file_from_buff(WEBRADIO_PATH "/181.FM_Old_School", "181.FM Old School\nhttps://listen.181fm.com/181-oldschool_128k.mp3\n");
+      write_file_from_buff(WEBRADIO_PATH "/Radio_Caroline", "Radio Caroline\nhttp://sc6.radiocaroline.net:8040/\n");
+    }
   }
 
   pim_app("Webradio", WEBRADIO_PATH, webradio_file_to_list, buttons, webradio_action);
@@ -13103,6 +13180,59 @@ void chip8(char mode, char *io_buff) {
     memcpy(io_buff, app_icon, 130);
     return;
   }
+
+  if(!Storage->exists(CHIP8_PATH)) {
+    Storage->mkdir(CHIP8_PATH);
+    if(!Storage->exists(CHIP8_PATH)) {
+      drawError("Unable to create directory");
+      return;
+    }
+  }
+
+  // Предложение скачать
+#ifdef IS_WIFI_ENABLED  
+  if(is_empty_directory(CHIP8_PATH)) {
+    clearScreen();
+    drawAppTitle("Chip-8");
+
+    if(drawConfirm("Download some games?") == 0) {
+      clearPopupWindow();
+      terminal_wget("https://arikado.xyz/cyd/chip8/Tetris.ch8", CHIP8_PATH "/Tetris.ch8");
+      if(Storage->exists(CHIP8_PATH "/Tetris.ch8") && is_empty_file(CHIP8_PATH "/Tetris.ch8")) {
+        Storage->remove(CHIP8_PATH "/Tetris.ch8");
+      }
+      terminal_wget("https://arikado.xyz/cyd/chip8/Puzzle.ch8", CHIP8_PATH "/Puzzle.ch8");
+      if(Storage->exists(CHIP8_PATH "/Puzzle.ch8") && is_empty_file(CHIP8_PATH "/Puzzle.ch8")) {
+        Storage->remove(CHIP8_PATH "/Puzzle.ch8");
+      }
+      terminal_wget("https://arikado.xyz/cyd/chip8/Chipquarium.ch8", CHIP8_PATH "/Chipquarium.ch8");
+      if(Storage->exists(CHIP8_PATH "/Chipquarium.ch8") && is_empty_file(CHIP8_PATH "/Chipquarium.ch8")) {
+        Storage->remove(CHIP8_PATH "/Chipquarium.ch8");
+      }
+      terminal_wget("https://arikado.xyz/cyd/chip8/Dinorun.ch8", CHIP8_PATH "/Dinorun.ch8");
+      if(Storage->exists(CHIP8_PATH "/Dinorun.ch8") && is_empty_file(CHIP8_PATH "/Dinorun.ch8")) {
+        Storage->remove(CHIP8_PATH "/Dinorun.ch8");
+      }
+      terminal_wget("https://arikado.xyz/cyd/chip8/GlitchGhost.ch8", CHIP8_PATH "/GlitchGhost.ch8");
+      if(Storage->exists(CHIP8_PATH "/GlitchGhost.ch8") && is_empty_file(CHIP8_PATH "/GlitchGhost.ch8")) {
+        Storage->remove(CHIP8_PATH "/GlitchGhost.ch8");
+      }
+      terminal_wget("https://arikado.xyz/cyd/chip8/SlipperySlope.ch8", CHIP8_PATH "/SlipperySlope.ch8");
+      if(Storage->exists(CHIP8_PATH "/SlipperySlope.ch8") && is_empty_file(CHIP8_PATH "/SlipperySlope.ch8")) {
+        Storage->remove(CHIP8_PATH "/SlipperySlope.ch8");
+      }
+      terminal_wget("https://arikado.xyz/cyd/chip8/GhostEscape.ch8", CHIP8_PATH "/GhostEscape.ch8");
+      if(Storage->exists(CHIP8_PATH "/GhostEscape.ch8") && is_empty_file(CHIP8_PATH "/GhostEscape.ch8")) {
+        Storage->remove(CHIP8_PATH "/GhostEscape.ch8");
+      }
+      terminal_wget("https://arikado.xyz/cyd/chip8/Br8kout.ch8", CHIP8_PATH "/Br8kout.ch8");
+      if(Storage->exists(CHIP8_PATH "/Br8kout.ch8") && is_empty_file(CHIP8_PATH "/Br8kout.ch8")) {
+        Storage->remove(CHIP8_PATH "/Br8kout.ch8");
+      }
+    }
+  }
+#endif
+
 
   pim_app("Chip-8", CHIP8_PATH, chip8_file_to_list, buttons, chip8_action);
 }
@@ -15494,7 +15624,7 @@ void random_app(char mode, char *io_buff) {
     case 44: i2c_scanner(APP_MODE_LAUNCH, NULL); break;
     case 45: life(APP_MODE_LAUNCH, NULL); break;
     case 46: fifteen(APP_MODE_LAUNCH, NULL); break;
-    case 47: lights_off(APP_MODE_LAUNCH, NULL); break;
+    case 47: lights_out(APP_MODE_LAUNCH, NULL); break;
 
     // Seventh line
     case 48: snake(APP_MODE_LAUNCH, NULL); break;
@@ -18558,12 +18688,15 @@ void sokoban(char mode, char *io_buff) {
   // Предложение скачать
 #ifdef IS_WIFI_ENABLED
   if(is_empty_directory(SOKOBAN_PATH)) {
+    clearScreen();
+    drawAppTitle("Sokoban");
+
     if(drawConfirm("Download classic levels?") == 0) {
-      terminal_wget("https://raw.githubusercontent.com/lieberkind/sokoban/refs/heads/elm/original-levels.txt", "/Sokoban/Classic");
-      if(Storage->exists("/Sokoban/Classic") && is_empty_file("/Sokoban/Classic")) {
-        Storage->remove("/Sokoban/Classic");
+      terminal_wget("https://raw.githubusercontent.com/lieberkind/sokoban/refs/heads/elm/original-levels.txt", SOKOBAN_PATH "/Classic");
+      if(Storage->exists(SOKOBAN_PATH "/Classic") && is_empty_file(SOKOBAN_PATH "/Classic")) {
+        Storage->remove(SOKOBAN_PATH "/Classic");
       }
-      if(!Storage->exists("/Sokoban/Classic")) {
+      if(!Storage->exists(SOKOBAN_PATH "/Classic")) {
         drawError("Download error");
       }
     }
@@ -28182,7 +28315,7 @@ void reboot(char mode, char *io_buff) {
   esp_reset_reason_t reason;
   char *buttons[] = {
     "Reboot",
-    "Light sleep (touch wake up)",
+    "Lock screen (touch wake up)",
     "Light sleep (BOOT wake up)",
     "Deep sleep (BOOT wake up)",
     NULL
@@ -33863,7 +33996,7 @@ int match_three_shift_down(int * field) {
 // Выключи свет
 // ====================================================
 
-void lights_off(char mode, char *io_buff) {
+void lights_out(char mode, char *io_buff) {
   int button_pressed;
   int moves_remain;
   int i;
@@ -33904,11 +34037,11 @@ void lights_off(char mode, char *io_buff) {
   };
 
   if(mode == APP_MODE_RETURN_NAME) {
-    strcpy(io_buff, "Lights Off");
+    strcpy(io_buff, "Lights Out");
     return;
   }
   if(mode == APP_MODE_RETURN_NAME_SHORT) {
-    strcpy(io_buff, "LOff");
+    strcpy(io_buff, "LOut");
     return;
   }
   if(mode == APP_MODE_RETURN_ICON) {
@@ -33917,7 +34050,7 @@ void lights_off(char mode, char *io_buff) {
   }
 
   clearScreen();
-  drawAppTitle("Lights Off");
+  drawAppTitle("Lights Out");
 
   while(1) {
     if(shuffle_flag) {
@@ -33954,7 +34087,7 @@ void lights_off(char mode, char *io_buff) {
     sprintf(buff, "Steps: %d", steps);
     tft.drawString(buff, tft.width() / 2, 20, FONT_DEFAULT);
 
-    lights_off_show_tiles(64, buttons);
+    lights_out_show_tiles(64, buttons);
     //drawButtonMatrix(0, 64, tft.width(), tft.width(), buttons, 5, 5);
 
     touchWaitPress();
@@ -33983,7 +34116,7 @@ void lights_off(char mode, char *io_buff) {
       steps++;
     }
 
-    lights_off_show_tiles(64, buttons);
+    lights_out_show_tiles(64, buttons);
     //drawButtonMatrix(0, 64, tft.width(), tft.width(), buttons, 5, 5);
 
     // Проверка выигрыша
@@ -34013,7 +34146,7 @@ void lights_off(char mode, char *io_buff) {
   }
 }
 
-void lights_off_show_tiles(int offset_y, char **tiles) {
+void lights_out_show_tiles(int offset_y, char **tiles) {
   int x, y;
   tft.setTextColor(color_scheme_fg, TFT_LIGHTGREY);
   for(y = 0; y < 5; y++) {
@@ -38841,7 +38974,7 @@ int show_system_menu() {
     "Inversion",
     "Rotation",
     "Silent mode",
-    "Sleep",
+    "Lock screen",
     "Exit app",
     NULL
   };
