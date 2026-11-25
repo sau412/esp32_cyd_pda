@@ -273,15 +273,27 @@
 2026-11-22 Заставка фоторамка, morse news исправлен баг бесконечного запроса RSS, mood lamp яркие цвета
 2026-11-23 Lights off теперь Lights Out, предлагать скачать chip8, предлагать интернет-радио, Sleep теперь Lock Screen,
   примеры для Tunes
+2026-11-24 Исправлены примеры для радио, примеры для IRC, примеры для RSS, возможность остановить mp3 (!),
+  индикация процесса в Tunes
+2026-11-25 Настройки пинов в терминале, команды при запуске, отображение терминала при запуске, Basic пример,
+  find в терминале (поиск по имени), поиск при просмотре по тексту, приложение графики функций?
+  возможность открыть терминал из файлов
 
 - новый обзор(ы)
 
 Улучшения тут и там:
-- Галерея (как на телефоне, разные папки с предпросмотром)
+- Поиск файлов по имени в файлах
+- Поиск файлов по содержимому в файлах
+- Распаковка zip (ошибка при линковке)
 - Проверить копирование и перемещение
-- Tunes индикация процесса
+
+- Переделать прогноз погоды
+- Добавить прогноз погоды на следующие дни
+- Добавить выбор градусов в прогноз погоды
+
+- Basic пример быки и коровы
+- Галерея (как на телефоне, разные папки с предпросмотром)
 - Оповещение о смене версии системы (апгрейд, даунгрейд)
-- Предложить создавать IRC, Basic, RSS
 - Журнал событий /Settings/Journal - что записывать? 
 - Журнал активности? /Settings/Launcher - что запускалось, что делалось последним. Записывать при выходе
 - Оповещения
@@ -289,25 +301,17 @@
 - Лаунчер с более крупными значками
 - Лаунчер "последние приложения"
 - tar
-- Приложение Графики функций
-- Поиск файлов по имени.
-- Поиск текста внутри файлов.
-- Погода прогноз
 - Совет от ИИ - экран История/продолжить - чем занимался в каких приложениях, как задачи
 - Угол луны сейчас, максимальный угол, азимут
 - Угол солнца сейчас, максимальный угол, азимут
-- Распаковка zip (ошибка при линковке)
 - Распаковка gz
 - Веб-сервер: плеер музыки
 - Веб-сервер: читалка книг
 - Веб-сервер: контакты, расписание, заметки, и прочие PIM-приложения он-лайн
-- Меню для просмотра: найти, найти далее
-- Меню файлов: смена кодировки, хэш мд5, хэш сша256
 - Меню редактирования: сохранить, найти, найти далее, заменить
 - Меню н назад, арифметики, прочих игр: изменить уровень, рестарт (вообще необязательно)
-- Добавить прогноз погоды на следующие дни
-- Добавить выбор градусов в прогноз погоды
 
+- Просмотр fb2
 - Пропикать морзянкой выделение
 - Разделить Exit app в правом меню - выход в лаунчер, exit в левом - назад
 - Автодополнение в терминале по табу для имён файлов
@@ -577,12 +581,13 @@ WiFiClient *global_client = NULL;
 #endif
 
 // Encryption library for password storage
-#include "mbedtls/aes.h"
+#include <psa/crypto.h>
+//#include "mbedtls/aes.h"
 
 // For crc, sha256sum, md5sum
 #include <rom/crc.h>
-#include "mbedtls/md5.h"
-#include "mbedtls/sha256.h"
+//#include "mbedtls/md5.h"
+//#include "mbedtls/sha256.h"
 
 // For deep sleep
 #include "driver/rtc_io.h"
@@ -716,6 +721,7 @@ int cursor_saved_color = 0x07;
 int cursor_saved_attribute = 0x00;
 
 #define TERMINAL_AUTOEXEC "/Terminal/Autoexec"
+#define TERMINAL_STARTUP "/Terminal/Startup"
 #define TERMINAL_HISTORY "/Terminal/History"
 #define TERMINAL_STACK "/Terminal/Stack"
 
@@ -1068,7 +1074,8 @@ int global_touch_y;
 char calibration_multipoint = 0;
 char global_touch_present_flag;
 char global_menu_visible_flag = 0;
-char global_exit_flag;
+char global_exit_flag = 0;
+char global_terminal_cmd_exit_flag = 0;
 unsigned long global_exit_flag_touch_begin;
 unsigned long global_exit_flag_touch_length;
 
@@ -1107,6 +1114,7 @@ int global_alarm_minute = 0;
 
 int global_beeper_pin = BUZZER_PIN;
 int global_music_pin = BUZZER_PIN;
+char global_music_enable_flag = 0;
 
 // Переменные для человекочитаемых параметров времени
 int global_year = 0;
@@ -1190,6 +1198,7 @@ void webradio(char mode, char *io_buff);
 void backups(char mode, char *io_buff);
 void life(char mode, char *io_buff);
 void l_system(char mode, char *io_buff);
+void graphs(char mode, char *io_buff);
 void i2c_scanner(char mode, char *io_buff);
 void dashboard(char mode, char *io_buff);
 void fuzzy_clock(char mode, char *io_buff);
@@ -1292,6 +1301,7 @@ function_application_pointer all_apps[] = {
   i2c_scanner,
   life,
   l_system,
+  graphs,
   fifteen,
   lights_out,
   snake,
@@ -2411,6 +2421,7 @@ const char global_terminal_help[] PROGMEM =
   "cp {from_path} {to_path} - copy files recursively\n"
   "mv {from_path} {to_path} - move files recursively\n"
   "rm {from_path} - remove files recursively\n"
+  "find {filename_mask} - find files with specific name\n"
   "file {file_path} - show file type by file contents\n"
   "cat {file_path} - show file contents\n"
   "head {file_path} - show starting lines of file\n"
@@ -2449,6 +2460,9 @@ const char global_terminal_help[] PROGMEM =
   "\n"
   "I2C and other protocols:\n"
   "i2c - I2C scanner\n"
+  "pin_mode {pin} {mode|expression} - set pin mode\n"
+  "digital_write {pin} {value|expression} - write value to pin in digital mode\n"
+  "analog_write {pin} {value|expression} - write value to pin in analog mode\n"
   "\n"
   "Sound:\n"
   "beep - beep once\n"
@@ -2534,6 +2548,7 @@ const char global_terminal_help[] PROGMEM =
   "generator - Signal generator app\n"
   "life - Life app\n"
   "l_system - L system fractal generator\n"
+  "graphs - function graphs\n"
   "dashboard - Dashboard app\n"
   "fuzzy_clock - Fuzzy Clock app\n"
   "view_font - View Font app\n"
@@ -2621,6 +2636,7 @@ void files(char mode, char *io_buff) {
   int menu_selected;
   char *menu_items[] = {
     "Go to root",
+    "Terminal",
     "Exit",
     NULL
   };
@@ -2770,26 +2786,26 @@ void files(char mode, char *io_buff) {
 
     touchWaitPress();
 
+    current_op = -1;
+
     // Меню
     if(touchIsMenuTap()) {
       menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
-      if(menu_selected == 0) {
-        terminal_cd_root();
-      }
-      else if(menu_selected == 1) {
-        global_exit_flag = 0;
+      if(menu_selected != -1) {
+        current_op = 100 + menu_selected;
       }
     }
 
-    current_op = -1;
-    if(touchCheckList(0, 40, 240, 192, files, 12, &file_offset, &file_selected) != -1) {
-      if(prev_file_selected == file_selected && prev_file_offset == file_offset) {
-        current_op = 1; 
+    if(current_op == -1) {
+      if(touchCheckList(0, 40, 240, 192, files, 12, &file_offset, &file_selected) != -1) {
+        if(prev_file_selected == file_selected && prev_file_offset == file_offset) {
+          current_op = 1; 
+        }
       }
-    }
-    else {
-      // Операции
-      current_op = touchCheckMatrix(0, 240, tft.width(), 80, file_operations, 4, 2);
+      else {
+        // Операции
+        current_op = touchCheckMatrix(0, 240, tft.width(), 80, file_operations, 4, 2);
+      }
     }
 
     if(current_op != -1) {
@@ -2902,6 +2918,7 @@ void files(char mode, char *io_buff) {
         else {
           if(!file) {
             drawError("File not found");
+            clearPopupWindow();
             continue;
           }
           terminal_get_file_path_with_current_path((char *)file.name(), buff);
@@ -3023,6 +3040,21 @@ void files(char mode, char *io_buff) {
           }
         }
       }
+      // Элементы из меню
+      // Переход к корню
+      if(current_op == 100) {
+        terminal_cd_root();
+        rescan_files = 1;
+      }
+      // Терминал
+      if(current_op == 101) {
+        terminal(APP_MODE_LAUNCH, NULL);
+        rescan_files = 1;
+      }
+      // Выход
+      if(current_op == 102) {
+        global_exit_flag = 1;
+      }
       redraw_required = 1;
     }
 
@@ -3103,8 +3135,9 @@ void terminal(char mode, char *io_buff) {
       // Читаем команду
       strcpy(buff, file.readStringUntil('\n').c_str());
       // Выполняем команду из строки
-      terminal_execute(buff);
       Serial.println(buff);
+      terminal_execute(buff);
+      terminal_show_screen();
     }
     file.close();
   }
@@ -3133,6 +3166,7 @@ void terminal(char mode, char *io_buff) {
       file_append_line(TERMINAL_HISTORY, buff);
     }
 
+    global_terminal_cmd_exit_flag = 0;
     terminal_execute(buff);
     strcpy(buff, "");
   }
@@ -3205,6 +3239,8 @@ void terminal_execute_single(char *str) {
   long long ll;
   double d1, d2, d3, d4;
   char *cmdline_params[40];
+  char error_flag = 0;
+  int expr_offset = 0;
 
   IPAddress ip;
   fs::File file;
@@ -3942,8 +3978,6 @@ void terminal_execute_single(char *str) {
     }
     else {
       double ans;
-      char error_flag = 0;
-      int expr_offset = 0;
       ans = parse_expression(cmdline_params[1], parse_expr_constant_by_name, &error_flag, &expr_offset);
       sprintf(buff, "%g", ans);
       terminal_println(buff);
@@ -4699,6 +4733,14 @@ void terminal_execute_single(char *str) {
       }
     }
   }
+  else if(strcmp(cmdline_params[0], "find") == 0) {
+    if(arg_count != 2) {
+      terminal_println("Usage: find {filename_mask}");
+    }
+    else {
+      terminal_find(arg_count, cmdline_params);
+    }
+  }
   else if(strcmp(cmdline_params[0], "file") == 0) {
     if(arg_count != 2) {
       terminal_println("Usage: file {file}");
@@ -5259,7 +5301,7 @@ void terminal_execute_single(char *str) {
     terminal_println(buff);
   }
   // ======================================================
-  // I2C
+  // I2C, низкоуровневые операции
   // ======================================================
   else if(strcmp(cmdline_params[0], "i2c") == 0) {
     found = 0;
@@ -5275,6 +5317,39 @@ void terminal_execute_single(char *str) {
     }
     if(!found) {
       terminal_println("No I2C devices found");
+    }
+  }
+  else if(strcmp(cmdline_params[0], "pin_mode") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: pin_mode {pin} {mode}");
+    }
+    else {
+      int pin, mode;
+      pin = strtol(cmdline_params[1], NULL, 10);
+      mode = parse_expression(cmdline_params[2], parse_expr_constant_by_name, &error_flag, &expr_offset);
+      pinMode(pin, mode);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "digital_write") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: digital_write {pin} {value}");
+    }
+    else {
+      int pin, val;
+      pin = strtol(cmdline_params[1], NULL, 10);
+      val = parse_expression(cmdline_params[2], parse_expr_constant_by_name, &error_flag, &expr_offset);
+      digitalWrite(pin, val);
+    }
+  }
+  else if(strcmp(cmdline_params[0], "analog_write") == 0) {
+    if(arg_count != 3) {
+      terminal_println("Usage: analog_write {pin} {value}");
+    }
+    else {
+      int pin, val;
+      pin = strtol(cmdline_params[1], NULL, 10);
+      val = parse_expression(cmdline_params[2], parse_expr_constant_by_name, &error_flag, &expr_offset);
+      analogWrite(pin, val);
     }
   }
   // ======================================================
@@ -5687,6 +5762,9 @@ void terminal_execute_single(char *str) {
     else if(strcmp(cmdline_params[1], "l_system") == 0) {
       l_system(APP_MODE_LAUNCH, NULL);
     }
+    else if(strcmp(cmdline_params[1], "graphs") == 0) {
+      graphs(APP_MODE_LAUNCH, NULL);
+    }
     else if(strcmp(cmdline_params[1], "dashboard") == 0) {
       dashboard(APP_MODE_LAUNCH, NULL);
     }
@@ -5967,6 +6045,69 @@ int terminal_du(int arg_count, char *cmdline_params[]) {
   terminal_println(buff);
   
   return 0;
+}
+
+int terminal_find(int arg_count, char *cmdline_params[]) {
+  if(!Storage) {
+    terminal_println("No storage");
+  }
+  else {
+    char1251_lowercase_string(cmdline_params[1]);
+    terminal_find_recursive(terminal_current_path, cmdline_params[1]);
+  }
+  return 0;
+}
+
+void terminal_find_recursive(char *path, char *pattern) {
+  char buff[240];
+  char name[240];
+  fs::File file;
+  fs::File current_dir;
+  int byte;
+
+  if(global_terminal_cmd_exit_flag) {
+    return;
+  }
+
+  byte = terminal_input_char();
+  if(byte == 0x03) {
+    global_terminal_cmd_exit_flag = 1;
+    return;
+  }
+  //Serial.printf("terminal_find_recursive %s %s\n", path, pattern); Serial.flush();
+  current_dir = Storage->open(path);
+  if(!current_dir) return;
+
+  strcpy(name, current_dir.name());
+  utf8_to_cp1251(name);
+  char1251_lowercase_string(name);
+  if(strstr(name, pattern) != NULL) {
+    sprintf(buff, "%s/%s", strcmp(path, "/") == 0 ? "" : path, file.name());
+    utf8_to_cp1251(buff);
+    terminal_println(buff);
+    terminal_show_screen();
+  }
+
+  if(current_dir.isDirectory()) {
+    while(file = current_dir.openNextFile()) {
+      //Serial.printf("%s/%s\n", strcmp(path, "/") == 0 ? "" : path, file.name()); Serial.flush();
+      strcpy(name, file.name());
+      utf8_to_cp1251(name);
+      char1251_lowercase_string(name);
+
+      if(strstr(name, pattern) != NULL) {
+        sprintf(buff, "%s/%s", strcmp(path, "/") == 0 ? "" : path, file.name());
+        utf8_to_cp1251(buff);
+        terminal_println(buff);
+        terminal_show_screen();
+      }
+      if(file.isDirectory()) {
+        sprintf(buff, "%s/%s", strcmp(path, "/") == 0 ? "" : path, file.name());
+        terminal_find_recursive(buff, pattern);
+      }
+    }
+  }
+  current_dir.close();
 }
 
 int terminal_file(int arg_count, char *cmdline_params[]) {
@@ -8999,69 +9140,112 @@ void terminal_wc(char *filename) {
   }
 }
 
+
 void terminal_checksum(char *filename, int checksum_type) {
   fs::File file;
   uint32_t crc32_val = 0;
-  mbedtls_md5_context md5_ctx;
-  mbedtls_sha256_context sha256_ctx;
   const size_t bufferSize = 512;
-  char buff[bufferSize];
+  uint8_t buff[bufferSize];
   size_t bytesRead;
-  unsigned char result[32];
+
+  uint8_t result[32];
+  size_t result_len = 0;
+
+  char output[65];
 
   file = Storage->open(filename);
-  if(file) {
-    switch(checksum_type) {
-      case CHECKSUM_CRC:
-        while (file.available()) {
-          bytesRead = file.read((uint8_t*)buff, bufferSize);
-          crc32_val = crc32_le(crc32_val, (const uint8_t*)buff, bytesRead);
-        }
-        sprintf(buff, "0x%08X", crc32_val);
-        terminal_println(buff);
-        break;
 
-      case CHECKSUM_MD5:
-        mbedtls_md5_init(&md5_ctx);
-        mbedtls_md5_starts(&md5_ctx);
-        while (file.available()) {
-          bytesRead = file.read((uint8_t*)buff, bufferSize);
-          mbedtls_md5_update(&md5_ctx, (const uint8_t*)buff, bytesRead);
-        }
-        mbedtls_md5_finish(&md5_ctx, result);
-        mbedtls_md5_free(&md5_ctx);
-        for (int i = 0; i < 16; i++) {
-          sprintf(buff, "%02x", result[i]);
-          terminal_print(buff);
-        }
-        terminal_println("");
-        break;
-
-      case CHECKSUM_SHA256:
-        mbedtls_sha256_init(&sha256_ctx);
-        mbedtls_sha256_starts(&sha256_ctx, 0); // 0 for SHA-256 (not SHA-224)
-
-        while (file.available()) {
-          bytesRead = file.read((uint8_t*)buff, bufferSize);
-          mbedtls_sha256_update(&sha256_ctx, (const uint8_t*)buff, bytesRead);
-        }
-        mbedtls_sha256_finish(&sha256_ctx, result);
-        mbedtls_sha256_free(&sha256_ctx);
-        for (int i = 0; i < 32; i++) {
-          sprintf(buff, "%02x", result[i]);
-          terminal_print(buff);
-        }
-        terminal_println("");
-        break;
-      default:
-        terminal_println("Unknown checksum type");
-        break;
-    }
-    file.close();
-  }
-  else {
+  if (!file) {
     terminal_println("File not found");
+    return;
   }
+
+  switch (checksum_type) {
+    case CHECKSUM_CRC:
+      while (file.available()) {
+        bytesRead = file.read(buff, bufferSize);
+        if (bytesRead == 0) break;
+
+        crc32_val = crc32_le(crc32_val, buff, bytesRead);
+      }
+
+      sprintf(output, "0x%08X", crc32_val);
+      terminal_println(output);
+      break;
+
+    case CHECKSUM_MD5:
+    case CHECKSUM_SHA256: {
+      psa_status_t status;
+      psa_algorithm_t algorithm;
+
+      algorithm = (checksum_type == CHECKSUM_MD5)
+                    ? PSA_ALG_MD5
+                    : PSA_ALG_SHA_256;
+
+      status = psa_crypto_init();
+
+      if (status != PSA_SUCCESS) {
+        terminal_println("PSA initialization failed");
+        break;
+      }
+
+      psa_hash_operation_t operation = PSA_HASH_OPERATION_INIT;
+
+      status = psa_hash_setup(&operation, algorithm);
+
+      if (status != PSA_SUCCESS) {
+        terminal_println("PSA hash setup failed");
+        break;
+      }
+
+      bool hash_error = false;
+
+      while (file.available()) {
+        bytesRead = file.read(buff, bufferSize);
+        if (bytesRead == 0) break;
+
+        status = psa_hash_update(&operation, buff, bytesRead);
+
+        if (status != PSA_SUCCESS) {
+          hash_error = true;
+          break;
+        }
+      }
+
+      if (!hash_error) {
+        status = psa_hash_finish(
+          &operation,
+          result,
+          sizeof(result),
+          &result_len
+        );
+
+        if (status != PSA_SUCCESS) {
+          hash_error = true;
+        }
+      }
+
+      if (hash_error) {
+        psa_hash_abort(&operation);
+        terminal_println("PSA hash calculation failed");
+        break;
+      }
+
+      for (size_t i = 0; i < result_len; i++) {
+        sprintf(output + i * 2,
+                 "%02x", result[i]);
+      }
+
+      terminal_println(output);
+      break;
+    }
+
+    default:
+      terminal_println("Unknown checksum type");
+      break;
+  }
+
+  file.close();
 }
 
 // Показать текущий месяц
@@ -11683,6 +11867,45 @@ void basic(char mode, char *io_buff) {
     return;
   }
 
+  if(!Storage->exists(BASIC_PATH)) {
+    Storage->mkdir(BASIC_PATH);
+    if(!Storage->exists(BASIC_PATH)) {
+      drawError("Unable to create directory");
+      return;
+    }
+  }
+
+  // Создать примеры
+  if(is_empty_directory(BASIC_PATH)) {
+    clearScreen();
+    drawAppTitle("Basic");
+
+    if(drawConfirm("Create some samples?") == 0) {
+      write_file_from_buff(BASIC_PATH "/cold_and_hot.bas", "rem Cold and Hot game\n"
+        "print \"Cold and hot game\"\n"
+        "print \"The computer has chosen a number. For each guess, the computer indicates whether it is closer to the "
+          "chosen number than the previous one: \"warmer\" means closer, \"colder\" means further away.\"\n"
+        "let n = floor(100*rnd())+1\n"
+        "print \"Your first guess:\"\n"
+        "input prev\n"
+        "if prev = n goto right\n"
+        "cycle:\n"
+        "print \"Your guess:\"\n"
+        "input guess\n"
+        "if guess = n goto right\n"
+        "let d = abs(n-guess)-abs(n-prev)\n"
+        "if d > 0 print \"Colder\"\n"
+        "if d < 0 print \"Warmer\"\n"
+        "if d = 0 print \"Same\"\n"
+        "let prev = guess\n"
+        "goto cycle\n"
+        "right:\n"
+        "print \"Bingo!\"\n"
+        "end\n"
+        );
+    }
+  }
+
   pim_app("Basic", BASIC_PATH, basic_file_to_list, buttons, basic_action);
 }
 
@@ -11905,7 +12128,9 @@ void tunes_action(int action_index, char *filename) {
   else if(action_index == 1) {
     // Воспроизведение
     sprintf(buff, "%s/%s", TUNES_PATH, filename);
+    drawProcessWindow("Playing. Press anywhere to stop.");
     tunes_play(buff);
+    clearPopupWindow();
   }
   else if(action_index == 2) {
     // Редактируем существующий файл
@@ -12184,21 +12409,25 @@ void music_action(int action_index, char *filename) {
       drawError("Wait until track ends");
     }
     else {
+      touchWaitRelease();
       Serial.println("Creating task");
       // Pin audio playback to Core 0
       xTaskCreatePinnedToCore(
-        music_play_task, /* Task function */
-        "music_play_task",         /* name of task */
-        8192,            /* Stack size of task */
-        buff,            /* parameter */
-        1,               /* priority */
-        &AudioTaskHandle,/* Task handle */
-        0                /* Core ID (0 or 1) */
+        music_play_task, // Task function
+        "music_play_task",         // name of task 
+        8192,            // Stack size of task
+        buff,            // parameter
+        1,               // priority
+        &AudioTaskHandle,// Task handle
+        0                // Core ID (0 or 1)
       );
       vTaskDelay(100 / portTICK_PERIOD_MS);
     }
   }
   else if(action_index == 1) {
+    global_music_enable_flag = 0;
+  }
+  else if(action_index == 2) {
     // Переименование
     strcpy(new_name, filename);
     utf8_to_cp1251(new_name);
@@ -12212,7 +12441,7 @@ void music_action(int action_index, char *filename) {
       }
     }
   }
-  else if(action_index == 2) {
+  else if(action_index == 3) {
     if(drawConfirm("Delete this file?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", MUSIC_PATH, filename);
@@ -12286,14 +12515,16 @@ int32_t btCallback(Frame *frame, int32_t count) {
   return count;
 }
 
+
 void music_play(char *filename) {
-  AudioGeneratorMP3 *mp3;
+  AudioGeneratorMP3 *mp3 = NULL;
   AudioFileSourceFS *file;
   RingBufOutput *audioOut  = nullptr;
 
 Serial.println(__LINE__);
   a2dp.set_volume(127);
-  a2dp.start("JBL GO 2", btCallback);
+  a2dp.start("JBL WAVE FLEX", btCallback);
+  //a2dp.start("JBL GO 2", btCallback);
 Serial.println(__LINE__);
 
   audioOut = new RingBufOutput();
@@ -12304,7 +12535,9 @@ Serial.println(__LINE__);
 
   drawProcessWindow("Playing...");
 Serial.println(__LINE__);
-  mp3 = new AudioGeneratorMP3();
+  if(!mp3) {
+    mp3 = new AudioGeneratorMP3();
+  }
 Serial.println(__LINE__);
   mp3->begin(file, audioOut);
 Serial.println(__LINE__);
@@ -12319,7 +12552,7 @@ return;
     if(!mp3->loop()) {
       mp3->stop();
     }
-    if(touchCheckNowait() == 1) {
+    if(global_music_enable_flag == 0) {
       mp3->stop();
     }
   }
@@ -12328,31 +12561,31 @@ return;
 #else
 
 void music_play(char *filename) {
-  AudioGeneratorMP3 *mp3;
+  AudioGeneratorMP3 *mp3 = NULL;
   AudioGeneratorWAV *wav;
   AudioFileSourceFS *file;
   AudioOutputI2SNoDAC *out;
   
+  global_music_enable_flag = 1;
   file = new AudioFileSourceFS(*Storage, filename);
   if(is_mp3_file(filename)) {
-
     out = new AudioOutputI2SNoDAC();
     out->SetGain((float)global_volume / 100);
     out->SetPinout(-1, -1, global_music_pin);
     if(xPortGetCoreID() != 0) {
       drawProcessWindow("Playing...");
     }
-    mp3 = new AudioGeneratorMP3();
-
+    if(!mp3) {
+      mp3 = new AudioGeneratorMP3();
+    }
     mp3->begin(file, out);
 
     while(mp3->isRunning()) {
-      vTaskDelay(1 / portTICK_PERIOD_MS);
-      //Serial.println(millis());
+      //vTaskDelay(1 / portTICK_PERIOD_MS);
       if(!mp3->loop()) {
         mp3->stop();
       }
-      if(touchCheckNowait() == 1) {
+      if(global_music_enable_flag == 0) {
         mp3->stop();
       }
     }
@@ -12364,6 +12597,7 @@ void music_play(char *filename) {
     if(xPortGetCoreID() != 0) {
       drawProcessWindow("Playing...");
     }
+
     wav = new AudioGeneratorWAV();
 
     wav->begin(file, out);
@@ -12374,7 +12608,7 @@ void music_play(char *filename) {
       if(!wav->loop()) {
         wav->stop();
       }
-      if(touchCheckNowait() == 1) {
+      if(global_music_enable_flag == 0) {
         wav->stop();
       }
     }
@@ -12390,7 +12624,7 @@ void music_play(char *filename) {
 
 void music(char mode, char *io_buff) {
   char *buttons[] = {
-    "Play", "Rename", "Delete",
+    "Play", "Stop", "Rename", "Delete",
     NULL
   };
   char app_icon[] = {
@@ -12484,6 +12718,9 @@ void webradio_action(int action_index, char *filename) {
     }
   }
   else if(action_index == 2) {
+    global_music_enable_flag = 0;
+  }
+  else if(action_index == 3) {
     // Редактируем существующий файл
     sprintf(buff, "%s/%s", WEBRADIO_PATH, filename);
     edit_file("Edit webradio", buff);
@@ -12491,7 +12728,7 @@ void webradio_action(int action_index, char *filename) {
     // Меняем название в соответствии с содержимым
     pim_rename_file(WEBRADIO_PATH, filename, NULL);
   }
-  else if(action_index == 3) {
+  else if(action_index == 4) {
     if(drawConfirm("Delete this webradio?") == 0) {
       // Удаляем заметку с соответствующим названием
       sprintf(buff, "%s/%s", WEBRADIO_PATH, filename);
@@ -12531,6 +12768,7 @@ void webradio_play(char *filename) {
   out->SetPinout(-1, -1, global_music_pin);
 
   mp3 = new AudioGeneratorMP3();
+  global_music_enable_flag = 1;
   mp3->begin(buff, out);
   if(xPortGetCoreID() != 0) {
     drawProcessWindow("Playing...");
@@ -12540,8 +12778,7 @@ void webradio_play(char *filename) {
     if(!mp3->loop()) {
       mp3->stop();
     }
-    //Serial.println(millis());
-    if(touchCheckNowait() == 1) {
+    if(global_music_enable_flag == 0) {
       mp3->stop();
     }
   }
@@ -12565,7 +12802,7 @@ void webradio_StatusCallback(void *cbData, int code, const char *string) {
 
 void webradio(char mode, char *io_buff) {
   char *buttons[] = {
-    "New", "Play", "Edit", "Delete",
+    "New", "Play", "Stop", "Edit", "Delete",
     NULL
   };
   char app_icon[] = {
@@ -12615,11 +12852,9 @@ void webradio(char mode, char *io_buff) {
     drawAppTitle("Webradio");
 
     if(drawConfirm("Create some samples?") == 0) {
-      write_file_from_buff(WEBRADIO_PATH "/Dance_UK_Radio", "Dance UK Radio\nhttp://uk2.internet-radio.com:8024/stream;\n");
-      write_file_from_buff(WEBRADIO_PATH "/FIP_Jazz", "FIP Jazz\nhttps://icecast.radiofrance.fr/fipjazz-midfi.mp3?id=radiofrance\n");
+      write_file_from_buff(WEBRADIO_PATH "/Swiss_Jazz", "Swiss Jazz\nhttp://stream.srg-ssr.ch/m/rsj/mp3_128\n");
       write_file_from_buff(WEBRADIO_PATH "/Radio_Paradise", "Radio Paradise\nhttp://stream-tx1.radioparadise.com/mp3-128\n");
-      write_file_from_buff(WEBRADIO_PATH "/181.FM_Old_School", "181.FM Old School\nhttps://listen.181fm.com/181-oldschool_128k.mp3\n");
-      write_file_from_buff(WEBRADIO_PATH "/Radio_Caroline", "Radio Caroline\nhttp://sc6.radiocaroline.net:8040/\n");
+      write_file_from_buff(WEBRADIO_PATH "/Radio_Caroline", "Radio Caroline\nhttp://sc6.radiocaroline.net:8040/;?type=http\n");
     }
   }
 
@@ -15370,9 +15605,7 @@ void search(char mode, char *io_buff) {
   if(drawPrompt("Search", query) != 0) {
     return;
   }
-  for(i = 0; i < strlen(query); i++) {
-    query[i] = char1251_lowercase(query[i]);
-  }
+  char1251_lowercase_string(query);
   clearPrompt();
 
   files = (char **)malloc(1024 * sizeof(char *));
@@ -15561,7 +15794,7 @@ void random_app(char mode, char *io_buff) {
   delay(1000);
 
   // Выбор случайного приложения
-  app_index = random(0, 107);
+  app_index = random(0, 114);
   Serial.println(app_index);
   switch(app_index) {
     // First line
@@ -15704,6 +15937,13 @@ void random_app(char mode, char *io_buff) {
     case 104: dashboard_intervals(); break;
     case 105: dashboard_morse_news(); break;
     case 106: morse_settings(APP_MODE_LAUNCH, NULL); break;
+    case 107: graphs(APP_MODE_LAUNCH, NULL); break;
+    case 108: screensaver_defrag(); break;
+    case 109: screensaver_julia_set(); break;
+    case 110: screensaver_rule_30(); break;
+    case 111: screensaver_voronoi(); break;
+    case 112: screensaver_spirograph(); break;
+    case 113: screensaver_photostand(); break;
   }
 }
 
@@ -18314,6 +18554,215 @@ void l_system_draw(char *data, double step_angle) {
       x_offset = (tft.width() - tft.width() * (x_max - x_min) / (y_max - y_min)) / 2;
     }
   }
+}
+
+// ====================================================
+// Графики функций
+// ====================================================
+
+double global_graphs_x = 0;
+
+void graphs(char mode, char *io_buff) {
+  char buff[320];
+  char func[80] = "sin(x)";
+  char error_flag;
+  int expr_offset;
+  double x_min = -10, x_max = 10;
+  double y_min = -10, y_max = 10;
+  double x, y;
+  double prev_x, prev_y;
+  int show_x, show_y;
+  int prev_show_x, prev_show_y;
+  int offset_top = 16 + 32;
+  char redraw_flag = 1;
+  char prev_visible = 0;
+  int i;
+
+  char app_icon[] = {
+    16, 16,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+    0x0F, 0x9F, 0xFF, 0xF7, 0xFF, 0xFF, 0xF9, 0xF0, 
+    0x0F, 0x9F, 0xFF, 0xFF, 0x7F, 0xFF, 0xF9, 0xF0, 
+    0x0F, 0x9F, 0xFF, 0xF7, 0xFF, 0xFF, 0xF9, 0xF0, 
+    0x0F, 0x9F, 0xFF, 0xFF, 0x7F, 0xFF, 0xF9, 0xF0, 
+    0x0F, 0x9F, 0xFF, 0xF7, 0xFF, 0xFF, 0xF9, 0xF0, 
+    0x0F, 0xF9, 0xFF, 0xFF, 0x7F, 0xFF, 0x9F, 0xF0, 
+    0x07, 0xF9, 0xF7, 0xF7, 0xF7, 0xF7, 0x97, 0xF0, 
+    0x0F, 0x79, 0x7F, 0x7F, 0x7F, 0x7F, 0x9F, 0x70, 
+    0x0F, 0xF9, 0xFF, 0xF7, 0xFF, 0xFF, 0x9F, 0xF0, 
+    0x0F, 0xFF, 0x9F, 0xFF, 0x7F, 0xF9, 0xFF, 0xF0, 
+    0x0F, 0xFF, 0xF9, 0xF7, 0xFF, 0x9F, 0xFF, 0xF0, 
+    0x0F, 0xFF, 0xFF, 0x99, 0x99, 0xFF, 0xFF, 0xF0, 
+    0x0F, 0xFF, 0xFF, 0xF7, 0xFF, 0xFF, 0xFF, 0xF0, 
+    0x0F, 0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xF0, 
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 
+  };
+
+  int button_pressed;
+  char *func_buttons[] = {
+    func, NULL
+  };
+  char *buttons[] = {
+    "-",
+    "Lt",
+    "Dn",
+    "Up",
+    "Rt",
+    "+",
+    NULL
+  };
+
+  if(mode == APP_MODE_RETURN_NAME) {
+    strcpy(io_buff, "Graphs");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_NAME_SHORT) {
+    strcpy(io_buff, "Grph");
+    return;
+  }
+  if(mode == APP_MODE_RETURN_ICON) {
+    memcpy(io_buff, app_icon, 130);
+    return;
+  }
+
+  clearScreen();
+  drawAppTitle("Graphs");
+  
+  redraw_flag = 1;
+  while(1) {
+    drawButtonMatrix(0, 16, tft.width(), 32, func_buttons, 1, 1);
+    drawButtonMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 6, 1);
+
+    if(redraw_flag) {
+      tft.fillRect(0, offset_top, tft.width(), tft.width(), color_scheme_bg);
+
+      // Ось X
+      if(y_min < 0 && y_max > 0) {
+        tft.drawLine(0, offset_top + tft.width() + tft.width() * y_min / (y_max - y_min), tft.width(),
+          offset_top + tft.width() + tft.width() * y_min / (y_max - y_min), color_scheme_inactive_fg);
+      }
+      // Ось Y
+      if(x_min < 0 && x_max > 0) {
+        tft.drawLine(- tft.width() * x_min / (x_max - x_min), offset_top,
+          - tft.width() * x_min / (x_max - x_min), offset_top + tft.width(), color_scheme_inactive_fg);
+      }
+      
+      // График
+      for(x = x_min; x < x_max; x += (x_max - x_min) / 1000) {
+        global_graphs_x = x;
+        error_flag = 0;
+        expr_offset = 0;
+        
+        // График
+        y = parse_expression(func, graphs_get_variable_by_name, &error_flag, &expr_offset);
+        show_x = tft.width() * (x - x_min) / (x_max - x_min);
+        show_y = tft.width() - tft.width() * (y - y_min) / (y_max - y_min);
+        
+        if(show_x >= 0 && show_x < tft.width() &&  show_y >= 0 && show_y < tft.width()) {
+          if(x == x_min || abs(y - prev_y) > abs(y_max - y_min) || !prev_visible) {
+            Serial.println("Pixel");
+            tft.drawPixel(
+              show_x,
+              offset_top + show_y,
+              color_scheme_fg
+            );
+          }
+          else {
+            Serial.println("Line");
+            tft.drawLine(
+              prev_show_x,
+              offset_top + prev_show_y,
+              show_x,
+              offset_top + show_y,
+              color_scheme_fg
+            );
+          }
+          prev_visible = 1;
+        }
+        else {
+          prev_visible = 0;
+        }
+
+        prev_x = x;
+        prev_y = y;
+        prev_show_x = show_x;
+        prev_show_y = show_y;
+      }
+      redraw_flag = 0;
+    }
+
+    touchWaitPress();
+    button_pressed = touchCheckMatrix(0, 16, tft.width(), 32, func_buttons, 1, 1);
+    if(button_pressed != -1) {
+      strcpy(buff, func);
+      if(drawPrompt("Function", buff) == 0) {
+        strcpy(func, buff);
+      }
+      redraw_flag = 1;
+    }
+
+    button_pressed = touchCheckMatrix(0, tft.height() - 32, tft.width(), 32, buttons, 6, 1);
+    if(button_pressed != -1) {
+      // -
+      if(button_pressed == 0) {
+        x_min *= 1.5;
+        x_max *= 1.5;
+        y_min *= 1.5;
+        y_max *= 1.5;
+      }
+      // Left
+      if(button_pressed == 1) {
+        double range = x_max - x_min;
+        x_min -= range * 0.2;
+        x_max -= range * 0.2;
+      }
+      // Down
+      if(button_pressed == 2) {
+        double range = y_max - y_min;
+        y_min -= range * 0.2;
+        y_max -= range * 0.2;
+      }
+      // Up
+      if(button_pressed == 3) {
+        double range = y_max - y_min;
+        y_min += range * 0.2;
+        y_max += range * 0.2;
+      }
+      // Right
+      if(button_pressed == 4) {
+        double range = x_max - x_min;
+        x_min += range * 0.2;
+        x_max += range * 0.2;
+      }
+      // +
+      if(button_pressed == 5) {
+        x_min /= 1.5;
+        x_max /= 1.5;
+        y_min /= 1.5;
+        y_max /= 1.5;
+      }
+      redraw_flag = 1;
+    }
+
+    touchWaitReleaseOrExit();
+    if(global_exit_flag) {
+      drawAppTitle("Exit");
+      touchWaitRelease();
+      touchExitActionReset();
+      return;
+    }
+    touchWaitRelease();
+  }
+}
+
+double graphs_get_variable_by_name(char *var_name) {
+  if(strcasecmp(var_name, "x") == 0) {
+    //Serial.printf("graphs_get_variable_by_name %s = %g\n", var_name, global_graphs_x);
+    return global_graphs_x;
+  }
+
+  //Serial.printf("graphs_get_variable_by_name %s = 0\n", var_name);
+  return 0;
 }
 
 // ====================================================
@@ -23535,6 +23984,7 @@ void http_file_access_show_dir(char *path, char *contents) {
   }
 
   current_dir = Storage->open(path);
+  if(!current_dir) return;
   if(current_dir.isDirectory()) {
     // Если это не корневая папка, то добавляем ссылки
     if(strcmp(path, "/")) {
@@ -24399,6 +24849,26 @@ void rss(char mode, char *io_buff) {
     return;
   }
 
+  if(!Storage->exists(RSS_PATH)) {
+    Storage->mkdir(RSS_PATH);
+    if(!Storage->exists(RSS_PATH)) {
+      drawError("Unable to create directory");
+      return;
+    }
+  }
+
+  // Создать примеры
+  if(is_empty_directory(RSS_PATH)) {
+    clearScreen();
+    drawAppTitle("RSS");
+
+    if(drawConfirm("Create some samples?") == 0) {
+      write_file_from_buff(RSS_PATH "/BBC_News", "BBC News World\nhttps://feeds.bbci.co.uk/news/world/rss.xml\n");
+      write_file_from_buff(RSS_PATH "/Hacker_News", "Hacker News\nhttps://news.ycombinator.com/rss\n");
+      write_file_from_buff(RSS_PATH "/NASA_News", "NASA News\nhttps://www.nasa.gov/news-release/feed/\n");
+    }
+  }
+
   pim_app("RSS", RSS_PATH, rss_file_to_list, buttons, rss_action);
 }
 
@@ -25175,6 +25645,25 @@ void irc(char mode, char *io_buff) {
   if(mode == APP_MODE_RETURN_ICON) {
     memcpy(io_buff, app_icon, 130);
     return;
+  }
+
+  if(!Storage->exists(IRC_PATH)) {
+    Storage->mkdir(IRC_PATH);
+    if(!Storage->exists(IRC_PATH)) {
+      drawError("Unable to create directory");
+      return;
+    }
+  }
+
+  // Создать примеры
+  if(is_empty_directory(IRC_PATH)) {
+    clearScreen();
+    drawAppTitle("IRC");
+
+    if(drawConfirm("Create some samples?") == 0) {
+      write_file_from_buff(IRC_PATH "/Libera_Chat", "Libera Chat\nirc.libera.chat\nhost=irc.libera.chat\nport=6667\npass=\nnick=\nident=\nrealname=\njoin=\nssl=0\n---\n");
+      write_file_from_buff(IRC_PATH "/Libera_Chat_SSL", "Libera Chat (SSL)\nirc.libera.chat\nhost=irc.libera.chat\nport=6697\npass=\nnick=\nident=\nrealname=\njoin=\nssl=1\n---\n");
+    }
   }
 
   terminal_send_mouse = 0;
@@ -29769,6 +30258,14 @@ void view_file(char *title, char *filename) {
   int skipped_pages = 0;
   char *buff;
   long millis_last_action = millis();
+  int menu_selected;
+  char search[80] = "";
+  char *menu_items[] = {
+    "Find",
+    "Find next",
+    "Exit",
+    NULL,
+  };
 
   clearScreen();
   drawAppTitle(title);
@@ -29825,6 +30322,60 @@ void view_file(char *title, char *filename) {
     }
 
     touchWaitPress();
+
+    if(touchIsMenuTap()) {
+      menu_selected = show_menu(0, 16, tft.width() / 2, 2 + 24 * get_list_length(menu_items), menu_items);
+      if(menu_selected == 0 || menu_selected == 1) {
+        // Поиск с текущего места
+        if(drawPrompt("Find", search) == 0) {
+          clearPrompt();
+          char found = 0;
+          long file_offset_before = file_offset;
+          char1251_lowercase_string(search);
+
+          if(menu_selected == 0) {
+            // С начала файла
+            file_offset = 0;
+          }
+          else {
+            // Со следующей страницы
+            file_offset += visible_offset;
+          }
+
+          // Ищем
+          while(file.available()) {
+            memset(buff, 0, 2048);
+            file.seek(file_offset);
+            file.read((uint8_t *)buff, 2048);
+            buff[2048] = 0;
+            if(global_view_font_small) {
+              visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, (tft.height() / 8) - 2, FONT_MONOSPACE, 0);
+            }
+            else {
+              visible_offset = draw_text_formatted(buff, 1, 16, tft.width() - 2, (tft.height() / 16) - 1, FONT_DEFAULT, 0);
+            }
+            buff[visible_offset] = 0;
+            char1251_lowercase_string(buff);
+            if(strstr(buff, search) != NULL) {
+              found = 1;
+              break;
+            }
+            file_offset += visible_offset;
+          }
+          if(!found) {
+            drawInfo("Not found");
+            file_offset = file_offset_before;
+          }
+          else {
+            history_index = -1;
+          }
+          continue;
+        }
+      }
+      else if(menu_selected == 2) {
+        global_exit_flag = 1;
+      }
+    }
 
     // Смотрим куда нажатие, двигаемся либо вперёд по файлу, либо назад
     touch_x = global_touch_x;
@@ -36012,23 +36563,36 @@ double det3(double x11, double x12, double x13, double x21, double x22, double x
     - x11 * x23 * x32;
 }
 
-// Хэш пароля
 void password_sha256(char *password, char *hash) {
-  mbedtls_sha256_context sha256_ctx;
-  unsigned char result[32];
-  char buff[10];
-  int i;
+  uint8_t result[32];
+  size_t result_len = 0;
 
-  mbedtls_sha256_init(&sha256_ctx);
-  mbedtls_sha256_starts(&sha256_ctx, 0); // 0 for SHA-256 (not SHA-224)
-  mbedtls_sha256_update(&sha256_ctx, (const uint8_t*)password, strlen(password));
-  mbedtls_sha256_finish(&sha256_ctx, result);
-  mbedtls_sha256_free(&sha256_ctx);
-  strcpy(hash, "");
-  for(i = 0; i < 32; i++) {
-    sprintf(buff, "%02x", result[i]);
-    strcat(hash, buff);
+  psa_status_t status = psa_crypto_init();
+
+  if (status != PSA_SUCCESS) {
+    hash[0] = '\0';
+    return;
   }
+
+  status = psa_hash_compute(
+    PSA_ALG_SHA_256,
+    (const uint8_t*)password,
+    strlen(password),
+    result,
+    sizeof(result),
+    &result_len
+  );
+
+  if (status != PSA_SUCCESS || result_len != 32) {
+    hash[0] = '\0';
+    return;
+  }
+
+  for (size_t i = 0; i < 32; i++) {
+    sprintf(hash + i * 2, "%02x", result[i]);
+  }
+
+  hash[64] = '\0';
 }
 
 // Генерировать uuid
@@ -37305,6 +37869,14 @@ char char1251_lowercase(char in) {
   if(in == 0xBD) return 0xBE;
 
   return in;
+}
+
+void char1251_lowercase_string(char *str) {
+  int i;
+  int len = strlen(str);
+  for(i = 0; i < len; i++) {
+    str[i] = char1251_lowercase(str[i]);
+  }
 }
 
 int get_list_length(char **list) {
@@ -40557,66 +41129,217 @@ void beep_alarm() {
 // Скопировал их из примера, потому что переработанный вариант не работал, вылетал в Exception
 // Единственное изменение - про вектор инициализации
 
-// Encryption Function with PKCS#7 Padding
+// Шифрование
 void encryptAES(uint8_t* input, int inputLen, uint8_t* output, int paddedLen) {
-  char aes_iv[16];
-  mbedtls_aes_context aes;
-  uint8_t iv_copy[16];
-  uint8_t paddingValue;
-  uint8_t* paddedInput;
-  int i;
+  psa_status_t status;
+  psa_key_id_t key_id = 0;
+  psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+  psa_cipher_operation_t operation = PSA_CIPHER_OPERATION_INIT;
 
-  // Генерировать случайный новый вектор инициализации
-  for(i = 0; i < 16; i++) {
-    aes_iv[i] = random(0, 256);
+  uint8_t* paddedInput = nullptr;
+  size_t outputLen = 0;
+  size_t finishLen = 0;
+
+  // Validate input and PKCS#7 padding length
+  if (!input || !output || inputLen < 0 ||
+      paddedLen < inputLen ||
+      paddedLen == inputLen ||
+      paddedLen % 16 != 0 ||
+      paddedLen - inputLen > 16) {
+    return;
   }
-  // Create a temporary copy of IV because mbedtls modifies it during processing
-  memcpy(iv_copy, aes_iv, 16);
 
-  // Allocate a temporary buffer to apply PKCS#7 padding
+  // Initialize PSA
+  status = psa_crypto_init();
+  if (status != PSA_SUCCESS) return;
+
+  // Generate random IV
+  status = psa_generate_random(output, 16);
+  if (status != PSA_SUCCESS) return;
+
+  // Allocate padded input
   paddedInput = (uint8_t*)malloc(paddedLen);
+  if (!paddedInput) return;
+
   memcpy(paddedInput, input, inputLen);
-  
-  // Apply PKCS#7 padding bytes
-  paddingValue = paddedLen - inputLen;
-  for (i = inputLen; i < paddedLen; i++) {
+
+  // PKCS#7 padding
+  uint8_t paddingValue = paddedLen - inputLen;
+
+  for (int i = inputLen; i < paddedLen; i++) {
     paddedInput[i] = paddingValue;
   }
 
-  mbedtls_aes_init(&aes);
-  mbedtls_aes_setkey_enc(&aes, (const unsigned char*)aes_encryption_key, PASSWORDS_AES_BITS);
+  // Configure AES key
+  psa_set_key_type(&attributes, PSA_KEY_TYPE_AES);
+  psa_set_key_bits(&attributes, PASSWORDS_AES_BITS);
+  psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_ENCRYPT);
+  psa_set_key_algorithm(&attributes, PSA_ALG_CBC_NO_PADDING);
 
-  mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, paddedLen, iv_copy, paddedInput, output + 16);
-  mbedtls_aes_free(&aes);
+  // Import encryption key
+  status = psa_import_key(
+    &attributes,
+    (const uint8_t*)aes_encryption_key,
+    PASSWORDS_AES_BITS / 8,
+    &key_id
+  );
 
-  // Первые 16 байт - вектор инициализации
-  memcpy(output, aes_iv, 16);
+  psa_reset_key_attributes(&attributes);
+
+  if (status != PSA_SUCCESS) {
+    free(paddedInput);
+    return;
+  }
+
+  // Setup AES-CBC operation
+  status = psa_cipher_encrypt_setup(
+    &operation,
+    key_id,
+    PSA_ALG_CBC_NO_PADDING
+  );
+
+  if (status == PSA_SUCCESS) {
+    status = psa_cipher_set_iv(&operation, output, 16);
+  }
+
+  // Encrypt padded data
+  if (status == PSA_SUCCESS) {
+    status = psa_cipher_update(
+      &operation,
+      paddedInput,
+      paddedLen,
+      output + 16,
+      paddedLen,
+      &outputLen
+    );
+  }
+
+  if (status == PSA_SUCCESS) {
+    status = psa_cipher_finish(
+      &operation,
+      output + 16 + outputLen,
+      paddedLen - outputLen,
+      &finishLen
+    );
+  }
+
+  // Cleanup
+  if (status != PSA_SUCCESS) {
+    psa_cipher_abort(&operation);
+  }
+
+  psa_destroy_key(key_id);
   free(paddedInput);
+
+  if (status != PSA_SUCCESS ||
+      outputLen + finishLen != (size_t)paddedLen) {
+    memset(output, 0, 16 + paddedLen);
+  }
 }
 
-// Decryption Function with PKCS#7 Unpadding
-void decryptAES(uint8_t* input, int dataLen, uint8_t* output) {
-  mbedtls_aes_context aes;
-  uint8_t iv_copy[16];
-  uint8_t paddingValue;
-  int originalLen;
-  int paddedLen;
-  int i;
+// Расшифровка
+int decryptAES(uint8_t* input, int dataLen, uint8_t* output) {
+  psa_status_t status;
+  psa_key_id_t key_id = 0;
 
-  paddedLen = ((dataLen - 16) / 16) * 16;
+  psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+  psa_cipher_operation_t operation = PSA_CIPHER_OPERATION_INIT;
 
-  // Первые 16 байт - вектор инициализации
-  memcpy(iv_copy, input, 16);
+  size_t outputLen = 0;
+  size_t finishLen = 0;
 
-  mbedtls_aes_init(&aes);
-  mbedtls_aes_setkey_dec(&aes, (const unsigned char*)aes_encryption_key, PASSWORDS_AES_BITS);
+  // Validate input
+  if (!input || !output ||
+      dataLen < 32 ||
+      (dataLen - 16) % 16 != 0) {
+    return -1;
+  }
 
-  mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, paddedLen, iv_copy, input + 16, output);
-  mbedtls_aes_free(&aes);
+  int paddedLen = dataLen - 16;
 
-  // Read PKCS#7 padding value from the very last byte to remove it
-  paddingValue = output[paddedLen - 1];
-  originalLen = paddedLen - paddingValue;
+  // Initialize PSA
+  status = psa_crypto_init();
+  if (status != PSA_SUCCESS) return -1;
+
+  // Configure AES key
+  psa_set_key_type(&attributes, PSA_KEY_TYPE_AES);
+  psa_set_key_bits(&attributes, PASSWORDS_AES_BITS);
+  psa_set_key_usage_flags(&attributes, PSA_KEY_USAGE_DECRYPT);
+  psa_set_key_algorithm(&attributes, PSA_ALG_CBC_NO_PADDING);
+
+  // Import key
+  status = psa_import_key(
+    &attributes,
+    (const uint8_t*)aes_encryption_key,
+    PASSWORDS_AES_BITS / 8,
+    &key_id
+  );
+
+  psa_reset_key_attributes(&attributes);
+
+  if (status != PSA_SUCCESS) return -1;
+
+  // Setup AES-CBC
+  status = psa_cipher_decrypt_setup(
+    &operation,
+    key_id,
+    PSA_ALG_CBC_NO_PADDING
+  );
+
+  if (status == PSA_SUCCESS) {
+    status = psa_cipher_set_iv(&operation, input, 16);
+  }
+
+  // Decrypt
+  if (status == PSA_SUCCESS) {
+    status = psa_cipher_update(
+      &operation,
+      input + 16,
+      paddedLen,
+      output,
+      paddedLen,
+      &outputLen
+    );
+  }
+
+  if (status == PSA_SUCCESS) {
+    status = psa_cipher_finish(
+      &operation,
+      output + outputLen,
+      paddedLen - outputLen,
+      &finishLen
+    );
+  }
+
+  if (status != PSA_SUCCESS) {
+    psa_cipher_abort(&operation);
+    psa_destroy_key(key_id);
+    return -1;
+  }
+
+  psa_destroy_key(key_id);
+
+  int decryptedLen = outputLen + finishLen;
+
+  if (decryptedLen != paddedLen || decryptedLen == 0) {
+    return -1;
+  }
+
+  // Validate PKCS#7 padding
+  uint8_t paddingValue = output[decryptedLen - 1];
+
+  if (paddingValue == 0 || paddingValue > 16 ||
+      paddingValue > decryptedLen) {
+    return -1;
+  }
+
+  for (int i = 0; i < paddingValue; i++) {
+    if (output[decryptedLen - 1 - i] != paddingValue) {
+      return -1;
+    }
+  }
+
+  return decryptedLen - paddingValue;
 }
 
 // ====================================================
@@ -41398,9 +42121,6 @@ void setup() {
   Serial.println("CYD PDA by sau412");
   Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
-  Serial.printf("CPU0 reset: %d\n", rtc_get_reset_reason(0));
-  Serial.printf("CPU1 reset: %d\n", rtc_get_reset_reason(1));
-
   // Output pins
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
@@ -41422,15 +42142,21 @@ void setup() {
   // Без этого неправильно работает JPEGDEC/PNGDec
   tft.setSwapBytes(true);
   // Очистка
-  clearScreen();
+  tft.fillScreen(TFT_BLACK);
+
+  terminal_clear_screen();
+  terminal_println("CYD PDA by sau412");
+  terminal_show_screen();
 
   // Причина перезагрузки
   reason = esp_reset_reason();
   if(reason == ESP_RST_BROWNOUT) {
     low_power_flag = 1; 
   }
-  sprintf(buff, "Reset reason:\n%s", get_reset_reason_text(reason));
-  drawProcessWindow(buff);
+  sprintf(buff, "Reset reason:\r\n%s", get_reset_reason_text(reason));
+  terminal_println(buff);
+  terminal_show_screen();
+  //drawProcessWindow(buff);
   if(reason != ESP_RST_POWERON) {
     delay(1000);
   }
@@ -41440,6 +42166,9 @@ void setup() {
   tft.drawPixel(0, 0, TFT_WHITE);
   if(tft.readPixel(0, 0) != TFT_WHITE && tft.readPixel(0, 0) == 0x07FF) {
     Serial.println("Read pixel bug found, appying correction");
+    terminal_println("Read pixel bug found, appying correction");
+    terminal_show_screen();
+
     global_screen_color_read_extra_byte = 1;
     tft.setReadExtraByte(global_screen_color_read_extra_byte);
   }
@@ -41454,6 +42183,9 @@ void setup() {
   }
 
   // Инициализация хранилища
+  terminal_println("Checking storages...");
+  terminal_show_screen();
+
   storage_type = STORAGE_TYPE_NONE;
   ffat_available_flag = 0;
   sd_available_flag = 0;
@@ -41466,6 +42198,8 @@ void setup() {
   if(FFat.begin(IS_FORMAT_FFAT_IF_FAILED)) {
     ffat_available_flag = 1;
     Serial.println("Storage type FFat present");
+    terminal_println("Storage type FFat present");
+    terminal_show_screen();
     FFat.end();
   }
 
@@ -41477,6 +42211,8 @@ void setup() {
     Storage = &SD;
     storage_type = STORAGE_TYPE_SD;
     Serial.println("Storage type SD present");
+    terminal_println("Storage type SD present");
+    terminal_show_screen();
   }
 
 #ifdef PREFER_SD_IF_AVAILABLE
@@ -41488,6 +42224,9 @@ void setup() {
     }
   }
 #endif
+
+  terminal_println("Loading settings");
+  terminal_show_screen();
 
   //Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
@@ -41831,15 +42570,48 @@ void setup() {
   // Загружаем многоточечную калибровку если есть
   touch_calibration_load_multipoint();
 
+  // Настройки при старте
+  if(Storage && Storage->exists(TERMINAL_STARTUP)) {
+    fs::File file;
+    file = Storage->open(TERMINAL_STARTUP);
+    terminal_println("Startup script");
+    terminal_show_screen();
+    while(file.available()) {
+      // Читаем команду
+      strcpy(buff, file.readStringUntil('\n').c_str());
+      // Выполняем команду из строки
+      Serial.println(buff);
+      terminal_execute(buff);
+      terminal_show_screen();
+    }
+    file.close();
+  }
+  else {
+    terminal_println("No startup script present");
+    terminal_show_screen();
+  }
+
   // Читаем информацию об автозапуске
   autorun_app_name[0] = 0;
   if(read_file_to_buff("/Settings/Autorun", 79, autorun_app_name)) {
+    terminal_println("Running autorun app");
+    terminal_show_screen();
     if(strcmp(autorun_app_name, "")) {
+      terminal_println(autorun_app_name);
+      terminal_show_screen();
       run_app_by_name(autorun_app_name);
     }
   }
+  else {
+    terminal_println("No autorun present");
+    terminal_show_screen();
+  }
 
+  // Отладочные данные
   Serial.printf("Free heap line %d: %d, max alloc %d\n", __LINE__, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+
+  terminal_println("Startup finished");
+  terminal_show_screen();
 }
 
 void loop() {
