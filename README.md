@@ -374,6 +374,9 @@ app command possible arguments: calculator, files, notes, contacts, todo, schedu
 # Terms of use
 You can modify code if you want. Bug reports and pull requests appreciated.
 
+# Contacts
+* My reddit account is suspended, don't write me there
+
 # Links
 * Feedback, suggestions: https://t.me/sau412 or sau@arikado.xyz
 * Web Flasher: https://sau412.github.io/esp32_cyd_pda/flash
